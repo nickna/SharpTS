@@ -34,7 +34,7 @@ public class DateStaticHandler : ICallHandler
             // Date.UTC(year, month?, ...): the components are packaged as object[]; $TSDate.UTC
             // honors each supplied (finite) component and returns the UTC timestamp (#538).
             case "UTC" when ctx.Runtime?.TSDateUTCStatic != null:
-                EmitArgsArray(emitter, call.Arguments);
+                emitter.EmitArgsArray(call.Arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime.TSDateUTCStatic);
                 emitter.SetStackType(StackType.Double);
                 return true;
@@ -56,22 +56,6 @@ public class DateStaticHandler : ICallHandler
 
             default:
                 return false;
-        }
-    }
-
-    /// <summary>Emits the call arguments as an <c>object[]</c> (boxing value types).</summary>
-    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var il = emitter.Context.IL;
-        il.Emit(OpCodes.Ldc_I4, arguments.Count);
-        il.Emit(OpCodes.Newarr, emitter.Context.Types.Object);
-        for (int i = 0; i < arguments.Count; i++)
-        {
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4, i);
-            emitter.EmitExpression(arguments[i]);
-            emitter.EmitBoxIfNeeded(arguments[i]);
-            il.Emit(OpCodes.Stelem_Ref);
         }
     }
 }

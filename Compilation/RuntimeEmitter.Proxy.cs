@@ -359,27 +359,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, handlerNullLabel);
 
-        // Use reflection to create SharpTSProxy: Type.GetType("SharpTS.Runtime.Types.SharpTSProxy, SharpTS")
-        // and call Activator.CreateInstance(type, target, handler)
-
-        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.Types.SharpTSProxy, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-
-        // Create object[] { target, handler }
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stelem_Ref);
-
-        // Call Activator.CreateInstance(type, args)
-        var createInstanceMethod = _types.GetMethod(_types.Activator, "CreateInstance", _types.Type, _types.ObjectArray);
-        il.Emit(OpCodes.Call, createInstanceMethod!);
+        // Late-bound construction of SharpTSProxy(target, handler) — soft dependency
+        // on SharpTS.dll (the Proxy feature records RequireSharpTSRuntime).
+        EmitReflectionCreateInstance(il, "SharpTS.Runtime.Types.SharpTSProxy, SharpTS", 2);
         il.Emit(OpCodes.Ret);
 
         // target null - throw
@@ -410,35 +392,7 @@ public partial class RuntimeEmitter
         runtime.CreateRevocableProxy = method;
 
         var il = method.GetILGenerator();
-
-        // Get the RuntimeTypes type via reflection
-        // Type runtimeTypesType = Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS")
-        il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-
-        // Get the CreateRevocableProxy method
-        // MethodInfo mi = runtimeTypesType.GetMethod("CreateRevocableProxy")
-        il.Emit(OpCodes.Ldstr, "CreateRevocableProxy");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-
-        // Prepare args: new object[] { target, handler }
-        il.Emit(OpCodes.Ldnull); // null target for static method invoke
-
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0); // target
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_1); // handler
-        il.Emit(OpCodes.Stelem_Ref);
-
-        // Call methodInfo.Invoke(null, args)
-        var invokeMethod = _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray);
-        il.Emit(OpCodes.Callvirt, invokeMethod!);
-
+        EmitReflectionCall(il, RuntimeTypesLateBoundName, "CreateRevocableProxy", 2);
         il.Emit(OpCodes.Ret);
     }
 }

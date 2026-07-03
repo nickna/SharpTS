@@ -112,32 +112,16 @@ public partial class RuntimeEmitter
         EmitArgOrNull(il, 1, optionsLoc);
 
         // return (string)RuntimeTypes.FormatDateToLocale(epochMs, kind, locale, options);  (reflected)
-        il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-        il.Emit(OpCodes.Ldstr, "FormatDateToLocale");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Ldnull); // static target
-        il.Emit(OpCodes.Ldc_I4_4);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, epochMs);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_1); // kind
-        il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Ldloc, localeLoc);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Ldloc, optionsLoc);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        EmitReflectionCall(il, RuntimeTypesLateBoundName, "FormatDateToLocale", 4, emitArg: i =>
+        {
+            switch (i)
+            {
+                case 0: il.Emit(OpCodes.Ldloc, epochMs); il.Emit(OpCodes.Box, _types.Double); break;
+                case 1: il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Box, _types.Int32); break; // kind
+                case 2: il.Emit(OpCodes.Ldloc, localeLoc); break;
+                case 3: il.Emit(OpCodes.Ldloc, optionsLoc); break;
+            }
+        });
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ret);
 

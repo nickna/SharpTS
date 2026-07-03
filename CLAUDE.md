@@ -126,19 +126,26 @@ il.Emit(OpCodes.Call, method);
 ```
 
 **Instead, emit reflection-based IL that resolves the type at runtime via
-`Type.GetType("…, SharpTS")`.** The `RuntimeEmitter.*` partials provide per-feature
-helpers that already follow this pattern — reuse the closest one rather than calling
-`typeof(...)` directly. For example:
+`Type.GetType("…, SharpTS")`.** The canonical helpers live in
+`Compilation/RuntimeEmitter.ReflectionHelpers.cs` — reuse them rather than calling
+`typeof(...)` directly or hand-rolling the idiom:
 ```csharp
 // GOOD - defines a static helper on the emitted runtime type whose body does
 // Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS").GetMethod(name).Invoke(...)
 runtime.SomeMethod = EmitReflectionHelper(typeBuilder, "SomeMethod", argCount);
+
+// GOOD - same idiom emitted inline into an existing method body; leaves the
+// Invoke result on the stack. EmitReflectionCallVoid pops it; onMissing
+// customizes the SharpTS.dll-absent path (ret/throw); emitArg customizes
+// argument loading. EmitReflectionCreateInstance covers the
+// Activator.CreateInstance(Type.GetType("…, SharpTS"), args) form.
+EmitReflectionCall(il, RuntimeTypesLateBoundName, "SomeMethod", argCount);
 ```
-Other variants emit the same late-bound `Type.GetType("…, SharpTS")` dispatch inline
-(e.g. `EmitVmReflectionCall` in `RuntimeEmitter.VmHelpers.cs`,
-`EmitReflectionConstructFromType` in `ILEmitter.Calls.Constructors.cs`). When no
-existing helper fits, add one alongside them — never reference a SharpTS type via a
-metadata token.
+Specialized variants emit the same late-bound `Type.GetType("…, SharpTS")` dispatch
+for shapes the canonical helpers don't cover (e.g. `EmitVmReflectionCall` in
+`RuntimeEmitter.VmHelpers.cs`, `EmitReflectionConstructFromType` in
+`ILEmitter.Calls.Constructors.cs`). When no existing helper fits, add one alongside
+them — never reference a SharpTS type via a metadata token.
 
 The same applies to `PropertyDescriptorStore`, `ObjectBuiltIns`, and any other SharpTS types.
 

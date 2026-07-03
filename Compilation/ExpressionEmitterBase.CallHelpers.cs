@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation.CallHandlers;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -985,6 +986,38 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ExpandCallArgs);
+    }
+
+    /// <summary>
+    /// Evaluates <paramref name="args"/> and leaves a single <c>object[]</c> of the boxed
+    /// argument values on the IL stack. No spread expansion — use
+    /// <see cref="EmitArgsArrayWithSpread"/> when arguments may contain <see cref="Expr.Spread"/>.
+    /// When <paramref name="argLocals"/> is supplied (await-safe pre-spilled args, #850) each
+    /// element is loaded from its local rather than re-evaluated — building the array inline
+    /// would strand the partly built array on the IL stack across a suspending argument.
+    /// </summary>
+    public void EmitArgsArray(IReadOnlyList<Expr> args, LocalBuilder[]? argLocals = null)
+    {
+        IL.Emit(OpCodes.Ldc_I4, args.Count);
+        IL.Emit(OpCodes.Newarr, Types.Object);
+        for (int i = 0; i < args.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            if (argLocals != null)
+            {
+                IL.Emit(OpCodes.Ldloc, argLocals[i]);
+            }
+            else
+            {
+                EmitExpression(args[i]);
+                // Interface dispatch — matches the retired per-file copies, which
+                // called through IEmitterContext (ILEmitter's type-aware override
+                // vs the base's EnsureBoxed default).
+                ((IEmitterContext)this).EmitBoxIfNeeded(args[i]);
+            }
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
     }
 
     /// <summary>

@@ -908,37 +908,14 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Type t = Type.GetType("SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS");
-        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-        var typeLocal = il.DeclareLocal(_types.Type);
-        il.Emit(OpCodes.Stloc, typeLocal);
-
-        var typeOk = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Brtrue, typeOk);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(typeOk);
-
-        // MethodInfo m = t.GetMethod("EventEmitterCall");
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldstr, "EventEmitterCall");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-
-        // m.Invoke(null, new object[] { methodName, args })
-        il.Emit(OpCodes.Ldnull); // static method
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0); // methodName (string)
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_1); // args (object[])
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        // ProcessBuiltIns.EventEmitterCall(methodName, args) — graceful null when
+        // SharpTS.dll is absent (process events degrade silently standalone).
+        EmitReflectionCall(il, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS", "EventEmitterCall", 2,
+            onMissing: () =>
+            {
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ret);
+            });
         il.Emit(OpCodes.Ret);
     }
 
@@ -958,37 +935,22 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Type.GetType("SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS")
-        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-        var typeLocal = il.DeclareLocal(_types.Type);
-        il.Emit(OpCodes.Stloc, typeLocal);
-
-        // If type not found, just return
-        var typeOk = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Brtrue, typeOk);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(typeOk);
-
-        // Call EmitExitEvent(null, exitCode) via reflection
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldstr, "EmitExitEvent");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Ldnull); // static method
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldnull); // interpreter = null
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_0); // exitCode
-        il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Pop); // discard return value
+        // ProcessBuiltIns.EmitExitEvent(null, exitCode) — no-op when SharpTS.dll
+        // is absent (graceful standalone degradation).
+        EmitReflectionCallVoid(il, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS", "EmitExitEvent", 2,
+            emitArg: i =>
+            {
+                if (i == 0)
+                {
+                    il.Emit(OpCodes.Ldnull); // interpreter = null
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldarg_0); // exitCode
+                    il.Emit(OpCodes.Box, _types.Int32);
+                }
+            },
+            onMissing: () => il.Emit(OpCodes.Ret));
         il.Emit(OpCodes.Ret);
     }
 

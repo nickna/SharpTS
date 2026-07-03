@@ -24,16 +24,16 @@ public class StandaloneDllTests
     // that return null if SharpTS.dll is absent. The compiled code works regardless.
     private static readonly HashSet<string> LateBindingAllowlist = new(StringComparer.OrdinalIgnoreCase)
     {
+        "Compilation/RuntimeEmitter.ReflectionHelpers.cs", // the canonical EmitReflectionHelper/EmitReflectionCall(/Void)/EmitReflectionCreateInstance helpers + RuntimeTypesLateBoundName const — #1128
         "Compilation/ConstantFolder.cs",              // SharpTSUndefined detection
         "Compilation/PropertyDescriptorStore.cs",     // SharpTSPropertyDescriptor/Object fallback
         "Compilation/RuntimeEmitter.Worker.cs",       // TypedArray/Worker/Atomics interpreter fallback
-        "Compilation/RuntimeEmitter.Proxy.cs",        // Proxy CreateProxy/CreateRevocableProxy (requires SharpTS.dll at runtime)
+        "Compilation/RuntimeEmitter.Proxy.cs",        // Proxy CreateProxy via EmitReflectionCreateInstance(SharpTSProxy) (requires SharpTS.dll at runtime)
         "Compilation/RuntimeEmitter.Json.Proxy.cs",   // JSON.stringify Proxy materialization via TrapOwnKeys/TrapGet (requires SharpTS.dll at runtime)
         "Compilation/RuntimeEmitter.Json.ParseReviver.cs", // JSON.parse reviver Proxy trap dispatch (TrapOwnKeys/TrapGet/TrapSet/TrapDeleteProperty)
-        "Compilation/RuntimeEmitter.Intl.cs",         // Intl.NumberFormat runtime dispatch via RuntimeTypes
-        "Compilation/RuntimeEmitter.Date.cs",         // Date.prototype.toLocale* with locale/options via RuntimeTypes.FormatDateToLocale (#539); only reached by toLocale* calls that pass arguments
-        "Compilation/RuntimeEmitter.AbortController.cs", // AbortSignal.any() via RuntimeTypes.AbortSignalAnyCompiled
-        "Compilation/RuntimeEmitter.ProcessHelpers.cs",      // ProcessEventEmitterCall and ProcessEmitExit fallback
+        // RuntimeEmitter.Intl.cs / .Date.cs / .AbortController.cs — pruned: migrated to the
+        // RuntimeEmitter.ReflectionHelpers.cs canonical helpers (#1128); no inline literals remain.
+        "Compilation/RuntimeEmitter.ProcessHelpers.cs",      // ProcessEventEmitterCall and ProcessEmitExit fallback (ProcessBuiltIns target via EmitReflectionCall)
         "Compilation/RuntimeEmitter.TSProcess.cs",           // process.ppid late-binds to ProcessBuiltIns.GetParentPid (graceful 0 when SharpTS absent) — #1085
         // "Compilation/RuntimeEmitter.Net.cs" — now uses emitted $NetServer/$NetSocket directly (no reflection)
         "Compilation/RuntimeEmitter.ChildProcessHelpers.cs", // child_process.fork bridges to the interpreter's ForkForCompiledLoop (requires SharpTS.dll co-located; suppressed by --standalone) — #1017
@@ -51,7 +51,9 @@ public class StandaloneDllTests
     /// SharpTS types that would embed assembly references in emitted IL.
     ///
     /// WRONG: typeof(RuntimeTypes).GetMethod(...) - embeds SharpTS.dll reference
-    /// RIGHT: EmitReflectionHelper(typeBuilder, "SomeMethod", argCount) - emits a
+    /// RIGHT: EmitReflectionHelper(typeBuilder, "SomeMethod", argCount) or
+    ///        EmitReflectionCall/EmitReflectionCallVoid/EmitReflectionCreateInstance
+    ///        (Compilation/RuntimeEmitter.ReflectionHelpers.cs) - emit a
     ///        Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS") runtime lookup
     /// </summary>
     [Fact]
@@ -106,7 +108,7 @@ public class StandaloneDllTests
 
         Assert.True(violations.Count == 0,
             $"Found {violations.Count} typeof() references that create SharpTS.dll dependencies in emitted IL.\n" +
-            $"Use a Type.GetType(\"…, SharpTS\") reflection helper (e.g. EmitReflectionHelper) instead.\n\n" +
+            $"Use a Type.GetType(\"…, SharpTS\") reflection helper instead — EmitReflectionHelper / EmitReflectionCall(/Void) / EmitReflectionCreateInstance in Compilation/RuntimeEmitter.ReflectionHelpers.cs.\n\n" +
             string.Join("\n", violations.Take(20)));
     }
 

@@ -178,17 +178,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHmacFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "Cannot update HMAC after digest() has been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsHmacFinalizedField, "Cannot update HMAC after digest() has been called");
 
         // var bytes = Encoding.UTF8.GetBytes(data)
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
@@ -223,17 +213,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHmacFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "digest() has already been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsHmacFinalizedField, "digest() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);
