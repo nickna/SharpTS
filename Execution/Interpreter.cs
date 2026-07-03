@@ -1915,21 +1915,18 @@ public partial class Interpreter : IDisposable
                 string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
                 var importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
 
-                // CJS modules are lazy-initialized — ESM imports of CJS need to trigger init now
-                // because BindModuleImports runs BEFORE the body executes (so we can't rely on a
-                // later require() call to set things up).
+                // Lazily-reached dependency: the static InterpretModules order only executes
+                // modules it was handed up front, so anything first reached at runtime — a CJS
+                // require() of a stdlib facade (whose primitive:* imports were loaded but never
+                // executed, #1210), a dynamically imported subtree, or an ESM import of a
+                // lazy-initialized CJS module — must be executed on demand here, BEFORE the
+                // importer's body runs. ExecuteModule routes every module kind (CJS, dotnet:,
+                // builtin:/primitive: placeholders, plain ESM) and registers the instance
+                // before binding its own imports, so circular graphs terminate.
                 if (importedModuleInstance == null)
                 {
                     var importedParsed = _moduleResolver.GetCachedModule(importedPath);
-                    if (importedParsed?.IsCommonJs == true)
-                    {
-                        ExecuteCommonJsModule(importedParsed);
-                        importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
-                    }
-                    // dotnet: modules are dependency-free and idempotent — execute on demand.
-                    // Covers modules reached outside the static InterpretModules order
-                    // (e.g. a dynamically imported file that itself imports a dotnet: module).
-                    else if (importedParsed?.IsDotNetModule == true)
+                    if (importedParsed != null)
                     {
                         ExecuteModule(importedParsed);
                         importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);

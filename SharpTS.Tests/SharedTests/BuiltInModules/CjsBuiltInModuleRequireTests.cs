@@ -126,4 +126,63 @@ public class CjsBuiltInModuleRequireTests
         var output = TestHarness.RunModules(files, "main.cjs", mode);
         Assert.Equal("function\n1\n2\n", output);
     }
+
+    /// <summary>
+    /// Regression (#1210): require() of a stdlib facade with primitive:* imports from an ESM
+    /// entry, without any ESM import of that module anywhere in the program.
+    /// </summary>
+    /// <remarks>
+    /// A CJS entry pre-loads its require() graph via CollectCjsRequireDependencies, so the
+    /// facade's primitive deps get executed by the static InterpretModules walk — which is why
+    /// the main.cjs tests above never hit this. An ESM entry's require() is fully lazy: the
+    /// facade loads, but its `import ... from 'primitive:fs'` used to fail with
+    /// "Module 'primitive:fs' not loaded" because BindModuleImports only lazy-initialized CJS
+    /// and dotnet: deps. Interpreter-only: compiled mode has a separate pre-existing gap
+    /// (facades reached only via require() from ESM files are never bundled into the assembly).
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Cjs_Require_PrimitiveSeamFacade_FromEsmEntry(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                const fs = require('fs');
+                console.log(typeof fs.existsSync);
+                const zlib = require('zlib');
+                console.log(zlib.gunzipSync(zlib.gzipSync('roundtrip')).toString());
+                const os = require('os');
+                console.log(typeof os.platform);
+                console.log(typeof path.join);
+                """
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("function\nroundtrip\nfunction\nfunction\n", output);
+    }
+
+    /// <summary>
+    /// Regression (#1210): dynamic import() of a stdlib facade never statically imported hits
+    /// the same lazy path — the facade's primitive:* deps must execute on demand.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void DynamicImport_PrimitiveSeamFacade_WithoutStaticImport(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                async function run(): Promise<void> {
+                    const fs = await import('fs');
+                    console.log(typeof fs.existsSync);
+                    const zlib = await import('zlib');
+                    console.log(zlib.gunzipSync(zlib.gzipSync('dyn')).toString());
+                }
+                run();
+                """
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("function\ndyn\n", output);
+    }
 }
