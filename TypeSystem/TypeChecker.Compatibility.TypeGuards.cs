@@ -527,7 +527,7 @@ public partial class TypeChecker
     /// <summary>
     /// Maps a literal AST value to its literal type for equality narrowing.
     /// Returns null for values that don't participate (null/undefined have their
-    /// own guard patterns; bigint literals don't form literal types here).
+    /// own guard patterns).
     /// </summary>
     private static TypeInfo? LiteralTypeFor(object? value) => value switch
     {
@@ -535,6 +535,7 @@ public partial class TypeChecker
         int i => new TypeInfo.NumberLiteral(i),
         double d => new TypeInfo.NumberLiteral(d),
         bool b => new TypeInfo.BooleanLiteral(b),
+        System.Numerics.BigInteger bi => new TypeInfo.BigIntLiteral(bi),
         _ => null
     };
 
@@ -556,6 +557,7 @@ public partial class TypeChecker
             TypeInfo.String => literal is TypeInfo.StringLiteral,
             TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => literal is TypeInfo.NumberLiteral,
             TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => literal is TypeInfo.BooleanLiteral,
+            TypeInfo.BigInt => literal is TypeInfo.BigIntLiteral,
             _ => false
         };
 
@@ -601,7 +603,8 @@ public partial class TypeChecker
         // A different literal of the same kind can never equal it.
         if (currentType is TypeInfo.StringLiteral && literalType is TypeInfo.StringLiteral ||
             currentType is TypeInfo.NumberLiteral && literalType is TypeInfo.NumberLiteral ||
-            currentType is TypeInfo.BooleanLiteral && literalType is TypeInfo.BooleanLiteral)
+            currentType is TypeInfo.BooleanLiteral && literalType is TypeInfo.BooleanLiteral ||
+            currentType is TypeInfo.BigIntLiteral && literalType is TypeInfo.BigIntLiteral)
         {
             if (negated)
                 return (varName, currentType, new TypeInfo.Never());
@@ -1319,6 +1322,7 @@ public partial class TypeChecker
         TypeInfo.BooleanLiteral { Value: false } => true,
         TypeInfo.NumberLiteral n => n.Value == 0,            // 0 and -0 (NaN literals don't occur)
         TypeInfo.StringLiteral s => s.Value.Length == 0,
+        TypeInfo.BigIntLiteral b => b.Value.IsZero,
         _ => false
     };
 
@@ -1335,6 +1339,7 @@ public partial class TypeChecker
         TypeInfo.BooleanLiteral { Value: true } => true,
         TypeInfo.NumberLiteral n => n.Value != 0 && !double.IsNaN(n.Value),
         TypeInfo.StringLiteral s => s.Value.Length > 0,
+        TypeInfo.BigIntLiteral b => !b.Value.IsZero,
         // Object-like types are truthy regardless of contents (even empty arrays/objects/`{}`).
         TypeInfo.Object or TypeInfo.Record or TypeInfo.Array or TypeInfo.Tuple or
         TypeInfo.Instance or TypeInfo.Class or TypeInfo.MutableClass or TypeInfo.Interface or
@@ -1357,7 +1362,7 @@ public partial class TypeChecker
         "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
-        "bigint" => type is TypeInfo.BigInt,
+        "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance or TypeInfo.Object,
         "function" => type is TypeInfo.Function,
         _ => false

@@ -80,8 +80,11 @@ public partial class TypeChecker
         TypeInfo.StringLiteral sl => sl.Value == value,
         TypeInfo.NumberLiteral nl => double.TryParse(value, out var d) && d == nl.Value,
         TypeInfo.BooleanLiteral bl => (bl.Value ? "true" : "false") == value,
+        // Bigint values stringify without the 'n' suffix: `${1n}` is "1".
+        TypeInfo.BigIntLiteral bil => System.Numerics.BigInteger.TryParse(value, out var bi) && bi == bil.Value,
         TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => double.TryParse(value, out _),
         TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => value is "true" or "false",
+        TypeInfo.BigInt => System.Numerics.BigInteger.TryParse(value, out _),
         TypeInfo.Union u => u.FlattenedTypes.Any(t => MatchesInterpolatedType(value, t)),
         _ => false
     };

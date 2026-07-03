@@ -33,12 +33,12 @@ public partial class TypeChecker
             type is TypeInfo.StringLiteral);
 
     private bool IsBigInt(TypeInfo t) =>
-        IsTypeOfKind(t, type => type is TypeInfo.BigInt);
+        IsTypeOfKind(t, type => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral);
 
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
     /// </summary>
-    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol or TypeInfo.UniqueSymbol;
+    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral or TypeInfo.Symbol or TypeInfo.UniqueSymbol;
 
     /// <summary>
     /// Checks if a type is an object type (has properties that could be mutated).

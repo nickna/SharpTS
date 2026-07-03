@@ -141,7 +141,7 @@ public class TypeMapper
     {
         TypeInfo.Primitive p => MapPrimitive(p),
         TypeInfo.String => _types.String, // String type maps to System.String
-        TypeInfo.BigInt => _types.BigInteger, // BigInt maps to BigInteger
+        TypeInfo.BigInt or TypeInfo.BigIntLiteral => _types.BigInteger, // BigInt maps to BigInteger
         TypeInfo.Array => _types.Object, // Will be TSArray at runtime
         TypeInfo.Function => _types.Object, // Will be delegate at runtime
         TypeInfo.Promise p => MapPromiseType(p), // Promise<T> maps to Task<T>
@@ -222,7 +222,7 @@ public class TypeMapper
         TypeInfo.StringLiteral => _types.String, // "foo" literal widens to string
         TypeInfo.NumberLiteral => _types.Double, // 42 literal widens to number
         TypeInfo.BooleanLiteral => _types.Boolean, // true/false literal widens to boolean
-        TypeInfo.BigInt => _types.BigInteger,
+        TypeInfo.BigInt or TypeInfo.BigIntLiteral => _types.BigInteger, // 1n literal widens to bigint
         TypeInfo.Array arr => MapArrayTypeStrict(arr),
         TypeInfo.Function => _types.Delegate, // Functions map to Delegate for typed interop
         TypeInfo.Promise p => MapPromiseTypeStrict(p),

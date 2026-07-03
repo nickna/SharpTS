@@ -276,7 +276,7 @@ public partial class TypeChecker
         bool hasNull = types.Any(t => t is TypeInfo.Null);
         bool hasUndefined = types.Any(t => t is TypeInfo.Undefined);
         bool hasSymbol = types.Any(t => t is TypeInfo.Symbol);
-        bool hasBigInt = types.Any(t => t is TypeInfo.BigInt);
+        bool hasBigInt = types.Any(t => t is TypeInfo.BigInt or TypeInfo.BigIntLiteral);
 
         // Count how many different primitive categories are present
         int primitiveCount = (hasString ? 1 : 0) + (hasNumber ? 1 : 0) + (hasBoolean ? 1 : 0)
@@ -422,6 +422,7 @@ public partial class TypeChecker
         TypeInfo.StringLiteral => true,
         TypeInfo.NumberLiteral => true,  // Numbers can be stringified
         TypeInfo.BooleanLiteral => true,  // Booleans can be stringified
+        TypeInfo.BigIntLiteral => true,  // Bigints stringify without the 'n' suffix
         TypeInfo.Union u => u.FlattenedTypes.All(IsConcreteStringType),
         _ => false
     };
@@ -460,6 +461,7 @@ public partial class TypeChecker
         TypeInfo.StringLiteral sl => [sl.Value],
         TypeInfo.NumberLiteral nl => [nl.Value.ToString()],
         TypeInfo.BooleanLiteral bl => [bl.Value ? "true" : "false"],
+        TypeInfo.BigIntLiteral bil => [bil.Value.ToString()],  // `${1n}` is "1" — no 'n' suffix
         TypeInfo.Union u => u.FlattenedTypes.SelectMany(GetStringLiteralValues).ToList(),
         _ => throw new InvalidOperationException($"Expected concrete string type, got {type}")
     };

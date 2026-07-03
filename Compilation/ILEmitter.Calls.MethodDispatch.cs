@@ -198,7 +198,7 @@ public partial class ILEmitter
         // so route toString/valueOf/toLocaleString to dedicated runtime helpers —
         // critically so `toString(radix)` honors the radix instead of falling through
         // to BigInteger.ToString() (which ignores the argument).
-        if (objType is TypeSystem.TypeInfo.BigInt && methodName is "toString" or "toLocaleString" or "valueOf")
+        if (objType is TypeSystem.TypeInfo.BigInt or TypeSystem.TypeInfo.BigIntLiteral && methodName is "toString" or "toLocaleString" or "valueOf")
         {
             EmitBigIntMethodCall(methodGet.Object, methodName, arguments);
             return;

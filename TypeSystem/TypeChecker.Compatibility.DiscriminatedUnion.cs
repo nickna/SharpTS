@@ -182,7 +182,7 @@ public partial class TypeChecker
             switch (t)
             {
                 case TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral
-                    or TypeInfo.Undefined or TypeInfo.Null:
+                    or TypeInfo.BigIntLiteral or TypeInfo.Undefined or TypeInfo.Null:
                     result.Add(t);
                     break;
                 case TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN }:

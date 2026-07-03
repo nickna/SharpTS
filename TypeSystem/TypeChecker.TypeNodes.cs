@@ -52,10 +52,7 @@ public partial class TypeChecker
                     string str => new TypeInfo.StringLiteral(str),
                     double num => new TypeInfo.NumberLiteral(num),
                     bool b => new TypeInfo.BooleanLiteral(b),
-                    // Bigint literal types (1n): parity with the string path, which has no bigint
-                    // handling and lets "1n" fall through its unknown-name tail to Any. Real
-                    // bigint literal types need TypeInfo.BigIntLiteral + compat rules (follow-up).
-                    System.Numerics.BigInteger => new TypeInfo.Any(),
+                    System.Numerics.BigInteger bi => new TypeInfo.BigIntLiteral(bi),
                     _ => null,
                 };
 

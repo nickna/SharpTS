@@ -66,6 +66,7 @@ public static class WorkerDataValidator
             TypeInfo.BooleanLiteral => (true, null),
             TypeInfo.String => (true, null),
             TypeInfo.BigInt => (true, null),
+            TypeInfo.BigIntLiteral => (true, null),
             TypeInfo.Null => (true, null),
             TypeInfo.Undefined => (true, null),
             TypeInfo.Any => (true, null), // any could be anything, allow it (runtime will catch)

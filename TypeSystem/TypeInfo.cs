@@ -1209,6 +1209,15 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// A bigint literal type (<c>1n</c>). Distinct literal values are distinct types
+    /// (<c>1n</c> vs <c>2n</c>); widens to <see cref="BigInt"/>.
+    /// </summary>
+    public record BigIntLiteral(System.Numerics.BigInteger Value) : TypeInfo
+    {
+        public override string ToString() => $"{Value}n";
+    }
+
+    /// <summary>
     /// Represents a template literal type pattern: `prefix${Type}suffix`
     /// </summary>
     /// <param name="Strings">Static string parts (n+1 elements for n interpolations)</param>
