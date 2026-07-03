@@ -4,21 +4,23 @@ using Interp = SharpTS.Execution.Interpreter;
 namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 
 /// <summary>
-/// Interpreter-mode implementation of the Node.js 'zlib' module.
+/// Interpreter-mode implementation of <c>primitive:zlib</c> — the narrow C#
+/// surface behind the stdlib/node/zlib.ts facade.
 /// </summary>
 /// <remarks>
-/// Provides compression/decompression functionality:
-/// - gzipSync/gunzipSync: Gzip format
-/// - deflateSync/inflateSync: Deflate with zlib header
-/// - deflateRawSync/inflateRawSync: Raw deflate (no header)
-/// - brotliCompressSync/brotliDecompressSync: Brotli format
-/// - zstdCompressSync/zstdDecompressSync: Zstandard format
-/// - constants: Compression constants object
+/// Provides the compression cores and stateful streams TypeScript cannot express:
+/// - Sync one-shots: gzipSync/gunzipSync, deflateSync/inflateSync,
+///   deflateRawSync/inflateRawSync, brotliCompress/DecompressSync,
+///   zstdCompress/DecompressSync, unzipSync
+/// - Streaming create*: Transform streams over BCL compression streams
+/// - crc32: tight bitwise checksum loop
+/// The Node-shape glue (constants/codes objects, async callback forms,
+/// argument shuffling) lives in the TS facade.
 /// </remarks>
 public static class ZlibModuleInterpreter
 {
     /// <summary>
-    /// Gets all exported values for the zlib module.
+    /// Gets all exported values for the primitive:zlib module.
     /// </summary>
     public static Dictionary<string, object?> GetExports()
     {
@@ -60,25 +62,8 @@ public static class ZlibModuleInterpreter
             ["createZstdDecompress"] = BuiltInMethod.CreateV2("createZstdDecompress", 0, 1, CreateZstdDecompress),
             ["createUnzip"] = BuiltInMethod.CreateV2("createUnzip", 0, 1, CreateUnzip),
 
-            // Async callback APIs
-            ["gzip"] = BuiltInMethod.CreateV2("gzip", 2, 3, GzipAsync),
-            ["gunzip"] = BuiltInMethod.CreateV2("gunzip", 2, 3, GunzipAsync),
-            ["deflate"] = BuiltInMethod.CreateV2("deflate", 2, 3, DeflateAsync),
-            ["inflate"] = BuiltInMethod.CreateV2("inflate", 2, 3, InflateAsync),
-            ["deflateRaw"] = BuiltInMethod.CreateV2("deflateRaw", 2, 3, DeflateRawAsync),
-            ["inflateRaw"] = BuiltInMethod.CreateV2("inflateRaw", 2, 3, InflateRawAsync),
-            ["brotliCompress"] = BuiltInMethod.CreateV2("brotliCompress", 2, 3, BrotliCompressAsync),
-            ["brotliDecompress"] = BuiltInMethod.CreateV2("brotliDecompress", 2, 3, BrotliDecompressAsync),
-            ["zstdCompress"] = BuiltInMethod.CreateV2("zstdCompress", 2, 3, ZstdCompressAsync),
-            ["zstdDecompress"] = BuiltInMethod.CreateV2("zstdDecompress", 2, 3, ZstdDecompressAsync),
-            ["unzip"] = BuiltInMethod.CreateV2("unzip", 2, 3, UnzipAsync),
-
             // Checksums (Node 22+)
-            ["crc32"] = BuiltInMethod.CreateV2("crc32", 1, 2, Crc32Method),
-
-            // Constants and error codes
-            ["constants"] = ZlibConstants.CreateConstantsObject(),
-            ["codes"] = ZlibConstants.CreateCodesObject()
+            ["crc32"] = BuiltInMethod.CreateV2("crc32", 1, 2, Crc32Method)
         };
     }
 
@@ -320,104 +305,6 @@ public static class ZlibModuleInterpreter
 
     private static RuntimeValue CreateUnzip(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromObject(new SharpTSZlibTransform(ZlibTransformKind.Unzip, GetOptions(args, 0)));
-
-    #endregion
-
-    #region Async Callback APIs
-
-    private static RuntimeValue GzipAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "gzip", ZlibHelpers.GzipCompress);
-
-    private static RuntimeValue GunzipAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "gunzip", ZlibHelpers.GzipDecompress);
-
-    private static RuntimeValue DeflateAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "deflate", ZlibHelpers.DeflateCompress);
-
-    private static RuntimeValue InflateAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "inflate", ZlibHelpers.DeflateDecompress);
-
-    private static RuntimeValue DeflateRawAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "deflateRaw", ZlibHelpers.DeflateRawCompress);
-
-    private static RuntimeValue InflateRawAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "inflateRaw", ZlibHelpers.DeflateRawDecompress);
-
-    private static RuntimeValue BrotliCompressAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "brotliCompress", ZlibHelpers.BrotliCompress);
-
-    private static RuntimeValue BrotliDecompressAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "brotliDecompress", ZlibHelpers.BrotliDecompress);
-
-    private static RuntimeValue ZstdCompressAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "zstdCompress", ZlibHelpers.ZstdCompress);
-
-    private static RuntimeValue ZstdDecompressAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => RunAsync(interpreter, args, "zstdDecompress", ZlibHelpers.ZstdDecompress);
-
-    private static RuntimeValue UnzipAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        var input = GetInputBytes(args, 0, "unzip");
-        var callback = ExtractCallback(args);
-        var options = args.Length >= 3 ? GetOptions(args, 1) : new ZlibOptions();
-
-        interpreter.ScheduleTimer(0, 0, () =>
-        {
-            try
-            {
-                // Auto-detect format
-                byte[] result;
-                if (input.Length >= 2 && input[0] == 0x1f && input[1] == 0x8b)
-                    result = ZlibHelpers.GzipDecompress(input, options);
-                else if (input.Length >= 1 && input[0] == 0x78)
-                    result = ZlibHelpers.DeflateDecompress(input, options);
-                else
-                    result = ZlibHelpers.DeflateRawDecompress(input, options);
-
-                callback?.Call(interpreter, [null, new SharpTSBuffer(result)]);
-            }
-            catch (Exception ex)
-            {
-                callback?.Call(interpreter, [ex.Message]);
-            }
-        }, isInterval: false);
-
-        return RuntimeValue.Null;
-    }
-
-    private static RuntimeValue RunAsync(Interp interpreter, ReadOnlySpan<RuntimeValue> args, string methodName,
-        Func<byte[], ZlibOptions, byte[]> operation)
-    {
-        var input = GetInputBytes(args, 0, methodName);
-        var callback = ExtractCallback(args);
-        var options = args.Length >= 3 ? GetOptions(args, 1) : new ZlibOptions();
-
-        interpreter.ScheduleTimer(0, 0, () =>
-        {
-            try
-            {
-                var result = operation(input, options);
-                callback?.Call(interpreter, [null, new SharpTSBuffer(result)]);
-            }
-            catch (Exception ex)
-            {
-                callback?.Call(interpreter, [ex.Message]);
-            }
-        }, isInterval: false);
-
-        return RuntimeValue.Null;
-    }
-
-    private static ISharpTSCallable? ExtractCallback(ReadOnlySpan<RuntimeValue> args)
-    {
-        // Callback is the last argument
-        for (int i = args.Length - 1; i >= 0; i--)
-        {
-            if (args[i].ToObject() is ISharpTSCallable cb)
-                return cb;
-        }
-        return null;
-    }
 
     #endregion
 

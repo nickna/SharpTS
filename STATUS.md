@@ -454,12 +454,12 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 
 ### Module Implementation Source
 
-14 modules are implemented in TypeScript under `stdlib/node/*.ts`, embedded in `SharpTS.dll` as resources and compiled alongside user code at `--compile` time. The remaining modules stay C#-backed for host-I/O reasons. See `docs/plans/embedded-stdlib.md` for the provider chain, `primitive:*` layer, and migration rationale.
+18 modules are implemented in TypeScript under `stdlib/node/*.ts`, embedded in `SharpTS.dll` as resources and compiled alongside user code at `--compile` time. Modules with host-I/O keep their heavy lifting in C#/IL behind a narrow `primitive:*` seam (`fs` raw syscalls, `zlib` compression cores + Transform streams) while the TS facade owns the Node-shape surface. The remaining modules stay fully C#-backed. See `docs/plans/embedded-stdlib.md` for the provider chain, `primitive:*` layer, and migration rationale.
 
 | Implementation | Modules |
 |---|---|
-| **TypeScript stdlib** | `assert`, `async_hooks`, `events`, `os`, `path`, `perf_hooks`, `process`, `querystring`, `readline`, `string_decoder`, `timers`, `timers/promises`, `tty`, `url`, `util` |
-| **C# / IL (host-I/O)** | `fs`, `fs/promises`, `crypto`, `stream`, `stream/promises`, `stream/web`, `buffer`, `http`, `https`, `net`, `tls`, `dgram`, `cluster`, `child_process`, `vm`, `zlib`, `dns`, `dns/promises`, `worker_threads` |
+| **TypeScript stdlib** | `assert`, `async_hooks`, `events`, `fs`, `fs/promises`, `os`, `path`, `perf_hooks`, `process`, `querystring`, `readline`, `string_decoder`, `timers`, `timers/promises`, `tty`, `url`, `util`, `zlib` |
+| **C# / IL (host-I/O)** | `crypto`, `stream`, `stream/promises`, `stream/web`, `buffer`, `http`, `https`, `net`, `tls`, `dgram`, `cluster`, `child_process`, `vm`, `dns`, `dns/promises`, `worker_threads` |
 
 ---
 

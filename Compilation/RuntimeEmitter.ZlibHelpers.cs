@@ -34,15 +34,10 @@ public partial class RuntimeEmitter
         EmitZlibZstdCompressSync(typeBuilder, runtime);
         EmitZlibZstdDecompressSync(typeBuilder, runtime);
         EmitZlibUnzipSync(typeBuilder, runtime);
-        EmitZlibGetConstants(typeBuilder, runtime);
-        EmitZlibGetCodes(typeBuilder, runtime);
         EmitZlibCrc32(typeBuilder, runtime);
 
         // Emit streaming create* methods (pure-IL, no reflection)
         EmitZlibStreamingMethods(typeBuilder, runtime);
-
-        // Emit per-method async wrappers
-        EmitZlibAsyncMethods(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitZlibMethodWrappers(typeBuilder, runtime);
@@ -724,203 +719,7 @@ public partial class RuntimeEmitter
 
     #endregion
 
-    #region Constants
-
-    /// <summary>
-    /// Emits: public static object ZlibGetConstants()
-    /// Creates a $Object with all zlib constants.
-    /// </summary>
-    private void EmitZlibGetConstants(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ZlibGetConstants",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            Type.EmptyTypes);
-        runtime.ZlibGetConstants = method;
-
-        var il = method.GetILGenerator();
-
-        // Create new $Object with empty dictionary: new $Object(new Dictionary<string, object?>())
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-        var objLocal = il.DeclareLocal(runtime.TSObjectType);
-        il.Emit(OpCodes.Stloc, objLocal);
-
-        // Helper to add constant
-        void AddConstant(string name, double value)
-        {
-            il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Ldc_R8, value);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
-        }
-
-        // Compression levels
-        AddConstant("Z_NO_COMPRESSION", 0);
-        AddConstant("Z_BEST_SPEED", 1);
-        AddConstant("Z_BEST_COMPRESSION", 9);
-        AddConstant("Z_DEFAULT_COMPRESSION", -1);
-
-        // Strategies
-        AddConstant("Z_FILTERED", 1);
-        AddConstant("Z_HUFFMAN_ONLY", 2);
-        AddConstant("Z_RLE", 3);
-        AddConstant("Z_FIXED", 4);
-        AddConstant("Z_DEFAULT_STRATEGY", 0);
-
-        // Flush modes
-        AddConstant("Z_NO_FLUSH", 0);
-        AddConstant("Z_PARTIAL_FLUSH", 1);
-        AddConstant("Z_SYNC_FLUSH", 2);
-        AddConstant("Z_FULL_FLUSH", 3);
-        AddConstant("Z_FINISH", 4);
-        AddConstant("Z_BLOCK", 5);
-        AddConstant("Z_TREES", 6);
-
-        // Return codes
-        AddConstant("Z_OK", 0);
-        AddConstant("Z_STREAM_END", 1);
-        AddConstant("Z_NEED_DICT", 2);
-        AddConstant("Z_ERRNO", -1);
-        AddConstant("Z_STREAM_ERROR", -2);
-        AddConstant("Z_DATA_ERROR", -3);
-        AddConstant("Z_MEM_ERROR", -4);
-        AddConstant("Z_BUF_ERROR", -5);
-        AddConstant("Z_VERSION_ERROR", -6);
-
-        // Window/memory defaults
-        AddConstant("Z_DEFAULT_WINDOWBITS", 15);
-        AddConstant("Z_DEFAULT_MEMLEVEL", 8);
-        AddConstant("Z_MIN_WINDOWBITS", 8);
-        AddConstant("Z_MAX_WINDOWBITS", 15);
-        AddConstant("Z_MIN_MEMLEVEL", 1);
-        AddConstant("Z_MAX_MEMLEVEL", 9);
-        AddConstant("Z_DEFAULT_CHUNK", 16384);
-        AddConstant("Z_MIN_CHUNK", 64);
-        AddConstant("Z_MAX_CHUNK", double.PositiveInfinity);
-        AddConstant("Z_MIN_LEVEL", -1);
-        AddConstant("Z_MAX_LEVEL", 9);
-        AddConstant("Z_DEFAULT_LEVEL", 6);
-
-        // Codec mode identifiers
-        AddConstant("DEFLATE", 1);
-        AddConstant("INFLATE", 2);
-        AddConstant("GZIP", 3);
-        AddConstant("GUNZIP", 4);
-        AddConstant("DEFLATERAW", 5);
-        AddConstant("INFLATERAW", 6);
-        AddConstant("UNZIP", 7);
-        AddConstant("BROTLI_DECODE", 8);
-        AddConstant("BROTLI_ENCODE", 9);
-        AddConstant("ZSTD_COMPRESS", 10);
-        AddConstant("ZSTD_DECOMPRESS", 11);
-
-        // Brotli constants
-        AddConstant("BROTLI_OPERATION_PROCESS", 0);
-        AddConstant("BROTLI_OPERATION_FLUSH", 1);
-        AddConstant("BROTLI_OPERATION_FINISH", 2);
-        AddConstant("BROTLI_OPERATION_EMIT_METADATA", 3);
-        AddConstant("BROTLI_PARAM_MODE", 0);
-        AddConstant("BROTLI_PARAM_QUALITY", 1);
-        AddConstant("BROTLI_PARAM_LGWIN", 2);
-        AddConstant("BROTLI_PARAM_LGBLOCK", 3);
-        AddConstant("BROTLI_PARAM_DISABLE_LITERAL_CONTEXT_MODELING", 4);
-        AddConstant("BROTLI_PARAM_SIZE_HINT", 5);
-        AddConstant("BROTLI_PARAM_LARGE_WINDOW", 6);
-        AddConstant("BROTLI_PARAM_NPOSTFIX", 7);
-        AddConstant("BROTLI_PARAM_NDIRECT", 8);
-        AddConstant("BROTLI_MODE_GENERIC", 0);
-        AddConstant("BROTLI_MODE_TEXT", 1);
-        AddConstant("BROTLI_MODE_FONT", 2);
-        AddConstant("BROTLI_MIN_QUALITY", 0);
-        AddConstant("BROTLI_MAX_QUALITY", 11);
-        AddConstant("BROTLI_DEFAULT_QUALITY", 11);
-        AddConstant("BROTLI_MIN_WINDOW_BITS", 10);
-        AddConstant("BROTLI_MAX_WINDOW_BITS", 24);
-        AddConstant("BROTLI_LARGE_MAX_WINDOW_BITS", 30);
-        AddConstant("BROTLI_DEFAULT_WINDOW", 22);
-        AddConstant("BROTLI_DECODER_PARAM_DISABLE_RING_BUFFER_REALLOCATION", 0);
-        AddConstant("BROTLI_DECODER_PARAM_LARGE_WINDOW", 1);
-        AddConstant("BROTLI_DECODER_RESULT_ERROR", 0);
-        AddConstant("BROTLI_DECODER_RESULT_SUCCESS", 1);
-        AddConstant("BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT", 2);
-        AddConstant("BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT", 3);
-
-        // Zstd constants
-        AddConstant("ZSTD_c_compressionLevel", 100);
-        AddConstant("ZSTD_c_windowLog", 101);
-        AddConstant("ZSTD_c_hashLog", 102);
-        AddConstant("ZSTD_c_chainLog", 103);
-        AddConstant("ZSTD_c_searchLog", 104);
-        AddConstant("ZSTD_c_minMatch", 105);
-        AddConstant("ZSTD_c_targetLength", 106);
-        AddConstant("ZSTD_c_strategy", 107);
-        AddConstant("ZSTD_c_checksumFlag", 201);
-        AddConstant("ZSTD_c_contentSizeFlag", 200);
-        AddConstant("ZSTD_c_dictIDFlag", 202);
-        AddConstant("ZSTD_c_nbWorkers", 400);
-        AddConstant("ZSTD_c_jobSize", 401);
-        AddConstant("ZSTD_c_overlapLog", 402);
-        AddConstant("ZSTD_minCLevel", -131072);
-        AddConstant("ZSTD_maxCLevel", 22);
-        AddConstant("ZSTD_defaultCLevel", 3);
-        AddConstant("ZSTD_e_continue", 0);
-        AddConstant("ZSTD_e_flush", 1);
-        AddConstant("ZSTD_e_end", 2);
-
-        il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object ZlibGetCodes()
-    /// Creates the bidirectional zlib.codes object (name↔number) mirroring
-    /// <c>ZlibConstants.CreateCodesObject</c>.
-    /// </summary>
-    private void EmitZlibGetCodes(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ZlibGetCodes",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            Type.EmptyTypes);
-        runtime.ZlibGetCodes = method;
-
-        var il = method.GetILGenerator();
-
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-        var objLocal = il.DeclareLocal(runtime.TSObjectType);
-        il.Emit(OpCodes.Stloc, objLocal);
-
-        void AddNumber(string name, double value)
-        {
-            il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Ldc_R8, value);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
-        }
-
-        void AddString(string key, string value)
-        {
-            il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Ldstr, key);
-            il.Emit(OpCodes.Ldstr, value);
-            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
-        }
-
-        foreach (var (name, value) in SharpTS.Runtime.BuiltIns.Modules.ZlibConstants.ReturnCodes)
-        {
-            AddNumber(name, value);                 // name -> number
-            AddString(value.ToString(), name);      // numeric string -> name
-        }
-
-        il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Ret);
-    }
+    #region Checksums
 
     /// <summary>
     /// Emits: public static object ZlibCrc32(object data, object value)
@@ -1039,7 +838,7 @@ public partial class RuntimeEmitter
     #region Streaming APIs
 
     /// <summary>
-    /// Emits all zlib streaming create* methods and the async callback helper.
+    /// Emits all zlib streaming create* methods.
     /// </summary>
     private void EmitZlibStreamingMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1055,7 +854,6 @@ public partial class RuntimeEmitter
         EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdCompress", 9, mb => runtime.ZlibCreateZstdCompress = mb);
         EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateZstdDecompress", 10, mb => runtime.ZlibCreateZstdDecompress = mb);
         EmitZlibCreateStreamMethod(typeBuilder, runtime, "ZlibCreateUnzip", 8, mb => runtime.ZlibCreateUnzip = mb);
-        EmitZlibAsyncCallback(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -1080,133 +878,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);              // options
         il.Emit(OpCodes.Call, _getZlibCompressionLevel!);  // -> int (CompressionLevel)
         il.Emit(OpCodes.Newobj, runtime.TSZlibTransformCtor);  // new $ZlibTransform(kind, level)
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Retained for backward compat — still referenced by EmittedRuntime.ZlibAsyncCallback.
-    /// Now a no-op since individual async methods are emitted separately.
-    /// </summary>
-    private void EmitZlibAsyncCallback(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ZlibAsyncCallback",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.Object]);
-        runtime.ZlibAsyncCallback = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits per-method async wrappers: ZlibGzipAsync, ZlibDeflateAsync, etc.
-    /// Each calls the corresponding sync method and invokes the callback with (null, result) or (error).
-    /// In compiled mode, these run synchronously (acceptable tradeoff).
-    /// </summary>
-    private void EmitZlibAsyncMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibGzipAsync", () => runtime.ZlibGzipSync, mb => runtime.ZlibGzipAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibGunzipAsync", () => runtime.ZlibGunzipSync, mb => runtime.ZlibGunzipAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibDeflateAsync", () => runtime.ZlibDeflateSync, mb => runtime.ZlibDeflateAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibInflateAsync", () => runtime.ZlibInflateSync, mb => runtime.ZlibInflateAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibDeflateRawAsync", () => runtime.ZlibDeflateRawSync, mb => runtime.ZlibDeflateRawAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibInflateRawAsync", () => runtime.ZlibInflateRawSync, mb => runtime.ZlibInflateRawAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibBrotliCompressAsync", () => runtime.ZlibBrotliCompressSync, mb => runtime.ZlibBrotliCompressAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibBrotliDecompressAsync", () => runtime.ZlibBrotliDecompressSync, mb => runtime.ZlibBrotliDecompressAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibZstdCompressAsync", () => runtime.ZlibZstdCompressSync, mb => runtime.ZlibZstdCompressAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibZstdDecompressAsync", () => runtime.ZlibZstdDecompressSync, mb => runtime.ZlibZstdDecompressAsync = mb);
-        EmitZlibAsyncMethod(typeBuilder, runtime, "ZlibUnzipAsync", () => runtime.ZlibUnzipSync, mb => runtime.ZlibUnzipAsync = mb);
-    }
-
-    /// <summary>
-    /// Emits: public static object ZlibXxxAsync(object input, object? options, object? callback)
-    /// Calls syncMethod(input, options), then invokes callback(null, result).
-    /// On exception, invokes callback(error.Message).
-    /// </summary>
-    private void EmitZlibAsyncMethod(TypeBuilder typeBuilder, EmittedRuntime runtime,
-        string methodName, Func<MethodBuilder> getSyncMethod, Action<MethodBuilder> setter)
-    {
-        var method = typeBuilder.DefineMethod(
-            methodName,
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.Object]  // input, options, callback
-        );
-        setter(method);
-
-        var il = method.GetILGenerator();
-
-        var resultLocal = il.DeclareLocal(_types.Object);
-
-        // try {
-        il.BeginExceptionBlock();
-
-        //   result = SyncMethod(input, options)
-        il.Emit(OpCodes.Ldarg_0); // input
-        il.Emit(OpCodes.Ldarg_1); // options
-        il.Emit(OpCodes.Call, getSyncMethod());
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        //   if (callback != null && callback is $TSFunction)
-        //     callback.Invoke([null, result])
-        var noCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, noCallbackLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, noCallbackLabel);
-
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldnull); // error = null
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldloc, resultLocal); // result
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(noCallbackLabel);
-
-        // } catch (Exception ex) {
-        il.BeginCatchBlock(typeof(Exception));
-        var exLocal = il.DeclareLocal(typeof(Exception));
-        il.Emit(OpCodes.Stloc, exLocal);
-
-        //   if (callback != null) callback.Invoke([ex.Message])
-        var noCatchCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, noCatchCallbackLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, noCatchCallbackLabel);
-
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Message")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(noCatchCallbackLabel);
-
-        // }
-        il.EndExceptionBlock();
-
-        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1249,7 +920,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, targetMethod);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("zlib", name, wrapper);
+            runtime.RegisterBuiltInModuleMethod("primitive:zlib", name, wrapper);
         }
 
         // Streaming create* methods (1 arg: options)
@@ -1281,41 +952,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, targetMethod);
             il.Emit(OpCodes.Ret);
 
-            runtime.RegisterBuiltInModuleMethod("zlib", name, wrapper);
-        }
-
-        // Async callback methods (3 args: input, options, callback)
-        var asyncMethods = new (string name, MethodBuilder target)[]
-        {
-            ("gzip", runtime.ZlibGzipAsync),
-            ("gunzip", runtime.ZlibGunzipAsync),
-            ("deflate", runtime.ZlibDeflateAsync),
-            ("inflate", runtime.ZlibInflateAsync),
-            ("deflateRaw", runtime.ZlibDeflateRawAsync),
-            ("inflateRaw", runtime.ZlibInflateRawAsync),
-            ("brotliCompress", runtime.ZlibBrotliCompressAsync),
-            ("brotliDecompress", runtime.ZlibBrotliDecompressAsync),
-            ("zstdCompress", runtime.ZlibZstdCompressAsync),
-            ("zstdDecompress", runtime.ZlibZstdDecompressAsync),
-            ("unzip", runtime.ZlibUnzipAsync)
-        };
-
-        foreach (var (name, targetMethod) in asyncMethods)
-        {
-            var wrapper = typeBuilder.DefineMethod(
-                "ZlibWrapper_" + name,
-                MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object,
-                [_types.Object, _types.Object, _types.Object]);
-
-            var il = wrapper.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0); // input
-            il.Emit(OpCodes.Ldarg_1); // options
-            il.Emit(OpCodes.Ldarg_2); // callback
-            il.Emit(OpCodes.Call, targetMethod);
-            il.Emit(OpCodes.Ret);
-
-            runtime.RegisterBuiltInModuleMethod("zlib", name, wrapper);
+            runtime.RegisterBuiltInModuleMethod("primitive:zlib", name, wrapper);
         }
     }
 

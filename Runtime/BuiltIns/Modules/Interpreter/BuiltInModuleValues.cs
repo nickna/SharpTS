@@ -37,7 +37,8 @@ public static class BuiltInModuleValues
             //   ReadlinePrimitiveInterpreter is reused by PrimitiveModuleValues; not routed here.
             "child_process" => ChildProcessModuleInterpreter.GetExports(),
             "buffer" => BufferModuleInterpreter.GetExports(),
-            "zlib" => ZlibModuleInterpreter.GetExports(),
+            // "zlib" — migrated to stdlib/node/zlib.ts which imports from primitive:zlib.
+            //   ZlibModuleInterpreter is reused by PrimitiveModuleValues; not routed here.
             // "events" — migrated to stdlib/node/events.ts (pure-TS EventEmitter).
             // "timers" / "timers/promises" — migrated to stdlib/node/timers{,/promises}.ts.
             //   TimersPrimitiveInterpreter is reused by PrimitiveModuleValues.
@@ -86,7 +87,7 @@ public static class BuiltInModuleValues
     {
         return moduleName is
             "crypto" or "child_process" or "buffer"
-            or "zlib" or "stream" or "stream/promises" or "stream/web"
+            or "stream" or "stream/promises" or "stream/web"
             or "http" or "worker_threads" or "dns" or "dns/promises" or "net" or "https" or "tls"
             or "dgram" or "cluster" or "vm";
     }

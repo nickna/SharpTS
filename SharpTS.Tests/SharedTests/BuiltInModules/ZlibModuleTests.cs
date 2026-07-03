@@ -1194,4 +1194,65 @@ public class ZlibModuleTests
     }
 
     #endregion
+
+    #region Facade Tests (stdlib/node/zlib.ts over primitive:zlib)
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Async_BadInput_InvokesErrorCallback(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            // The TS facade derives the callback forms from the sync primitives;
+            // failures must arrive as callback(err) with no result, in both modes.
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                zlib.gunzip(Buffer.from('definitely not gzip data'), (err: any, result: any) => {
+                    console.log(err !== null && err !== undefined);
+                    console.log(result === undefined);
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Codes_BidirectionalMapping(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                console.log(zlib.codes.Z_DATA_ERROR);
+                console.log(zlib.codes['-3']);
+                console.log(zlib.constants.Z_MAX_CHUNK === Infinity);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("-3\nZ_DATA_ERROR\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_NamedImports_ThroughFacade(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { gzipSync, gunzipSync, crc32, constants } from 'zlib';
+                console.log(gunzipSync(gzipSync('named-import')).toString());
+                console.log(crc32('abc'));
+                console.log(constants.Z_BEST_COMPRESSION);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("named-import\n891568578\n9\n", output);
+    }
+
+    #endregion
 }

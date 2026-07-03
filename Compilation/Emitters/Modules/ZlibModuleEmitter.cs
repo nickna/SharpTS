@@ -5,20 +5,18 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.Emitters.Modules;
 
 /// <summary>
-/// Emits IL code for the Node.js 'zlib' module.
+/// Emits IL code for <c>primitive:zlib</c> — the narrow compiled surface behind
+/// the stdlib/node/zlib.ts facade.
 /// </summary>
 /// <remarks>
-/// Provides compression/decompression functionality:
-/// - gzipSync/gunzipSync: Gzip format
-/// - deflateSync/inflateSync: Deflate with zlib header
-/// - deflateRawSync/inflateRawSync: Raw deflate (no header)
-/// - brotliCompressSync/brotliDecompressSync: Brotli format
-/// - zstdCompressSync/zstdDecompressSync: Zstandard format
-/// - constants: Compression constants object
+/// Provides the compression cores and stateful streams TypeScript cannot express:
+/// sync one-shots (gzip/deflate/deflateRaw/brotli/zstd/unzip), the streaming
+/// create* Transform factories, and crc32. The Node-shape glue (constants/codes
+/// objects, async callback forms) lives in the TS facade.
 /// </remarks>
 public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
 {
-    public string ModuleName => "zlib";
+    public string ModuleName => "primitive:zlib";
 
     private static readonly string[] _exportedMembers =
     [
@@ -35,16 +33,8 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
         "createBrotliCompress", "createBrotliDecompress",
         "createZstdCompress", "createZstdDecompress",
         "createUnzip",
-        // Async callback APIs
-        "gzip", "gunzip",
-        "deflate", "inflate",
-        "deflateRaw", "inflateRaw",
-        "brotliCompress", "brotliDecompress",
-        "zstdCompress", "zstdDecompress",
-        "unzip",
         // Checksums
-        "crc32",
-        "constants", "codes"
+        "crc32"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -76,18 +66,6 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
             "createZstdCompress" => EmitCreateStream(emitter, arguments, "ZlibCreateZstdCompress"),
             "createZstdDecompress" => EmitCreateStream(emitter, arguments, "ZlibCreateZstdDecompress"),
             "createUnzip" => EmitCreateStream(emitter, arguments, "ZlibCreateUnzip"),
-            // Async callback APIs
-            "gzip" => EmitAsyncMethod(emitter, arguments, "ZlibGzipAsync"),
-            "gunzip" => EmitAsyncMethod(emitter, arguments, "ZlibGunzipAsync"),
-            "deflate" => EmitAsyncMethod(emitter, arguments, "ZlibDeflateAsync"),
-            "inflate" => EmitAsyncMethod(emitter, arguments, "ZlibInflateAsync"),
-            "deflateRaw" => EmitAsyncMethod(emitter, arguments, "ZlibDeflateRawAsync"),
-            "inflateRaw" => EmitAsyncMethod(emitter, arguments, "ZlibInflateRawAsync"),
-            "brotliCompress" => EmitAsyncMethod(emitter, arguments, "ZlibBrotliCompressAsync"),
-            "brotliDecompress" => EmitAsyncMethod(emitter, arguments, "ZlibBrotliDecompressAsync"),
-            "zstdCompress" => EmitAsyncMethod(emitter, arguments, "ZlibZstdCompressAsync"),
-            "zstdDecompress" => EmitAsyncMethod(emitter, arguments, "ZlibZstdDecompressAsync"),
-            "unzip" => EmitAsyncMethod(emitter, arguments, "ZlibUnzipAsync"),
             // Checksums (Node 22+): crc32(data[, value])
             "crc32" => EmitCrc32(emitter, arguments),
             _ => false
@@ -130,20 +108,8 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        switch (propertyName)
-        {
-            case "constants":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ZlibGetConstants);
-                return true;
-            case "codes":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ZlibGetCodes);
-                return true;
-            default:
-                return false;
-        }
+        // constants/codes are TS object literals in the stdlib/node/zlib.ts facade.
+        return false;
     }
 
     /// <summary>
@@ -184,71 +150,6 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
         };
 
         il.Emit(OpCodes.Call, method);
-        return true;
-    }
-
-    /// <summary>
-    /// Emits an async callback zlib method call.
-    /// Pattern: Method(input, [options,] callback) -> null
-    /// Calls the per-method async wrapper which calls sync + invokes callback.
-    /// </summary>
-    private static bool EmitAsyncMethod(IEmitterContext emitter, List<Expr> arguments, string asyncMethodName)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Emit input argument
-        if (arguments.Count == 0)
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-        else
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-
-        // Emit options argument (null if callback is arg[1])
-        if (arguments.Count >= 3)
-        {
-            emitter.EmitExpression(arguments[1]);
-            emitter.EmitBoxIfNeeded(arguments[1]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        // Emit callback argument (last arg)
-        if (arguments.Count >= 2)
-        {
-            var cbIndex = arguments.Count >= 3 ? 2 : 1;
-            emitter.EmitExpression(arguments[cbIndex]);
-            emitter.EmitBoxIfNeeded(arguments[cbIndex]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        // Call the per-method async wrapper: XxxAsync(input, options, callback)
-        var asyncMethod = asyncMethodName switch
-        {
-            "ZlibGzipAsync" => ctx.Runtime!.ZlibGzipAsync,
-            "ZlibGunzipAsync" => ctx.Runtime!.ZlibGunzipAsync,
-            "ZlibDeflateAsync" => ctx.Runtime!.ZlibDeflateAsync,
-            "ZlibInflateAsync" => ctx.Runtime!.ZlibInflateAsync,
-            "ZlibDeflateRawAsync" => ctx.Runtime!.ZlibDeflateRawAsync,
-            "ZlibInflateRawAsync" => ctx.Runtime!.ZlibInflateRawAsync,
-            "ZlibBrotliCompressAsync" => ctx.Runtime!.ZlibBrotliCompressAsync,
-            "ZlibBrotliDecompressAsync" => ctx.Runtime!.ZlibBrotliDecompressAsync,
-            "ZlibZstdCompressAsync" => ctx.Runtime!.ZlibZstdCompressAsync,
-            "ZlibZstdDecompressAsync" => ctx.Runtime!.ZlibZstdDecompressAsync,
-            "ZlibUnzipAsync" => ctx.Runtime!.ZlibUnzipAsync,
-            _ => throw new CompileException($"Unknown zlib async method: {asyncMethodName}")
-        };
-
-        il.Emit(OpCodes.Call, asyncMethod);
         return true;
     }
 

@@ -2230,8 +2230,6 @@ public class EmittedRuntime
     public MethodBuilder ZlibZstdCompressSync { get; set; } = null!;
     public MethodBuilder ZlibZstdDecompressSync { get; set; } = null!;
     public MethodBuilder ZlibUnzipSync { get; set; } = null!;
-    public MethodBuilder ZlibGetConstants { get; set; } = null!;
-    public MethodBuilder ZlibGetCodes { get; set; } = null!;
     public MethodBuilder ZlibCrc32 { get; set; } = null!;
 
     // Zlib streaming APIs
@@ -2246,20 +2244,6 @@ public class EmittedRuntime
     public MethodBuilder ZlibCreateZstdCompress { get; set; } = null!;
     public MethodBuilder ZlibCreateZstdDecompress { get; set; } = null!;
     public MethodBuilder ZlibCreateUnzip { get; set; } = null!;
-    public MethodBuilder ZlibAsyncCallback { get; set; } = null!;
-
-    // Zlib per-method async wrappers
-    public MethodBuilder ZlibGzipAsync { get; set; } = null!;
-    public MethodBuilder ZlibGunzipAsync { get; set; } = null!;
-    public MethodBuilder ZlibDeflateAsync { get; set; } = null!;
-    public MethodBuilder ZlibInflateAsync { get; set; } = null!;
-    public MethodBuilder ZlibDeflateRawAsync { get; set; } = null!;
-    public MethodBuilder ZlibInflateRawAsync { get; set; } = null!;
-    public MethodBuilder ZlibBrotliCompressAsync { get; set; } = null!;
-    public MethodBuilder ZlibBrotliDecompressAsync { get; set; } = null!;
-    public MethodBuilder ZlibZstdCompressAsync { get; set; } = null!;
-    public MethodBuilder ZlibZstdDecompressAsync { get; set; } = null!;
-    public MethodBuilder ZlibUnzipAsync { get; set; } = null!;
 
     // $ZlibTransform type - emitted for standalone zlib streaming support
     public ConstructorBuilder TSZlibTransformCtor { get; set; } = null!;

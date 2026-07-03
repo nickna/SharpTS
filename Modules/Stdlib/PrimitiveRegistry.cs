@@ -31,6 +31,7 @@ public static class PrimitiveRegistry
         Prefix + "readline",
         Prefix + "fs",
         Prefix + "fs/promises",
+        Prefix + "zlib",
     };
 
     /// <summary>
