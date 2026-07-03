@@ -81,6 +81,9 @@ public partial class RuntimeEmitter
 
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
+
+        // #1059/#1060 — generateKey/generateKeySync/getFips/setFips wrappers
+        EmitCryptoCompletionWrappers(typeBuilder, runtime);
     }
 
     /// <summary>

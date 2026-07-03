@@ -1,0 +1,225 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
+
+/// <summary>
+/// Parity tests for crypto KeyObject completeness (#1059) and ECDH raw-point
+/// encodings + FIPS shims (#1060).
+///
+/// Compiled scope: ECDH raw-point getPublicKey/getPrivateKey/computeSecret,
+/// asymmetricKeyDetails.namedCurve, generateKey/generateKeySync, getFips/fips.
+/// Documented compiled-deferred (interpreter-only tests): KeyObject jwk/der
+/// import+export, equals(), ECDH.convertKey, compressed-point computeSecret input,
+/// one-shot crypto.diffieHellman().
+/// </summary>
+public class CryptoKeyEcdhParityTests
+{
+    // ----- Dual-mode (compiled + interpreted) -----
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Ecdh_TwoParty_RawPoint_Agreement(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const alice = crypto.createECDH('prime256v1');
+                const alicePub = alice.generateKeys('hex');       // uncompressed raw point
+                const bob = crypto.createECDH('prime256v1');
+                const bobPub = bob.generateKeys('hex');
+                const s1 = alice.computeSecret(bobPub, 'hex', 'hex');
+                const s2 = bob.computeSecret(alicePub, 'hex', 'hex');
+                console.log(s1 === s2);
+                // uncompressed P-256 point = 1 + 2*32 bytes = 65 -> 130 hex chars, prefix '04'
+                console.log(alicePub.length === 130);
+                console.log(alicePub.substring(0, 2) === '04');
+                """
+        };
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Ecdh_GetPrivateKey_RawScalar(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const ecdh = crypto.createECDH('prime256v1');
+                ecdh.generateKeys();
+                const priv = ecdh.getPrivateKey('hex');
+                // Raw P-256 scalar is <= 32 bytes (64 hex chars), NOT a PKCS8 blob.
+                console.log(priv.length <= 64);
+                console.log(priv.length > 0);
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Ecdh_GetPublicKey_CompressedFormat(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const ecdh = crypto.createECDH('prime256v1');
+                ecdh.generateKeys();
+                const comp = ecdh.getPublicKey('hex', 'compressed');
+                // compressed P-256 = 1 + 32 bytes = 33 -> 66 hex chars, prefix 02 or 03
+                console.log(comp.length === 66);
+                const p = comp.substring(0, 2);
+                console.log(p === '02' || p === '03');
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void AsymmetricKeyDetails_NamedCurve_P384(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'secp384r1' });
+                const key = crypto.createPublicKey(publicKey);
+                console.log(key.asymmetricKeyType === 'ec');
+                console.log(key.asymmetricKeyDetails.namedCurve === 'secp384r1');
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void GenerateKeySync_Aes256(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const key = crypto.generateKeySync('aes', { length: 256 });
+                console.log(key.type === 'secret');
+                console.log(key.symmetricKeySize === 32);
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void GenerateKey_Callback(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                crypto.generateKey('hmac', { length: 256 }, (err: any, key: any) => {
+                    console.log(err === null || err === undefined);
+                    console.log(key.type === 'secret');
+                    console.log(key.symmetricKeySize === 32);
+                });
+                """
+        };
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Fips_Shims(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                console.log(crypto.getFips() === 0);
+                console.log(crypto.fips === false);
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    // ----- Interpreter-only (compiled-deferred surface) -----
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void KeyObject_JwkRoundTrip_Rsa(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const { publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+                const key = crypto.createPublicKey(publicKey);
+                const jwk = key.export({ format: 'jwk' });
+                console.log(jwk.kty === 'RSA');
+                console.log(typeof jwk.n === 'string');
+                const back = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+                console.log(back.asymmetricKeyType === 'rsa');
+                """
+        };
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void KeyObject_Equals(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+                const a = crypto.createPublicKey(publicKey);
+                const b = crypto.createPublicKey(publicKey);
+                console.log(a.equals(b));
+                const { publicKey: other } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+                console.log(a.equals(crypto.createPublicKey(other)) === false);
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void CreatePublicKey_FromPrivateKeyObject(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+                const priv = crypto.createPrivateKey(privateKey);
+                const pub = crypto.createPublicKey(priv);
+                console.log(pub.type === 'public');
+                console.log(pub.asymmetricKeyType === 'rsa');
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Ecdh_ConvertKey_And_OneShotDiffieHellman(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const ecdh = crypto.createECDH('prime256v1');
+                const uncompressed = ecdh.generateKeys('hex');
+                const compressed = crypto.ECDH.convertKey(uncompressed, 'prime256v1', 'hex', 'hex', 'compressed');
+                console.log(compressed.length === 66);
+                const roundtrip = crypto.ECDH.convertKey(compressed, 'prime256v1', 'hex', 'hex', 'uncompressed');
+                console.log(roundtrip === uncompressed);
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+}

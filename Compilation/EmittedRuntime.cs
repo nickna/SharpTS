@@ -2877,4 +2877,14 @@ public class EmittedRuntime
     public MethodBuilder CryptoGeneratePrimeCore { get; set; } = null!;
     public MethodBuilder CryptoGeneratePrimeSyncObj { get; set; } = null!;
     public MethodBuilder CryptoCheckPrimeSyncObj { get; set; } = null!;
+
+    // crypto KeyObject/ECDH completeness (#1059/#1060)
+    /// <summary>Recovers the Y coordinate of a compressed EC point via modular sqrt.</summary>
+    public MethodBuilder EcdhDecompressY { get; set; } = null!;
+    /// <summary>Encodes an ECPoint per Node point-conversion format (uncompressed/compressed/hybrid).</summary>
+    public MethodBuilder EcdhEncodePoint { get; set; } = null!;
+    /// <summary>Decodes a raw EC point (any format) into an ECParameters point on a curve.</summary>
+    public MethodBuilder EcdhDecodePoint { get; set; } = null!;
+    /// <summary>The curve field byte length for a curve name (32/48/66).</summary>
+    public MethodBuilder EcdhFieldLength { get; set; } = null!;
 }
