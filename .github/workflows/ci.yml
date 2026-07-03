@@ -60,6 +60,13 @@ jobs:
       # DNS/HTTP calls (tagged [Trait("Category","LiveNetwork")]); those depend on
       # the runner's network and false-red CI (#495). Run them on demand locally:
       # dotnet test --filter "Category=LiveNetwork"
+      #
+      # Category!=LoadSensitive is the same quarantine for tests that inherently
+      # depend on load/wall-clock timing (#1215 policy): the default suite must
+      # contain no test we know can fail without a code defect. Currently no test
+      # carries the tag — every known load-flake was fixed at the product level
+      # (#1211/#1212/#1213) — but any future inherently-timing-dependent test gets
+      # [Trait("Category","LoadSensitive")] and is excluded here automatically.
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive"
         timeout-minutes: 10

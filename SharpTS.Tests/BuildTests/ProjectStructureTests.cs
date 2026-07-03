@@ -30,10 +30,15 @@ public class ProjectStructureTests
 
         // Every sibling project directory under the repo root (the core project, build
         // output, and the external submodules excluded — the submodules carry no .cs).
+        // Dot-directories (.claude worktrees, .perf-probe scratch dirs, .git) are skipped
+        // to mirror the SDK's DefaultItemExcludes (**/.*/**): the compiler never globs
+        // sources under them, so a csproj there needs no <Compile Remove> entry — and
+        // untracked working dirs must not turn this test red on dev machines (#1214).
         var siblingProjects = Directory
             .EnumerateFiles(repoRoot, "*.csproj", SearchOption.AllDirectories)
             .Where(p => !string.Equals(p, coreCsproj, StringComparison.OrdinalIgnoreCase))
-            .Where(p => !IsUnder(repoRoot, p, "external", "bin", "obj"))
+            .Where(p => !IsUnder(repoRoot, p, "external"))
+            .Where(p => !HasSkippedSegment(repoRoot, p))
             .ToList();
 
         Assert.NotEmpty(siblingProjects); // sanity: discovery actually found the sibling projects
@@ -61,6 +66,20 @@ public class ProjectStructureTests
         var rel = Path.GetRelativePath(repoRoot, path).Replace('\\', '/');
         return topLevelDirs.Any(d =>
             rel.StartsWith(d + "/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// True when any directory segment of the path is a dot-directory or a
+    /// bin/obj output directory (at any depth — publish output can nest csproj
+    /// copies under a project's own bin/).
+    /// </summary>
+    private static bool HasSkippedSegment(string repoRoot, string path)
+    {
+        var rel = Path.GetRelativePath(repoRoot, Path.GetDirectoryName(path)!);
+        return rel.Split('/', '\\').Any(seg =>
+            seg.StartsWith('.') ||
+            seg.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+            seg.Equals("obj", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string FindRepoRoot()
