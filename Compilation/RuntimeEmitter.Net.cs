@@ -23,8 +23,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public static object NetCreateServer(object? callback)
+    /// Emits: public static object NetCreateServer(object? optionsOrCallback, object? callback)
     /// Creates a $NetServer directly (no reflection needed — standalone DLL support).
+    /// Node signature: createServer([options][, connectionListener]) — an options dict
+    /// as the first arg carries per-socket settings (highWaterMark) applied to
+    /// accepted connections.
     /// </summary>
     private void EmitNetCreateServer(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -32,17 +35,61 @@ public partial class RuntimeEmitter
             "NetCreateServer",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.NetCreateServer = method;
         runtime.RegisterBuiltInModuleMethod("net", "createServer", method);
         runtime.RegisterBuiltInModuleMethod("net", "Server", method); // alias
 
         var il = method.GetILGenerator();
+        var serverLocal = il.DeclareLocal(_netServerTypeBuilder);
+        var cbLocal = il.DeclareLocal(_types.Object);
 
-        // return new $NetServer(callback)
+        // callback = (arg0 is Dictionary) ? arg1 : arg0
+        var optionsForm = il.DefineLabel();
+        var createServer = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, optionsForm);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.Emit(OpCodes.Br, createServer);
+        il.MarkLabel(optionsForm);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.MarkLabel(createServer);
+
+        // server = new $NetServer(callback)
+        il.Emit(OpCodes.Ldloc, cbLocal);
         il.Emit(OpCodes.Newobj, runtime.NetServerCtor);
+        il.Emit(OpCodes.Stloc, serverLocal);
+
+        // if (arg0 is Dictionary && arg0["highWaterMark"] is double hwm) server._socketHwm = (int)hwm
+        var noOptions = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, noOptions);
+        {
+            var valLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "highWaterMark");
+            il.Emit(OpCodes.Ldloca, valLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, noOptions);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Isinst, typeof(double));
+            il.Emit(OpCodes.Brfalse, noOptions);
+            il.Emit(OpCodes.Ldloc, serverLocal);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Unbox_Any, _types.Double);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
+        }
+        il.MarkLabel(noOptions);
+
+        // return server
+        il.Emit(OpCodes.Ldloc, serverLocal);
         il.Emit(OpCodes.Ret);
     }
 

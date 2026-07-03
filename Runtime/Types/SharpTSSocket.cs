@@ -29,6 +29,16 @@ public class SharpTSSocket : SharpTSEventEmitter
     internal bool _isIpc;
     internal string? _pipePath;
 
+    // Write backpressure (#1068). Writes are queued onto a serialized task chain;
+    // _writableLength tracks bytes enqueued but not yet flushed to the stream.
+    // write() returns false once that exceeds the high-water mark, and 'drain'
+    // fires when the buffer fully empties (Node emits at length === 0).
+    private long _writableLength;
+    protected internal int _writableHighWaterMark = 16384; // Node's stream default (16 KiB)
+    private bool _needDrain;
+    private Task _writeChain = Task.CompletedTask;
+    private readonly object _writeLock = new();
+
     /// <summary>
     /// Creates a new Socket wrapping an existing TcpClient (server-side).
     /// </summary>
@@ -89,6 +99,9 @@ public class SharpTSSocket : SharpTSEventEmitter
             "connecting" => _connecting,
             "destroyed" => _destroyed,
             "readyState" => GetReadyState(),
+            "writableLength" => (double)Interlocked.Read(ref _writableLength),
+            "writableHighWaterMark" => (double)_writableHighWaterMark,
+            "writableNeedDrain" => _needDrain,
 
             // EventEmitter methods
             _ => base.GetMember(name)
@@ -123,6 +136,7 @@ public class SharpTSSocket : SharpTSEventEmitter
         }
         else if (arg0 is SharpTSObject options && options.GetProperty("path") is string optPath)
         {
+            ConfigureFromOptions(options);
             ipcPath = optPath;
             callback = args.Length > 1 ? WrapCallbackArg(args[1].ToObject()) : null;
         }
@@ -137,6 +151,7 @@ public class SharpTSSocket : SharpTSEventEmitter
 
         if (arg0 is SharpTSObject opts)
         {
+            ConfigureFromOptions(opts);
             port = (int)(double)(opts.GetProperty("port") ?? throw new Exception("Runtime Error: port is required"));
             if (opts.GetProperty("host") is string h) host = h;
             callback = args.Length > 1 ? WrapCallbackArg(args[1].ToObject()) : null;
@@ -269,6 +284,19 @@ public class SharpTSSocket : SharpTSEventEmitter
     }
 
     /// <summary>
+    /// Applies Node socket construction options. Recognized here:
+    /// writableHighWaterMark / highWaterMark (stream.Duplex options, honored by
+    /// net.Socket in Node because Socket forwards its options to the Duplex ctor).
+    /// </summary>
+    internal void ConfigureFromOptions(SharpTSObject options)
+    {
+        if (options.GetProperty("writableHighWaterMark") is double whwm && whwm >= 0)
+            _writableHighWaterMark = (int)whwm;
+        else if (options.GetProperty("highWaterMark") is double hwm && hwm >= 0)
+            _writableHighWaterMark = (int)hwm;
+    }
+
+    /// <summary>
     /// Creates a SharpTSError with Node.js-compatible code and syscall properties.
     /// </summary>
     internal static SharpTSError CreateSocketError(Exception ex, string syscall, string? address = null)
@@ -356,44 +384,60 @@ public class SharpTSSocket : SharpTSEventEmitter
         byte[] data = ChunkToBytes(chunk, encoding ?? _encoding);
         _interpreter = interpreter;
 
-        if (_isIpc)
+        return EnqueueWrite(interpreter, data, callback) ? RuntimeValue.True : RuntimeValue.False;
+    }
+
+    /// <summary>
+    /// Queues a chunk onto the serialized write chain and reports backpressure.
+    /// Returns false once the un-flushed byte count reaches the high-water mark
+    /// (the caller should wait for 'drain'). The chain preserves write ordering —
+    /// this also serializes IPC writes, which previously raced on Task.Run.
+    /// </summary>
+    private bool EnqueueWrite(Interp interpreter, byte[] data, ISharpTSCallable? callback)
+    {
+        long newLength = Interlocked.Add(ref _writableLength, data.Length);
+
+        // A pending write is an active handle: keep the loop alive until the
+        // flush (and its callback/'drain' delivery) lands, mirroring Connect.
+        interpreter.Ref();
+
+        lock (_writeLock)
         {
-            // IPC pipes (Windows InOut) deadlock when sync Write blocks the event loop
-            // because the reader may not have started yet. Write asynchronously.
-            _ = Task.Run(() =>
+            _writeChain = _writeChain.ContinueWith(async _ =>
             {
                 try
                 {
-                    _stream!.Write(data, 0, data.Length);
+                    var stream = _stream ?? throw new IOException("socket has been closed");
+                    await stream.WriteAsync(data, 0, data.Length);
                     _bytesWritten += data.Length;
-                    if (callback != null)
+                    long remaining = Interlocked.Add(ref _writableLength, -data.Length);
+                    interpreter.ScheduleTimer(0, 0, () =>
                     {
-                        interpreter.ScheduleTimer(0, 0, () => callback.Call(interpreter, []), false);
-                    }
+                        callback?.Call(interpreter, []);
+                        if (remaining == 0 && _needDrain && !_destroyed)
+                        {
+                            _needDrain = false;
+                            EmitEvent(interpreter, "drain", []);
+                        }
+                        interpreter.Unref();
+                    }, isInterval: false);
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Add(ref _writableLength, -data.Length);
                     interpreter.ScheduleTimer(0, 0, () =>
                     {
-                        EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
-                    }, false);
+                        if (!_destroyed)
+                            EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
+                        interpreter.Unref();
+                    }, isInterval: false);
                 }
-            });
-            return RuntimeValue.True;
+            }, TaskContinuationOptions.ExecuteSynchronously).Unwrap();
         }
 
-        try
-        {
-            _stream.Write(data, 0, data.Length);
-            _bytesWritten += data.Length;
-            callback?.Call(interpreter, []);
-            return RuntimeValue.True;
-        }
-        catch (Exception ex)
-        {
-            EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
-            return RuntimeValue.False;
-        }
+        bool belowMark = newLength < _writableHighWaterMark;
+        if (!belowMark) _needDrain = true;
+        return belowMark;
     }
 
     /// <summary>
@@ -403,17 +447,59 @@ public class SharpTSSocket : SharpTSEventEmitter
     {
         if (_ended) return RuntimeValue.FromObject(this);
 
-        // Write final chunk if provided
-        if (args.Length > 0 && args[0].ToObject() is { } first && first is not ISharpTSCallable)
+        // Parse end([data[, encoding]][, callback]). The callback is invoked here
+        // exactly once, after the shutdown — not routed through Write (which would
+        // fire it a second time on flush).
+        object? data = null;
+        string? encoding = null;
+        ISharpTSCallable? callback = null;
+        if (args.Length > 0 && args[0].ToObject() is { } first)
         {
-            Write(interpreter, receiver, args);
+            if (WrapCallbackArg(first) is { } cb0) callback = cb0;
+            else data = first;
+        }
+        if (args.Length > 1)
+        {
+            if (args[1].IsString) encoding = args[1].AsStringUnsafe();
+            else callback ??= WrapCallbackArg(args[1].ToObject());
+        }
+        if (args.Length > 2) callback ??= WrapCallbackArg(args[2].ToObject());
+
+        if (data != null && !_destroyed && _stream != null)
+        {
+            EnqueueWrite(interpreter, ChunkToBytes(data, encoding ?? _encoding), null);
         }
 
         _ended = true;
+        _interpreter = interpreter;
 
+        // Shut the writable side down only after queued writes have flushed —
+        // end() must not truncate pending data.
+        interpreter.Ref();
+        lock (_writeLock)
+        {
+            _writeChain = _writeChain.ContinueWith(_ =>
+            {
+                ShutdownWritable();
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    callback?.Call(interpreter, []);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        }
+
+        return RuntimeValue.FromObject(this);
+    }
+
+    /// <summary>
+    /// Shuts down the writable side: TCP half-close via Shutdown(Send); IPC pipes
+    /// don't support half-close, so the stream is closed entirely.
+    /// </summary>
+    private void ShutdownWritable()
+    {
         if (_isIpc)
         {
-            // Named pipes don't support half-close; close the stream entirely
             try
             {
                 _stream?.Close();
@@ -435,15 +521,6 @@ public class SharpTSSocket : SharpTSEventEmitter
                 // May already be disconnected
             }
         }
-
-        ISharpTSCallable? callback = null;
-        foreach (var arg in args)
-        {
-            if (arg.ToObject() is ISharpTSCallable cb) { callback = cb; break; }
-        }
-        callback?.Call(interpreter, []);
-
-        return RuntimeValue.FromObject(this);
     }
 
     /// <summary>

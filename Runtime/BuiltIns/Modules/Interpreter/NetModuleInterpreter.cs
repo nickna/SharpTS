@@ -41,6 +41,7 @@ public static class NetModuleInterpreter
     private static RuntimeValue CreateServer(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         ISharpTSCallable? connectionListener = null;
+        SharpTSObject? options = null;
 
         if (args.Length > 0)
         {
@@ -48,14 +49,18 @@ public static class NetModuleInterpreter
             {
                 connectionListener = cb;
             }
-            else if (args[0].ToObject() is SharpTSObject && args.Length > 1 && args[1].ToObject() is ISharpTSCallable cb2)
+            else if (args[0].ToObject() is SharpTSObject opts)
             {
-                // First arg is options, second is callback
-                connectionListener = cb2;
+                options = opts;
+                if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable cb2)
+                    connectionListener = cb2;
             }
         }
 
-        return RuntimeValue.FromObject(new SharpTSNetServer(connectionListener));
+        var server = new SharpTSNetServer(connectionListener);
+        if (options != null)
+            server.ConfigureFromOptions(options);
+        return RuntimeValue.FromObject(server);
     }
 
     /// <summary>
@@ -80,7 +85,10 @@ public static class NetModuleInterpreter
     /// </summary>
     private static RuntimeValue CreateSocket(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        return RuntimeValue.FromObject(new SharpTSSocket());
+        var socket = new SharpTSSocket();
+        if (args.Length > 0 && args[0].ToObject() is SharpTSObject options)
+            socket.ConfigureFromOptions(options);
+        return RuntimeValue.FromObject(socket);
     }
 
     /// <summary>

@@ -54,18 +54,22 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // Emit callback argument (optional)
-        if (arguments.Count > 0)
+        // Node signature: createServer([options][, connectionListener]).
+        // Emit up to two positional args; missing ones are null.
+        for (int i = 0; i < 2; i++)
         {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
+            if (arguments.Count > i)
+            {
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
         }
 
-        // Call $Runtime.NetCreateServer(callback)
+        // Call $Runtime.NetCreateServer(optionsOrCallback, callback)
         il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateServer);
         emitter.SetStackUnknown();
         return true;

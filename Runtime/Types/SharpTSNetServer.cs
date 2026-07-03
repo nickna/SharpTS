@@ -30,6 +30,25 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
     private string? _pipePath;
     private Socket? _unixSocket;
     private bool _isClusterWorker;
+    private int? _socketHighWaterMark;
+
+    /// <summary>
+    /// Applies createServer(options) settings that configure accepted sockets.
+    /// </summary>
+    internal void ConfigureFromOptions(SharpTSObject options)
+    {
+        if (options.GetProperty("highWaterMark") is double hwm && hwm >= 0)
+            _socketHighWaterMark = (int)hwm;
+    }
+
+    /// <summary>
+    /// Applies per-server socket settings to a freshly accepted connection.
+    /// </summary>
+    private void ConfigureAcceptedSocket(SharpTSSocket socket)
+    {
+        if (_socketHighWaterMark is int hwm)
+            socket._writableHighWaterMark = hwm;
+    }
 
     /// <summary>
     /// Creates a new TCP server with an optional connection listener.
@@ -286,6 +305,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                     interpreter.ScheduleTimer(0, 0, () =>
                     {
                         var socket = new SharpTSSocket(acceptedPipe, _pipePath!);
+                        ConfigureAcceptedSocket(socket);
                         _connections.Add(socket);
                         // For IPC: start reading BEFORE user callback so writes
                         // don't block (Windows InOut pipes need a pending reader)
@@ -338,6 +358,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                     {
                         var stream = new NetworkStream(accepted, ownsSocket: true);
                         var socket = new SharpTSSocket(stream, _pipePath!);
+                        ConfigureAcceptedSocket(socket);
                         _connections.Add(socket);
                         socket.StartReading(interpreter);
                         _connectionListener?.Call(interpreter, [socket]);
@@ -369,6 +390,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
             interpreter.ScheduleTimer(0, 0, () =>
             {
                 var socket = new SharpTSSocket(tcpClient);
+                ConfigureAcceptedSocket(socket);
                 _connections.Add(socket);
                 _connectionListener?.Call(interpreter, [socket]);
                 EmitEvent(interpreter, "connection", [socket]);
@@ -412,6 +434,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                     interpreter.ScheduleTimer(0, 0, () =>
                     {
                         var socket = new SharpTSSocket(tcpClient);
+                        ConfigureAcceptedSocket(socket);
                         _connections.Add(socket);
 
                         // Call connection listener if set

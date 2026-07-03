@@ -1506,7 +1506,10 @@ public static class BuiltInModuleTypes
             ["bytesWritten"] = numberType,
             ["connecting"] = booleanType,
             ["destroyed"] = booleanType,
-            ["readyState"] = stringType
+            ["readyState"] = stringType,
+            ["writableLength"] = numberType,
+            ["writableHighWaterMark"] = numberType,
+            ["writableNeedDrain"] = booleanType
         };
         var socketType = new TypeInfo.Record(socketMembers.ToFrozenDictionary());
 

@@ -19,8 +19,6 @@ public partial class RuntimeEmitter
     internal MethodBuilder _httpAcceptClosureRun = null!;
 
     // IPC write closure fields
-    internal ConstructorBuilder _ipcWriteClosureCtor = null!;
-    internal MethodBuilder _ipcWriteClosureRun = null!;
 
     private void EmitNetClosureTypes(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -33,7 +31,6 @@ public partial class RuntimeEmitter
         // $HttpAcceptClosure references $HttpServer, which is gated on UsesHttp.
         if (_features.UsesHttp)
             EmitHttpAcceptClosure(moduleBuilder, runtime);
-        EmitIpcWriteClosure(moduleBuilder, runtime);
     }
 
     /// <summary>
@@ -87,6 +84,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, clientField);
             il.Emit(OpCodes.Newobj, runtime.NetSocketCtorTcpClient);
             il.Emit(OpCodes.Stloc, socketLocal);
+
+            EmitApplyServerSocketOptions(il, serverField, socketLocal);
 
             // _server._connections.Add(socket)
             il.Emit(OpCodes.Ldarg_0);
@@ -204,6 +203,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.NetSocketCtorStream);
             il.Emit(OpCodes.Stloc, socketLocal);
 
+            EmitApplyServerSocketOptions(il, serverField, socketLocal);
+
             // _server._connections.Add(socket)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, serverField);
@@ -273,6 +274,27 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
         _ipcAcceptClosureCtor = ctor;
         _ipcAcceptClosureRun = run;
+    }
+
+    /// <summary>
+    /// Applies createServer(options) per-socket settings to a freshly accepted socket:
+    /// if (server._socketHwm >= 0) socket._writableHwm = server._socketHwm (#1068).
+    /// The closure's Run() has the server in a field and the socket in a local.
+    /// </summary>
+    private void EmitApplyServerSocketOptions(ILGenerator il, FieldBuilder serverField, LocalBuilder socketLocal)
+    {
+        var skipHwm = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, serverField);
+        il.Emit(OpCodes.Ldfld, _netServerSocketHwmField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, skipHwm);
+        il.Emit(OpCodes.Ldloc, socketLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, serverField);
+        il.Emit(OpCodes.Ldfld, _netServerSocketHwmField);
+        il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+        il.MarkLabel(skipHwm);
     }
 
     /// <summary>
@@ -831,88 +853,4 @@ public partial class RuntimeEmitter
         _httpAcceptClosureRun = run;
     }
 
-    /// <summary>
-    /// Emits $IpcWriteClosure: performs async write on ThreadPool for IPC pipes.
-    /// Run(object state): try { _socket._stream.Write(_bytes, 0, _bytes.Length); _socket._bytesWritten += _bytes.Length; } catch { }
-    /// </summary>
-    private void EmitIpcWriteClosure(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
-    {
-        var typeBuilder = moduleBuilder.DefineType(
-            "$IpcWriteClosure",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object)
-        );
-
-        var socketField = typeBuilder.DefineField("_socket", _netSocketTypeBuilder, FieldAttributes.Private);
-        var bytesField = typeBuilder.DefineField("_bytes", typeof(byte[]), FieldAttributes.Private);
-
-        // Constructor: (socket, bytes)
-        var ctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public,
-            CallingConventions.Standard,
-            [_netSocketTypeBuilder, typeof(byte[])]
-        );
-        {
-            var il = ctor.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Stfld, socketField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Stfld, bytesField);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // Run(object state) — WaitCallback signature
-        var run = typeBuilder.DefineMethod(
-            "Run",
-            MethodAttributes.Public,
-            typeof(void),
-            [_types.Object]
-        );
-        {
-            var il = run.GetILGenerator();
-
-            // try { _socket._stream.Write(_bytes, 0, _bytes.Length); _socket._bytesWritten += _bytes.Length; } catch { }
-            il.BeginExceptionBlock();
-
-            // _socket._stream.Write(_bytes, 0, _bytes.Length)
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketStreamField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, bytesField);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, bytesField);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Write", [typeof(byte[]), typeof(int), typeof(int)])!);
-
-            // _socket._bytesWritten += _bytes.Length
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldfld, _netSocketBytesWrittenField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, bytesField);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stfld, _netSocketBytesWrittenField);
-
-            il.BeginCatchBlock(_types.Exception);
-            il.Emit(OpCodes.Pop);
-            il.EndExceptionBlock();
-
-            il.Emit(OpCodes.Ret);
-        }
-
-        typeBuilder.CreateType();
-        _ipcWriteClosureCtor = ctor;
-        _ipcWriteClosureRun = run;
-    }
 }

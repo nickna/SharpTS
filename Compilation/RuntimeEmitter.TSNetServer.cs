@@ -33,6 +33,8 @@ public partial class RuntimeEmitter
     private FieldBuilder _netServerPipePathField = null!;
     private FieldBuilder _netServerUnixSocketField = null!;
     private FieldBuilder _netServerPipeReadyField = null!;
+    // createServer(options) settings applied to accepted sockets (#1068); -1 = unset
+    private FieldBuilder _netServerSocketHwmField = null!;
 
     // Method builders (defined in Phase 1a, bodies emitted in Phase 2)
     private MethodBuilder _netServerListenMethod = null!;
@@ -77,6 +79,7 @@ public partial class RuntimeEmitter
         _netServerPipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
         _netServerUnixSocketField = typeBuilder.DefineField("_unixSocket", typeof(Socket), FieldAttributes.Private);
         _netServerPipeReadyField = typeBuilder.DefineField("_pipeReady", typeof(System.Threading.ManualResetEventSlim), FieldAttributes.Private);
+        _netServerSocketHwmField = typeBuilder.DefineField("_socketHwm", _types.Int32, FieldAttributes.Assembly);
 
         // ── Constructor (with body) ──
         EmitNetServerCtor(typeBuilder, runtime);
@@ -186,6 +189,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stfld, _netServerConnectionsField);
+        // _socketHwm = -1 (unset — accepted sockets keep the 16 KiB default)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
         il.Emit(OpCodes.Ret);
     }
 
