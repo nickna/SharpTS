@@ -18,7 +18,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
         "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey",
-        "pbkdf2", "scrypt", "generateKeyPair", "hkdf"
+        "pbkdf2", "scrypt", "generateKeyPair", "hkdf",
+        "X509Certificate"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;

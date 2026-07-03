@@ -2851,4 +2851,9 @@ public class EmittedRuntime
     public TypeBuilder TransformStreamType { get; set; } = null!;
     public ConstructorBuilder TransformStreamCtor { get; set; } = null!;
     public MethodBuilder BuildTransformSink { get; set; } = null!;
+
+    // crypto.X509Certificate (#1064). Null when UsesCrypto is off — the
+    // `new X509Certificate(...)` constructor case guards on the ctor being present.
+    public TypeBuilder? X509CertificateType { get; set; }
+    public ConstructorBuilder? X509CertificateCtor { get; set; }
 }

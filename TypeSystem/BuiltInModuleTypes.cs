@@ -754,7 +754,11 @@ public static class BuiltInModuleTypes
             // hkdf(digest, ikm, salt, info, keylen, callback) -> void
             ["hkdf"] = new TypeInfo.Function(
                 [stringType, bufferOrStringType, bufferOrStringType, bufferOrStringType, numberType, anyType],
-                voidType)
+                voidType),
+
+            // X509Certificate class (#1064) — any-typed so `new crypto.X509Certificate(...)`
+            // and instance member access type-check; a refined shape lands with #1065.
+            ["X509Certificate"] = anyType
         };
     }
 

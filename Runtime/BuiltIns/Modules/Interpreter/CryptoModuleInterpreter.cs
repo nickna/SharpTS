@@ -87,8 +87,20 @@ public static class CryptoModuleInterpreter
             ["generatePrime"] = BuiltInMethod.CreateV2("generatePrime", 2, 3, GeneratePrimeAsync),
             ["generatePrimeSync"] = BuiltInMethod.CreateV2("generatePrimeSync", 1, 2, GeneratePrimeSync),
             ["checkPrime"] = BuiltInMethod.CreateV2("checkPrime", 2, 3, CheckPrimeAsync),
-            ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync)
+            ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync),
+            // X509Certificate class (#1064) — constructable via `new crypto.X509Certificate(...)`
+            // (the interpreter invokes a BuiltInMethod export when used with `new`, like net.BlockList)
+            ["X509Certificate"] = BuiltInMethod.CreateV2("X509Certificate", 1, CreateX509Certificate)
         };
+    }
+
+    /// <summary>new crypto.X509Certificate(pemOrDer) (#1064).</summary>
+    private static RuntimeValue CreateX509Certificate(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("X509Certificate constructor requires a PEM string or Buffer argument");
+        var source = args[0].ToObject() ?? throw new Exception("X509Certificate: argument must not be null");
+        return RuntimeValue.FromObject(new SharpTSX509Certificate(source));
     }
 
     private static RuntimeValue CreateSign(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
