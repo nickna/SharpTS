@@ -209,6 +209,7 @@ public sealed class BuiltInRegistry
         RegisterVerifyType(registry);
         RegisterDiffieHellmanType(registry);
         RegisterECDHType(registry);
+        RegisterX509CertificateType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
@@ -876,6 +877,13 @@ public sealed class BuiltInRegistry
         // ECDH members accessed via property access (ecdh.generateKeys, ecdh.computeSecret, etc.)
         registry.RegisterInstanceType(typeof(SharpTSECDH), (instance, name) =>
             ((SharpTSECDH)instance).GetMember(name));
+    }
+
+    private static void RegisterX509CertificateType(BuiltInRegistry registry)
+    {
+        // X509Certificate members accessed via property access (cert.subject, cert.checkHost, ...) (#1064)
+        registry.RegisterInstanceType(typeof(SharpTSX509Certificate), (instance, name) =>
+            ((SharpTSX509Certificate)instance).GetMember(name));
     }
 
     private static void RegisterStreamTypes(BuiltInRegistry registry)

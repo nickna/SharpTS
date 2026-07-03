@@ -1153,7 +1153,10 @@ public partial class RuntimeEmitter
         EmitConsoleExtensions(typeBuilder, runtime);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
+        {
             EmitCryptoMethods(typeBuilder, runtime);
+            EmitX509CertificateFactory(typeBuilder, runtime); // crypto.X509Certificate (#1064)
+        }
         // Util module methods (util.types.* always emitted; promisify/callbackify/deprecate
         // gated inside EmitUtilMethods on _features.UsesUtilPromisify).
         EmitUtilMethods(typeBuilder, runtime);

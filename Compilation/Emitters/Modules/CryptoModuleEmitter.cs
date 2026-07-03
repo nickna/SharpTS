@@ -24,7 +24,9 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "generatePrime", "generatePrimeSync", "checkPrime", "checkPrimeSync",
         "randomFill", "constants",
         // #1059/#1060
-        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup"
+        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup",
+        // #1064
+        "X509Certificate"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;

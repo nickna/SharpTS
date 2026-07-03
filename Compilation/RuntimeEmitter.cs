@@ -170,6 +170,7 @@ public partial class RuntimeEmitter
             EmitTSSignTypeDefinition(moduleBuilder, runtime);
             EmitTSVerifyTypeDefinition(moduleBuilder, runtime);
             EmitTSKeyObjectClass(moduleBuilder, runtime);
+            EmitTSX509Class(moduleBuilder, runtime); // crypto.X509Certificate (#1064); needs $TSKeyObject
             EmitTSECDHTypeDefinition(moduleBuilder, runtime);
             EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime);
             EmitTSDHTypeDefinition(moduleBuilder, runtime);

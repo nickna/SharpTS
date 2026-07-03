@@ -781,7 +781,10 @@ public static class BuiltInModuleTypes
             ["generatePrimeSync"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
             ["checkPrime"] = new TypeInfo.Function([anyType, anyType, anyType], voidType, RequiredParams: 2),
             ["checkPrimeSync"] = new TypeInfo.Function([anyType, anyType], BooleanType, RequiredParams: 1),
-            // X509Certificate + WebCrypto are added by their respective children (#1063/#1064)
+            // X509Certificate class (#1064) — any-typed so `new crypto.X509Certificate(...)`
+            // and instance member access type-check; a refined shape lands with #1065.
+            ["X509Certificate"] = anyType,
+            // WebCrypto (webcrypto/subtle/getRandomValues) is added by #1063.
         };
     }
 
