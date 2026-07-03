@@ -1,8 +1,9 @@
 # Type-AST design: replacing the string-based type pipeline
 
-**Status:** spike (this document + vertical slice in the same PR)
+**Status:** ✅ complete — slices 1–6 shipped; the string scanner is deleted (#1111)
 **Driver:** three independent conformance blockers and a recurring bug class, all rooted in
 types passing through lossy string round-trips between the parser and the checker.
+(The "problem today" section below describes the pre-migration state, kept for context.)
 
 ## The problem today
 
@@ -238,15 +239,41 @@ an equivalence test that converts both ways and asserts identical `TypeInfo` ren
    `ResolveAnnotation`. Constructor **parameter properties** (`constructor(public x: T)`) are a
    separate field-creation path still on the string path. No baseline movement; full unit suite green.
 
-### Slice 6 — deleting the scanner (remaining)
-1. Flip the rest of the annotation consumers to the node path (class/interface members, function
-   signatures, accessors, index signatures, parameter properties, assertions) — mechanical breadth,
-   one AST `…Node` field + parser capture + checker `ResolveAnnotation` per site.
-2. Eliminate the internal rendered-string round-trips (work on `TypeInfo`/nodes, not `ToString()`).
-3. Reimplement `ToTypeInfo(string)` as parse-to-node + convert for the REPL/embedding surface, then
-   delete `TypeChecker.TypeParsing.cs`'s scanning.
-6. Delete `TypeChecker.TypeParsing.cs` string scanning; `ToTypeInfo(string)` survives only
-   for the REPL/embedding API surface, implemented as parse-to-node + convert.
+### Slice 6 — deleting the scanner ✅ **Shipped (#1111)**
+1. ✅ **Construct gaps closed.** The last three node-less constructs: bigint literal types (`1n`,
+   `LiteralTypeNode` carrying the `BigInteger`; resolves to `Any` for parity with the scanner's
+   unknown-name tail — real `BigIntLiteral` semantics are a follow-up), `unique symbol`
+   (`UniqueSymbolTypeNode`; resolution throws the same TS1331, the const-`Symbol()` special case
+   still short-circuits before resolution), and `this`-parameter constructor types
+   (`ConstructorTypeNode.ThisType`; resolved then dropped from the construct signature, exactly
+   like `ConvertConstructSignatures` did).
+2. ✅ **All remaining consumers flipped** to node-first `ResolveAnnotation`: `TypeParam`
+   constraints/defaults (node twins on the record), function/method/arrow signatures
+   (params/returns/`this`, both hoisting and body-check passes), interface call/construct
+   signatures, auto-accessors, catch bindings, `using` bindings, ambient module vars,
+   `Expr.Call`/`Expr.New` type arguments, class heritage and interface-extends type arguments.
+   Two divergences surfaced by the flips were ported, not papered over: the
+   `IsDeferredKeyDomain` mapped-expansion guard (#337 — without it the conditionalTypes1 f7/f8
+   verdicts flip) and eager `SimplifyConcreteIndexedAccess` on `IndexedAccessTypeNode` (#365).
+3. ✅ **Rendered-string round-trips eliminated.** Non-generic aliases store their definition NODE
+   in `TypeEnvironment` beside the string (the string stays: it keys the expansion cache and
+   discriminates same-named aliases across scopes); expansion is node-first inside
+   `ResolveTypeName` with the identical cache/recursion/TS2456 guards. Generic alias expansion is
+   node-only (`TryExpandGenericAliasFromNode`); `SubstituteTypeParamInString` and the
+   argument-string substitution are gone. `GetReferenceParamConstraints` returns `TypeInfo`
+   directly instead of rendering and re-parsing.
+4. ✅ **Scanner deleted** (~1,500 lines out of `TypeChecker.TypeParsing.cs`, plus
+   `ParseGenericTypeReference`/`SplitTypeArguments`). What survives in that file:
+   `ResolveTypeName` — the shared single-name resolver both paths use (type-param scope,
+   node-first alias expansion, primitives/lib globals/typed arrays/Error names, open type
+   variables, environment tail; the TS2456 depth backstop rides on it, which every unbounded
+   resolution cycle traverses) — plus `SimplifyIntersection`, the template-literal normalization
+   family, and the `EvaluateTypeOf` family, which the node path resolves through.
+   `ToTypeInfo(string)` survives only as parse-to-node + convert (`Parser.TryParseTypeFragment`:
+   the real lexer + type grammar over the fragment, EOF-checked; unparseable text → `any`,
+   matching the old unknown tail) serving `ResolveAnnotation`'s defensive fallback and the
+   embedding surface. `TypeNodeEndStateTests` pins zero string fallbacks across a
+   construct-corpus program.
 
 ### Non-goals
 

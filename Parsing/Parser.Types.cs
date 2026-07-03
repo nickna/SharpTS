@@ -34,6 +34,30 @@ public partial class Parser
         return node;
     }
 
+    /// <summary>
+    /// Parses a standalone type-annotation fragment (<c>{ a: number }</c>, <c>A | B[]</c>,
+    /// <c>`a${string}`</c>) to its <see cref="TypeNode"/>. Null when the text is not a complete
+    /// type: lex/parse error, no node produced, or trailing tokens after the type. This is the
+    /// string entry for the checker's <c>ToTypeInfo(string)</c> (fallback + embedding surface) —
+    /// the same real lexer + type grammar as source annotations, replacing the retired
+    /// char-scanning re-parser. The try/catch covers lex/parse ONLY; resolution errors
+    /// (TS2456/TS2314/TS1331, …) happen in the checker and propagate there.
+    /// </summary>
+    internal static TypeNode? TryParseTypeFragment(string annotation)
+    {
+        try
+        {
+            var parser = new Parser(new Lexer(annotation).ScanTokens());
+            parser.ParseTypeAnnotation();          // rendered string result discarded
+            var node = parser.TakeTypeNode();
+            return parser.IsAtEnd() ? node : null; // reject partial parses ("number garbage")
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private string ParseTypeAnnotation()
     {
         _lastTypeNode = null;

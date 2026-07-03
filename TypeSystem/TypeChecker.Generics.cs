@@ -8,9 +8,8 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 /// <remarks>
 /// Contains core generic type methods:
-/// ParseGenericTypeReference, ResolveGenericType, SplitTypeArguments, SubstituteTypeParamInString,
-/// InstantiateGenericClass, InstantiateGenericInterface, InstantiateGenericFunction,
-/// ResolveTypeArgumentsWithDefaults.
+/// ResolveGenericType, InstantiateGenericClass, InstantiateGenericInterface,
+/// InstantiateGenericFunction, ResolveTypeArgumentsWithDefaults.
 ///
 /// Related partial files:
 /// - TypeChecker.Generics.Substitution.cs: Type parameter substitution and tuple flattening
@@ -22,55 +21,14 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
-    /// Parses a generic type reference like "Box&lt;number&gt;" or "Map&lt;string, number&gt;".
-    /// Also handles array suffixes: "Partial&lt;T&gt;[]", "Box&lt;number&gt;[][]".
-    /// </summary>
-    private TypeInfo ParseGenericTypeReference(string typeName)
-    {
-        int openAngle = typeName.IndexOf('<');
-        string baseName = typeName[..openAngle];
-
-        // Find matching closing '>' respecting nested angle brackets
-        // Skip `>` that is part of `=>` (arrow function syntax)
-        int angleDepth = 0;
-        int closeAngle = -1;
-        for (int i = openAngle; i < typeName.Length; i++)
-        {
-            char c = typeName[i];
-            if (c == '<') angleDepth++;
-            else if (c == '>')
-            {
-                // Skip `>` that is part of `=>` (arrow function return type)
-                if (i > 0 && typeName[i - 1] == '=')
-                    continue;
-
-                angleDepth--;
-                if (angleDepth == 0)
-                {
-                    closeAngle = i;
-                    break;
-                }
-            }
-        }
-
-        string argsStr = typeName[(openAngle + 1)..closeAngle];
-        string suffix = typeName[(closeAngle + 1)..];
-
-        // Split type arguments respecting nesting
-        var typeArgStrings = SplitTypeArguments(argsStr);
-        var typeArgs = typeArgStrings.Select(ToTypeInfo).ToList();
-
-        return ResolveGenericType(baseName, typeArgs, suffix);
-    }
-
-    /// <summary>
-    /// Resolves a generic type with pre-parsed TypeInfo arguments.
+    /// Resolves a generic type reference with pre-parsed TypeInfo arguments: built-in generics
+    /// (with their TS2314/TS2707 arity errors) ahead of generic-alias node expansion, then
+    /// generic classes/interfaces/functions.
     /// </summary>
     /// <param name="baseName">The generic type name (e.g., "Promise", "Box").</param>
     /// <param name="typeArgs">The type arguments as TypeInfo objects.</param>
-    /// <param name="suffix">Optional array suffix (e.g., "[][]") — string-path callers only.</param>
     /// <returns>The resolved type.</returns>
-    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, string suffix = "")
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs)
     {
         TypeInfo result;
 
@@ -339,10 +297,9 @@ public partial class TypeChecker
                 // resolves directly — no argument-string substitution, no definition re-parse.
                 // TryExpandGenericAliasFromNode carries the string branch's guards (TS2314 arity,
                 // open-type-variable deferral, TS2589 depth, recursion placeholder, deferred-key
-                // mapped guard) and its post-expansion passes; deferral placeholders flow to the
-                // shared suffix wrap below. Aliases without a definition node cannot exist once
-                // the parser produces nodes for every construct; if one slips through, resolve
-                // permissively rather than crash.
+                // mapped guard) and its post-expansion passes. Aliases without a definition node
+                // cannot exist once the parser produces nodes for every construct; if one slips
+                // through, resolve permissively rather than crash.
                 result = genericAlias.Value.DefinitionNode is { } definitionNode
                     ? TryExpandGenericAliasFromNode(baseName, definitionNode, genericAlias.Value.TypeParams, typeArgs)
                         ?? new TypeInfo.Any()
@@ -361,13 +318,6 @@ public partial class TypeChecker
                     _ => new TypeInfo.Any() // Unknown generic type - fallback to any
                 };
             }
-        }
-
-        // Handle array suffix(es) after the generic type
-        while (suffix.StartsWith("[]"))
-        {
-            result = new TypeInfo.Array(result);
-            suffix = suffix[2..];
         }
 
         return result;
@@ -405,36 +355,6 @@ public partial class TypeChecker
             TypeInfo.TemplateLiteralType tlt => tlt.InterpolatedTypes.Any(Walk),
             _ => false
         };
-    }
-
-    /// <summary>
-    /// Splits type arguments respecting nested angle brackets.
-    /// </summary>
-    private List<string> SplitTypeArguments(string argsStr)
-    {
-        List<string> args = [];
-        int depth = 0;
-        int start = 0;
-
-        for (int i = 0; i < argsStr.Length; i++)
-        {
-            char c = argsStr[i];
-            // Track all bracket types to handle tuples and function types in type arguments
-            if (c == '<' || c == '[' || c == '(') depth++;
-            else if (c == '>' || c == ']' || c == ')') depth--;
-            else if (c == ',' && depth == 0)
-            {
-                args.Add(argsStr[start..i].Trim());
-                start = i + 1;
-            }
-        }
-
-        if (start < argsStr.Length)
-        {
-            args.Add(argsStr[start..].Trim());
-        }
-
-        return args;
     }
 
     /// <summary>
