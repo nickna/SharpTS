@@ -1718,6 +1718,40 @@ public class EmittedRuntime
     public MethodBuilder ProcessEmitExit { get; set; } = null!;
     public MethodBuilder GetProcessEventEmitter { get; set; } = null!;
 
+    // $Process — the live compiled process object (epic #1078). GetProcessObject
+    // returns the singleton; the value helpers back both the $Process instance
+    // members and the static-receiver emitters (ProcessStaticEmitter /
+    // ProcessModuleEmitter).
+    public TypeBuilder ProcessType { get; set; } = null!;
+    public MethodBuilder GetProcessObject { get; set; } = null!;
+    public MethodBuilder ProcessExit { get; set; } = null!;
+    public MethodBuilder ProcessKill { get; set; } = null!;
+    public MethodBuilder ProcessEmitWarning { get; set; } = null!;
+    public MethodBuilder ProcessRunLifecycle { get; set; } = null!;
+    public MethodBuilder ProcessRegisterSignal { get; set; } = null!;
+    public MethodBuilder ProcessDispatchSignal { get; set; } = null!;
+    public MethodBuilder ProcessEmitClosureInvoke { get; set; } = null!;
+    public MethodBuilder ProcessGetPpid { get; set; } = null!;
+    public MethodBuilder ProcessGetTitle { get; set; } = null!;
+    public MethodBuilder ProcessSetTitle { get; set; } = null!;
+    public MethodBuilder ProcessGetVersions { get; set; } = null!;
+    public MethodBuilder ProcessGetRelease { get; set; } = null!;
+    public MethodBuilder ProcessGetFeatures { get; set; } = null!;
+    public MethodBuilder ProcessGetConfig { get; set; } = null!;
+    public MethodBuilder ProcessGetExecArgv { get; set; } = null!;
+    public MethodBuilder ProcessGetAllowedFlags { get; set; } = null!;
+    public MethodBuilder ProcessCpuUsage { get; set; } = null!;
+    public MethodBuilder ProcessResourceUsage { get; set; } = null!;
+    public MethodBuilder ProcessAvailableMemory { get; set; } = null!;
+    public MethodBuilder ProcessGetActiveResourcesInfoM { get; set; } = null!;
+    public MethodBuilder ProcessHrtimeBigint { get; set; } = null!;
+    public MethodBuilder ProcessMemoryRss { get; set; } = null!;
+    public MethodBuilder ProcessGetHrtimeFn { get; set; } = null!;
+    public MethodBuilder ProcessGetMemoryUsageFn { get; set; } = null!;
+    public MethodBuilder ProcessUmask { get; set; } = null!;
+    public MethodBuilder ProcessBuildReport { get; set; } = null!;
+    public MethodBuilder ProcessGetReport { get; set; } = null!;
+
     // Process stdin/stdout/stderr stream methods
     public MethodBuilder StdinRead { get; set; } = null!;
     public MethodBuilder StdinIsTTY { get; set; } = null!;
@@ -2729,6 +2763,12 @@ public class EmittedRuntime
     /// </summary>
     public MethodBuilder EventLoopPumpOnce { get; set; } = null!;
     public FieldBuilder EventLoopTimerProcessorField { get; set; } = null!;
+
+    /// <summary>
+    /// $EventLoop.HasPendingWork() — true while active handles remain or
+    /// callbacks are queued. Read by the process beforeExit lifecycle (#1080).
+    /// </summary>
+    public MethodBuilder EventLoopHasPendingWork { get; set; } = null!;
 
     /// <summary>
     /// Parameterless constructor of the emitted <c>$EventLoopSyncContext</c> (a

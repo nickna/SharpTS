@@ -693,9 +693,11 @@ public sealed class BuiltInRegistry
 
     private static void RegisterProcessType(BuiltInRegistry registry)
     {
-        // Process members accessed via property access (process.env, process.cwd)
-        registry.RegisterInstanceType(typeof(SharpTSProcess), (_, name) =>
-            ProcessBuiltIns.GetMember(name));
+        // Process members accessed via property access (process.env, process.cwd).
+        // Route through the instance override so user expando assignments
+        // (process.myFlag = …) resolve alongside the built-in surface.
+        registry.RegisterInstanceType(typeof(SharpTSProcess), (instance, name) =>
+            ((SharpTSProcess)instance).GetMember(name));
     }
 
     private static void RegisterStdinType(BuiltInRegistry registry)

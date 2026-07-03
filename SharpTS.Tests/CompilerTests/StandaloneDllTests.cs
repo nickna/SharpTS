@@ -34,6 +34,7 @@ public class StandaloneDllTests
         "Compilation/RuntimeEmitter.Date.cs",         // Date.prototype.toLocale* with locale/options via RuntimeTypes.FormatDateToLocale (#539); only reached by toLocale* calls that pass arguments
         "Compilation/RuntimeEmitter.AbortController.cs", // AbortSignal.any() via RuntimeTypes.AbortSignalAnyCompiled
         "Compilation/RuntimeEmitter.ProcessHelpers.cs",      // ProcessEventEmitterCall and ProcessEmitExit fallback
+        "Compilation/RuntimeEmitter.TSProcess.cs",           // process.ppid late-binds to ProcessBuiltIns.GetParentPid (graceful 0 when SharpTS absent) — #1085
         // "Compilation/RuntimeEmitter.Net.cs" — now uses emitted $NetServer/$NetSocket directly (no reflection)
         "Compilation/RuntimeEmitter.ChildProcessHelpers.cs", // child_process.fork bridges to the interpreter's ForkForCompiledLoop (requires SharpTS.dll co-located; suppressed by --standalone) — #1017
         // ZlibHelpers.cs / DnsPromises.cs — pruned: now pure IL, no SharpTS late binding

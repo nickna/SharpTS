@@ -39,18 +39,23 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "exit":
-                // Environment.Exit(code)
+                // $Runtime.ProcessExit(code): emits 'exit' on the process
+                // singleton before Environment.Exit (matches the interpreter).
                 if (arguments.Count > 0)
                 {
-                    emitter.EmitExpressionAsDouble(arguments[0]);
-                    il.Emit(OpCodes.Conv_I4); // Convert to int
+                    emitter.EmitExpression(arguments[0]);
+                    emitter.EmitBoxIfNeeded(arguments[0]);
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldc_I4_0); // Default exit code 0
+                    il.Emit(OpCodes.Ldnull); // → process.exitCode
                 }
-                il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Environment, "Exit", ctx.Types.Int32));
-                // Exit never returns, but we need to push something for the stack
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessExit);
+                return true;
+
+            case "abort":
+                il.Emit(OpCodes.Ldstr, "process.abort() called");
+                il.Emit(OpCodes.Call, typeof(Environment).GetMethod("FailFast", [ctx.Types.String])!);
                 il.Emit(OpCodes.Ldnull);
                 return true;
 
@@ -68,6 +73,49 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "nextTick":
                 EmitNextTick(emitter, arguments);
+                return true;
+
+            case "kill":
+                EmitTwoArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessKill);
+                return true;
+
+            case "umask":
+                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessUmask);
+                return true;
+
+            case "cpuUsage":
+                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessCpuUsage);
+                return true;
+
+            case "resourceUsage":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessResourceUsage);
+                return true;
+
+            case "availableMemory":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessAvailableMemory);
+                return true;
+
+            case "constrainedMemory":
+                il.Emit(OpCodes.Ldc_R8, 0.0);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                return true;
+
+            case "getActiveResourcesInfo":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetActiveResourcesInfoM);
+                return true;
+
+            case "emitWarning":
+                EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.ProcessEmitWarning);
+                return true;
+
+            case "setSourceMapsEnabled":
+                // Route through the $Process property setter semantics via the
+                // live object (SetProperty handles the bool coercion).
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
+                EmitBoxedArg(emitter, arguments, 0);
+                il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
+                il.Emit(OpCodes.Ldnull);
                 return true;
 
             case "on":
@@ -120,15 +168,9 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "version":
-                // "v" + Environment.Version.ToString()
-                il.Emit(OpCodes.Ldstr, "v");
-                il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "Version"));
-                var versionLocal = il.DeclareLocal(ctx.Types.Version);
-                il.Emit(OpCodes.Stloc, versionLocal);
-                il.Emit(OpCodes.Ldloca, versionLocal);
-                il.Emit(OpCodes.Constrained, ctx.Types.Version);
-                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
-                il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.String, "Concat", ctx.Types.String, ctx.Types.String));
+                // The emulated Node version (see ProcessBuiltIns.NodeVersion) —
+                // feature-detection code must not parse the CLR version here.
+                il.Emit(OpCodes.Ldstr, "v" + SharpTS.Runtime.BuiltIns.ProcessBuiltIns.NodeVersion);
                 return true;
 
             case "env":
@@ -181,9 +223,117 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetNextTick);
                 return true;
 
+            // Function-with-members properties: process.hrtime.bigint(),
+            // process.memoryUsage.rss() work through these cached functions.
+            case "hrtime":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetHrtimeFn);
+                return true;
+
+            case "memoryUsage":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetMemoryUsageFn);
+                return true;
+
+            // Identity / info properties (#1085)
+            case "ppid":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetPpid);
+                return true;
+
+            case "title":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetTitle);
+                return true;
+
+            case "versions":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetVersions);
+                return true;
+
+            case "execPath":
+                {
+                    var haveIt = il.DefineLabel();
+                    il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ProcessPath"));
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Brtrue, haveIt);
+                    il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
+                    il.Emit(OpCodes.Ldc_I4_0);
+                    il.Emit(OpCodes.Ldelem_Ref);
+                    il.MarkLabel(haveIt);
+                    return true;
+                }
+
+            case "execArgv":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetExecArgv);
+                return true;
+
+            case "argv0":
+                il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+                return true;
+
+            case "config":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetConfig);
+                return true;
+
+            case "release":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetRelease);
+                return true;
+
+            case "features":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetFeatures);
+                return true;
+
+            case "debugPort":
+                il.Emit(OpCodes.Ldc_R8, 9229.0);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                return true;
+
+            case "allowedNodeEnvironmentFlags":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetAllowedFlags);
+                return true;
+
+            case "report":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetReport);
+                return true;
+
+            // Deprecation / source-map flags and IPC state: read through the
+            // live $Process object's dynamic property path (single source of
+            // truth for coercion + expando semantics).
+            case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
+                or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
+                il.Emit(OpCodes.Ldstr, propertyName);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
+                return true;
+
             default:
                 return false;
         }
+    }
+
+    /// <summary>Emits a call to a one-object-arg $Runtime helper (missing arg → null).</summary>
+    private static void EmitOneArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
+    {
+        EmitBoxedArg(emitter, arguments, 0);
+        emitter.Context.IL.Emit(OpCodes.Call, helper);
+    }
+
+    /// <summary>Emits a call to a two-object-arg $Runtime helper (missing args → null).</summary>
+    private static void EmitTwoArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
+    {
+        EmitBoxedArg(emitter, arguments, 0);
+        EmitBoxedArg(emitter, arguments, 1);
+        emitter.Context.IL.Emit(OpCodes.Call, helper);
+    }
+
+    /// <summary>Emits a call to a four-object-arg $Runtime helper (missing args → null).</summary>
+    private static void EmitFourArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
+    {
+        EmitBoxedArg(emitter, arguments, 0);
+        EmitBoxedArg(emitter, arguments, 1);
+        EmitBoxedArg(emitter, arguments, 2);
+        EmitBoxedArg(emitter, arguments, 3);
+        emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
 
     private static void EmitPlatformString(ILGenerator il)
@@ -316,9 +466,11 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
     /// <summary>
     /// Emits IL for EventEmitter method calls on process (on, once, off, emit, etc.).
-    /// Uses the compiled $EventEmitter singleton for process events.
+    /// Uses the compiled $Process singleton for process events. Shared with
+    /// ProcessModuleEmitter so the module facade's forwarding functions hit the
+    /// same emitter instance as the bare global.
     /// </summary>
-    private static void EmitProcessEventEmitterCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
+    internal static void EmitProcessEventEmitterCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -351,21 +503,13 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 break;
 
             case "emit":
-                // Emit(string eventName, object[] args) -> bool
+                // Emit(string eventName, object[] args) -> bool. The payload
+                // array is built with the spread-aware builder so the facade's
+                // `emit(event, ...args)` forwarding works (#1149 pattern).
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                // Pack remaining args into object[]
-                var extraCount = Math.Max(0, arguments.Count - 1);
-                il.Emit(OpCodes.Ldc_I4, extraCount);
-                il.Emit(OpCodes.Newarr, ctx.Types.Object);
-                for (int i = 1; i < arguments.Count; i++)
-                {
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Ldc_I4, i - 1);
-                    emitter.EmitExpression(arguments[i]);
-                    emitter.EmitBoxIfNeeded(arguments[i]);
-                    il.Emit(OpCodes.Stelem_Ref);
-                }
+                emitter.EmitArgsArrayWithSpread(
+                    arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : []);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 break;
@@ -464,5 +608,10 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
     public bool HasStaticProperty(string memberName) => memberName is
         "platform" or "arch" or "pid" or "version" or "env" or "argv" or
-        "exitCode" or "stdin" or "stdout" or "stderr";
+        "exitCode" or "stdin" or "stdout" or "stderr" or
+        "ppid" or "title" or "versions" or "execPath" or "execArgv" or "argv0" or
+        "config" or "release" or "features" or "debugPort" or
+        "allowedNodeEnvironmentFlags" or "report" or "hrtime" or "memoryUsage" or
+        "throwDeprecation" or "traceDeprecation" or "noDeprecation" or
+        "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect";
 }

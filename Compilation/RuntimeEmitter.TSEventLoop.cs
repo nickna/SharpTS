@@ -105,6 +105,10 @@ public partial class RuntimeEmitter
         // PumpOnce() — single cooperative tick for the PipeTo pump (#448)
         EmitEventLoopPumpOnce(typeBuilder, runtime);
 
+        // HasPendingWork() — used by the beforeExit lifecycle (#1080) to decide
+        // whether a listener scheduled new work at loop drain.
+        EmitEventLoopHasPendingWork(typeBuilder, runtime);
+
         typeBuilder.CreateType();
 
         // Emit the SynchronizationContext that routes await continuations back to
@@ -329,6 +333,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _eventLoopWakeField);
         il.Emit(OpCodes.Callvirt, typeof(ManualResetEventSlim).GetMethod("Set")!);
 
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public bool HasPendingWork() — true while active handles remain
+    /// or callbacks are queued. Read by the process 'beforeExit' lifecycle to
+    /// re-enter Run() when a listener scheduled new work (#1080).
+    /// </summary>
+    private void EmitEventLoopHasPendingWork(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "HasPendingWork",
+            MethodAttributes.Public,
+            _types.Boolean,
+            Type.EmptyTypes
+        );
+        runtime.EventLoopHasPendingWork = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+
+        // _activeHandles > 0 → true
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _eventLoopActiveHandlesField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, trueLabel);
+
+        // !_queue.IsEmpty → true
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _eventLoopQueueField);
+        il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
 

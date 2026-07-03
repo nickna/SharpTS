@@ -192,6 +192,9 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
         // Interpretation
         var interpreter = new Interpreter();
         interpreter.SetDecoratorMode(decoratorMode);
+        // Program main interpreter: fire beforeExit/exit at event-loop drain and
+        // receive signal events (#1080/#1081).
+        interpreter.EmitProcessLifecycleEvents = true;
 
         // If this process was forked, wire its IPC channel to this interpreter's loop so
         // 'message' handlers run with an interpreter and the child stays alive (#1017).
@@ -244,6 +247,9 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
 {
     interpreter ??= new Interpreter();
     interpreter.SetDecoratorMode(decoratorMode);
+    // Program main interpreter: fire beforeExit/exit at event-loop drain and
+    // receive signal events (#1080/#1081).
+    interpreter.EmitProcessLifecycleEvents = true;
 
     // Forked-child IPC: attach this interpreter's loop (idempotent — only acts once).
     SharpTS.Runtime.Types.ForkIpcClient.Instance?.AttachLoop(interpreter);

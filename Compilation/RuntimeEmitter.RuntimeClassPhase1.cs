@@ -68,6 +68,16 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.String, _types.Object]);
 
+        // Reserve GetProcessObject() → object — the live $Process singleton
+        // (epic #1078). Body emitted by EmitProcessObjectInfrastructure; the
+        // signature must exist earlier because GlobalThisGetProperty (emitted
+        // before EmitProcessMethods) resolves `globalThis.process` through it.
+        runtime.GetProcessObject = typeBuilder.DefineMethod(
+            "GetProcessObject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+
         // Reserve GlobalThisGetProperty(string) → object and
         // GlobalThisSetProperty(string, object) → void. EmitGlobalThisMethods
         // (run much later) fills the bodies, but GetProperty/GetIndex/SetProperty/

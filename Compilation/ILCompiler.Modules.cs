@@ -734,6 +734,9 @@ public partial class ILCompiler
         // Run the event loop — no-op if no handles are active
         il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
         il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+        // Node process lifecycle at natural drain: 'beforeExit' (re-entering
+        // the loop when a listener schedules work), then 'exit' (#1080).
+        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
 
         il.Emit(OpCodes.Ret);
     }

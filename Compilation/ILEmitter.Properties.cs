@@ -583,6 +583,25 @@ public partial class ILEmitter
             return;
         }
 
+        // Other `process.X = value` assignments route through the live
+        // $Process object's SetProperty: title, the deprecation flags, and
+        // arbitrary expando properties (epic #1078).
+        if (s.Object is Expr.Variable processSetVar && processSetVar.Name.Lexeme == "process")
+        {
+            EmitExpression(s.Value);
+            EmitBoxIfNeeded(s.Value);
+            var processValueTemp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, processValueTemp);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProcessObject);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.IHasFieldsInterface);
+            IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloc, processValueTemp);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.IHasFieldsSetProperty);
+            IL.Emit(OpCodes.Ldloc, processValueTemp); // expression result
+            SetStackUnknown();
+            return;
+        }
+
         // Promoted object-literal shape struct (#862): `o.KEY = v` writes the typed struct field
         // directly (ldloca + stfld) — no Dictionary, no freeze/seal probe, no boxing. The expression's
         // result is the assigned value (typed). Keyed off the slot's CLR type (scope-correct). The

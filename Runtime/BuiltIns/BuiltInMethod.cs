@@ -77,6 +77,26 @@ public class BuiltInMethod : ISharpTSCallable
     /// </summary>
     public bool HasV2Implementation => _implementationV2 != null;
 
+    /// <summary>
+    /// Own (function-object) properties carried by this method, resolved by the
+    /// interpreter's function-member path before the Function.prototype surface.
+    /// Node models several process APIs as functions with methods hanging off
+    /// them (<c>process.hrtime.bigint</c>, <c>process.memoryUsage.rss</c>);
+    /// this dictionary is how a BuiltInMethod exposes those. Propagated to
+    /// bound copies created by <see cref="Bind"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?>? OwnProperties { get; private set; }
+
+    /// <summary>
+    /// Attaches own function-object properties (see <see cref="OwnProperties"/>).
+    /// Returns this method for fluent initialization.
+    /// </summary>
+    public BuiltInMethod WithOwnProperties(Dictionary<string, object?> properties)
+    {
+        OwnProperties = properties;
+        return this;
+    }
+
     // Boxed-delegate constructors. The legacy delegate type survives only as plumbing
     // (CreateConstant + the reflective standalone-DLL Call path), so these are not part of
     // the public surface — they exist for the dispatcher tests, which have InternalsVisibleTo.
@@ -202,6 +222,7 @@ public class BuiltInMethod : ISharpTSCallable
         {
             var unboundCopy = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, (object?)null);
             unboundCopy._specLength = _specLength;
+            unboundCopy.OwnProperties = OwnProperties;
             return unboundCopy;
         }
 
@@ -211,6 +232,7 @@ public class BuiltInMethod : ISharpTSCallable
         {
             var valBound = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, receiver);
             valBound._specLength = _specLength;
+            valBound.OwnProperties = OwnProperties;
             return valBound;
         }
 
@@ -226,6 +248,7 @@ public class BuiltInMethod : ISharpTSCallable
         // Create new bound method and cache it
         var bound = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, receiver);
         bound._specLength = _specLength;
+        bound.OwnProperties = OwnProperties;
         _boundMethodCache.AddOrUpdate(receiver, bound);
         return bound;
     }
