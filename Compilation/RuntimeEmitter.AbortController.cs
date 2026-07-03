@@ -785,28 +785,7 @@ public partial class RuntimeEmitter
         runtime.AbortSignalAny = method;
 
         var il = method.GetILGenerator();
-
-        // Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS")
-        il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-
-        // .GetMethod("AbortSignalAnyCompiled")
-        il.Emit(OpCodes.Ldstr, "AbortSignalAnyCompiled");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-
-        // .Invoke(null, new object[] { signals })
-        il.Emit(OpCodes.Ldnull); // null target for static method
-
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldarg_0); // signals
-        il.Emit(OpCodes.Stelem_Ref);
-
-        var invokeMethod = _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray);
-        il.Emit(OpCodes.Callvirt, invokeMethod!);
-
+        EmitReflectionCall(il, RuntimeTypesLateBoundName, "AbortSignalAnyCompiled", 1);
         il.Emit(OpCodes.Ret);
     }
 
