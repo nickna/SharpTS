@@ -31,6 +31,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
     private Socket? _unixSocket;
     private bool _isClusterWorker;
     private int? _socketHighWaterMark;
+    private SharpTSBlockList? _blockList;
 
     /// <summary>
     /// Applies createServer(options) settings that configure accepted sockets.
@@ -39,6 +40,8 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
     {
         if (options.GetProperty("highWaterMark") is double hwm && hwm >= 0)
             _socketHighWaterMark = (int)hwm;
+        if (options.GetProperty("blockList") is SharpTSBlockList blockList)
+            _blockList = blockList;
     }
 
     /// <summary>
@@ -424,6 +427,15 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                 try
                 {
                     var tcpClient = await _listener.AcceptTcpClientAsync(token);
+
+                    // BlockList rejection: close silently, no event (Node semantics).
+                    if (_blockList != null
+                        && tcpClient.Client.RemoteEndPoint is IPEndPoint remote
+                        && _blockList.IsBlocked(remote.Address))
+                    {
+                        tcpClient.Close();
+                        continue;
+                    }
 
                     if (_connections.Count >= _maxConnections)
                     {

@@ -25,7 +25,9 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         "isIPv4",
         "isIPv6",
         "Server",
-        "Socket"
+        "Socket",
+        "BlockList",
+        "SocketAddress"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;

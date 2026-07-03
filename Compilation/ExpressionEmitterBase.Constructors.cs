@@ -182,6 +182,20 @@ public abstract partial class ExpressionEmitterBase
                 SetStackUnknown();
                 return true;
 
+            // net.BlockList / net.SocketAddress (#1069). Guarded on the emitted
+            // ctor being present (UsesNet) so a user class with the same name
+            // still resolves when the net module is not in play.
+            case "BlockList" when Ctx.Runtime?.BlockListCtor != null:
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.BlockListCtor);
+                SetStackUnknown();
+                return true;
+
+            case "SocketAddress" when Ctx.Runtime?.SocketAddressCtor != null:
+                EmitBoxedArgOrNull(arguments, 0);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.SocketAddressCtor);
+                SetStackUnknown();
+                return true;
+
             case "AbortController":
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateAbortController);
                 SetStackUnknown();
@@ -640,6 +654,8 @@ public abstract partial class ExpressionEmitterBase
             "CountQueuingStrategy" => TryEmitBuiltInConstructor("CountQueuingStrategy", arguments),
             "Agent" => TryEmitAgentConstructor(arguments),
             "Resolver" => TryEmitResolverConstructor(),
+            "BlockList" => TryEmitBuiltInConstructor("BlockList", arguments),
+            "SocketAddress" => TryEmitBuiltInConstructor("SocketAddress", arguments),
             _ => false
         };
     }

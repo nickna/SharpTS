@@ -1966,6 +1966,13 @@ public class EmittedRuntime
     public MethodBuilder NetIsIPv4 { get; set; } = null!;
     public MethodBuilder NetIsIPv6 { get; set; } = null!;
 
+    // net.BlockList / net.SocketAddress (#1069). Null when UsesNet is off —
+    // constructor emission guards on that before referencing them.
+    public TypeBuilder? BlockListType { get; set; }
+    public ConstructorBuilder? BlockListCtor { get; set; }
+    public MethodBuilder? BlockListCheckIp { get; set; }
+    public ConstructorBuilder? SocketAddressCtor { get; set; }
+
     // TLS module methods
     public MethodBuilder TlsCreateServer { get; set; } = null!;
     public MethodBuilder TlsConnect { get; set; } = null!;

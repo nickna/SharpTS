@@ -20,6 +20,47 @@ public partial class RuntimeEmitter
         EmitNetIsIP(typeBuilder, runtime);
         EmitNetIsIPv4(typeBuilder, runtime);
         EmitNetIsIPv6(typeBuilder, runtime);
+        EmitNetCreateBlockList(typeBuilder, runtime);
+        EmitNetCreateSocketAddress(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits: public static object NetCreateBlockList(object? unused) — factory
+    /// for the callable form / dynamic dispatch; `new net.BlockList()` compiles
+    /// directly to the $BlockList constructor.
+    /// </summary>
+    private void EmitNetCreateBlockList(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "NetCreateBlockList",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.RegisterBuiltInModuleMethod("net", "BlockList", method);
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Newobj, runtime.BlockListCtor!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object NetCreateSocketAddress(object? options)
+    /// </summary>
+    private void EmitNetCreateSocketAddress(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "NetCreateSocketAddress",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.RegisterBuiltInModuleMethod("net", "SocketAddress", method);
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, runtime.SocketAddressCtor!);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -64,27 +105,47 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.NetServerCtor);
         il.Emit(OpCodes.Stloc, serverLocal);
 
-        // if (arg0 is Dictionary && arg0["highWaterMark"] is double hwm) server._socketHwm = (int)hwm
+        // if (arg0 is Dictionary) parse per-socket options
         var noOptions = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, noOptions);
         {
             var valLocal = il.DeclareLocal(_types.Object);
+
+            // highWaterMark (double) → server._socketHwm (#1068)
+            var noHwm = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "highWaterMark");
             il.Emit(OpCodes.Ldloca, valLocal);
             il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
-            il.Emit(OpCodes.Brfalse, noOptions);
+            il.Emit(OpCodes.Brfalse, noHwm);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
-            il.Emit(OpCodes.Brfalse, noOptions);
+            il.Emit(OpCodes.Brfalse, noHwm);
             il.Emit(OpCodes.Ldloc, serverLocal);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Unbox_Any, _types.Double);
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
+            il.MarkLabel(noHwm);
+
+            // blockList ($BlockList) → server._blockList (#1069)
+            var noBlockList = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "blockList");
+            il.Emit(OpCodes.Ldloca, valLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, noBlockList);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Isinst, _blockListTypeBuilder);
+            il.Emit(OpCodes.Brfalse, noBlockList);
+            il.Emit(OpCodes.Ldloc, serverLocal);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Stfld, _netServerBlockListField);
+            il.MarkLabel(noBlockList);
         }
         il.MarkLabel(noOptions);
 

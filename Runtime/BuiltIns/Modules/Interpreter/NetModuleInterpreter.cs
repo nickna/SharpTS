@@ -31,8 +31,27 @@ public static class NetModuleInterpreter
             ["isIPv4"] = BuiltInMethod.CreateV2("isIPv4", 1, IsIPv4),
             ["isIPv6"] = BuiltInMethod.CreateV2("isIPv6", 1, IsIPv6),
             ["Server"] = BuiltInMethod.CreateV2("Server", 0, 2, CreateServer),
-            ["Socket"] = BuiltInMethod.CreateV2("Socket", 0, 1, CreateSocket)
+            ["Socket"] = BuiltInMethod.CreateV2("Socket", 0, 1, CreateSocket),
+            ["BlockList"] = BuiltInMethod.CreateV2("BlockList", 0, 0, CreateBlockList),
+            ["SocketAddress"] = BuiltInMethod.CreateV2("SocketAddress", 0, 1, CreateSocketAddress)
         };
+    }
+
+    /// <summary>
+    /// Creates a new net.BlockList (#1069).
+    /// </summary>
+    private static RuntimeValue CreateBlockList(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        return RuntimeValue.FromObject(new SharpTSBlockList());
+    }
+
+    /// <summary>
+    /// Creates a new net.SocketAddress (#1069).
+    /// </summary>
+    private static RuntimeValue CreateSocketAddress(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var options = args.Length > 0 ? args[0].ToObject() as SharpTSObject : null;
+        return RuntimeValue.FromObject(new SharpTSSocketAddress(options));
     }
 
     /// <summary>

@@ -35,6 +35,8 @@ public partial class RuntimeEmitter
     private FieldBuilder _netServerPipeReadyField = null!;
     // createServer(options) settings applied to accepted sockets (#1068); -1 = unset
     private FieldBuilder _netServerSocketHwmField = null!;
+    // createServer({blockList}) — a $BlockList checked per accepted connection (#1069)
+    private FieldBuilder _netServerBlockListField = null!;
 
     // Method builders (defined in Phase 1a, bodies emitted in Phase 2)
     private MethodBuilder _netServerListenMethod = null!;
@@ -80,6 +82,7 @@ public partial class RuntimeEmitter
         _netServerUnixSocketField = typeBuilder.DefineField("_unixSocket", typeof(Socket), FieldAttributes.Private);
         _netServerPipeReadyField = typeBuilder.DefineField("_pipeReady", typeof(System.Threading.ManualResetEventSlim), FieldAttributes.Private);
         _netServerSocketHwmField = typeBuilder.DefineField("_socketHwm", _types.Int32, FieldAttributes.Assembly);
+        _netServerBlockListField = typeBuilder.DefineField("_blockList", _types.Object, FieldAttributes.Assembly);
 
         // ── Constructor (with body) ──
         EmitNetServerCtor(typeBuilder, runtime);

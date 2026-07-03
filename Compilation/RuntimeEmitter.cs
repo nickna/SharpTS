@@ -362,6 +362,9 @@ public partial class RuntimeEmitter
         // by UsesHttp and UsesTls (both extend $NetServer-style sockets).
         if (features.UsesNet)
         {
+            // $SocketAddress/$BlockList are self-contained (pure BCL) — fully created
+            // here so $NetServer and the net module factories can reference them.
+            EmitTSNetBlockListTypes(moduleBuilder, runtime);
             EmitTSNetSocketPhase1(moduleBuilder, runtime);
             EmitTSNetServerPhase1(moduleBuilder, runtime);
         }

@@ -79,6 +79,43 @@ public partial class RuntimeEmitter
             var il = run.GetILGenerator();
             var socketLocal = il.DeclareLocal(_netSocketTypeBuilder); // local 0: $NetSocket
 
+            // BlockList rejection (#1069): a blocked peer is closed silently — no
+            // 'connection' event, no socket construction (Node semantics).
+            {
+                var noBlock = il.DefineLabel();
+                var epLocal = il.DeclareLocal(typeof(System.Net.IPEndPoint));
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, serverField);
+                il.Emit(OpCodes.Ldfld, _netServerBlockListField);
+                il.Emit(OpCodes.Brfalse, noBlock);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, clientField);
+                il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetProperty("Client")!.GetGetMethod()!);
+                il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty("RemoteEndPoint")!.GetGetMethod()!);
+                il.Emit(OpCodes.Isinst, typeof(System.Net.IPEndPoint));
+                il.Emit(OpCodes.Stloc, epLocal);
+                il.Emit(OpCodes.Ldloc, epLocal);
+                il.Emit(OpCodes.Brfalse, noBlock);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, serverField);
+                il.Emit(OpCodes.Ldfld, _netServerBlockListField);
+                il.Emit(OpCodes.Castclass, runtime.BlockListType!);
+                il.Emit(OpCodes.Ldloc, epLocal);
+                il.Emit(OpCodes.Callvirt, typeof(System.Net.IPEndPoint).GetProperty("Address")!.GetGetMethod()!);
+                il.Emit(OpCodes.Callvirt, runtime.BlockListCheckIp!);
+                il.Emit(OpCodes.Brfalse, noBlock);
+                // blocked: try { _client.Close() } catch { } ; return
+                il.BeginExceptionBlock();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, clientField);
+                il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetMethod("Close")!);
+                il.BeginCatchBlock(_types.Exception);
+                il.Emit(OpCodes.Pop);
+                il.EndExceptionBlock();
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(noBlock);
+            }
+
             // var socket = new $NetSocket(_client)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, clientField);

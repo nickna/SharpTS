@@ -1527,6 +1527,26 @@ public static class BuiltInModuleTypes
         };
         var serverType = new TypeInfo.Record(serverMembers.ToFrozenDictionary());
 
+        // net.SocketAddress instance type (#1069)
+        var socketAddressType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["address"] = stringType,
+            ["family"] = stringType,
+            ["port"] = numberType,
+            ["flowlabel"] = numberType,
+            ["toJSON"] = new TypeInfo.Function([], anyType)
+        }.ToFrozenDictionary());
+
+        // net.BlockList instance type (#1069)
+        var blockListType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["addAddress"] = new TypeInfo.Function([anyType, stringType], voidType, RequiredParams: 1),
+            ["addRange"] = new TypeInfo.Function([anyType, anyType, stringType], voidType, RequiredParams: 2),
+            ["addSubnet"] = new TypeInfo.Function([anyType, numberType, stringType], voidType, RequiredParams: 2),
+            ["check"] = new TypeInfo.Function([anyType, stringType], booleanType, RequiredParams: 1),
+            ["rules"] = new TypeInfo.Array(stringType)
+        }.ToFrozenDictionary());
+
         return new Dictionary<string, TypeInfo>
         {
             ["createServer"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
@@ -1537,7 +1557,9 @@ public static class BuiltInModuleTypes
             ["isIPv4"] = new TypeInfo.Function([stringType], booleanType),
             ["isIPv6"] = new TypeInfo.Function([stringType], booleanType),
             ["Server"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
-            ["Socket"] = new TypeInfo.Function([anyType], socketType, RequiredParams: 0)
+            ["Socket"] = new TypeInfo.Function([anyType], socketType, RequiredParams: 0),
+            ["BlockList"] = new TypeInfo.Function([], blockListType, RequiredParams: 0),
+            ["SocketAddress"] = new TypeInfo.Function([anyType], socketAddressType, RequiredParams: 0)
         };
     }
 
