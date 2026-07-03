@@ -18,7 +18,9 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
         "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey",
-        "pbkdf2", "scrypt", "generateKeyPair", "hkdf"
+        "pbkdf2", "scrypt", "generateKeyPair", "hkdf",
+        // #1059/#1060
+        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -45,6 +47,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "generateKeyPairSync" => EmitGenerateKeyPairSync(emitter, arguments),
             "createDiffieHellman" => EmitCreateDiffieHellman(emitter, arguments),
             "getDiffieHellman" => EmitGetDiffieHellman(emitter, arguments),
+            // createDiffieHellmanGroup is an alias for getDiffieHellman (#1060)
+            "createDiffieHellmanGroup" => EmitGetDiffieHellman(emitter, arguments),
             "createECDH" => EmitCreateECDH(emitter, arguments),
             "publicEncrypt" => EmitPublicEncrypt(emitter, arguments),
             "privateDecrypt" => EmitPrivateDecrypt(emitter, arguments),
@@ -60,8 +64,18 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // crypto module has no properties
-        return false;
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        switch (propertyName)
+        {
+            case "fips":
+                // crypto.fips — always false (non-FIPS build) (#1060)
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Box, ctx.Types.Boolean);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static bool EmitCreateHash(IEmitterContext emitter, List<Expr> arguments)

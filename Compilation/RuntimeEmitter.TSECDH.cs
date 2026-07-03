@@ -13,6 +13,7 @@ public partial class RuntimeEmitter
     private TypeBuilder _tsECDHTypeBuilder = null!;
     private FieldBuilder _tsECDHEcdhField = null!;
     private FieldBuilder _tsECDHCurveNameField = null!;
+    private FieldBuilder _tsECDHFieldLenField = null!;
 
     /// <summary>
     /// Phase 1: Define type, fields, and constructor.
@@ -31,6 +32,7 @@ public partial class RuntimeEmitter
         // Fields
         _tsECDHEcdhField = _tsECDHTypeBuilder.DefineField("_ecdh", typeof(ECDiffieHellman), FieldAttributes.Private);
         _tsECDHCurveNameField = _tsECDHTypeBuilder.DefineField("_curveName", _types.String, FieldAttributes.Private);
+        _tsECDHFieldLenField = _tsECDHTypeBuilder.DefineField("_fieldLen", _types.Int32, FieldAttributes.Private);
 
         // Constructor only in Phase 1
         EmitTSECDHCtor(_tsECDHTypeBuilder, runtime);
@@ -144,18 +146,27 @@ public partial class RuntimeEmitter
         il.MarkLabel(p256Label);
         il.Emit(OpCodes.Call, typeof(ECCurve.NamedCurves).GetProperty("nistP256")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, curveLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, 32);
+        il.Emit(OpCodes.Stfld, _tsECDHFieldLenField);
         il.Emit(OpCodes.Br, createLabel);
 
         // P384
         il.MarkLabel(p384Label);
         il.Emit(OpCodes.Call, typeof(ECCurve.NamedCurves).GetProperty("nistP384")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, curveLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, 48);
+        il.Emit(OpCodes.Stfld, _tsECDHFieldLenField);
         il.Emit(OpCodes.Br, createLabel);
 
         // P521
         il.MarkLabel(p521Label);
         il.Emit(OpCodes.Call, typeof(ECCurve.NamedCurves).GetProperty("nistP521")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, curveLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, 66);
+        il.Emit(OpCodes.Stfld, _tsECDHFieldLenField);
         il.Emit(OpCodes.Br, createLabel);
 
         // Default - throw
@@ -241,11 +252,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
-        // Call helper to compute the shared secret (handles Span conversion)
+        // Call helper to compute the shared secret (handles raw points + SPKI, DeriveRawSecretAgreement)
         var secretLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsECDHEcdhField);
         il.Emit(OpCodes.Ldloc, otherBytesLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsECDHFieldLenField);
         il.Emit(OpCodes.Call, runtime.TSECDHComputeSecretHelper);
         il.Emit(OpCodes.Stloc, secretLocal);
 
@@ -271,15 +284,31 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Export the public key in SPKI format
-        var bytesLocal = il.DeclareLocal(_types.ByteArray);
+        // Export EC parameters (public), then build the raw point per the format (#1060).
+        var paramsLocal = il.DeclareLocal(typeof(ECParameters));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsECDHEcdhField);
-        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportSubjectPublicKeyInfo")!);
-        il.Emit(OpCodes.Stloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportParameters", [_types.Boolean])!);
+        il.Emit(OpCodes.Stloc, paramsLocal);
+
+        var qField = typeof(ECParameters).GetField("Q")!;
+        var xField = typeof(ECPoint).GetField("X")!;
+        var yField = typeof(ECPoint).GetField("Y")!;
+
+        // EcdhEncodePoint(Q.X, Q.Y, _fieldLen, format)
+        il.Emit(OpCodes.Ldloca, paramsLocal);
+        il.Emit(OpCodes.Ldflda, qField);
+        il.Emit(OpCodes.Ldfld, xField);
+        il.Emit(OpCodes.Ldloca, paramsLocal);
+        il.Emit(OpCodes.Ldflda, qField);
+        il.Emit(OpCodes.Ldfld, yField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsECDHFieldLenField);
+        il.Emit(OpCodes.Ldarg_2);  // format
+        il.Emit(OpCodes.Call, runtime.EcdhEncodePoint);
 
         // Encode and return the result
-        il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldarg_1);  // encoding
         il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
         il.Emit(OpCodes.Ret);
@@ -300,15 +329,16 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Export the private key in PKCS8 format
-        var bytesLocal = il.DeclareLocal(_types.ByteArray);
+        // Return the raw private scalar D (Node behavior) (#1060).
+        var paramsLocal = il.DeclareLocal(typeof(ECParameters));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsECDHEcdhField);
-        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportPkcs8PrivateKey")!);
-        il.Emit(OpCodes.Stloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_1);  // includePrivateParameters = true
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportParameters", [_types.Boolean])!);
+        il.Emit(OpCodes.Stloc, paramsLocal);
 
-        // Encode and return the result
-        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldloca, paramsLocal);
+        il.Emit(OpCodes.Ldfld, typeof(ECParameters).GetField("D")!);
         il.Emit(OpCodes.Ldarg_1);  // encoding
         il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
         il.Emit(OpCodes.Ret);
@@ -460,6 +490,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSECDHHelpers(TypeBuilder runtimeTypeBuilder, EmittedRuntime runtime)
     {
+        EmitEcPointHelpers(runtimeTypeBuilder, runtime);
         EmitTSECDHEncodeResult(runtimeTypeBuilder, runtime);
         EmitTSECDHDecodeInput(runtimeTypeBuilder, runtime);
         EmitTSECDHComputeSecretHelper(runtimeTypeBuilder, runtime);
@@ -471,45 +502,134 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSECDHComputeSecretHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        // byte[] ECDHComputeSecretHelper(ECDiffieHellman self, byte[] otherBytes, int fieldLen)
         var method = typeBuilder.DefineMethod(
             "ECDHComputeSecretHelper",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ByteArray,
-            [typeof(ECDiffieHellman), _types.ByteArray]
+            [typeof(ECDiffieHellman), _types.ByteArray, _types.Int32]
         );
         runtime.TSECDHComputeSecretHelper = method;
 
         var il = method.GetILGenerator();
 
-        // Create a temporary ECDiffieHellman to hold the other party's public key
         var otherEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
         il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
-        // Create a ReadOnlySpan<byte> from the byte array
-        // For value types, we need to: declare local, ldloca, call ctor
-        var spanLocal = il.DeclareLocal(typeof(ReadOnlySpan<byte>));
-        il.Emit(OpCodes.Ldloca, spanLocal);  // Address of span local
-        il.Emit(OpCodes.Ldarg_1);            // byte[] otherPublicKeyBytes
-        il.Emit(OpCodes.Call, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        var rawPointLabel = il.DefineLabel();
+        var importedLabel = il.DefineLabel();
 
-        // Import the public key into the temporary ECDH
+        // if (otherBytes[0] == 0x30) => SPKI path, else raw point path
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x30);
+        il.Emit(OpCodes.Bne_Un, rawPointLabel);
+
+        // SPKI: ImportSubjectPublicKeyInfo(span, out _)
+        var spanLocal = il.DeclareLocal(typeof(ReadOnlySpan<byte>));
         var bytesReadLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloca, spanLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
         il.Emit(OpCodes.Ldloc, otherEcdhLocal);
-        il.Emit(OpCodes.Ldloc, spanLocal);           // The ReadOnlySpan<byte> value
-        il.Emit(OpCodes.Ldloca, bytesReadLocal);     // out int bytesRead
+        il.Emit(OpCodes.Ldloc, spanLocal);
+        il.Emit(OpCodes.Ldloca, bytesReadLocal);
         il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ImportSubjectPublicKeyInfo",
             [typeof(ReadOnlySpan<byte>), typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Br, importedLabel);
 
-        // Derive shared secret
+        // Raw point: prefix 0x04/0x06/0x07 (uncompressed/hybrid) with length 1+2*fieldLen.
+        il.MarkLabel(rawPointLabel);
+
+        // Compressed (0x02/0x03) is a documented compiled ceiling: length == 1+fieldLen.
+        var notCompressedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_2);      // fieldLen
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);          // 1 + fieldLen
+        il.Emit(OpCodes.Bne_Un, notCompressedLabel);
+        il.Emit(OpCodes.Ldstr, "ECDH.computeSecret: compressed-point input is not supported in compiled mode (interpreter only)");
+        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(notCompressedLabel);
+
+        // Build ECParameters { Curve = self's curve, Q = { X, Y } } and import.
+        var selfParamsLocal = il.DeclareLocal(typeof(ECParameters));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportParameters", [_types.Boolean])!);
+        il.Emit(OpCodes.Stloc, selfParamsLocal);
+
+        // x = new byte[fieldLen]; Array.Copy(otherBytes, 1, x, 0, fieldLen)
+        var xLocal = il.DeclareLocal(_types.ByteArray);
+        var yLocal = il.DeclareLocal(_types.ByteArray);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, xLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
+        // y = new byte[fieldLen]; Array.Copy(otherBytes, 1+fieldLen, y, 0, fieldLen)
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, yLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, yLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
+
+        // otherParams = new ECParameters { Curve = selfParams.Curve, Q = new ECPoint { X = x, Y = y } }
+        var otherParamsLocal = il.DeclareLocal(typeof(ECParameters));
+        var qLocal = il.DeclareLocal(typeof(ECPoint));
+        var curveField = typeof(ECParameters).GetField("Curve")!;
+        var qField = typeof(ECParameters).GetField("Q")!;
+        var xField = typeof(ECPoint).GetField("X")!;
+        var yField = typeof(ECPoint).GetField("Y")!;
+
+        il.Emit(OpCodes.Ldloca, qLocal);
+        il.Emit(OpCodes.Initobj, typeof(ECPoint));
+        il.Emit(OpCodes.Ldloca, qLocal);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Stfld, xField);
+        il.Emit(OpCodes.Ldloca, qLocal);
+        il.Emit(OpCodes.Ldloc, yLocal);
+        il.Emit(OpCodes.Stfld, yField);
+
+        il.Emit(OpCodes.Ldloca, otherParamsLocal);
+        il.Emit(OpCodes.Initobj, typeof(ECParameters));
+        il.Emit(OpCodes.Ldloca, otherParamsLocal);
+        il.Emit(OpCodes.Ldloca, selfParamsLocal);
+        il.Emit(OpCodes.Ldfld, curveField);
+        il.Emit(OpCodes.Stfld, curveField);
+        il.Emit(OpCodes.Ldloca, otherParamsLocal);
+        il.Emit(OpCodes.Ldloc, qLocal);
+        il.Emit(OpCodes.Stfld, qField);
+
+        il.Emit(OpCodes.Ldloc, otherEcdhLocal);
+        il.Emit(OpCodes.Ldloc, otherParamsLocal);
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ImportParameters", [typeof(ECParameters)])!);
+
+        il.MarkLabel(importedLabel);
+
+        // Derive raw secret (the X coordinate) — matches interp's DeriveRawSecretAgreement.
         var secretLocal = il.DeclareLocal(_types.ByteArray);
-        il.Emit(OpCodes.Ldarg_0);  // ecdh
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, otherEcdhLocal);
         il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetProperty("PublicKey")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("DeriveKeyMaterial", [typeof(ECDiffieHellmanPublicKey)])!);
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("DeriveRawSecretAgreement", [typeof(ECDiffieHellmanPublicKey)])!);
         il.Emit(OpCodes.Stloc, secretLocal);
 
-        // Dispose the temporary ECDH
         il.Emit(OpCodes.Ldloc, otherEcdhLocal);
         il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
 
