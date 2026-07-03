@@ -90,7 +90,16 @@ public static class CryptoModuleInterpreter
             ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync),
             // X509Certificate class (#1064) — constructable via `new crypto.X509Certificate(...)`
             // (the interpreter invokes a BuiltInMethod export when used with `new`, like net.BlockList)
-            ["X509Certificate"] = BuiltInMethod.CreateV2("X509Certificate", 1, CreateX509Certificate)
+            ["X509Certificate"] = BuiltInMethod.CreateV2("X509Certificate", 1, CreateX509Certificate),
+            // WebCrypto (#1063): module surface — same objects as globalThis.crypto
+            ["webcrypto"] = SharpTSWebCrypto.Instance,
+            ["subtle"] = SharpTSWebCrypto.Instance.Subtle,
+            ["getRandomValues"] = BuiltInMethod.CreateV2("getRandomValues", 1, (_, _, args) =>
+            {
+                if (args.Length == 0)
+                    throw new Exception("crypto.getRandomValues requires a typed array argument");
+                return RuntimeValue.FromBoxed(SharpTSWebCrypto.GetRandomValues(args[0].ToObject()));
+            })
         };
     }
 

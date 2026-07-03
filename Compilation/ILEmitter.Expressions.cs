@@ -301,6 +301,17 @@ public partial class ILEmitter
             return;
         }
 
+        // Bare `crypto` (unimported) → the WebCrypto global (#1063), via
+        // GlobalThisGetProperty so the gating lives in one place. Positioned
+        // after every other resolution so imports/locals/classes always win.
+        if (name == "crypto")
+        {
+            IL.Emit(OpCodes.Ldstr, "crypto");
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
+            SetStackUnknown();
+            return;
+        }
+
         // Unknown variable - throw ReferenceError at runtime
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);

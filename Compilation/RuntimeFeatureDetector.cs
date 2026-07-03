@@ -126,6 +126,13 @@ public sealed class RuntimeFeatureDetector
         {
             _set.UsesBuffer = true;
         }
+        // WebCrypto (#1063): subtle results are $ArrayBuffer and getRandomValues
+        // consumes $TypedArray views, so crypto implies both base types.
+        if (_set.UsesCrypto)
+        {
+            _set.TypedArrays |= RuntimeFeatureSet.TypedArrayKinds.ArrayBuffer
+                              | RuntimeFeatureSet.TypedArrayKinds.TypedArrayBase;
+        }
         // Anything that needs a typed-array kind also needs $TypedArray + $ArrayBuffer.
         if (_set.TypedArrays != RuntimeFeatureSet.TypedArrayKinds.None)
         {
@@ -245,6 +252,12 @@ public sealed class RuntimeFeatureDetector
             case "Request":
             case "Response":
                 _set.UsesFetch = true; break;
+
+            // WebCrypto global (#1063): bare `crypto` / `globalThis.crypto` without
+            // an import still needs $WebCrypto + the crypto helpers emitted. A local
+            // variable named crypto over-emits harmlessly.
+            case "crypto":
+                _set.UsesCrypto = true; break;
 
             // Workers / channels
             case "BroadcastChannel":

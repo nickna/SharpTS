@@ -259,6 +259,21 @@ public partial class RuntimeEmitter
             il.MarkLabel(notProcess);
         }
 
+        // globalThis.crypto → the $WebCrypto singleton (#1063), same object as
+        // crypto.webcrypto. Gated: without crypto the reserved accessor's stub
+        // returns null, so keep the name resolving to undefined instead.
+        if (_features.UsesCrypto)
+        {
+            var notCrypto = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "crypto");
+            il.Emit(OpCodes.Call, strEquals);
+            il.Emit(OpCodes.Brfalse, notCrypto);
+            il.Emit(OpCodes.Call, runtime.GetWebCryptoObject);
+            il.Emit(OpCodes.Br, returnLabel);
+            il.MarkLabel(notCrypto);
+        }
+
         // console / Reflect have no value-form singleton representation; keep
         // the historical null marker so syntactic dispatch (which fires before
         // this value-form path) stays authoritative for them.

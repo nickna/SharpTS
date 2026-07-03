@@ -1156,6 +1156,16 @@ public partial class RuntimeEmitter
         {
             EmitCryptoMethods(typeBuilder, runtime);
             EmitX509CertificateFactory(typeBuilder, runtime); // crypto.X509Certificate (#1064)
+            // WebCrypto (#1063): byte-level $Runtime helpers, then the $CryptoKey/
+            // $SubtleCrypto/$WebCrypto types (which call into those helpers) and
+            // the GetWebCryptoObject singleton body.
+            EmitWebCryptoRuntimeHelpers(typeBuilder, runtime);
+            EmitWebCryptoTypes((System.Reflection.Emit.ModuleBuilder)typeBuilder.Module, runtime);
+        }
+        else
+        {
+            // The Phase1-reserved GetWebCryptoObject must still get a body.
+            EmitGetWebCryptoObjectStub(runtime);
         }
         // Util module methods (util.types.* always emitted; promisify/callbackify/deprecate
         // gated inside EmitUtilMethods on _features.UsesUtilPromisify).

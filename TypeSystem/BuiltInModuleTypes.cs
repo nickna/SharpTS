@@ -784,7 +784,11 @@ public static class BuiltInModuleTypes
             // X509Certificate class (#1064) — any-typed so `new crypto.X509Certificate(...)`
             // and instance member access type-check; a refined shape lands with #1065.
             ["X509Certificate"] = anyType,
-            // WebCrypto (webcrypto/subtle/getRandomValues) is added by #1063.
+            // WebCrypto (#1063): crypto.webcrypto / crypto.subtle / crypto.getRandomValues.
+            // Kept as `any` here; the full SubtleCrypto shape is #1065's type pass.
+            ["webcrypto"] = anyType,
+            ["subtle"] = anyType,
+            ["getRandomValues"] = new TypeInfo.Function([anyType], anyType)
         };
     }
 

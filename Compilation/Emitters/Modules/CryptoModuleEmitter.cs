@@ -26,10 +26,20 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         // #1059/#1060
         "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup",
         // #1064
-        "X509Certificate"
+        "X509Certificate",
+        // WebCrypto (#1063)
+        "webcrypto", "subtle", "getRandomValues"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
+
+    /// <summary>
+    /// webcrypto/subtle resolve to the $WebCrypto singleton at each access site (#1063)
+    /// — the import-time namespace-dict snapshot has no value form for them.
+    /// </summary>
+    public bool HasLivePropertyGet(string memberName) => memberName is "webcrypto" or "subtle";
+
+    public bool IsExportedProperty(string memberName) => memberName is "webcrypto" or "subtle";
 
     public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {
@@ -81,6 +91,15 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 // crypto.fips — always false (non-FIPS build) (#1060)
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
+                return true;
+            // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
+            case "webcrypto":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                return true;
+            case "subtle":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                il.Emit(OpCodes.Ldstr, "subtle");
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
                 return true;
             default:
                 return false;

@@ -240,6 +240,8 @@ public sealed class BuiltInRegistry
         RegisterIntlSegmenterType(registry);
         RegisterIntlDisplayNamesType(registry);
         RegisterAsyncLocalStorageType(registry);
+        RegisterWebCryptoNamespace(registry);
+        RegisterWebCryptoTypes(registry);
 
         // Register fast category-indexed dispatch for built-in types.
         // These use the already-computed TypeCategory from ClassifyRuntime() to skip
@@ -791,6 +793,29 @@ public sealed class BuiltInRegistry
         // access on the wrapper itself goes through here.
         registry.RegisterInstanceType(typeof(SharpTSClassPrototype), (instance, name) =>
             ((SharpTSClassPrototype)instance).GetMember(name));
+    }
+
+    private static void RegisterWebCryptoNamespace(BuiltInRegistry registry)
+    {
+        // globalThis.crypto / bare `crypto` → the WebCrypto object (#1063).
+        // An `import ... from 'crypto'` binding shadows this via normal scoping.
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "crypto",
+            IsSingleton: true,
+            SingletonFactory: () => SharpTSWebCrypto.Instance,
+            GetMethod: name => SharpTSWebCrypto.Instance.GetMember(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterWebCryptoTypes(BuiltInRegistry registry)
+    {
+        // WebCrypto instance surfaces (#1063): crypto.subtle.digest, key.type, ...
+        registry.RegisterInstanceType(typeof(SharpTSWebCrypto), (instance, name) =>
+            ((SharpTSWebCrypto)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSSubtleCrypto), (instance, name) =>
+            ((SharpTSSubtleCrypto)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSCryptoKey), (instance, name) =>
+            ((SharpTSCryptoKey)instance).GetMember(name));
     }
 
     private static void RegisterGlobalThisNamespace(BuiltInRegistry registry)
