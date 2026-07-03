@@ -15,7 +15,8 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
     [
         "lookup", "resolve", "resolve4", "resolve6", "reverse",
         "resolveMx", "resolveTxt", "resolveSrv", "resolveCname",
-        "resolveNs", "resolveSoa", "resolvePtr", "resolveCaa", "resolveNaptr"
+        "resolveNs", "resolveSoa", "resolvePtr", "resolveCaa", "resolveNaptr",
+        "setDefaultResultOrder", "getDefaultResultOrder"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -38,6 +39,8 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             "resolvePtr" => EmitSingleArg(emitter, arguments, "DnsPromisesResolvePtr"),
             "resolveCaa" => EmitSingleArg(emitter, arguments, "DnsPromisesResolveCaa"),
             "resolveNaptr" => EmitSingleArg(emitter, arguments, "DnsPromisesResolveNaptr"),
+            "setDefaultResultOrder" => EmitSetDefaultResultOrder(emitter, arguments),
+            "getDefaultResultOrder" => EmitGetDefaultResultOrder(emitter),
             _ => false
         };
     }
@@ -45,6 +48,32 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
         return false;
+    }
+
+    /// <summary>Emits: dnsPromises.setDefaultResultOrder(order) — shared emitted state with dns (#1072)</summary>
+    private static bool EmitSetDefaultResultOrder(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.DnsSetDefaultResultOrder);
+        return true;
+    }
+
+    /// <summary>Emits: dnsPromises.getDefaultResultOrder() (#1072)</summary>
+    private static bool EmitGetDefaultResultOrder(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.DnsGetDefaultResultOrder);
+        return true;
     }
 
     /// <summary>Emits: RuntimeTypes.DnsPromisesXxx(hostname) → Task → WrapTaskAsPromise</summary>

@@ -1350,6 +1350,10 @@ public static class BuiltInModuleTypes
             // dns.Resolver class constructor
             ["Resolver"] = new TypeInfo.Function([], anyType, RequiredParams: 0),
 
+            // Default lookup result order (#1072)
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType),
+
             // dns.promises sub-module
             ["promises"] = anyType,
 
@@ -1446,7 +1450,9 @@ public static class BuiltInModuleTypes
                 new TypeInfo.Promise(anyType)),
             ["resolveNaptr"] = new TypeInfo.Function(
                 [stringType],
-                new TypeInfo.Promise(anyType))
+                new TypeInfo.Promise(anyType)),
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType)
         };
     }
 
@@ -1506,7 +1512,13 @@ public static class BuiltInModuleTypes
             ["bytesWritten"] = numberType,
             ["connecting"] = booleanType,
             ["destroyed"] = booleanType,
-            ["readyState"] = stringType
+            ["readyState"] = stringType,
+            ["writableLength"] = numberType,
+            ["writableHighWaterMark"] = numberType,
+            ["writableNeedDrain"] = booleanType,
+            ["localFamily"] = stringType,
+            ["pending"] = booleanType,
+            ["allowHalfOpen"] = booleanType
         };
         var socketType = new TypeInfo.Record(socketMembers.ToFrozenDictionary());
 
@@ -1524,6 +1536,26 @@ public static class BuiltInModuleTypes
         };
         var serverType = new TypeInfo.Record(serverMembers.ToFrozenDictionary());
 
+        // net.SocketAddress instance type (#1069)
+        var socketAddressType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["address"] = stringType,
+            ["family"] = stringType,
+            ["port"] = numberType,
+            ["flowlabel"] = numberType,
+            ["toJSON"] = new TypeInfo.Function([], anyType)
+        }.ToFrozenDictionary());
+
+        // net.BlockList instance type (#1069)
+        var blockListType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["addAddress"] = new TypeInfo.Function([anyType, stringType], voidType, RequiredParams: 1),
+            ["addRange"] = new TypeInfo.Function([anyType, anyType, stringType], voidType, RequiredParams: 2),
+            ["addSubnet"] = new TypeInfo.Function([anyType, numberType, stringType], voidType, RequiredParams: 2),
+            ["check"] = new TypeInfo.Function([anyType, stringType], booleanType, RequiredParams: 1),
+            ["rules"] = new TypeInfo.Array(stringType)
+        }.ToFrozenDictionary());
+
         return new Dictionary<string, TypeInfo>
         {
             ["createServer"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
@@ -1534,7 +1566,13 @@ public static class BuiltInModuleTypes
             ["isIPv4"] = new TypeInfo.Function([stringType], booleanType),
             ["isIPv6"] = new TypeInfo.Function([stringType], booleanType),
             ["Server"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
-            ["Socket"] = new TypeInfo.Function([anyType], socketType, RequiredParams: 0)
+            ["Socket"] = new TypeInfo.Function([anyType], socketType, RequiredParams: 0),
+            ["BlockList"] = new TypeInfo.Function([], blockListType, RequiredParams: 0),
+            ["SocketAddress"] = new TypeInfo.Function([anyType], socketAddressType, RequiredParams: 0),
+            ["getDefaultAutoSelectFamily"] = new TypeInfo.Function([], booleanType),
+            ["setDefaultAutoSelectFamily"] = new TypeInfo.Function([booleanType], voidType),
+            ["getDefaultAutoSelectFamilyAttemptTimeout"] = new TypeInfo.Function([], numberType),
+            ["setDefaultAutoSelectFamilyAttemptTimeout"] = new TypeInfo.Function([numberType], voidType)
         };
     }
 
@@ -2143,7 +2181,11 @@ public static class BuiltInModuleTypes
             ["setTTL"] = new TypeInfo.Function([numberType], voidType),
             ["setMulticastTTL"] = new TypeInfo.Function([numberType], voidType),
             ["addMembership"] = new TypeInfo.Function([stringType, stringType], voidType, RequiredParams: 1),
-            ["dropMembership"] = new TypeInfo.Function([stringType], voidType),
+            ["dropMembership"] = new TypeInfo.Function([stringType, stringType], voidType, RequiredParams: 1),
+            ["addSourceSpecificMembership"] = new TypeInfo.Function([stringType, stringType, stringType], voidType, RequiredParams: 2),
+            ["dropSourceSpecificMembership"] = new TypeInfo.Function([stringType, stringType, stringType], voidType, RequiredParams: 2),
+            ["setMulticastLoopback"] = new TypeInfo.Function([boolType], voidType),
+            ["setMulticastInterface"] = new TypeInfo.Function([stringType], voidType),
             ["ref"] = new TypeInfo.Function([], anyType),
             ["unref"] = new TypeInfo.Function([], anyType),
             ["connect"] = new TypeInfo.Function([numberType, stringType, anyType], voidType, RequiredParams: 1),

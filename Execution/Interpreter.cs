@@ -511,7 +511,11 @@ public partial class Interpreter : IDisposable
     // Virtual timer system - timers are checked and executed on the main thread during loop iterations.
     // This avoids thread scheduling issues on macOS where background threads may not get CPU time.
     // Uses PriorityQueue for O(log n) insert and O(log n) extraction of due timers.
-    private readonly PriorityQueue<VirtualTimer, long> _virtualTimerQueue = new();
+    // Priority is (fireTime, sequence): PriorityQueue is not FIFO-stable for equal
+    // priorities, and two 0-ms timers scheduled within the same millisecond MUST fire
+    // in schedule order (e.g. a socket's 'data' before its read-EOF 'end'/'close').
+    private readonly PriorityQueue<VirtualTimer, (long FireTime, long Seq)> _virtualTimerQueue = new();
+    private long _timerSequence;
     private readonly object _virtualTimersLock = new();
     // Volatile flag for O(1) "queue empty" check without acquiring lock
     private volatile bool _hasScheduledTimers;
@@ -695,7 +699,7 @@ public partial class Interpreter : IDisposable
         var timer = new VirtualTimer(fireTime, intervalMs, callback, isInterval);
         lock (_virtualTimersLock)
         {
-            _virtualTimerQueue.Enqueue(timer, fireTime);
+            _virtualTimerQueue.Enqueue(timer, (fireTime, _timerSequence++));
             _hasScheduledTimers = true;
         }
         // Always wake the event loop: it may be blocked in a wait whose timeout was
@@ -850,14 +854,14 @@ public partial class Interpreter : IDisposable
                 _virtualTimerQueue.Dequeue();
             }
 
-            if (!_virtualTimerQueue.TryPeek(out _, out var fireTime))
+            if (!_virtualTimerQueue.TryPeek(out _, out var priority))
             {
                 _hasScheduledTimers = false;
                 return TimeSpan.FromSeconds(60);
             }
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var ms = fireTime - now;
+            var ms = priority.FireTime - now;
 
             // Clamp to reasonable range: 0ms to 60 seconds
             if (ms <= 0) return TimeSpan.Zero;
@@ -1230,10 +1234,11 @@ public partial class Interpreter : IDisposable
         lock (_virtualTimersLock)
         {
             // Dequeue all due timers - PriorityQueue is min-heap, so lowest fireTime comes first
-            while (_virtualTimerQueue.TryPeek(out var timer, out var fireTime))
+            // (ties broken by schedule order via the sequence component)
+            while (_virtualTimerQueue.TryPeek(out var timer, out var priority))
             {
                 // If the next timer isn't due yet, stop processing
-                if (fireTime > now) break;
+                if (priority.FireTime > now) break;
 
                 // Remove the timer from queue
                 _virtualTimerQueue.Dequeue();
@@ -1259,7 +1264,7 @@ public partial class Interpreter : IDisposable
             {
                 foreach (var timer in toReschedule)
                 {
-                    _virtualTimerQueue.Enqueue(timer, timer.FireTimeMs);
+                    _virtualTimerQueue.Enqueue(timer, (timer.FireTimeMs, _timerSequence++));
                 }
             }
 

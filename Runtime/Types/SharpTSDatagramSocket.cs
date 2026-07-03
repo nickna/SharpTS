@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.BuiltIns.Modules;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
@@ -41,6 +42,10 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
             "setMulticastTTL" => BuiltInMethod.CreateV2("setMulticastTTL", 1, SetMulticastTTL),
             "addMembership" => BuiltInMethod.CreateV2("addMembership", 1, 2, AddMembership),
             "dropMembership" => BuiltInMethod.CreateV2("dropMembership", 1, 2, DropMembership),
+            "addSourceSpecificMembership" => BuiltInMethod.CreateV2("addSourceSpecificMembership", 2, 3, AddSourceSpecificMembership),
+            "dropSourceSpecificMembership" => BuiltInMethod.CreateV2("dropSourceSpecificMembership", 2, 3, DropSourceSpecificMembership),
+            "setMulticastLoopback" => BuiltInMethod.CreateV2("setMulticastLoopback", 1, SetMulticastLoopback),
+            "setMulticastInterface" => BuiltInMethod.CreateV2("setMulticastInterface", 1, SetMulticastInterface),
             "ref" => BuiltInMethod.CreateV2("ref", 0, Ref),
             "unref" => BuiltInMethod.CreateV2("unref", 0, Unref),
             "connect" => BuiltInMethod.CreateV2("connect", 1, 3, Connect),
@@ -160,6 +165,9 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
         if (args.Length >= 4 && args[1].IsNumber && args[2].IsNumber && args[3].IsNumber)
         {
             // send(msg, offset, length, port, address?, callback?)
+            // An explicit destination on a connected socket is an error (Node).
+            if (_connected)
+                throw new NodeError("ERR_SOCKET_DGRAM_IS_CONNECTED", "Already connected");
             int offset = (int)args[1].AsNumberUnsafe();
             int length = (int)args[2].AsNumberUnsafe();
             if (offset != 0 || length != data.Length)
@@ -173,16 +181,40 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
             if (args.Length > 4 && args[4].ToObject() is ISharpTSCallable c4) callback = c4;
             if (args.Length > 5 && args[5].ToObject() is ISharpTSCallable c5) callback = c5;
         }
-        else if (_connected && (args.Length < 2 || !args[1].IsNumber))
+        else if (_connected)
         {
-            // Connected mode: send(msg, callback?)
+            // Connected mode: send(msg[, offset, length][, callback]) — an explicit
+            // port/address is rejected (ERR_SOCKET_DGRAM_IS_CONNECTED, Node semantics).
             useConnected = true;
-            if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable c1) callback = c1;
+            if (args.Length > 2 && args[1].IsNumber && args[2].IsNumber)
+            {
+                // send(msg, offset, length[, callback]) — legal while connected
+                int offset = (int)args[1].AsNumberUnsafe();
+                int length = (int)args[2].AsNumberUnsafe();
+                if (offset != 0 || length != data.Length)
+                {
+                    var slice = new byte[length];
+                    Array.Copy(data, offset, slice, 0, length);
+                    data = slice;
+                }
+                if (args.Length > 3 && args[3].ToObject() is ISharpTSCallable c3c) callback = c3c;
+            }
+            else if (args.Length > 1 && args[1].IsNumber)
+            {
+                throw new NodeError("ERR_SOCKET_DGRAM_IS_CONNECTED", "Already connected");
+            }
+            else if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable c1)
+            {
+                callback = c1;
+            }
         }
         else
         {
-            // send(msg, port, address?, callback?)
-            port = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
+            // send(msg, port, address?, callback?) — the destination port is
+            // required on an unconnected socket (Node semantics).
+            if (args.Length < 2 || !args[1].IsNumber)
+                throw new NodeError("ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
+            port = (int)args[1].AsNumberUnsafe();
             if (args.Length > 2 && args[2].IsString) address = args[2].AsStringUnsafe();
             if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable c2) callback = c2;
             if (args.Length > 3 && args[3].ToObject() is ISharpTSCallable c3) callback = c3;
@@ -346,7 +378,119 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
     {
         if (_client != null && args.Length > 0 && args[0].IsString)
         {
-            _client.DropMulticastGroup(IPAddress.Parse(args[0].AsStringUnsafe()));
+            var multicastAddress = IPAddress.Parse(args[0].AsStringUnsafe());
+            // Node: dropMembership(multicastAddress[, multicastInterface]). The
+            // interface matters: Linux requires IP_DROP_MEMBERSHIP to match the
+            // join's (group, interface) tuple — dropping a 127.0.0.1-scoped join
+            // with INADDR_ANY throws there (Windows matches by group alone).
+            var localAddress = args.Length > 1 && args[1].IsString
+                ? IPAddress.Parse(args[1].AsStringUnsafe())
+                : null;
+            if (localAddress != null && _family == AddressFamily.InterNetwork)
+            {
+                _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.DropMembership,
+                    new MulticastOption(multicastAddress, localAddress));
+            }
+            else
+            {
+                _client.DropMulticastGroup(multicastAddress);
+            }
+        }
+        return RuntimeValue.Null;
+    }
+
+    /// <summary>
+    /// Lazily creates the UDP handle so pre-bind option setters work (Node's
+    /// handle exists from createSocket; ours is created on first use).
+    /// </summary>
+    private UdpClient EnsureClient()
+    {
+        if (_closed)
+            throw new NodeError("ERR_SOCKET_DGRAM_NOT_RUNNING", "Not running");
+        return _client ??= new UdpClient(_family);
+    }
+
+    /// <summary>
+    /// addSourceSpecificMembership(sourceAddress, groupAddress[, multicastInterface]) (#1071)
+    /// </summary>
+    private RuntimeValue AddSourceSpecificMembership(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => SourceSpecificMembership(args, add: true);
+
+    /// <summary>
+    /// dropSourceSpecificMembership(sourceAddress, groupAddress[, multicastInterface]) (#1071)
+    /// </summary>
+    private RuntimeValue DropSourceSpecificMembership(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => SourceSpecificMembership(args, add: false);
+
+    private RuntimeValue SourceSpecificMembership(ReadOnlySpan<RuntimeValue> args, bool add)
+    {
+        if (args.Length < 2 || !args[0].IsString || !args[1].IsString)
+            throw new NodeError("ERR_INVALID_ARG_TYPE", "The \"sourceAddress\" and \"groupAddress\" arguments must be of type string");
+
+        if (_family == AddressFamily.InterNetworkV6)
+        {
+            // .NET has no portable MCAST_JOIN_SOURCE_GROUP mapping — documented ceiling.
+            throw new NodeError("ERR_INVALID_ARG_VALUE",
+                "Source-specific multicast is not supported for udp6 sockets on this runtime");
+        }
+
+        var source = IPAddress.Parse(args[0].AsStringUnsafe());
+        var group = IPAddress.Parse(args[1].AsStringUnsafe());
+        var iface = args.Length > 2 && args[2].IsString
+            ? IPAddress.Parse(args[2].AsStringUnsafe())
+            : IPAddress.Any;
+
+        // ip_mreq_source is 3 in_addr fields whose ORDER differs by platform:
+        // Windows: { multiaddr, sourceaddr, interface }; Linux/macOS: { multiaddr, interface, sourceaddr }.
+        var mreq = new byte[12];
+        group.GetAddressBytes().CopyTo(mreq, 0);
+        if (OperatingSystem.IsWindows())
+        {
+            source.GetAddressBytes().CopyTo(mreq, 4);
+            iface.GetAddressBytes().CopyTo(mreq, 8);
+        }
+        else
+        {
+            iface.GetAddressBytes().CopyTo(mreq, 4);
+            source.GetAddressBytes().CopyTo(mreq, 8);
+        }
+
+        EnsureClient().Client.SetSocketOption(
+            SocketOptionLevel.IP,
+            add ? SocketOptionName.AddSourceMembership : SocketOptionName.DropSourceMembership,
+            mreq);
+        return RuntimeValue.Null;
+    }
+
+    /// <summary>
+    /// setMulticastLoopback(flag) (#1071): UdpClient.MulticastLoopback picks the
+    /// right option level (IP vs IPv6) from the socket family.
+    /// </summary>
+    private RuntimeValue SetMulticastLoopback(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var flag = (args[0].IsBoolean && args[0].AsBooleanUnsafe())
+            || (args[0].IsNumber && args[0].AsNumberUnsafe() != 0);
+        EnsureClient().MulticastLoopback = flag;
+        return RuntimeValue.Null;
+    }
+
+    /// <summary>
+    /// setMulticastInterface(multicastInterface) (#1071): IPv4 takes the interface
+    /// address; IPv6 takes the scope id of an "::%N"-style address.
+    /// </summary>
+    private RuntimeValue SetMulticastInterface(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (!args[0].IsString)
+            throw new NodeError("ERR_INVALID_ARG_TYPE", "The \"multicastInterface\" argument must be of type string");
+        var ip = IPAddress.Parse(args[0].AsStringUnsafe());
+        var client = EnsureClient();
+        if (_family == AddressFamily.InterNetworkV6)
+        {
+            client.Client.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.MulticastInterface, (int)ip.ScopeId);
+        }
+        else
+        {
+            client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, ip.GetAddressBytes());
         }
         return RuntimeValue.Null;
     }
@@ -416,7 +560,7 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
     {
         if (!_connected)
         {
-            throw new Exception("Runtime Error: Not connected");
+            throw new NodeError("ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
         }
 
         try
@@ -442,7 +586,7 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
     {
         if (!_connected || _connectedRemote == null)
         {
-            throw new Exception("Runtime Error: Not connected");
+            throw new NodeError("ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
         }
 
         return RuntimeValue.FromObject(new SharpTSObject(new Dictionary<string, object?>

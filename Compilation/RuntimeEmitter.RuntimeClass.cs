@@ -1112,7 +1112,11 @@ public partial class RuntimeEmitter
             EmitOsModuleMethods(typeBuilder, runtime);
         if (_features.UsesDns)
         {
-            // dns.Resolver late-binds to RuntimeTypes.DnsCreateResolver — needs SharpTS at runtime.
+            // Standalone posture (#1073, explicit decision): the module-level dns
+            // surface (lookup/resolve*/result-order) is fully emitted BCL IL and
+            // works standalone; only dns.Resolver and the dns.promises namespace
+            // late-bind to RuntimeTypes (SharpTS.dll), so the soft-dependency is
+            // KEPT and recorded here rather than re-emitting those as IL.
             runtime.RequireSharpTSRuntime("dns module");
             EmitDnsModuleMethods(typeBuilder, runtime);
             EmitDnsPromisesMethods(typeBuilder, runtime);

@@ -49,6 +49,10 @@ public static class DnsModuleInterpreter
             // Resolver class constructor
             ["Resolver"] = BuiltInMethod.CreateV2("Resolver", 0, 1, CreateResolver),
 
+            // Default lookup result order (#1072)
+            ["setDefaultResultOrder"] = BuiltInMethod.CreateV2("setDefaultResultOrder", 1, SetDefaultResultOrder),
+            ["getDefaultResultOrder"] = BuiltInMethod.CreateV2("getDefaultResultOrder", 0, GetDefaultResultOrder),
+
             // Constants
             ["ADDRCONFIG"] = (double)1,
             ["V4MAPPED"] = (double)2,
@@ -100,8 +104,31 @@ public static class DnsModuleInterpreter
             ["resolveSoa"] = new BuiltInAsyncMethod("resolveSoa", 1, 1, ResolveSoaPromise),
             ["resolvePtr"] = new BuiltInAsyncMethod("resolvePtr", 1, 1, ResolvePtrPromise),
             ["resolveCaa"] = new BuiltInAsyncMethod("resolveCaa", 1, 1, ResolveCaaPromise),
-            ["resolveNaptr"] = new BuiltInAsyncMethod("resolveNaptr", 1, 1, ResolveNaptrPromise)
+            ["resolveNaptr"] = new BuiltInAsyncMethod("resolveNaptr", 1, 1, ResolveNaptrPromise),
+            // Shared with the callback API (#1072) — Node's dnsPromises mirrors these.
+            ["setDefaultResultOrder"] = BuiltInMethod.CreateV2("setDefaultResultOrder", 1, SetDefaultResultOrder),
+            ["getDefaultResultOrder"] = BuiltInMethod.CreateV2("getDefaultResultOrder", 0, GetDefaultResultOrder)
         };
+    }
+
+    /// <summary>
+    /// dns.setDefaultResultOrder(order) — 'ipv4first' | 'ipv6first' | 'verbatim' (#1072).
+    /// Affects the address selection of dns.lookup / dnsPromises.lookup.
+    /// </summary>
+    private static RuntimeValue SetDefaultResultOrder(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (!args[0].IsString)
+            throw new NodeError("ERR_INVALID_ARG_VALUE", "The argument 'order' must be one of: 'ipv4first', 'ipv6first', 'verbatim'");
+        DnsConfig.SetDefaultResultOrder(args[0].AsStringUnsafe());
+        return RuntimeValue.Undefined;
+    }
+
+    /// <summary>
+    /// dns.getDefaultResultOrder() (#1072).
+    /// </summary>
+    private static RuntimeValue GetDefaultResultOrder(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        return RuntimeValue.FromString(DnsConfig.DefaultResultOrder);
     }
 
     /// <summary>
@@ -123,6 +150,7 @@ public static class DnsModuleInterpreter
         // Parse options
         int family = 0; // 0 = any, 4 = IPv4 only, 6 = IPv6 only
         bool all = false;
+        string? order = null; // per-call result order (#1072); null = module default
 
         if (args.Length > 1 && !args[1].IsNull)
         {
@@ -136,19 +164,23 @@ public static class DnsModuleInterpreter
                     family = (int)f;
                 if (options.Fields.TryGetValue("all", out var allVal))
                     all = IsTruthy(allVal);
+                if (options.Fields.TryGetValue("order", out var orderVal) && orderVal is string o)
+                    order = o;
+                else if (options.Fields.TryGetValue("verbatim", out var verbatimVal) && verbatimVal is bool v)
+                    order = v ? "verbatim" : "ipv4first"; // legacy boolean form
             }
         }
 
         var callback = args[^1].ToObject() as ISharpTSCallable;
         if (callback == null)
-            return RuntimeValue.FromBoxed(LookupCore(hostname, family, all));
+            return RuntimeValue.FromBoxed(LookupCore(hostname, family, all, order));
 
         interpreter.Ref();
         _ = Task.Run(() =>
         {
             try
             {
-                var result = LookupCore(hostname, family, all);
+                var result = LookupCore(hostname, family, all, order);
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
                     if (result is SharpTSObject single)
@@ -176,7 +208,7 @@ public static class DnsModuleInterpreter
     /// Shared dns.lookup resolution: returns a single {address, family} object,
     /// or an array of them when <paramref name="all"/> is set.
     /// </summary>
-    private static object? LookupCore(string hostname, int family, bool all)
+    private static object? LookupCore(string hostname, int family, bool all, string? order = null)
     {
         try
         {
@@ -188,6 +220,16 @@ public static class DnsModuleInterpreter
                 addresses = addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).ToArray();
             else if (family == 6)
                 addresses = addresses.Where(a => a.AddressFamily == AddressFamily.InterNetworkV6).ToArray();
+            else
+            {
+                // Result order (#1072): per-call option, else the module default.
+                // Stable partition so relative resolver order is preserved.
+                var effectiveOrder = order ?? DnsConfig.DefaultResultOrder;
+                if (effectiveOrder == "ipv4first")
+                    addresses = [.. addresses.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)];
+                else if (effectiveOrder == "ipv6first")
+                    addresses = [.. addresses.OrderBy(a => a.AddressFamily == AddressFamily.InterNetworkV6 ? 0 : 1)];
+            }
 
             if (addresses.Length == 0)
             {
@@ -359,9 +401,71 @@ public static class DnsModuleInterpreter
                 ResolverRecordAsync(interp, instance, "resolveCaa", a, r => r.ResolveCaa)),
             ["resolveNaptr"] = BuiltInMethod.CreateV2("resolveNaptr", 2, 2, (interp, _, a) =>
                 ResolverRecordAsync(interp, instance, "resolveNaptr", a, r => r.ResolveNaptr)),
-            ["cancel"] = BuiltInMethod.CreateV2("cancel", 0, 0, (_, _, _) => RuntimeValue.Undefined)
+            // Real cancel (#1072): all outstanding queries reject with ECANCELLED.
+            // Cooperative — the in-flight wire query itself runs to its timeout in
+            // the background, but delivery is aborted promptly.
+            ["cancel"] = BuiltInMethod.CreateV2("cancel", 0, 0, (_, _, _) =>
+            {
+                instance.Cancel();
+                return RuntimeValue.Undefined;
+            }),
+            ["setLocalAddress"] = BuiltInMethod.CreateV2("setLocalAddress", 0, 2, (interp, _, a) =>
+            {
+                string? v4 = a.Length > 0 && a[0].IsString ? a[0].AsStringUnsafe() : null;
+                string? v6 = a.Length > 1 && a[1].IsString ? a[1].AsStringUnsafe() : null;
+                instance.SetLocalAddress(v4, v6);
+                return RuntimeValue.Undefined;
+            })
         };
         return RuntimeValue.FromObject(new SharpTSObject(fields));
+    }
+
+    /// <summary>
+    /// Runs a resolver query off-thread with cooperative cancellation (#1072):
+    /// the result/error is delivered via the callback on the event loop, and a
+    /// Resolver.cancel() while the query is outstanding rejects it promptly with
+    /// ECANCELLED (the orphaned wire query runs out its timeout in the background).
+    /// </summary>
+    private static RuntimeValue ResolverRunCancellable(Interp interpreter, DnsResolverInstance instance,
+        string identifier, ISharpTSCallable callback, Func<object?> query, Func<object?, object?> wrap)
+    {
+        interpreter.Ref();
+        var token = instance.CancellationToken;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var queryTask = Task.Run(query);
+                var cancelTask = Task.Delay(Timeout.Infinite, token);
+                var completed = await Task.WhenAny(queryTask, cancelTask);
+                if (completed != queryTask)
+                    throw new OperationCanceledException(token);
+                var raw = await queryTask;
+                var result = wrap(raw);
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    interpreter.InvokeGuestCallback(callback, [null, result]);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }
+            catch (OperationCanceledException)
+            {
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    interpreter.InvokeGuestCallback(callback, [CreateDnsError("ECANCELLED", identifier), null]);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }
+            catch (Exception ex)
+            {
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), identifier), null]);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }
+        });
+        return RuntimeValue.Undefined;
     }
 
     private static string[] ExtractStringArray(object? value)
@@ -381,29 +485,8 @@ public static class DnsModuleInterpreter
         string rrtype = "A";
         if (args.Length > 2 && args[1].IsString) rrtype = args[1].AsStringUnsafe();
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var raw = instance.Resolve(hostname, rrtype);
-                var result = WrapDnsResult(raw);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+        return ResolverRunCancellable(interpreter, instance, hostname, callback,
+            () => instance.Resolve(hostname, rrtype), WrapDnsResult);
     }
 
     private static RuntimeValue ResolverResolveByFamilyAsync(Interp interpreter, DnsResolverInstance instance,
@@ -413,29 +496,9 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception($"Runtime Error: dns.{methodName} callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var result = family == 4 ? instance.Resolve4(hostname) : instance.Resolve6(hostname);
-                var wrapped = new SharpTSArray(result);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, wrapped]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+        return ResolverRunCancellable(interpreter, instance, hostname, callback,
+            () => family == 4 ? instance.Resolve4(hostname) : instance.Resolve6(hostname),
+            raw => new SharpTSArray((List<object?>)raw!));
     }
 
     private static RuntimeValue ResolverReverseAsync(Interp interpreter, DnsResolverInstance instance, ReadOnlySpan<RuntimeValue> args)
@@ -444,29 +507,9 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: dns.reverse callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var result = instance.Reverse(ip);
-                var wrapped = new SharpTSArray(result);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, wrapped]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), ip), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+        return ResolverRunCancellable(interpreter, instance, ip, callback,
+            () => instance.Reverse(ip),
+            raw => new SharpTSArray((List<object?>)raw!));
     }
 
     private static RuntimeValue ResolverRecordAsync(Interp interpreter, DnsResolverInstance instance,
@@ -477,29 +520,8 @@ public static class DnsModuleInterpreter
             ?? throw new Exception($"Runtime Error: dns.{methodName} callback is required");
 
         var resolveFunc = resolveSelector(instance);
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var raw = resolveFunc(hostname);
-                var result = WrapDnsResult(raw);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+        return ResolverRunCancellable(interpreter, instance, hostname, callback,
+            () => resolveFunc(hostname), WrapDnsResult);
     }
 
     #endregion
@@ -608,8 +630,13 @@ public static class DnsModuleInterpreter
     /// </summary>
     private static string ExtractErrorCode(Exception ex)
     {
+        // Wire-protocol errors carry the code directly (#1073) — deterministic,
+        // no message parsing needed.
+        if (ex is NodeError nodeError)
+            return nodeError.Code;
+
         var msg = ex.Message;
-        // Error messages follow pattern "Runtime Error: dns.xxx ECODE hostname"
+        // Legacy fallback: error messages follow "Runtime Error: dns.xxx ECODE hostname"
         if (msg.StartsWith("Runtime Error:"))
         {
             var parts = msg.Split(' ');

@@ -1966,6 +1966,19 @@ public class EmittedRuntime
     public MethodBuilder NetIsIPv4 { get; set; } = null!;
     public MethodBuilder NetIsIPv6 { get; set; } = null!;
 
+    // net.BlockList / net.SocketAddress (#1069). Null when UsesNet is off —
+    // constructor emission guards on that before referencing them.
+    public TypeBuilder? BlockListType { get; set; }
+    public ConstructorBuilder? BlockListCtor { get; set; }
+    public MethodBuilder? BlockListCheckIp { get; set; }
+    public ConstructorBuilder? SocketAddressCtor { get; set; }
+
+    // autoSelectFamily default knobs (#1070)
+    public MethodBuilder NetGetDefaultAutoSelectFamily { get; set; } = null!;
+    public MethodBuilder NetSetDefaultAutoSelectFamily { get; set; } = null!;
+    public MethodBuilder NetGetDefaultAutoSelectFamilyAttemptTimeout { get; set; } = null!;
+    public MethodBuilder NetSetDefaultAutoSelectFamilyAttemptTimeout { get; set; } = null!;
+
     // TLS module methods
     public MethodBuilder TlsCreateServer { get; set; } = null!;
     public MethodBuilder TlsConnect { get; set; } = null!;
@@ -2601,6 +2614,10 @@ public class EmittedRuntime
 
     // DNS module methods
     public MethodBuilder DnsLookup { get; set; } = null!;
+
+    // dns default result order (#1072)
+    public MethodBuilder DnsGetDefaultResultOrder { get; set; } = null!;
+    public MethodBuilder DnsSetDefaultResultOrder { get; set; } = null!;
     public MethodBuilder DnsLookupService { get; set; } = null!;
     public MethodBuilder DnsGetLookup { get; set; } = null!;
     public MethodBuilder DnsGetLookupService { get; set; } = null!;

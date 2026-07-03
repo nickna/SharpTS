@@ -985,6 +985,11 @@ public sealed class BuiltInRegistry
         registry.RegisterInstanceType(typeof(SharpTSSocket), (instance, name) =>
             ((SharpTSSocket)instance).GetMember(name));
 
+        registry.RegisterInstanceType(typeof(SharpTSBlockList), (instance, name) =>
+            ((SharpTSBlockList)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSSocketAddress), (instance, name) =>
+            ((SharpTSSocketAddress)instance).GetMember(name));
+
         // Register dgram types
         registry.RegisterInstanceType(typeof(SharpTSDatagramSocket), (instance, name) =>
             ((SharpTSDatagramSocket)instance).GetMember(name));

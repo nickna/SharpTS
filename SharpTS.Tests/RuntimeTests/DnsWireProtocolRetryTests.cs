@@ -40,10 +40,11 @@ public class DnsWireProtocolRetryTests
         using var server = new FakeDnsServer((request, _) =>
             DnsPackets.Response(request, Servfail));
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<NodeError>(() =>
             DnsWireProtocol.Query("example.com", DnsWireProtocol.TypeTXT, server.Address));
 
         Assert.Contains("ESERVFAIL", ex.Message);
+        Assert.Equal("ESERVFAIL", ex.Code);
         Assert.Equal(3, server.QueryCount); // initial attempt + MaxRetries (2)
     }
 }

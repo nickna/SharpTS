@@ -25,7 +25,13 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         "isIPv4",
         "isIPv6",
         "Server",
-        "Socket"
+        "Socket",
+        "BlockList",
+        "SocketAddress",
+        "getDefaultAutoSelectFamily",
+        "setDefaultAutoSelectFamily",
+        "getDefaultAutoSelectFamilyAttemptTimeout",
+        "setDefaultAutoSelectFamilyAttemptTimeout"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -39,8 +45,36 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
             "isIP" => EmitIsIP(emitter, arguments),
             "isIPv4" => EmitIsIPv4(emitter, arguments),
             "isIPv6" => EmitIsIPv6(emitter, arguments),
+            "getDefaultAutoSelectFamily" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamily),
+            "setDefaultAutoSelectFamily" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamily),
+            "getDefaultAutoSelectFamilyAttemptTimeout" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamilyAttemptTimeout),
+            "setDefaultAutoSelectFamilyAttemptTimeout" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamilyAttemptTimeout),
             _ => false
         };
+    }
+
+    private static bool EmitZeroArgCall(IEmitterContext emitter, System.Reflection.MethodInfo method)
+    {
+        emitter.Context.IL.Emit(OpCodes.Call, method);
+        emitter.SetStackUnknown();
+        return true;
+    }
+
+    private static bool EmitOneArgCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.MethodInfo method)
+    {
+        var il = emitter.Context.IL;
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, method);
+        emitter.SetStackUnknown();
+        return true;
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
@@ -54,18 +88,22 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // Emit callback argument (optional)
-        if (arguments.Count > 0)
+        // Node signature: createServer([options][, connectionListener]).
+        // Emit up to two positional args; missing ones are null.
+        for (int i = 0; i < 2; i++)
         {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
+            if (arguments.Count > i)
+            {
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
         }
 
-        // Call $Runtime.NetCreateServer(callback)
+        // Call $Runtime.NetCreateServer(optionsOrCallback, callback)
         il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateServer);
         emitter.SetStackUnknown();
         return true;

@@ -256,4 +256,73 @@ public class DnsFakeServerModuleTests
 
         Assert.Equal("true\nmail.fake.test\n10\n", output);
     }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Resolve4_CnameOnlyAnswer_FollowsChain(ExecutionMode mode)
+    {
+        // CNAME-chain following (#1073): a response carrying ONLY a CNAME makes the
+        // client re-query the target. Both wire protocols (C# and emitted IL) must
+        // chase identically.
+        using var server = new FakeDnsServer((request, _) =>
+            DnsPackets.QueryName(request) == "alias.test"
+                ? DnsPackets.Response(request, 0,
+                    DnsPackets.Record(DnsWireProtocol.TypeCNAME, DnsPackets.Name("target.test")))
+                : DnsPackets.Response(request, 0,
+                    DnsPackets.Record(DnsWireProtocol.TypeA, DnsPackets.A("10.1.2.3"))));
+
+        var output = RunWithFakeDns(server, """
+            import * as dns from 'dns';
+            dns.resolve4('alias.test', (err: any, addrs: any) => {
+                console.log(err === null);
+                console.log(addrs[0]);
+            });
+            """, mode);
+
+        Assert.Equal("true\n10.1.2.3\n", output);
+        Assert.Equal(2, server.QueryCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Resolve4_CnameLoop_BoundedAndErrors(ExecutionMode mode)
+    {
+        // A CNAME pointing at itself must terminate at the chase depth bound and
+        // surface an error rather than spin forever (#1073).
+        using var server = new FakeDnsServer((request, _) =>
+            DnsPackets.Response(request, 0,
+                DnsPackets.Record(DnsWireProtocol.TypeCNAME, DnsPackets.Name("loop.test"))));
+
+        var output = RunWithFakeDns(server, """
+            import * as dns from 'dns';
+            dns.resolve4('loop.test', (err: any, addrs: any) => {
+                console.log(err !== null);
+            });
+            """, mode);
+
+        Assert.Equal("true\n", output);
+        Assert.Equal(9, server.QueryCount); // initial + MaxCnameChaseDepth (8)
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ResolveCaa_CriticalFlagsByte_Parity(ExecutionMode mode)
+    {
+        // Node reports the whole CAA flags byte as 'critical' (#1073).
+        using var server = new FakeDnsServer((request, _) =>
+            DnsPackets.Response(request, 0,
+                DnsPackets.Record(DnsWireProtocol.TypeCAA,
+                    DnsPackets.Caa(flags: 0, "issue", "ca.example.net"))));
+
+        var output = RunWithFakeDns(server, """
+            import * as dns from 'dns';
+            dns.resolveCaa('fake.test', (err: any, records: any) => {
+                console.log(err === null);
+                console.log(records[0].critical);
+                console.log(records[0].issue);
+            });
+            """, mode);
+
+        Assert.Equal("true\n0\nca.example.net\n", output);
+    }
 }

@@ -39,6 +39,23 @@ public partial class RuntimeEmitter
     private FieldBuilder _netSocketConnectHostField = null!;
     private FieldBuilder _netSocketConnectPortField = null!;
 
+    // Write backpressure state (#1068) — mirrors SharpTSSocket's write queue.
+    // _writeQueue holds object[]{byte[] bytes, object? callback}; _writeWorkerRunning
+    // and _shutdownAfterFlush are guarded by Monitor on _writeQueue; _writableLength
+    // is Interlocked; _needDrain and the pending-* fields are event-loop-thread state.
+    internal FieldBuilder _netSocketWriteQueueField = null!;
+    internal FieldBuilder _netSocketWriteWorkerRunningField = null!;
+    internal FieldBuilder _netSocketShutdownAfterFlushField = null!;
+    private FieldBuilder _netSocketWritableLengthField = null!;
+    private FieldBuilder _netSocketWritableHwmField = null!;
+    private FieldBuilder _netSocketNeedDrainField = null!;
+    private FieldBuilder _netSocketPendingWriteCallbacksField = null!;
+    private FieldBuilder _netSocketPendingWriteErrorField = null!;
+    private FieldBuilder _netSocketPendingEndCallbackField = null!;
+    internal FieldBuilder _netSocketAllowHalfOpenField = null!;
+    internal FieldBuilder _netSocketEndReceivedField = null!;
+    internal FieldBuilder _netSocketFinishAfterEndField = null!;
+
     // Method builders for $NetSocket (defined in Phase 1a, bodies emitted in Phase 2)
     private MethodBuilder _netSocketConnectMethod = null!;
     private MethodBuilder _netSocketWriteMethod = null!;
@@ -47,6 +64,13 @@ public partial class RuntimeEmitter
     private MethodBuilder _netSocketStartReadingMethod = null!;
     private MethodBuilder _netSocketSetEncodingMethod = null!;
     private MethodBuilder _netSocketGetMemberMethod = null!;
+    private MethodBuilder _netSocketEnqueueWriteMethod = null!;
+    private MethodBuilder _netSocketWriteWorkerMethod = null!;
+    private MethodBuilder _netSocketFlushTickMethod = null!;
+    private MethodBuilder _netSocketFireWriteCallbacksMethod = null!;
+    private MethodBuilder _netSocketFireWriteErrorMethod = null!;
+    private MethodBuilder _netSocketFireEndCallbackMethod = null!;
+    private MethodBuilder _netSocketShutdownWritableMethod = null!;
 
     // Closure constructors/run methods (set by the closure emitter between phases)
     internal ConstructorBuilder _socketReadDataClosureCtor = null!;
@@ -83,7 +107,8 @@ public partial class RuntimeEmitter
         _netSocketConnectingField = typeBuilder.DefineField("_connecting", _types.Boolean, FieldAttributes.Assembly);
         _netSocketDestroyedField = typeBuilder.DefineField("_destroyed", _types.Boolean, FieldAttributes.Assembly);
         _netSocketCloseEmittedField = typeBuilder.DefineField("_closeEmitted", _types.Boolean, FieldAttributes.Assembly);
-        _netSocketEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Private);
+        // _ended is Assembly: the read-end closure branches on it for half-close (#1070)
+        _netSocketEndedField = typeBuilder.DefineField("_ended", _types.Boolean, FieldAttributes.Assembly);
         _netSocketBytesReadField = typeBuilder.DefineField("_bytesRead", _types.Int32, FieldAttributes.Private);
         _netSocketBytesWrittenField = typeBuilder.DefineField("_bytesWritten", _types.Int32, FieldAttributes.Assembly);
         _netSocketEncodingField = typeBuilder.DefineField("_encoding", _types.String, FieldAttributes.Private);
@@ -94,6 +119,25 @@ public partial class RuntimeEmitter
         _netSocketPipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
         _netSocketConnectHostField = typeBuilder.DefineField("_connectHost", _types.String, FieldAttributes.Private);
         _netSocketConnectPortField = typeBuilder.DefineField("_connectPort", _types.Int32, FieldAttributes.Private);
+
+        // Write backpressure state (#1068). Queue/worker/shutdown/hwm fields are
+        // Assembly: the server accept closures apply createServer options to
+        // accepted sockets, and $SocketReadEndClosure coordinates the flush-aware
+        // close through the worker flags.
+        _netSocketWriteQueueField = typeBuilder.DefineField("_writeQueue", typeof(Queue<object[]>), FieldAttributes.Assembly);
+        _netSocketWriteWorkerRunningField = typeBuilder.DefineField("_writeWorkerRunning", _types.Boolean, FieldAttributes.Assembly);
+        _netSocketShutdownAfterFlushField = typeBuilder.DefineField("_shutdownAfterFlush", _types.Boolean, FieldAttributes.Assembly);
+        _netSocketWritableLengthField = typeBuilder.DefineField("_writableLength", _types.Int32, FieldAttributes.Private);
+        _netSocketWritableHwmField = typeBuilder.DefineField("_writableHwm", _types.Int32, FieldAttributes.Assembly);
+        _netSocketNeedDrainField = typeBuilder.DefineField("_needDrain", _types.Boolean, FieldAttributes.Private);
+        _netSocketPendingWriteCallbacksField = typeBuilder.DefineField("_pendingWriteCallbacks", typeof(Queue<object>), FieldAttributes.Private);
+        _netSocketPendingWriteErrorField = typeBuilder.DefineField("_pendingWriteError", _types.String, FieldAttributes.Private);
+        _netSocketPendingEndCallbackField = typeBuilder.DefineField("_pendingEndCallback", _types.Object, FieldAttributes.Private);
+
+        // Half-close state (#1070) — Assembly: set/read by the accept and read-end closures.
+        _netSocketAllowHalfOpenField = typeBuilder.DefineField("_allowHalfOpen", _types.Boolean, FieldAttributes.Assembly);
+        _netSocketEndReceivedField = typeBuilder.DefineField("_endReceived", _types.Boolean, FieldAttributes.Assembly);
+        _netSocketFinishAfterEndField = typeBuilder.DefineField("_finishAfterEnd", _types.Boolean, FieldAttributes.Assembly);
 
         // ── Constructors (with bodies) ──
 
@@ -164,6 +208,50 @@ public partial class RuntimeEmitter
         );
         runtime.NetSocketGetMember = _netSocketGetMemberMethod;
 
+        // Write-queue plumbing (#1068) — private helpers; bodies emitted in Phase 2.
+        _netSocketEnqueueWriteMethod = typeBuilder.DefineMethod(
+            "_EnqueueWrite",
+            MethodAttributes.Private,
+            _types.Boolean,
+            [_types.ByteArray, _types.Object]
+        );
+        _netSocketWriteWorkerMethod = typeBuilder.DefineMethod(
+            "_WriteWorker",
+            MethodAttributes.Private,
+            typeof(void),
+            [_types.Object]
+        );
+        _netSocketFlushTickMethod = typeBuilder.DefineMethod(
+            "_FlushTick",
+            MethodAttributes.Private,
+            typeof(void),
+            Type.EmptyTypes
+        );
+        _netSocketFireWriteCallbacksMethod = typeBuilder.DefineMethod(
+            "_FireWriteCallbacks",
+            MethodAttributes.Private,
+            typeof(void),
+            Type.EmptyTypes
+        );
+        _netSocketFireWriteErrorMethod = typeBuilder.DefineMethod(
+            "_FireWriteError",
+            MethodAttributes.Private,
+            typeof(void),
+            Type.EmptyTypes
+        );
+        _netSocketFireEndCallbackMethod = typeBuilder.DefineMethod(
+            "_FireEndCallback",
+            MethodAttributes.Private,
+            typeof(void),
+            Type.EmptyTypes
+        );
+        _netSocketShutdownWritableMethod = typeBuilder.DefineMethod(
+            "_ShutdownWritable",
+            MethodAttributes.Private,
+            typeof(void),
+            Type.EmptyTypes
+        );
+
         // NOTE: CreateType() is deferred to Phase 2
     }
 
@@ -179,6 +267,13 @@ public partial class RuntimeEmitter
         EmitNetSocketStartReadingBody(typeBuilder, runtime);
         EmitNetSocketConnectBody(typeBuilder, runtime);
         EmitNetSocketWriteBody(typeBuilder, runtime);
+        EmitNetSocketEnqueueWriteBody(runtime);
+        EmitNetSocketWriteWorkerBody(runtime);
+        EmitNetSocketFlushTickBody(runtime);
+        EmitNetSocketFireWriteCallbacksBody(runtime);
+        EmitNetSocketFireWriteErrorBody(runtime);
+        EmitNetSocketFireEndCallbackBody(runtime);
+        EmitNetSocketShutdownWritableBody(runtime);
         EmitNetSocketEndBody(typeBuilder, runtime);
         EmitNetSocketDestroyBody(typeBuilder, runtime);
         EmitNetSocketSetEncodingBody(typeBuilder, runtime);
@@ -190,6 +285,25 @@ public partial class RuntimeEmitter
     // ════════════════════════════════════════════════════════════════
     //  Constructors (bodies emitted in Phase 1a)
     // ════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Shared ctor tail: initializes the write-queue state (#1068).
+    /// </summary>
+    private void EmitNetSocketWriteStateInit(ILGenerator il)
+    {
+        // _writeQueue = new Queue<object[]>()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(Queue<object[]>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stfld, _netSocketWriteQueueField);
+        // _pendingWriteCallbacks = new Queue<object>()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(Queue<object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stfld, _netSocketPendingWriteCallbacksField);
+        // _writableHwm = 16384 (Node's stream default)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, 16384);
+        il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+    }
 
     private void EmitNetSocketDefaultCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -208,6 +322,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "utf8");
         il.Emit(OpCodes.Stfld, _netSocketEncodingField);
+        EmitNetSocketWriteStateInit(il);
         il.Emit(OpCodes.Ret);
     }
 
@@ -237,6 +352,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "utf8");
         il.Emit(OpCodes.Stfld, _netSocketEncodingField);
+        EmitNetSocketWriteStateInit(il);
         il.Emit(OpCodes.Ret);
     }
 
@@ -269,6 +385,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "utf8");
         il.Emit(OpCodes.Stfld, _netSocketEncodingField);
+        EmitNetSocketWriteStateInit(il);
         il.Emit(OpCodes.Ret);
     }
 
@@ -390,6 +507,61 @@ public partial class RuntimeEmitter
 
         // Extract host from dict["host"] if present
         EmitDictTryGetString(il, 1, "host", hostLocal);
+
+        // Extract writableHighWaterMark / highWaterMark (stream.Duplex options that
+        // Node's net.Socket honors) into _writableHwm (#1068)
+        {
+            var hwmValLocal = il.DeclareLocal(_types.Object);
+            var applyHwm = il.DefineLabel();
+            var tryPlainHwm = il.DefineLabel();
+            var noHwm = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "writableHighWaterMark");
+            il.Emit(OpCodes.Ldloca, hwmValLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, tryPlainHwm);
+            il.Emit(OpCodes.Ldloc, hwmValLocal);
+            il.Emit(OpCodes.Isinst, typeof(double));
+            il.Emit(OpCodes.Brtrue, applyHwm);
+
+            il.MarkLabel(tryPlainHwm);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "highWaterMark");
+            il.Emit(OpCodes.Ldloca, hwmValLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, noHwm);
+            il.Emit(OpCodes.Ldloc, hwmValLocal);
+            il.Emit(OpCodes.Isinst, typeof(double));
+            il.Emit(OpCodes.Brfalse, noHwm);
+
+            il.MarkLabel(applyHwm);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, hwmValLocal);
+            il.Emit(OpCodes.Unbox_Any, _types.Double);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+            il.MarkLabel(noHwm);
+
+            // allowHalfOpen (bool) → _allowHalfOpen (#1070)
+            var noAho = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "allowHalfOpen");
+            il.Emit(OpCodes.Ldloca, hwmValLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, noAho);
+            il.Emit(OpCodes.Ldloc, hwmValLocal);
+            il.Emit(OpCodes.Isinst, typeof(bool));
+            il.Emit(OpCodes.Brfalse, noAho);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, hwmValLocal);
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Stfld, _netSocketAllowHalfOpenField);
+            il.MarkLabel(noAho);
+        }
 
         // arg2 is callback
         il.Emit(OpCodes.Ldarg_2);
@@ -527,10 +699,8 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Callvirt, typeof(TcpClient).GetMethod("GetStream")!);
         wil.Emit(OpCodes.Stfld, _netSocketStreamField);
 
-        // _connecting = false
-        wil.Emit(OpCodes.Ldarg_0);
-        wil.Emit(OpCodes.Ldc_I4_0);
-        wil.Emit(OpCodes.Stfld, _netSocketConnectingField);
+        // _connecting clears in the scheduled OK/ERR closure (loop thread) so
+        // pending/readyState don't race the worker (Node semantics).
 
         // EventLoop.Schedule(new Action(new $SocketConnectOkClosure(this).Run))
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
@@ -544,13 +714,9 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Leave, leaveOk);
 
         wil.BeginCatchBlock(_types.Exception);
-        // On error: _connecting = false, schedule error event via closure
+        // On error: schedule error event via closure (which clears _connecting)
         var exLocal = wil.DeclareLocal(_types.Exception);
         wil.Emit(OpCodes.Stloc, exLocal);
-
-        wil.Emit(OpCodes.Ldarg_0);
-        wil.Emit(OpCodes.Ldc_I4_0);
-        wil.Emit(OpCodes.Stfld, _netSocketConnectingField);
 
         // EventLoop.Schedule(new Action(new $SocketConnectErrClosure(this, ex.Message, GetSocketErrorCode(ex)).Run))
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
@@ -687,10 +853,7 @@ public partial class RuntimeEmitter
 
         wil.MarkLabel(connectDone);
 
-        // _connecting = false
-        wil.Emit(OpCodes.Ldarg_0);
-        wil.Emit(OpCodes.Ldc_I4_0);
-        wil.Emit(OpCodes.Stfld, _netSocketConnectingField);
+        // _connecting clears in the scheduled OK/ERR closure (loop thread)
 
         // EventLoop.Schedule(new Action(new $SocketConnectOkClosure(this).Run))
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
@@ -707,9 +870,7 @@ public partial class RuntimeEmitter
         var exLocal = wil.DeclareLocal(_types.Exception);
         wil.Emit(OpCodes.Stloc, exLocal);
 
-        wil.Emit(OpCodes.Ldarg_0);
-        wil.Emit(OpCodes.Ldc_I4_0);
-        wil.Emit(OpCodes.Stfld, _netSocketConnectingField);
+        // _connecting clears in the scheduled ERR closure (loop thread)
 
         // EventLoop.Schedule(new Action(new $SocketConnectErrClosure(this, ex.Message, GetSocketErrorCode(ex)).Run))
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
@@ -966,35 +1127,215 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // IPC: async write via ThreadPool to avoid blocking on InOut pipes
-        var syncWrite = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netSocketIsIpcField);
-        il.Emit(OpCodes.Brfalse, syncWrite);
+        // callback = arg3 if callable, else arg2 if callable, else null.
+        // The write callback fires post-flush on the event loop (Node semantics),
+        // delivered via the write worker — not invoked synchronously here.
+        var cbLocal = il.DeclareLocal(_types.Object);
+        var useArg3 = il.DefineLabel();
+        var useArg2 = il.DefineLabel();
+        var cbDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, useArg3);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, useArg3);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, useArg2);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, useArg2);
+        il.Emit(OpCodes.Br, cbDone);
+        il.MarkLabel(useArg3);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.Emit(OpCodes.Br, cbDone);
+        il.MarkLabel(useArg2);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.MarkLabel(cbDone);
 
-        // ThreadPool.QueueUserWorkItem(new WaitCallback(new $IpcWriteClosure(this, bytes).Run))
+        // return _EnqueueWrite(bytes, callback) — the queue serializes TCP and IPC
+        // writes alike (the old per-write IPC ThreadPool items could reorder) and
+        // reports backpressure against _writableHwm.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, _ipcWriteClosureCtor);
-        il.Emit(OpCodes.Ldftn, _ipcWriteClosureRun);
-        il.Emit(OpCodes.Newobj, typeof(WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Call, typeof(System.Threading.ThreadPool).GetMethod("QueueUserWorkItem", [typeof(WaitCallback)])!);
-        il.Emit(OpCodes.Pop);
-
-        // Invoke callbacks even for async write
-        EmitNetSocketInvokeCallback(il, runtime, 3);
-        EmitNetSocketInvokeCallback(il, runtime, 2);
-
-        // return true
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Call, _netSocketEnqueueWriteMethod);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
+    }
 
-        il.MarkLabel(syncWrite);
+    /// <summary>
+    /// Emits body for: private bool _EnqueueWrite(byte[] bytes, object callback)
+    /// Adds the chunk to the write queue, starts the single write worker if idle,
+    /// and returns the backpressure verdict (false once buffered >= high-water mark).
+    /// </summary>
+    private void EmitNetSocketEnqueueWriteBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketEnqueueWriteMethod.GetILGenerator();
+        var newLenLocal = il.DeclareLocal(_types.Int32);
+        var startWorkerLocal = il.DeclareLocal(_types.Boolean);
 
-        // try { _stream.Write(bytes, 0, bytes.Length); _bytesWritten += bytes.Length; } catch { }
+        // newLen = Interlocked.Add(ref _writableLength, bytes.Length)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, _netSocketWritableLengthField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Add", [_types.Int32.MakeByRefType(), _types.Int32])!);
+        il.Emit(OpCodes.Stloc, newLenLocal);
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, startWorkerLocal);
+
+        // lock (_writeQueue) { _writeQueue.Enqueue([bytes, callback]); if (!_writeWorkerRunning) { _writeWorkerRunning = true; startWorker = true; } }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [_types.Object])!);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object[]>).GetMethod("Enqueue", [typeof(object[])])!);
+
+        var alreadyRunning = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteWorkerRunningField);
+        il.Emit(OpCodes.Brtrue, alreadyRunning);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _netSocketWriteWorkerRunningField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, startWorkerLocal);
+        il.MarkLabel(alreadyRunning);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
+
+        // if (startWorker) { EventLoop.Ref(); ThreadPool.QueueUserWorkItem(new WaitCallback(this._WriteWorker)); }
+        // The Ref keeps the loop alive until the flush lands; released in _FlushTick.
+        var noStart = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, startWorkerLocal);
+        il.Emit(OpCodes.Brfalse, noStart);
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoopRef);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, _netSocketWriteWorkerMethod);
+        il.Emit(OpCodes.Newobj, typeof(WaitCallback).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, typeof(ThreadPool).GetMethod("QueueUserWorkItem", [typeof(WaitCallback)])!);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(noStart);
+
+        // if (newLen < _writableHwm) return true; _needDrain = true; return false
+        var below = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newLenLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWritableHwmField);
+        il.Emit(OpCodes.Blt, below);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _netSocketNeedDrainField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(below);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits body for: private void _WriteWorker(object state)
+    /// Single-threaded flusher: dequeues chunks in order, writes them to _stream,
+    /// schedules write callbacks / error delivery, and on queue-empty performs the
+    /// deferred end() shutdown and schedules _FlushTick (drain check + loop Unref).
+    /// </summary>
+    private void EmitNetSocketWriteWorkerBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketWriteWorkerMethod.GetILGenerator();
+        var itemLocal = il.DeclareLocal(typeof(object[]));
+        var bytesLocal = il.DeclareLocal(_types.ByteArray);
+        var cbLocal = il.DeclareLocal(_types.Object);
+        var doShutdownLocal = il.DeclareLocal(_types.Boolean);
+        var exitLocal = il.DeclareLocal(_types.Boolean);
+        var okLocal = il.DeclareLocal(_types.Boolean);
+
+        var loopTop = il.DefineLabel();
+        var exitPath = il.DefineLabel();
+
+        il.MarkLabel(loopTop);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, itemLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, exitLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, doShutdownLocal);
+
+        // lock (_writeQueue) { if (Count == 0) { _writeWorkerRunning = false; doShutdown = _shutdownAfterFlush; _shutdownAfterFlush = false; exit = true; } else item = Dequeue(); }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [_types.Object])!);
+
+        var hasItem = il.DefineLabel();
+        var lockDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object[]>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, hasItem);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _netSocketWriteWorkerRunningField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketShutdownAfterFlushField);
+        il.Emit(OpCodes.Stloc, doShutdownLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _netSocketShutdownAfterFlushField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, exitLocal);
+        il.Emit(OpCodes.Br, lockDone);
+        il.MarkLabel(hasItem);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object[]>).GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Stloc, itemLocal);
+        il.MarkLabel(lockDone);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
+
+        il.Emit(OpCodes.Ldloc, exitLocal);
+        il.Emit(OpCodes.Brtrue, exitPath);
+
+        // bytes = (byte[])item[0]; cb = item[1]
+        il.Emit(OpCodes.Ldloc, itemLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Castclass, _types.ByteArray);
+        il.Emit(OpCodes.Stloc, bytesLocal);
+        il.Emit(OpCodes.Ldloc, itemLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, cbLocal);
+
+        // ok = true; try { _stream.Write(bytes, 0, bytes.Length); _bytesWritten += bytes.Length; }
+        // catch (Exception ex) { ok = false; _pendingWriteError = ex.Message; schedule _FireWriteError }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, okLocal);
         il.BeginExceptionBlock();
-
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netSocketStreamField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
@@ -1003,8 +1344,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Write", [_types.ByteArray, _types.Int32, _types.Int32])!);
-
-        // _bytesWritten += bytes.Length
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netSocketBytesWrittenField);
@@ -1013,39 +1352,337 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stfld, _netSocketBytesWrittenField);
-
         il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
+        {
+            var exLocal = il.DeclareLocal(_types.Exception);
+            il.Emit(OpCodes.Stloc, exLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, okLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stfld, _netSocketPendingWriteErrorField);
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldftn, _netSocketFireWriteErrorMethod);
+            il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+            il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        }
         il.EndExceptionBlock();
 
-        // Invoke callback if arg3 or arg2 is callable
-        EmitNetSocketInvokeCallback(il, runtime, 3);
-        EmitNetSocketInvokeCallback(il, runtime, 2);
+        // Interlocked.Add(ref _writableLength, -bytes.Length)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, _netSocketWritableLengthField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Add", [_types.Int32.MakeByRefType(), _types.Int32])!);
+        il.Emit(OpCodes.Pop);
 
-        // return true
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
+        // if (ok && cb != null) { lock (_pendingWriteCallbacks) Enqueue(cb); schedule _FireWriteCallbacks }
+        var skipCb = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, okLocal);
+        il.Emit(OpCodes.Brfalse, skipCb);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Brfalse, skipCb);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [_types.Object])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object>).GetMethod("Enqueue", [_types.Object])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, _netSocketFireWriteCallbacksMethod);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.MarkLabel(skipCb);
+
+        il.Emit(OpCodes.Br, loopTop);
+
+        il.MarkLabel(exitPath);
+        // if (doShutdown) { _ShutdownWritable(); schedule _FireEndCallback }
+        var noShut = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doShutdownLocal);
+        il.Emit(OpCodes.Brfalse, noShut);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.MarkLabel(noShut);
+
+        // schedule _FlushTick — drain check + the worker's balancing Unref
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, _netSocketFlushTickMethod);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
-    /// Helper: If arg at argIdx is TSFunction, invoke it with empty args.
+    /// Emits body for: private void _FlushTick()
+    /// Runs on the event loop after a write-worker generation exits: emits 'drain'
+    /// if the buffer fully emptied while backpressured, then releases the worker's Ref.
     /// </summary>
-    private void EmitNetSocketInvokeCallback(ILGenerator il, EmittedRuntime runtime, int argIdx)
+    private void EmitNetSocketFlushTickBody(EmittedRuntime runtime)
     {
-        var skip = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg, argIdx);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, skip);
+        var il = _netSocketFlushTickMethod.GetILGenerator();
 
-        il.Emit(OpCodes.Ldarg, argIdx);
+        var skip = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketDestroyedField);
+        il.Emit(OpCodes.Brtrue, skip);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWritableLengthField);
+        il.Emit(OpCodes.Brtrue, skip);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketNeedDrainField);
+        il.Emit(OpCodes.Brfalse, skip);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _netSocketNeedDrainField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "drain");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(skip);
+
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Helper: invokes the callable in <paramref name="cbLocal"/> ($TSFunction or
+    /// $BoundTSFunction) with zero args; non-callables are ignored.
+    /// </summary>
+    private void EmitInvokeCallableLocal(ILGenerator il, EmittedRuntime runtime, LocalBuilder cbLocal)
+    {
+        var notTs = il.DefineLabel();
+        var invoked = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notTs);
+        il.Emit(OpCodes.Ldloc, cbLocal);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, invoked);
+        il.MarkLabel(notTs);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, invoked);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(invoked);
+    }
 
-        il.MarkLabel(skip);
+    /// <summary>
+    /// Emits body for: private void _FireWriteCallbacks()
+    /// Drains the pending write-callback queue on the event loop, in order.
+    /// </summary>
+    private void EmitNetSocketFireWriteCallbacksBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketFireWriteCallbacksMethod.GetILGenerator();
+        var cbLocal = il.DeclareLocal(_types.Object);
+        var loopTop = il.DefineLabel();
+        var done = il.DefineLabel();
+
+        il.MarkLabel(loopTop);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, cbLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [_types.Object])!);
+        var emptyQueue = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, emptyQueue);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Callvirt, typeof(Queue<object>).GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.MarkLabel(emptyQueue);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteCallbacksField);
+        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
+
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Brfalse, done);
+        EmitInvokeCallableLocal(il, runtime, cbLocal);
+        il.Emit(OpCodes.Br, loopTop);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits body for: private void _FireWriteError()
+    /// Delivers a write failure as an 'error' event on the event loop (skipped once destroyed).
+    /// </summary>
+    private void EmitNetSocketFireWriteErrorBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketFireWriteErrorMethod.GetILGenerator();
+        var msgLocal = il.DeclareLocal(_types.String);
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingWriteErrorField);
+        il.Emit(OpCodes.Stloc, msgLocal);
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _netSocketPendingWriteErrorField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketDestroyedField);
+        il.Emit(OpCodes.Brtrue, done);
+
+        // this.Emit("error", [new $Error(msg)])
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "error");
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits body for: private void _FireEndCallback()
+    /// Invokes the end() callback exactly once, after the deferred shutdown completes.
+    /// Then, when the readable side already saw FIN (or the read-end path requested
+    /// an auto-finish), completes the close via Destroy (#1070).
+    /// </summary>
+    private void EmitNetSocketFireEndCallbackBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketFireEndCallbackMethod.GetILGenerator();
+        var cbLocal = il.DeclareLocal(_types.Object);
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketPendingEndCallbackField);
+        il.Emit(OpCodes.Stloc, cbLocal);
+        il.Emit(OpCodes.Ldloc, cbLocal);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _netSocketPendingEndCallbackField);
+        EmitInvokeCallableLocal(il, runtime, cbLocal);
+        il.MarkLabel(done);
+
+        // if (!_destroyed && (_finishAfterEnd || _endReceived)) { _finishAfterEnd = false; Destroy(null); }
+        var skipDestroy = il.DefineLabel();
+        var doDestroy = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketDestroyedField);
+        il.Emit(OpCodes.Brtrue, skipDestroy);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketFinishAfterEndField);
+        il.Emit(OpCodes.Brtrue, doDestroy);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketEndReceivedField);
+        il.Emit(OpCodes.Brfalse, skipDestroy);
+        il.MarkLabel(doDestroy);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _netSocketFinishAfterEndField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, _netSocketDestroyMethod);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(skipDestroy);
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits body for: private void _ShutdownWritable()
+    /// TCP: half-close via Socket.Shutdown(Send). IPC: pipes can't half-close, so the
+    /// stream is closed entirely (mirrors SharpTSSocket.ShutdownWritable).
+    /// </summary>
+    private void EmitNetSocketShutdownWritableBody(EmittedRuntime runtime)
+    {
+        var il = _netSocketShutdownWritableMethod.GetILGenerator();
+
+        var tcpPath = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketIsIpcField);
+        il.Emit(OpCodes.Brfalse, tcpPath);
+
+        // IPC: try { _stream?.Close() } catch { } ; _stream = null
+        il.BeginExceptionBlock();
+        var noStream = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketStreamField);
+        il.Emit(OpCodes.Brfalse, noStream);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketStreamField);
+        il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Close")!);
+        il.MarkLabel(noStream);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _netSocketStreamField);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(tcpPath);
+        // try { _client?.Client?.Shutdown(SocketShutdown.Send) } catch { }
+        il.BeginExceptionBlock();
+        var noClient = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketClientField);
+        il.Emit(OpCodes.Brfalse, noClient);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketClientField);
+        il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetProperty("Client")!.GetGetMethod()!);
+        il.Emit(OpCodes.Dup);
+        var noSocket = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noSocket);
+        il.Emit(OpCodes.Ldc_I4_1); // SocketShutdown.Send = 1
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("Shutdown", [typeof(SocketShutdown)])!);
+        var shutDone = il.DefineLabel();
+        il.Emit(OpCodes.Br, shutDone);
+        il.MarkLabel(noSocket);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(shutDone);
+        il.MarkLabel(noClient);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -1091,29 +1728,90 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _netSocketEndedField);
 
-        // try { _client?.Client?.Shutdown(SocketShutdown.Send) } catch { }
-        il.BeginExceptionBlock();
-        var noClient = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netSocketClientField);
-        il.Emit(OpCodes.Brfalse, noClient);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _netSocketClientField);
-        il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetProperty("Client")!.GetGetMethod()!);
-        il.Emit(OpCodes.Dup);
-        var noSocket = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, noSocket);
-        il.Emit(OpCodes.Ldc_I4_1); // SocketShutdown.Send = 1
-        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("Shutdown", [typeof(SocketShutdown)])!);
-        var shutdownDone = il.DefineLabel();
-        il.Emit(OpCodes.Br, shutdownDone);
-        il.MarkLabel(noSocket);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(shutdownDone);
-        il.MarkLabel(noClient);
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
-        il.EndExceptionBlock();
+        // _pendingEndCallback = first callable among arg1..arg3 (fired once after shutdown)
+        {
+            var cbLocal = il.DeclareLocal(_types.Object);
+            var useArg1 = il.DefineLabel();
+            var useArg2 = il.DefineLabel();
+            var useArg3 = il.DefineLabel();
+            var cbDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stloc, cbLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg1);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg2);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg2);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg3);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Brtrue, useArg3);
+            il.Emit(OpCodes.Br, cbDone);
+            il.MarkLabel(useArg1);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stloc, cbLocal);
+            il.Emit(OpCodes.Br, cbDone);
+            il.MarkLabel(useArg2);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stloc, cbLocal);
+            il.Emit(OpCodes.Br, cbDone);
+            il.MarkLabel(useArg3);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Stloc, cbLocal);
+            il.MarkLabel(cbDone);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, cbLocal);
+            il.Emit(OpCodes.Stfld, _netSocketPendingEndCallbackField);
+        }
+
+        // end() must not truncate queued writes: if the write worker is active,
+        // flag the shutdown for it to perform at queue-drain; otherwise shut down now.
+        {
+            var shutdownNowLocal = il.DeclareLocal(_types.Boolean);
+            var workerActive = il.DefineLabel();
+            var lockDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [_types.Object])!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketWriteWorkerRunningField);
+            il.Emit(OpCodes.Brtrue, workerActive);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, shutdownNowLocal);
+            il.Emit(OpCodes.Br, lockDone);
+            il.MarkLabel(workerActive);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, _netSocketShutdownAfterFlushField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, shutdownNowLocal);
+            il.MarkLabel(lockDone);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
+
+            // if (shutdownNow) { _ShutdownWritable(); schedule _FireEndCallback }
+            var noShutdownNow = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, shutdownNowLocal);
+            il.Emit(OpCodes.Brfalse, noShutdownNow);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
+            il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+            il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            il.MarkLabel(noShutdownNow);
+        }
 
         // return this
         il.Emit(OpCodes.Ldarg_0);
@@ -1465,6 +2163,12 @@ public partial class RuntimeEmitter
         var connectingLabel = il.DefineLabel();
         var destroyedLabel = il.DefineLabel();
         var readyStateLabel = il.DefineLabel();
+        var writableLengthLabel = il.DefineLabel();
+        var writableHwmLabel = il.DefineLabel();
+        var writableNeedDrainLabel = il.DefineLabel();
+        var localFamilyLabel = il.DefineLabel();
+        var pendingLabel = il.DefineLabel();
+        var allowHalfOpenLabel = il.DefineLabel();
         var defaultLabel = il.DefineLabel();
 
         EmitStringCheck(il, 1, "remoteAddress", remoteAddressLabel);
@@ -1477,9 +2181,80 @@ public partial class RuntimeEmitter
         EmitStringCheck(il, 1, "connecting", connectingLabel);
         EmitStringCheck(il, 1, "destroyed", destroyedLabel);
         EmitStringCheck(il, 1, "readyState", readyStateLabel);
+        EmitStringCheck(il, 1, "writableLength", writableLengthLabel);
+        EmitStringCheck(il, 1, "writableHighWaterMark", writableHwmLabel);
+        EmitStringCheck(il, 1, "writableNeedDrain", writableNeedDrainLabel);
+        EmitStringCheck(il, 1, "localFamily", localFamilyLabel);
+        EmitStringCheck(il, 1, "pending", pendingLabel);
+        EmitStringCheck(il, 1, "allowHalfOpen", allowHalfOpenLabel);
 
         // Fall through to default
         il.Emit(OpCodes.Br, defaultLabel);
+
+        // ── localFamily ── (#1070)
+        il.MarkLabel(localFamilyLabel);
+        {
+            var notIpcLf = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketIsIpcField);
+            il.Emit(OpCodes.Brfalse, notIpcLf);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notIpcLf);
+        }
+        EmitGetEndpointFamily(il, runtime, "LocalEndPoint");
+        il.Emit(OpCodes.Ret);
+
+        // ── pending ── (#1070): not yet connected — no stream, or connect in flight
+        il.MarkLabel(pendingLabel);
+        {
+            var retTruePending = il.DefineLabel();
+            var retFalsePending = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketConnectingField);
+            il.Emit(OpCodes.Brtrue, retTruePending);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketStreamField);
+            il.Emit(OpCodes.Brtrue, retFalsePending);
+            il.MarkLabel(retTruePending);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(retFalsePending);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // ── allowHalfOpen ── (#1070)
+        il.MarkLabel(allowHalfOpenLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketAllowHalfOpenField);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+
+        // ── writableLength ──
+        il.MarkLabel(writableLengthLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWritableLengthField);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        // ── writableHighWaterMark ──
+        il.MarkLabel(writableHwmLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketWritableHwmField);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        // ── writableNeedDrain ──
+        il.MarkLabel(writableNeedDrainLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _netSocketNeedDrainField);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
 
         // ── remoteAddress ──
         il.MarkLabel(remoteAddressLabel);
@@ -1624,20 +2399,45 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(notIpc);
 
-            // TCP: _client?.Connected ? "open" : "closed"
-            var noClientRS = il.DefineLabel();
+            // TCP: derived from lifecycle state (mirrors SharpTSSocket.GetReadyState —
+            // TcpClient.Connected is racy around shutdown). Half-close states (#1070):
+            // readOnly after end(), writeOnly after a received FIN.
+            var closedRS = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _netSocketClientField);
-            il.Emit(OpCodes.Brfalse, noClientRS);
+            il.Emit(OpCodes.Ldfld, _netSocketStreamField);
+            il.Emit(OpCodes.Brfalse, closedRS);
+
+            // if (_ended && _endReceived) return "closed"
+            var notBothDone = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, _netSocketClientField);
-            il.Emit(OpCodes.Callvirt, typeof(TcpClient).GetProperty("Connected")!.GetGetMethod()!);
-            var notConnectedRS = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notConnectedRS);
+            il.Emit(OpCodes.Ldfld, _netSocketEndedField);
+            il.Emit(OpCodes.Brfalse, notBothDone);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketEndReceivedField);
+            il.Emit(OpCodes.Brtrue, closedRS);
+            il.MarkLabel(notBothDone);
+
+            // if (_ended) return "readOnly"
+            var notReadOnly = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketEndedField);
+            il.Emit(OpCodes.Brfalse, notReadOnly);
+            il.Emit(OpCodes.Ldstr, "readOnly");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notReadOnly);
+
+            // if (_endReceived) return "writeOnly"
+            var notWriteOnly = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _netSocketEndReceivedField);
+            il.Emit(OpCodes.Brfalse, notWriteOnly);
+            il.Emit(OpCodes.Ldstr, "writeOnly");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notWriteOnly);
+
             il.Emit(OpCodes.Ldstr, "open");
             il.Emit(OpCodes.Ret);
-            il.MarkLabel(notConnectedRS);
-            il.MarkLabel(noClientRS);
+            il.MarkLabel(closedRS);
             il.Emit(OpCodes.Ldstr, "closed");
             il.Emit(OpCodes.Ret);
         }
@@ -1775,6 +2575,13 @@ public partial class RuntimeEmitter
     /// Helper: returns "IPv6" or "IPv4" based on remote endpoint address family, or null.
     /// </summary>
     private void EmitGetRemoteEndpointFamily(ILGenerator il, EmittedRuntime runtime)
+        => EmitGetEndpointFamily(il, runtime, "RemoteEndPoint");
+
+    /// <summary>
+    /// Helper: pushes "IPv4"/"IPv6" (or null) for the given endpoint property
+    /// ("RemoteEndPoint" or "LocalEndPoint").
+    /// </summary>
+    private void EmitGetEndpointFamily(ILGenerator il, EmittedRuntime runtime, string endpointProperty)
     {
         var resultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldnull);
@@ -1796,7 +2603,7 @@ public partial class RuntimeEmitter
 
         var epLocal = il.DeclareLocal(typeof(IPEndPoint));
         il.Emit(OpCodes.Ldloc, socketLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty("RemoteEndPoint")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetProperty(endpointProperty)!.GetGetMethod()!);
         il.Emit(OpCodes.Isinst, typeof(IPEndPoint));
         il.Emit(OpCodes.Stloc, epLocal);
         il.Emit(OpCodes.Ldloc, epLocal);

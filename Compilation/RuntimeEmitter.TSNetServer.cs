@@ -33,6 +33,12 @@ public partial class RuntimeEmitter
     private FieldBuilder _netServerPipePathField = null!;
     private FieldBuilder _netServerUnixSocketField = null!;
     private FieldBuilder _netServerPipeReadyField = null!;
+    // createServer(options) settings applied to accepted sockets (#1068); -1 = unset
+    private FieldBuilder _netServerSocketHwmField = null!;
+    // createServer({blockList}) — a $BlockList checked per accepted connection (#1069)
+    private FieldBuilder _netServerBlockListField = null!;
+    // createServer({allowHalfOpen}) — applied to accepted sockets (#1070)
+    private FieldBuilder _netServerSocketAllowHalfOpenField = null!;
 
     // Method builders (defined in Phase 1a, bodies emitted in Phase 2)
     private MethodBuilder _netServerListenMethod = null!;
@@ -71,12 +77,16 @@ public partial class RuntimeEmitter
         _netServerConnectionListenerField = typeBuilder.DefineField("_connectionListener", _types.Object, FieldAttributes.Assembly);
         _netServerPortField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
         _netServerHostField = typeBuilder.DefineField("_host", _types.String, FieldAttributes.Private);
-        _netServerMaxConnectionsField = typeBuilder.DefineField("_maxConnections", _types.Int32, FieldAttributes.Private);
+        // Assembly: the TCP accept closure enforces maxConnections + 'drop' (#1070)
+        _netServerMaxConnectionsField = typeBuilder.DefineField("_maxConnections", _types.Int32, FieldAttributes.Assembly);
         _netServerConnectionsField = typeBuilder.DefineField("_connections", _types.ListOfObject, FieldAttributes.Assembly);
         _netServerIsIpcField = typeBuilder.DefineField("_isIpc", _types.Boolean, FieldAttributes.Private);
         _netServerPipePathField = typeBuilder.DefineField("_pipePath", _types.String, FieldAttributes.Private);
         _netServerUnixSocketField = typeBuilder.DefineField("_unixSocket", typeof(Socket), FieldAttributes.Private);
         _netServerPipeReadyField = typeBuilder.DefineField("_pipeReady", typeof(System.Threading.ManualResetEventSlim), FieldAttributes.Private);
+        _netServerSocketHwmField = typeBuilder.DefineField("_socketHwm", _types.Int32, FieldAttributes.Assembly);
+        _netServerBlockListField = typeBuilder.DefineField("_blockList", _types.Object, FieldAttributes.Assembly);
+        _netServerSocketAllowHalfOpenField = typeBuilder.DefineField("_socketAllowHalfOpen", _types.Boolean, FieldAttributes.Assembly);
 
         // ── Constructor (with body) ──
         EmitNetServerCtor(typeBuilder, runtime);
@@ -186,6 +196,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stfld, _netServerConnectionsField);
+        // _socketHwm = -1 (unset — accepted sockets keep the 16 KiB default)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, _netServerSocketHwmField);
         il.Emit(OpCodes.Ret);
     }
 

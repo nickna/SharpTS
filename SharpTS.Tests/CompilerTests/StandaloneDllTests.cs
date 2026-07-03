@@ -41,6 +41,7 @@ public class StandaloneDllTests
         "Compilation/RuntimeEmitter.ClusterHelpers.cs", // cluster bridges to ClusterCompiledBridge — workers run interpreted (requires SharpTS.dll co-located; suppressed by --standalone) — #1171
         "Compilation/RuntimeEmitter.VmHelpers.cs",             // vm module delegation to interpreter via reflection
         "Compilation/RuntimeEmitter.DnsResolver.cs",           // dns.Resolver factory via RuntimeTypes
+        "Compilation/RuntimeEmitter.Dns.cs",                   // setDefaultResultOrder best-effort sync to RuntimeTypes.DnsConfig (graceful no-op when SharpTS absent; standalone lookup ordering uses the emitted static) — #1072
         "Compilation/ILEmitter.Calls.ExternalInterop.cs",      // @DotNetType delegate shim + event subscription via DotNetDelegateShim/DotNetEventBinder
         "Compilation/CallHandlers/GlobalFunctionHandler.cs",   // eval() indirect dispatch via EvalBridge (graceful throw when SharpTS absent)
     };
