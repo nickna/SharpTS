@@ -157,6 +157,10 @@ public partial class RuntimeEmitter
         EmitDgramSend(typeBuilder, runtime);
         EmitDgramAddMembership(typeBuilder, runtime);
         EmitDgramDropMembership(typeBuilder, runtime);
+        EmitDgramSourceSpecificMembership(typeBuilder, runtime, add: true);
+        EmitDgramSourceSpecificMembership(typeBuilder, runtime, add: false);
+        EmitDgramSetMulticastLoopback(typeBuilder, runtime);
+        EmitDgramSetMulticastInterface(typeBuilder, runtime);
         EmitDgramRef(typeBuilder, runtime);
         EmitDgramUnref(typeBuilder, runtime);
 
@@ -870,15 +874,13 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (!_connected) throw
+        // if (!_connected) throw ERR_SOCKET_DGRAM_NOT_CONNECTED (#1071)
         var isConnected = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _dgramConnectedField);
         il.Emit(OpCodes.Brtrue, isConnected);
 
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Not connected");
-        il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
+        EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
 
         il.MarkLabel(isConnected);
 
@@ -985,15 +987,13 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (!_connected) throw
+        // if (!_connected) throw ERR_SOCKET_DGRAM_NOT_CONNECTED (#1071)
         var isConnected = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _dgramConnectedField);
         il.Emit(OpCodes.Brtrue, isConnected);
 
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Not connected");
-        il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
+        EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
 
         il.MarkLabel(isConnected);
 
@@ -1404,6 +1404,26 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipCb);
         }
 
+        // Destination validation (#1071, Node semantics): a connected socket rejects
+        // an explicit port; an unconnected socket requires one. Thrown synchronously.
+        {
+            var validationDone = il.DefineLabel();
+            var notConnectedCheck = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _dgramConnectedField);
+            il.Emit(OpCodes.Brfalse, notConnectedCheck);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, _types.Double);
+            il.Emit(OpCodes.Brfalse, validationDone);
+            EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_IS_CONNECTED", "Already connected");
+            il.MarkLabel(notConnectedCheck);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, _types.Double);
+            il.Emit(OpCodes.Brtrue, validationDone);
+            EmitDgramThrowCoded(il, runtime, "ERR_SOCKET_DGRAM_NOT_CONNECTED", "Not connected");
+            il.MarkLabel(validationDone);
+        }
+
         // Try/catch for send
         var tryStart = il.BeginExceptionBlock();
 
@@ -1512,8 +1532,38 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Helper: throws a guest error carrying a Node error code:
+    /// throw CreateException(new $Error(message) { Code = code })
+    /// </summary>
+    private void EmitDgramThrowCoded(ILGenerator il, EmittedRuntime runtime, string code, string message)
+    {
+        il.Emit(OpCodes.Ldstr, message);
+        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, code);
+        il.Emit(OpCodes.Callvirt, runtime.TSErrorCodeSetter);
+        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Helper: if (_client == null) _client = new UdpClient(family) — lazily creates
+    /// the handle so pre-bind option setters work (mirrors SharpTSDatagramSocket.EnsureClient).
+    /// </summary>
+    private void EmitDgramEnsureClient(ILGenerator il)
+    {
+        var exists = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Brtrue, exists);
+        EmitDgramCreateClient(il);
+        il.MarkLabel(exists);
+    }
+
+    /// <summary>
     /// Emits: public object AddMembership(object multicastAddr, object localAddr)
-    /// Stub implementation.
+    /// UdpClient.JoinMulticastGroup with the optional local interface address (#1071 —
+    /// previously a silent no-op stub, diverging from the interpreter).
     /// </summary>
     private void EmitDgramAddMembership(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1525,13 +1575,50 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
+        var done = il.DefineLabel();
+
+        // if (_client == null || multicastAddr is not string) return null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, done);
+
+        var noLocal = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, noLocal);
+
+        // _client.JoinMulticastGroup(Parse(mcast), Parse(local))
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetMethod("JoinMulticastGroup", [typeof(IPAddress), typeof(IPAddress)])!);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(noLocal);
+        // _client.JoinMulticastGroup(Parse(mcast))
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetMethod("JoinMulticastGroup", [typeof(IPAddress)])!);
+
+        il.MarkLabel(done);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public object DropMembership(object multicastAddr)
-    /// Stub implementation.
+    /// UdpClient.DropMulticastGroup (#1071 — previously a silent no-op stub).
     /// </summary>
     private void EmitDgramDropMembership(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1543,6 +1630,267 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, done);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetMethod("DropMulticastGroup", [typeof(IPAddress)])!);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public object AddSourceSpecificMembership/DropSourceSpecificMembership
+    /// (sourceAddr, groupAddr[, iface]) — IPv4 ip_mreq_source via SetSocketOption;
+    /// field order differs per platform (Windows: group,source,iface; Unix:
+    /// group,iface,source). udp6 throws — no portable MCAST_JOIN_SOURCE_GROUP in .NET.
+    /// Mirrors SharpTSDatagramSocket.SourceSpecificMembership (#1071).
+    /// </summary>
+    private void EmitDgramSourceSpecificMembership(TypeBuilder typeBuilder, EmittedRuntime runtime, bool add)
+    {
+        var method = typeBuilder.DefineMethod(
+            add ? "AddSourceSpecificMembership" : "DropSourceSpecificMembership",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]
+        );
+
+        var il = method.GetILGenerator();
+        var mreqLocal = il.DeclareLocal(_types.ByteArray);
+        var ifaceLocal = il.DeclareLocal(typeof(IPAddress));
+        var argsOk = il.DefineLabel();
+        var familyOk = il.DefineLabel();
+
+        // if (arg1 is not string || arg2 is not string) throw ERR_INVALID_ARG_TYPE
+        var badArgs = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, badArgs);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, argsOk);
+        il.MarkLabel(badArgs);
+        EmitDgramThrowCoded(il, runtime, "ERR_INVALID_ARG_TYPE",
+            "The \"sourceAddress\" and \"groupAddress\" arguments must be of type string");
+        il.MarkLabel(argsOk);
+
+        // if (_family == InterNetworkV6) throw — documented ceiling
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldc_I4, 23);
+        il.Emit(OpCodes.Bne_Un, familyOk);
+        EmitDgramThrowCoded(il, runtime, "ERR_INVALID_ARG_VALUE",
+            "Source-specific multicast is not supported for udp6 sockets on this runtime");
+        il.MarkLabel(familyOk);
+
+        EmitDgramEnsureClient(il);
+
+        // mreq = new byte[12]
+        il.Emit(OpCodes.Ldc_I4, 12);
+        il.Emit(OpCodes.Newarr, typeof(byte));
+        il.Emit(OpCodes.Stloc, mreqLocal);
+
+        // Array.Copy(Parse(group).GetAddressBytes(), 0, mreq, 0, 4)
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetMethod("GetAddressBytes")!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, mreqLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), _types.Int32, typeof(Array), _types.Int32, _types.Int32])!);
+
+        // iface = (arg3 is string) ? Parse(arg3) : IPAddress.Any
+        var haveIface = il.DefineLabel();
+        var ifaceDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, haveIface);
+        il.Emit(OpCodes.Ldsfld, typeof(IPAddress).GetField("Any")!);
+        il.Emit(OpCodes.Stloc, ifaceLocal);
+        il.Emit(OpCodes.Br, ifaceDone);
+        il.MarkLabel(haveIface);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Stloc, ifaceLocal);
+        il.MarkLabel(ifaceDone);
+
+        // Platform-dependent packing of source/interface at offsets 4/8
+        var unixPack = il.DefineLabel();
+        var packDone = il.DefineLabel();
+        il.Emit(OpCodes.Call, typeof(OperatingSystem).GetMethod("IsWindows")!);
+        il.Emit(OpCodes.Brfalse, unixPack);
+        // Windows: source@4, iface@8
+        EmitDgramCopyAddressBytes(il, mreqLocal, 4, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        });
+        EmitDgramCopyAddressBytes(il, mreqLocal, 8, () => il.Emit(OpCodes.Ldloc, ifaceLocal));
+        il.Emit(OpCodes.Br, packDone);
+        il.MarkLabel(unixPack);
+        // Unix: iface@4, source@8
+        EmitDgramCopyAddressBytes(il, mreqLocal, 4, () => il.Emit(OpCodes.Ldloc, ifaceLocal));
+        EmitDgramCopyAddressBytes(il, mreqLocal, 8, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        });
+        il.MarkLabel(packDone);
+
+        // _client.Client.SetSocketOption(IP, Add/DropSourceMembership, mreq)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
+        il.Emit(OpCodes.Ldc_I4, (int)(add ? SocketOptionName.AddSourceMembership : SocketOptionName.DropSourceMembership));
+        il.Emit(OpCodes.Ldloc, mreqLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("SetSocketOption", [typeof(SocketOptionLevel), typeof(SocketOptionName), _types.ByteArray])!);
+
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Helper: Array.Copy(loadAddress().GetAddressBytes(), 0, mreq, offset, 4)
+    /// </summary>
+    private void EmitDgramCopyAddressBytes(ILGenerator il, LocalBuilder mreqLocal, int offset, Action loadAddress)
+    {
+        loadAddress();
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetMethod("GetAddressBytes")!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, mreqLocal);
+        il.Emit(OpCodes.Ldc_I4, offset);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), _types.Int32, typeof(Array), _types.Int32, _types.Int32])!);
+    }
+
+    /// <summary>
+    /// Emits: public object SetMulticastLoopback(object flag)
+    /// UdpClient.MulticastLoopback picks the right option level from the family (#1071).
+    /// </summary>
+    private void EmitDgramSetMulticastLoopback(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetMulticastLoopback",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.Object]
+        );
+
+        var il = method.GetILGenerator();
+        var flagLocal = il.DeclareLocal(_types.Boolean);
+
+        EmitDgramEnsureClient(il);
+
+        // flag = (arg is bool b && b) || (arg is double d && d != 0)
+        var setTrue = il.DefineLabel();
+        var setFalse = il.DefineLabel();
+        var flagDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Brfalse, setFalse);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, setTrue);
+        il.Emit(OpCodes.Br, setFalse);
+        il.MarkLabel(setTrue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, flagLocal);
+        il.Emit(OpCodes.Br, flagDone);
+        il.MarkLabel(setFalse);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, flagLocal);
+        il.MarkLabel(flagDone);
+
+        // _client.MulticastLoopback = flag
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Ldloc, flagLocal);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("MulticastLoopback")!.GetSetMethod()!);
+
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public object SetMulticastInterface(object iface)
+    /// IPv4: interface address bytes; IPv6: scope id (#1071).
+    /// </summary>
+    private void EmitDgramSetMulticastInterface(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetMulticastInterface",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.Object]
+        );
+
+        var il = method.GetILGenerator();
+        var ipLocal = il.DeclareLocal(typeof(IPAddress));
+        var argOk = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, argOk);
+        EmitDgramThrowCoded(il, runtime, "ERR_INVALID_ARG_TYPE",
+            "The \"multicastInterface\" argument must be of type string");
+        il.MarkLabel(argOk);
+
+        EmitDgramEnsureClient(il);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Stloc, ipLocal);
+
+        var v6Path = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldc_I4, 23);
+        il.Emit(OpCodes.Beq, v6Path);
+
+        // IPv4: SetSocketOption(IP, MulticastInterface, ip.GetAddressBytes())
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.MulticastInterface);
+        il.Emit(OpCodes.Ldloc, ipLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetMethod("GetAddressBytes")!);
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("SetSocketOption", [typeof(SocketOptionLevel), typeof(SocketOptionName), _types.ByteArray])!);
+        il.Emit(OpCodes.Br, done);
+
+        // IPv6: SetSocketOption(IPv6, MulticastInterface, (int)ip.ScopeId)
+        il.MarkLabel(v6Path);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IPv6);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.MulticastInterface);
+        il.Emit(OpCodes.Ldloc, ipLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("ScopeId")!.GetGetMethod()!);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("SetSocketOption", [typeof(SocketOptionLevel), typeof(SocketOptionName), _types.Int32])!);
+
+        il.MarkLabel(done);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
     }
