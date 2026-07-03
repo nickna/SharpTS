@@ -12,52 +12,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private EmittedStateMachine DefinePromiseAllStateMachine(ModuleBuilder moduleBuilder)
     {
-        var builderType = _types.AsyncTaskMethodBuilderOfObject;
         var awaiterType = _types.TaskAwaiterOfObjectArray;
-
-        // Define state machine struct: $PromiseAll_SM
-        var smType = moduleBuilder.DefineType(
-            "$PromiseAll_SM",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            _types.ValueType,
-            [_types.IAsyncStateMachine]
-        );
-
-        // Define fields
-        var stateField = smType.DefineField("<>1__state", _types.Int32, FieldAttributes.Public);
-        var builderField = smType.DefineField("<>t__builder", builderType, FieldAttributes.Public);
-        var iterableField = smType.DefineField("iterable", _types.Object, FieldAttributes.Public);
-        var awaiterField = smType.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
-
-        // Define MoveNext method
-        var moveNext = smType.DefineMethod(
-            "MoveNext",
-            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            _types.Void,
-            Type.EmptyTypes
-        );
-        smType.DefineMethodOverride(moveNext, _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext"));
-
-        // Define SetStateMachine method (empty body for value types)
-        var setStateMachine = smType.DefineMethod(
-            "SetStateMachine",
-            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            _types.Void,
-            [_types.IAsyncStateMachine]
-        );
-        smType.DefineMethodOverride(setStateMachine, _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]));
-        var setSmIL = setStateMachine.GetILGenerator();
-        setSmIL.Emit(OpCodes.Ret);
+        var shell = DefineCombinatorStateMachineShell(moduleBuilder, "$PromiseAll_SM", "iterable",
+            MethodAttributes.Public);
+        var awaiterField = shell.Type.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
 
         return new EmittedStateMachine
         {
-            Type = smType,
-            StateField = stateField,
-            BuilderField = builderField,
-            IterableField = iterableField,
+            Type = shell.Type,
+            StateField = shell.StateField,
+            BuilderField = shell.BuilderField,
+            IterableField = shell.InputField,
             AwaiterField = awaiterField,
-            MoveNextMethod = moveNext,
-            BuilderType = builderType,
+            MoveNextMethod = shell.MoveNextMethod,
+            BuilderType = shell.BuilderType,
             AwaiterType = awaiterType
         };
     }
@@ -66,47 +34,14 @@ public partial class RuntimeEmitter
     /// Emits the PromiseAll wrapper method that creates and starts the state machine.
     /// </summary>
     private void EmitPromiseAllWrapper(ILGenerator il, EmittedStateMachine sm, EmittedRuntime runtime)
-    {
-        var smLocal = il.DeclareLocal(sm.Type);
-
-        // Initialize state machine: var sm = default($PromiseAll_SM);
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Initobj, sm.Type);
-
-        // sm.<>1__state = -1;
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        // sm.iterable = NormalizePromiseList(arg0); — $Promise elements
-        // (#242 subclasses) become their wrapped Task so the SM awaits them.
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
-        il.Emit(OpCodes.Stfld, sm.IterableField);
-
-        // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create();
-        il.Emit(OpCodes.Ldloca, smLocal);
-        var createMethod = sm.BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
-        il.Emit(OpCodes.Call, createMethod);
-        il.Emit(OpCodes.Stfld, sm.BuilderField);
-
-        // sm.<>t__builder.Start(ref sm);
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "Start" && m.IsGenericMethod)
-            .MakeGenericMethod(sm.Type);
-        il.Emit(OpCodes.Call, startMethod);
-
-        // return sm.<>t__builder.Task;
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        var taskGetter = sm.BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
-        il.Emit(OpCodes.Call, taskGetter);
-        il.Emit(OpCodes.Ret);
-    }
+        => EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
+            () =>
+            {
+                // sm.iterable = NormalizePromiseList(arg0); — $Promise elements
+                // (#242 subclasses) become their wrapped Task so the SM awaits them.
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
+            });
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAll state machine.
@@ -117,7 +52,6 @@ public partial class RuntimeEmitter
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
         var taskListType = typeof(List<Task<object?>>);
-        var taskArrayType = typeof(Task<object?>[]);
 
         // Local variables
         var exceptionLocal = il.DeclareLocal(typeof(Exception));
@@ -126,7 +60,7 @@ public partial class RuntimeEmitter
         // Labels
         var state0Label = il.DefineLabel();
         var continueLabel = il.DefineLabel();
-        var setResultLabel = il.DefineLabel();  // New: for success path
+        var setResultLabel = il.DefineLabel();  // success path (empty list jumps here too)
         var returnLabel = il.DefineLabel();
 
         // Begin outer try block
@@ -142,23 +76,7 @@ public partial class RuntimeEmitter
         // ECMA-262 §27.2.4.1 Promise.all: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws
         // InvalidCastException, failing test262 `err instanceof TypeError`.
-        var iterableOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, sm.IterableField);
-        il.Emit(OpCodes.Isinst, listType);
-        il.Emit(OpCodes.Brtrue, iterableOkLabel);
-        il.Emit(OpCodes.Ldstr, "Promise.all argument is not iterable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(iterableOkLabel);
-
-        // Cast iterable to List<object?>
-        var listLocal = il.DeclareLocal(listType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, sm.IterableField);
-        il.Emit(OpCodes.Castclass, listType);
-        il.Emit(OpCodes.Stloc, listLocal);
+        var listLocal = EmitCombinatorIterableGuard(il, runtime, sm.IterableField, "all");
 
         // Check for empty list
         var notEmptyLabel = il.DefineLabel();
@@ -173,78 +91,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notEmptyLabel);
 
-        // Create tasks list
-        var tasksLocal = il.DeclareLocal(taskListType);
-        il.Emit(OpCodes.Newobj, taskListType.GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, tasksLocal);
-
-        // Loop through input list and convert to tasks
-        var indexLocal = il.DeclareLocal(typeof(int));
-        var countLocal = il.DeclareLocal(typeof(int));
-        var elementLocal = il.DeclareLocal(typeof(object));
-
-        // count = list.Count
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetProperty("Count")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, countLocal);
-
-        // index = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        il.MarkLabel(loopStart);
-
-        // if (index >= count) goto loopEnd
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // element = list[index]
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, elementLocal);
-
-        // Check if element is Task<object?>
-        var isTaskLabel = il.DefineLabel();
-        var afterAddLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, typeof(Task<object?>));
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, isTaskLabel);
-        il.Emit(OpCodes.Pop);
-
-        // Not a task - wrap in Task.FromResult
-        il.Emit(OpCodes.Ldloc, tasksLocal);
-        il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
-        il.Emit(OpCodes.Callvirt, taskListType.GetMethod("Add")!);
-        il.Emit(OpCodes.Br, afterAddLabel);
-
-        // Is a task - add directly
-        il.MarkLabel(isTaskLabel);
-        var taskTemp = il.DeclareLocal(typeof(Task<object?>));
-        il.Emit(OpCodes.Stloc, taskTemp);
-        il.Emit(OpCodes.Ldloc, tasksLocal);
-        il.Emit(OpCodes.Ldloc, taskTemp);
-        il.Emit(OpCodes.Callvirt, taskListType.GetMethod("Add")!);
-
-        il.MarkLabel(afterAddLabel);
-
-        // index++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        // goto loopStart
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
+        // Convert elements to tasks
+        var tasksLocal = EmitCombinatorTaskListLoop(il, listLocal);
 
         // Call Task.WhenAll<object?>(tasks.ToArray())
         // Find the generic WhenAll<TResult>(Task<TResult>[]) and specialize it
@@ -257,47 +105,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, taskListType.GetMethod("ToArray")!);
         il.Emit(OpCodes.Call, whenAllMethod);
 
-        // GetAwaiter and store to field
-        var awaiterLocal = il.DeclareLocal(sm.AwaiterType);
+        // Await the WhenAll task (suspends at state 0 when not yet complete)
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectArrayGetAwaiter);
-        il.Emit(OpCodes.Stloc, awaiterLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, awaiterLocal);
-        il.Emit(OpCodes.Stfld, sm.AwaiterField);
-
-        // Check IsCompleted
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, continueLabel);
-
-        // Not completed - suspend
-        // this.<>1__state = 0
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        // builder.AwaitUnsafeOnCompleted(ref awaiter, ref this)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
-            .MakeGenericMethod(sm.AwaiterType, sm.Type);
-        il.Emit(OpCodes.Call, awaitMethod);
-
-        // return (exit MoveNext)
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorAwaitSuspend(il, sm.Type, sm.StateField, sm.BuilderField, sm.BuilderType,
+            sm.AwaiterField, sm.AwaiterType, 0, continueLabel, returnLabel);
 
         // ========== STATE 0: Resume after await ==========
-        il.MarkLabel(state0Label);
-
-        // Reset state to -1
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, sm.StateField);
+        EmitCombinatorResumeState(il, state0Label, sm.StateField);
 
         // ========== Continue (completed synchronously or resumed) ==========
         il.MarkLabel(continueLabel);
@@ -316,34 +130,10 @@ public partial class RuntimeEmitter
 
         // ========== Success path - both normal and empty list converge here ==========
         il.MarkLabel(setResultLabel);
-
-        // Set state to -2 (completed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4, -2);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        // builder.SetResult(result)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetResult")!);
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorSetResult(il, sm.StateField, sm.BuilderField, sm.BuilderType, resultLocal, returnLabel);
 
         // ========== Exception handler ==========
-        il.BeginCatchBlock(typeof(Exception));
-        il.Emit(OpCodes.Stloc, exceptionLocal);
-
-        // Set state to -2 (completed with error)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4, -2);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        // builder.SetException(exception)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorCatchSetException(il, sm.StateField, sm.BuilderField, sm.BuilderType, exceptionLocal, returnLabel);
 
         il.EndExceptionBlock();
 
@@ -354,4 +144,3 @@ public partial class RuntimeEmitter
 
     #endregion
 }
-

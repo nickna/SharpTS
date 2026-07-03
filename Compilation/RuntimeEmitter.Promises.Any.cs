@@ -229,53 +229,22 @@ public partial class RuntimeEmitter
     /// </summary>
     private PromiseAnyStateMachine DefinePromiseAnyStateMachine(ModuleBuilder moduleBuilder, AnyStateClass anyState)
     {
-        var builderType = _types.AsyncTaskMethodBuilderOfObject;
         var awaiterType = _types.TaskAwaiterOfObject;
-
-        var typeBuilder = moduleBuilder.DefineType(
-            "$PromiseAny_StateMachine",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            _types.ValueType,
-            [_types.IAsyncStateMachine]
-        );
-
-        // Fields
-        var stateField = typeBuilder.DefineField("<>1__state", _types.Int32, FieldAttributes.Public);
-        var builderField = typeBuilder.DefineField("<>t__builder", builderType, FieldAttributes.Public);
-        var iterableField = typeBuilder.DefineField("iterable", _types.Object, FieldAttributes.Public);
-        var stateObjField = typeBuilder.DefineField("anyState", anyState.Type, FieldAttributes.Public);
-        var awaiterField = typeBuilder.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
-
-        // MoveNext method
-        var moveNext = typeBuilder.DefineMethod(
-            "MoveNext",
-            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            _types.Void,
-            []
-        );
-        typeBuilder.DefineMethodOverride(moveNext, _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext"));
-
-        // SetStateMachine
-        var setStateMachine = typeBuilder.DefineMethod(
-            "SetStateMachine",
-            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            _types.Void,
-            [_types.IAsyncStateMachine]
-        );
-        typeBuilder.DefineMethodOverride(setStateMachine, _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]));
-        var setIL = setStateMachine.GetILGenerator();
-        setIL.Emit(OpCodes.Ret);
+        var shell = DefineCombinatorStateMachineShell(moduleBuilder, "$PromiseAny_StateMachine", "iterable",
+            MethodAttributes.Private);
+        var stateObjField = shell.Type.DefineField("anyState", anyState.Type, FieldAttributes.Public);
+        var awaiterField = shell.Type.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
 
         return new PromiseAnyStateMachine
         {
-            Type = typeBuilder,
-            StateField = stateField,
-            BuilderField = builderField,
-            IterableField = iterableField,
+            Type = shell.Type,
+            StateField = shell.StateField,
+            BuilderField = shell.BuilderField,
+            IterableField = shell.InputField,
             StateObjField = stateObjField,
             AwaiterField = awaiterField,
-            MoveNextMethod = moveNext,
-            BuilderType = builderType,
+            MoveNextMethod = shell.MoveNextMethod,
+            BuilderType = shell.BuilderType,
             AwaiterType = awaiterType
         };
     }
@@ -284,45 +253,13 @@ public partial class RuntimeEmitter
     /// Emits the wrapper method for PromiseAny.
     /// </summary>
     private void EmitPromiseAnyWrapper(ILGenerator il, PromiseAnyStateMachine sm, EmittedRuntime runtime)
-    {
-        var smLocal = il.DeclareLocal(sm.Type);
-
-        // Initialize state machine
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Initobj, sm.Type);
-
-        // sm.<>1__state = -1
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        // sm.iterable = NormalizePromiseList(arg0) — see PromiseAll wrapper.
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
-        il.Emit(OpCodes.Stfld, sm.IterableField);
-
-        // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create()
-        il.Emit(OpCodes.Ldloca, smLocal);
-        var createMethod = _types.GetMethodStatic(sm.BuilderType, "Create");
-        il.Emit(OpCodes.Call, createMethod);
-        il.Emit(OpCodes.Stfld, sm.BuilderField);
-
-        // sm.<>t__builder.Start(ref sm)
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = _types.GetGenericMethod(sm.BuilderType, "Start")
-            .MakeGenericMethod(sm.Type);
-        il.Emit(OpCodes.Call, startMethod);
-
-        // return sm.<>t__builder.Task
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        var taskGetter = _types.GetPropertyGetter(sm.BuilderType, "Task");
-        il.Emit(OpCodes.Call, taskGetter);
-        il.Emit(OpCodes.Ret);
-    }
+        => EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
+            () =>
+            {
+                // sm.iterable = NormalizePromiseList(arg0) — see PromiseAll wrapper.
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
+            });
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAny state machine.
@@ -353,23 +290,7 @@ public partial class RuntimeEmitter
         // ========== STATE -1: Initial execution ==========
 
         // ECMA-262 §27.2.4.2 Promise.any: non-iterable → reject with TypeError.
-        var iterableOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, sm.IterableField);
-        il.Emit(OpCodes.Isinst, listType);
-        il.Emit(OpCodes.Brtrue, iterableOkLabel);
-        il.Emit(OpCodes.Ldstr, "Promise.any argument is not iterable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(iterableOkLabel);
-
-        // Cast iterable to List<object?>
-        var listLocal = il.DeclareLocal(listType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, sm.IterableField);
-        il.Emit(OpCodes.Castclass, listType);
-        il.Emit(OpCodes.Stloc, listLocal);
+        var listLocal = EmitCombinatorIterableGuard(il, runtime, sm.IterableField, "any");
 
         // Get count
         var countLocal = il.DeclareLocal(_types.Int32);
@@ -531,46 +452,17 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
 
-        // Now await state.Tcs.Task
+        // Now await state.Tcs.Task (suspends at state 0 when not yet complete)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.StateObjField);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.TaskCompletionSourceOfObject, "Task"));
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter"));
-
-        var awaiterLocal = il.DeclareLocal(sm.AwaiterType);
-        il.Emit(OpCodes.Stloc, awaiterLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, awaiterLocal);
-        il.Emit(OpCodes.Stfld, sm.AwaiterField);
-
-        // Check IsCompleted
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, _types.GetPropertyGetter(sm.AwaiterType, "IsCompleted"));
-        il.Emit(OpCodes.Brtrue, continueLabel);
-
-        // Not completed - suspend
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = _types.GetGenericMethod(sm.BuilderType, "AwaitUnsafeOnCompleted")
-            .MakeGenericMethod(sm.AwaiterType, sm.Type);
-        il.Emit(OpCodes.Call, awaitMethod);
-
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorAwaitSuspend(il, sm.Type, sm.StateField, sm.BuilderField, sm.BuilderType,
+            sm.AwaiterField, sm.AwaiterType, 0, continueLabel, returnLabel);
 
         // ========== STATE 0: Resume after await ==========
-        il.MarkLabel(state0Label);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stfld, sm.StateField);
+        EmitCombinatorResumeState(il, state0Label, sm.StateField);
 
         // ========== continueLabel: Completed ==========
         il.MarkLabel(continueLabel);
@@ -582,29 +474,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Set state to -2 and SetResult
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4, -2);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult", [_types.Object]));
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorSetResult(il, sm.StateField, sm.BuilderField, sm.BuilderType, resultLocal, returnLabel);
 
         // ========== Exception handler ==========
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, exceptionLocal);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4, -2);
-        il.Emit(OpCodes.Stfld, sm.StateField);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException", [_types.Exception]));
-        il.Emit(OpCodes.Leave, returnLabel);
+        EmitCombinatorCatchSetException(il, sm.StateField, sm.BuilderField, sm.BuilderType, exceptionLocal, returnLabel);
 
         il.EndExceptionBlock();
 
