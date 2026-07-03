@@ -195,10 +195,11 @@ public class DnsWireProtocolFakeServerTests
     {
         using var server = new FakeDnsServer((request, _) => DnsPackets.Response(request, rcode));
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<NodeError>(() =>
             DnsWireProtocol.Query("example.com", DnsWireProtocol.TypeTXT, server.Address));
 
         Assert.Contains(expectedCode, ex.Message);
+        Assert.Equal(expectedCode, ex.Code);
         Assert.Equal(1, server.QueryCount); // unlike SERVFAIL/REFUSED, these are final
     }
 
@@ -207,10 +208,11 @@ public class DnsWireProtocolFakeServerTests
     {
         using var server = new FakeDnsServer((request, _) => DnsPackets.Response(request));
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<NodeError>(() =>
             DnsWireProtocol.Query("example.com", DnsWireProtocol.TypeTXT, server.Address));
 
         Assert.Contains("ENODATA", ex.Message);
+        Assert.Equal("ENODATA", ex.Code);
     }
 
     [Fact]
@@ -220,10 +222,11 @@ public class DnsWireProtocolFakeServerTests
         using var server = new FakeDnsServer((request, _) =>
             [request[0], request[1], 0x81, 0x80, 0x00]);
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<NodeError>(() =>
             DnsWireProtocol.Query("example.com", DnsWireProtocol.TypeTXT, server.Address));
 
         Assert.Contains("EAI_FAIL", ex.Message);
+        Assert.Equal("EAI_FAIL", ex.Code);
     }
 
     [Fact]
@@ -250,10 +253,11 @@ public class DnsWireProtocolFakeServerTests
             DnsPackets.WithCorruptedId(DnsPackets.Response(request, 0,
                 DnsPackets.Record(DnsWireProtocol.TypeTXT, DnsPackets.Txt("spoofed")))));
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<NodeError>(() =>
             DnsWireProtocol.Query("example.com", DnsWireProtocol.TypeTXT, server.Address));
 
         Assert.Contains("ETIMEOUT", ex.Message);
+        Assert.Equal("ETIMEOUT", ex.Code);
         Assert.Equal(3, server.QueryCount); // initial attempt + MaxRetries (2)
     }
 }

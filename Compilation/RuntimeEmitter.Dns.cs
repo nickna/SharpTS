@@ -47,6 +47,7 @@ public partial class RuntimeEmitter
 
         // DNS record resolution (MX, TXT, SRV, CNAME, NS, SOA, PTR, CAA, NAPTR)
         EmitDnsConvertList(typeBuilder, runtime);
+        EmitDnsFindChaseTarget(typeBuilder, runtime);
         EmitDnsDoQuery(typeBuilder, runtime);
         EmitDnsResolveRecord(typeBuilder, runtime);
 
@@ -920,6 +921,244 @@ public partial class RuntimeEmitter
     /// Uses emitted wire protocol helpers — no DnsClient dependency.
     /// Signature: object DnsDoQuery(string hostname, int queryType)
     /// </summary>
+    // Emitted mirror of DnsWireProtocol.FindChaseTarget (#1073)
+    private MethodBuilder _dnsFindChaseTargetMethod = null!;
+
+    /// <summary>
+    /// Emits DnsFindChaseTarget: returns the first CNAME target when the answer
+    /// section has no records of the query type but does contain CNAMEs; null
+    /// otherwise. Mirrors DnsWireProtocol.FindChaseTarget (#1073).
+    /// Signature: string DnsFindChaseTarget(byte[] data, int queryType)
+    /// </summary>
+    private void EmitDnsFindChaseTarget(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DnsFindChaseTarget",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [typeof(byte[]), _types.Int32]);
+        _dnsFindChaseTargetMethod = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.String);
+        var offArrLocal = il.DeclareLocal(typeof(int[]));
+        var qdcountLocal = il.DeclareLocal(_types.Int32);
+        var ancountLocal = il.DeclareLocal(_types.Int32);
+        var iLocal = il.DeclareLocal(_types.Int32);
+        var typeLocal = il.DeclareLocal(_types.Int32);
+        var rdlengthLocal = il.DeclareLocal(_types.Int32);
+        var rdataStartLocal = il.DeclareLocal(_types.Int32);
+        var offLocal = il.DeclareLocal(_types.Int32);
+        var endLabel = il.DefineLabel();
+        var retNullFast = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // if (data.Length < 12) return null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, 12);
+        il.Emit(OpCodes.Blt, retNullFast);
+        // if ((data[3] & 0x0F) != 0) return null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x0F);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Brtrue, retNullFast);
+        var scan = il.DefineLabel();
+        il.Emit(OpCodes.Br, scan);
+        il.MarkLabel(retNullFast);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(scan);
+        il.BeginExceptionBlock();
+
+        // qdcount = (data[4] << 8) | data[5]; ancount = (data[6] << 8) | data[7]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Shl);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_5);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Stloc, qdcountLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_6);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Shl);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_7);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Stloc, ancountLocal);
+
+        // offArr = new int[1] { 12 }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Int32);
+        il.Emit(OpCodes.Stloc, offArrLocal);
+        il.Emit(OpCodes.Ldloc, offArrLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4, 12);
+        il.Emit(OpCodes.Stelem_I4);
+
+        // skip questions: for q in 0..qdcount { SkipName; offArr[0] += 4 }
+        {
+            var qLoopTop = il.DefineLabel();
+            var qLoopCond = il.DefineLabel();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, iLocal);
+            il.Emit(OpCodes.Br, qLoopCond);
+            il.MarkLabel(qLoopTop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Call, runtime.DnsSkipName);
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_I4);
+            il.Emit(OpCodes.Ldc_I4_4);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stelem_I4);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, iLocal);
+            il.MarkLabel(qLoopCond);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldloc, qdcountLocal);
+            il.Emit(OpCodes.Blt, qLoopTop);
+        }
+
+        // answer scan
+        {
+            var aLoopTop = il.DefineLabel();
+            var aLoopCond = il.DefineLabel();
+            var nextIter = il.DefineLabel();
+            var scanDone = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, iLocal);
+            il.Emit(OpCodes.Br, aLoopCond);
+
+            il.MarkLabel(aLoopTop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Call, runtime.DnsSkipName);
+
+            // off = offArr[0]
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_I4);
+            il.Emit(OpCodes.Stloc, offLocal);
+
+            // type = (data[off] << 8) | data[off + 1]
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offLocal);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Stloc, typeLocal);
+
+            // rdlength = (data[off + 8] << 8) | data[off + 9]
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offLocal);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, offLocal);
+            il.Emit(OpCodes.Ldc_I4, 9);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Stloc, rdlengthLocal);
+
+            // rdataStart = off + 10
+            il.Emit(OpCodes.Ldloc, offLocal);
+            il.Emit(OpCodes.Ldc_I4, 10);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, rdataStartLocal);
+
+            // if (type == queryType) { result = null; done; } — real answers exist
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            var notMatch = il.DefineLabel();
+            il.Emit(OpCodes.Bne_Un, notMatch);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, endLabel);
+            il.MarkLabel(notMatch);
+
+            // if (type == 5 (CNAME) && result == null) result = DnsReadName(data, [rdataStart])
+            var notCname = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldc_I4_5);
+            il.Emit(OpCodes.Bne_Un, notCname);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Brtrue, notCname);
+            {
+                var nameOffLocal = il.DeclareLocal(typeof(int[]));
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Newarr, _types.Int32);
+                il.Emit(OpCodes.Stloc, nameOffLocal);
+                il.Emit(OpCodes.Ldloc, nameOffLocal);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, rdataStartLocal);
+                il.Emit(OpCodes.Stelem_I4);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldloc, nameOffLocal);
+                il.Emit(OpCodes.Call, runtime.DnsReadName);
+                il.Emit(OpCodes.Stloc, resultLocal);
+            }
+            il.MarkLabel(notCname);
+
+            // offArr[0] = rdataStart + rdlength
+            il.Emit(OpCodes.Ldloc, offArrLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, rdataStartLocal);
+            il.Emit(OpCodes.Ldloc, rdlengthLocal);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stelem_I4);
+
+            il.MarkLabel(nextIter);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, iLocal);
+            il.MarkLabel(aLoopCond);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldloc, ancountLocal);
+            il.Emit(OpCodes.Blt, aLoopTop);
+            il.MarkLabel(scanDone);
+        }
+
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitDnsDoQuery(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -930,21 +1169,67 @@ public partial class RuntimeEmitter
         runtime.DnsDoQuery = method;
 
         var il = method.GetILGenerator();
+        var nameLocal = il.DeclareLocal(_types.String);
+        var depthLocal = il.DeclareLocal(_types.Int32);
+        var queryLocal = il.DeclareLocal(typeof(byte[]));
+        var responseLocal = il.DeclareLocal(typeof(byte[]));
+        var targetLocal = il.DeclareLocal(_types.String);
+        var loopTop = il.DefineLabel();
+        var parseLabel = il.DefineLabel();
 
-        // byte[] query = DnsBuildQuery(hostname, queryType)
+        // name = hostname; depth = 0
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, nameLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, depthLocal);
+
+        il.MarkLabel(loopTop);
+
+        // byte[] query = DnsBuildQuery(name, queryType)
+        il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.DnsBuildQuery);
-        var queryLocal = il.DeclareLocal(typeof(byte[]));
         il.Emit(OpCodes.Stloc, queryLocal);
 
         // byte[] response = DnsSendReceive(query)
         il.Emit(OpCodes.Ldloc, queryLocal);
         il.Emit(OpCodes.Call, runtime.DnsSendReceive);
-        var responseLocal = il.DeclareLocal(typeof(byte[]));
         il.Emit(OpCodes.Stloc, responseLocal);
 
-        // return DnsParseResponse(response, queryType, hostname)
+        // CNAME chase (#1073): A(1)/AAAA(28) only, bounded depth 8
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        var maybeAaaa = il.DefineLabel();
+        var chase = il.DefineLabel();
+        il.Emit(OpCodes.Beq, chase);
+        il.MarkLabel(maybeAaaa);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4, 28);
+        il.Emit(OpCodes.Bne_Un, parseLabel);
+        il.MarkLabel(chase);
+        il.Emit(OpCodes.Ldloc, depthLocal);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Bge, parseLabel);
+
+        // target = DnsFindChaseTarget(response, queryType); if (target == null) parse
+        il.Emit(OpCodes.Ldloc, responseLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _dnsFindChaseTargetMethod);
+        il.Emit(OpCodes.Stloc, targetLocal);
+        il.Emit(OpCodes.Ldloc, targetLocal);
+        il.Emit(OpCodes.Brfalse, parseLabel);
+
+        // name = target; depth++; loop
+        il.Emit(OpCodes.Ldloc, targetLocal);
+        il.Emit(OpCodes.Stloc, nameLocal);
+        il.Emit(OpCodes.Ldloc, depthLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, depthLocal);
+        il.Emit(OpCodes.Br, loopTop);
+
+        // return DnsParseResponse(response, queryType, hostname) — original hostname
+        il.MarkLabel(parseLabel);
         il.Emit(OpCodes.Ldloc, responseLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_0);
@@ -2815,36 +3100,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "hostmaster");
             il.Emit(OpCodes.Ldloc, rnameLocal);
             il.Emit(OpCodes.Call, dictAdd);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldstr, "serial");
-            il.Emit(OpCodes.Ldloc, serialLocal);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, dictAdd);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldstr, "refresh");
-            il.Emit(OpCodes.Ldloc, refreshLocal);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, dictAdd);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldstr, "retry");
-            il.Emit(OpCodes.Ldloc, retryLocal);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, dictAdd);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldstr, "expire");
-            il.Emit(OpCodes.Ldloc, expireLocal);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, dictAdd);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldstr, "minttl");
-            il.Emit(OpCodes.Ldloc, minimumLocal);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Call, dictAdd);
+            // The 32-bit SOA fields are unsigned — Conv_R_Un treats the int32
+            // bits as unsigned so serials >= 2^31 don't go negative (#1073).
+            foreach (var (fieldName, fieldLocal) in new[]
+            {
+                ("serial", serialLocal), ("refresh", refreshLocal),
+                ("retry", retryLocal), ("expire", expireLocal), ("minttl", minimumLocal)
+            })
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldstr, fieldName);
+                il.Emit(OpCodes.Ldloc, fieldLocal);
+                il.Emit(OpCodes.Conv_R_Un);
+                il.Emit(OpCodes.Conv_R8);
+                il.Emit(OpCodes.Box, _types.Double);
+                il.Emit(OpCodes.Call, dictAdd);
+            }
             il.Emit(OpCodes.Stloc, resultLocal);
 
             EmitSetOffsetToRdataEnd(il);
@@ -2948,9 +3219,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, dictCtor);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldstr, "critical");
+            // Node reports the whole flags byte, not just the 0x80 bit (#1073)
             il.Emit(OpCodes.Ldloc, flagsLocal);
-            il.Emit(OpCodes.Ldc_I4, 0x80);
-            il.Emit(OpCodes.And);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Call, dictAdd);

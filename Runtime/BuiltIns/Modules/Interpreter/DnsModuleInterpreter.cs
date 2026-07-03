@@ -630,8 +630,13 @@ public static class DnsModuleInterpreter
     /// </summary>
     private static string ExtractErrorCode(Exception ex)
     {
+        // Wire-protocol errors carry the code directly (#1073) — deterministic,
+        // no message parsing needed.
+        if (ex is NodeError nodeError)
+            return nodeError.Code;
+
         var msg = ex.Message;
-        // Error messages follow pattern "Runtime Error: dns.xxx ECODE hostname"
+        // Legacy fallback: error messages follow "Runtime Error: dns.xxx ECODE hostname"
         if (msg.StartsWith("Runtime Error:"))
         {
             var parts = msg.Split(' ');

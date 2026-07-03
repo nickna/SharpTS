@@ -52,6 +52,8 @@ public static class DnsWireProtocol
     /// </summary>
     public static object Query(string hostname, int queryType)
     {
+        if (queryType is TypeA or TypeAAAA)
+            return QueryWithCnameChase(hostname, queryType, serverAddress: null, localAddress: null);
         var queryPacket = BuildQuery(hostname, queryType);
         var response = SendReceive(queryPacket);
         return ParseResponse(response, queryType, hostname);
@@ -65,9 +67,87 @@ public static class DnsWireProtocol
     /// </summary>
     public static object Query(string hostname, int queryType, string serverAddress, string? localAddress = null)
     {
+        if (queryType is TypeA or TypeAAAA)
+            return QueryWithCnameChase(hostname, queryType, serverAddress, localAddress);
         var queryPacket = BuildQuery(hostname, queryType);
         var response = SendReceive(queryPacket, serverAddress, localAddress);
         return ParseResponse(response, queryType, hostname);
+    }
+
+    /// <summary>Maximum CNAME indirections followed by resolve4/resolve6 (#1073).</summary>
+    private const int MaxCnameChaseDepth = 8;
+
+    /// <summary>
+    /// A/AAAA resolution with CNAME-chain following (#1073): a recursive resolver
+    /// normally inlines the chain's address records into one response (which the
+    /// answer scan already handles), but a response carrying ONLY a CNAME requires
+    /// re-querying the target. Errors always report the ORIGINAL hostname.
+    /// </summary>
+    private static object QueryWithCnameChase(string hostname, int queryType, string? serverAddress, string? localAddress)
+    {
+        var name = hostname;
+        for (var depth = 0; ; depth++)
+        {
+            var queryPacket = BuildQuery(name, queryType);
+            var response = serverAddress != null
+                ? SendReceive(queryPacket, serverAddress, localAddress)
+                : SendReceive(queryPacket);
+            var chaseTarget = depth < MaxCnameChaseDepth ? FindChaseTarget(response, queryType) : null;
+            if (chaseTarget == null)
+                return ParseResponse(response, queryType, hostname);
+            name = chaseTarget;
+        }
+    }
+
+    /// <summary>
+    /// Returns the first CNAME target when the answer section has no records of
+    /// the query type but does contain CNAMEs; null otherwise (real answers
+    /// present, error rcode, or malformed — ParseResponse handles those).
+    /// The emitted IL mirror is DnsFindChaseTarget (RuntimeEmitter.Dns.cs).
+    /// </summary>
+    internal static string? FindChaseTarget(byte[] data, int queryType)
+    {
+        if (data.Length < 12) return null;
+        if ((data[3] & 0x0F) != 0) return null;
+
+        try
+        {
+            var qdcount = (data[4] << 8) | data[5];
+            var ancount = (data[6] << 8) | data[7];
+            var offset = 12;
+            for (var q = 0; q < qdcount; q++)
+            {
+                SkipName(data, ref offset);
+                offset += 4; // QTYPE + QCLASS
+            }
+
+            string? firstCname = null;
+            for (var i = 0; i < ancount; i++)
+            {
+                SkipName(data, ref offset);
+                var type = (data[offset] << 8) | data[offset + 1];
+                offset += 8; // TYPE + CLASS + TTL
+                var rdlength = (data[offset] << 8) | data[offset + 1];
+                offset += 2;
+                var rdataStart = offset;
+
+                if (type == queryType)
+                    return null; // real answers present — no chase needed
+
+                if (type == TypeCNAME && firstCname == null)
+                {
+                    var nameOffset = offset;
+                    firstCname = ReadName(data, ref nameOffset);
+                }
+
+                offset = rdataStart + rdlength;
+            }
+            return firstCname;
+        }
+        catch
+        {
+            return null; // malformed — let ParseResponse produce the error
+        }
     }
 
     /// <summary>
@@ -230,7 +310,7 @@ public static class DnsWireProtocol
             }
         }
 
-        throw new Exception("Runtime Error: dns.resolve ETIMEOUT DNS query timed out");
+        throw new NodeError("ETIMEOUT", "Runtime Error: dns.resolve ETIMEOUT DNS query timed out");
     }
 
     /// <summary>
@@ -347,9 +427,12 @@ public static class DnsWireProtocol
     public static object ParseResponse(byte[] data, int queryType, string hostname)
     {
         if (data.Length < 12)
-            throw new Exception($"Runtime Error: dns.resolve EAI_FAIL {hostname}");
+            throw new NodeError("EAI_FAIL", $"Runtime Error: dns.resolve EAI_FAIL {hostname}");
 
-        // Check RCODE (bits 0-3 of byte 3)
+        // Check RCODE (bits 0-3 of byte 3). NodeError carries the code directly
+        // so interpreter-side extraction is deterministic instead of parsing the
+        // message text (#1073); the message keeps the legacy format for the
+        // compiled path, which still string-matches.
         var rcode = data[3] & 0x0F;
         if (rcode != 0)
         {
@@ -362,7 +445,7 @@ public static class DnsWireProtocol
                 5 => "EREFUSED",
                 _ => "EAI_FAIL"
             };
-            throw new Exception($"Runtime Error: dns.resolve {errorCode} {hostname}");
+            throw new NodeError(errorCode, $"Runtime Error: dns.resolve {errorCode} {hostname}");
         }
 
         // ANCOUNT
@@ -412,14 +495,14 @@ public static class DnsWireProtocol
         if (queryType == TypeSOA)
         {
             if (results.Count == 0)
-                throw new Exception($"Runtime Error: dns.resolveSoa ENODATA {hostname}");
+                throw new NodeError("ENODATA", $"Runtime Error: dns.resolveSoa ENODATA {hostname}");
             return results[0]!;
         }
 
         if (results.Count == 0)
         {
             var methodName = GetMethodName(queryType);
-            throw new Exception($"Runtime Error: dns.{methodName} ENODATA {hostname}");
+            throw new NodeError("ENODATA", $"Runtime Error: dns.{methodName} ENODATA {hostname}");
         }
 
         return results;
@@ -479,13 +562,15 @@ public static class DnsWireProtocol
 
             case TypeTXT:
             {
-                // TXT records: sequence of length-prefixed strings
+                // TXT records: sequence of length-prefixed strings. A malformed
+                // length that overruns the RDATA is clamped instead of throwing (#1073).
                 var chunks = new List<object?>();
                 var end = rdataStart + rdlength;
                 while (offset < end)
                 {
-                    var strLen = data[offset];
+                    int strLen = data[offset];
                     offset++;
+                    if (offset + strLen > end) strLen = end - offset;
                     var text = Encoding.UTF8.GetString(data, offset, strLen);
                     offset += strLen;
                     chunks.Add(text);
@@ -558,10 +643,13 @@ public static class DnsWireProtocol
 
             case TypeCAA:
             {
+                // Malformed tag lengths overrunning the RDATA drop the record (#1073).
+                if (rdlength < 2) { offset = rdataStart + rdlength; return null; }
                 var flags = data[offset];
                 offset++;
                 var tagLen = data[offset];
                 offset++;
+                if (2 + tagLen > rdlength) { offset = rdataStart + rdlength; return null; }
                 var tag = Encoding.ASCII.GetString(data, offset, tagLen);
                 offset += tagLen;
                 var valueLen = rdlength - 2 - tagLen;
@@ -569,7 +657,8 @@ public static class DnsWireProtocol
                 offset = rdataStart + rdlength;
                 return new Dictionary<string, object?>
                 {
-                    ["critical"] = (double)(flags & 0x80),
+                    // Node reports the whole flags byte (0 or 128 in practice)
+                    ["critical"] = (double)flags,
                     [tag] = value
                 };
             }
