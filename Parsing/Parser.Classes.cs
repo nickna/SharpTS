@@ -11,23 +11,28 @@ public partial class Parser
 
         Expr? superclassExpr = null;
         List<string>? superclassTypeArgs = null;
+        List<TypeNode?>? superclassTypeArgNodes = null;
         if (Match(TokenType.EXTENDS))
         {
             superclassExpr = Call();  // Parse LHS expression (identifiers, member access, calls)
-            superclassTypeArgs = TryParseTypeArguments();
+            superclassTypeArgs = TryParseTypeArguments(out superclassTypeArgNodes);
         }
 
         // Parse implements clause
         List<Token>? interfaces = null;
         List<List<string>>? interfaceTypeArgs = null;
+        List<List<TypeNode?>>? interfaceTypeArgNodes = null;
         if (Match(TokenType.IMPLEMENTS))
         {
             interfaces = [];
             interfaceTypeArgs = [];
+            interfaceTypeArgNodes = [];
             do
             {
                 interfaces.Add(Consume(TokenType.IDENTIFIER, "Expect interface name."));
-                interfaceTypeArgs.Add(TryParseTypeArguments() ?? []);
+                interfaceTypeArgs.Add(TryParseTypeArguments(out var implArgNodes) ?? []);
+                // Empty inner list pairs with the empty string list, keeping indices aligned.
+                interfaceTypeArgNodes.Add(implArgNodes ?? []);
             } while (Match(TokenType.COMMA));
         }
 
@@ -158,9 +163,11 @@ public partial class Parser
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
 
                 string? typeAnnotation = null;
+                TypeNode? typeAnnotationNode = null;
                 if (Match(TokenType.COLON))
                 {
                     typeAnnotation = ParseTypeAnnotation();
+                    typeAnnotationNode = TakeTypeNode();
                 }
 
                 Expr? initializer = null;
@@ -179,7 +186,8 @@ public partial class Parser
                     access,
                     isReadonly,
                     isOverride,
-                    memberDecorators
+                    memberDecorators,
+                    typeAnnotationNode
                 ));
                 continue;
             }
@@ -490,7 +498,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null);
+        return new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null, superclassTypeArgNodes, interfaceTypeArgNodes);
     }
 
     /// <summary>
@@ -632,23 +640,28 @@ public partial class Parser
 
         Expr? superclassExpr = null;
         List<string>? superclassTypeArgs = null;
+        List<TypeNode?>? superclassTypeArgNodes = null;
         if (Match(TokenType.EXTENDS))
         {
             superclassExpr = Call();  // Parse LHS expression (identifiers, member access, calls)
-            superclassTypeArgs = TryParseTypeArguments();
+            superclassTypeArgs = TryParseTypeArguments(out superclassTypeArgNodes);
         }
 
         // Parse implements clause
         List<Token>? interfaces = null;
         List<List<string>>? interfaceTypeArgs = null;
+        List<List<TypeNode?>>? interfaceTypeArgNodes = null;
         if (Match(TokenType.IMPLEMENTS))
         {
             interfaces = [];
             interfaceTypeArgs = [];
+            interfaceTypeArgNodes = [];
             do
             {
                 interfaces.Add(Consume(TokenType.IDENTIFIER, "Expect interface name."));
-                interfaceTypeArgs.Add(TryParseTypeArguments() ?? []);
+                interfaceTypeArgs.Add(TryParseTypeArguments(out var implArgNodes) ?? []);
+                // Empty inner list pairs with the empty string list, keeping indices aligned.
+                interfaceTypeArgNodes.Add(implArgNodes ?? []);
             } while (Match(TokenType.COMMA));
         }
 
@@ -724,9 +737,11 @@ public partial class Parser
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
 
                 string? typeAnnotation = null;
+                TypeNode? typeAnnotationNode = null;
                 if (Match(TokenType.COLON))
                 {
                     typeAnnotation = ParseTypeAnnotation();
+                    typeAnnotationNode = TakeTypeNode();
                 }
 
                 Expr? initializer = null;
@@ -745,7 +760,8 @@ public partial class Parser
                     access,
                     isReadonly,
                     IsOverride: false,  // Class expressions don't support override
-                    Decorators: null    // Class expressions don't support decorators on members
+                    Decorators: null,   // Class expressions don't support decorators on members
+                    TypeAnnotationNode: typeAnnotationNode
                 ));
                 continue;
             }
@@ -987,7 +1003,9 @@ public partial class Parser
             interfaces,
             interfaceTypeArgs,
             IsAbstract: false,  // Class expressions cannot be abstract
-            staticInitializers.Count > 0 ? staticInitializers : null
+            staticInitializers.Count > 0 ? staticInitializers : null,
+            superclassTypeArgNodes,
+            interfaceTypeArgNodes
         );
     }
 }

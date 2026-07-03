@@ -28,15 +28,64 @@ public class TypeNodeSliceTests
     }
 
     [Fact]
-    public void NodePath_FallsBackForUnsupportedConstructs()
+    public void NodePath_EngagesForBigintLiteralType()
     {
-        // bigint literal types (1n) still have no node form, so they fall back.
+        // Bigint literal types (1n) now carry a node. Resolution keeps parity with the string
+        // path, which had no bigint handling and let "1n" fall through its unknown-name tail to
+        // any — so the annotation resolves (node-first) without constraining the value.
         TypeNodeStats.Reset();
         TestHarness.RunInterpreted("""
             let x: 1n;
+            let y: 1n | 2n;
             """);
-        Assert.True(TypeNodeStats.StringFallbacks >= 1,
-            $"expected the bigint-literal-type annotation to fall back, got {TypeNodeStats.StringFallbacks}");
+        Assert.True(TypeNodeStats.NodeHits >= 2,
+            $"expected the bigint-literal-type annotations on the node path, got {TypeNodeStats.NodeHits}");
+        Assert.Equal(0, TypeNodeStats.StringFallbacks);
+    }
+
+    [Fact]
+    public void NodePath_EngagesForConstructorTypeWithThisParam()
+    {
+        // Constructor types with a `this:` pseudo-parameter now carry nodes (plain and generic).
+        // The this-type resolves but is dropped from the construct signature, exactly like the
+        // string path's ConvertConstructSignatures.
+        // Plain field (not a constructor parameter property) — parameter-property fields are a
+        // separate consumer site not yet node-wired.
+        TypeNodeStats.Reset();
+        TestHarness.RunInterpreted("""
+            class Widget { id!: number; }
+            let make: new (this: Widget, id: number) => Widget;
+            let gmake: new <T>(this: object, x: T) => T[];
+            """);
+        Assert.True(TypeNodeStats.NodeHits >= 2,
+            $"expected the this-param constructor-type annotations on the node path, got {TypeNodeStats.NodeHits}");
+        Assert.Equal(0, TypeNodeStats.StringFallbacks);
+    }
+
+    [Fact]
+    public void NodeResolved_ConstructorTypeWithThisParamStillEnforcesShape()
+    {
+        // Dropping the this-type must not loosen the signature: the parameter list still binds.
+        Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            var ctor: new (this: object, x: number) => object = 42;
+            """));
+    }
+
+    [Fact]
+    public void NodeResolved_UniqueSymbolMatchesStringPath()
+    {
+        // Valid form: const initialized with Symbol() — special-cased BEFORE resolution on both
+        // paths, so nothing resolves (and nothing falls back).
+        TypeNodeStats.Reset();
+        TestHarness.RunInterpreted("""
+            const s: unique symbol = Symbol();
+            """);
+        Assert.Equal(0, TypeNodeStats.StringFallbacks);
+
+        // Any other position reaches resolution and throws the same TS1331 as the string path.
+        Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            let x: unique symbol;
+            """));
     }
 
     [Fact]

@@ -260,12 +260,15 @@ public partial class Parser
 
         // Parse extends clause: interface Foo extends Bar, Baz { ... }
         List<string>? extends = null;
+        List<TypeNode?>? extendsNodes = null;
         if (Match(TokenType.EXTENDS))
         {
             extends = [];
+            extendsNodes = [];
             do
             {
                 extends.Add(ParseTypeAnnotation());
+                extendsNodes.Add(TakeTypeNode()); // per-entry; null keeps indices aligned
             } while (Match(TokenType.COMMA));
         }
 
@@ -393,7 +396,8 @@ public partial class Parser
             indexSignatures.Count > 0 ? indexSignatures : null,
             extends,
             callSignatures.Count > 0 ? callSignatures : null,
-            constructorSignatures.Count > 0 ? constructorSignatures : null
+            constructorSignatures.Count > 0 ? constructorSignatures : null,
+            extendsNodes
         );
     }
 
@@ -452,9 +456,10 @@ public partial class Parser
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after call signature parameters.");
             Consume(TokenType.COLON, "Expect ':' before return type in call signature.");
             string returnType = ParseTypeAnnotation();
+            TypeNode? returnTypeNode = TakeTypeNode();
             ConsumeInterfaceMemberSeparator();
 
-            return new Stmt.CallSignature(sigTypeParams, parameters, returnType);
+            return new Stmt.CallSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
         catch
         {
@@ -490,9 +495,10 @@ public partial class Parser
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after constructor signature parameters.");
             Consume(TokenType.COLON, "Expect ':' before return type in constructor signature.");
             string returnType = ParseTypeAnnotation();
+            TypeNode? returnTypeNode = TakeTypeNode();
             ConsumeInterfaceMemberSeparator();
 
-            return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType);
+            return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType, returnTypeNode);
         }
         catch
         {
@@ -522,12 +528,14 @@ public partial class Parser
 
                 // Parse type annotation
                 string? paramType = null;
+                TypeNode? paramTypeNode = null;
                 if (Match(TokenType.COLON))
                 {
                     paramType = ParseTypeAnnotation();
+                    paramTypeNode = TakeTypeNode();
                 }
 
-                parameters.Add(new Stmt.Parameter(paramName, paramType, null, isRest, IsOptional: isOptional));
+                parameters.Add(new Stmt.Parameter(paramName, paramType, null, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
 
             } while (Match(TokenType.COMMA));
         }
@@ -1023,14 +1031,16 @@ public partial class Parser
         Token name = ConsumeIdentifierName("Expect variable name in 'using' declaration.");
 
         string? typeAnnotation = null;
+        TypeNode? typeAnnotationNode = null;
         if (Match(TokenType.COLON))
         {
             typeAnnotation = ParseTypeAnnotation();
+            typeAnnotationNode = TakeTypeNode();
         }
 
         Consume(TokenType.EQUAL, "'using' declarations must be initialized.");
         Expr initializer = Expression();
 
-        return new Stmt.UsingBinding(name, null, typeAnnotation, initializer);
+        return new Stmt.UsingBinding(name, null, typeAnnotation, initializer, typeAnnotationNode);
     }
 }

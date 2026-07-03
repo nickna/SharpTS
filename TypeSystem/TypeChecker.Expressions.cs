@@ -684,7 +684,7 @@ public partial class TypeChecker
                 getterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.ReturnType != null)
                 {
-                    fields[name] = ToTypeInfo(arrow.ReturnType);
+                    fields[name] = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
                 }
                 else
                 {
@@ -705,7 +705,7 @@ public partial class TypeChecker
                     // If getter already defined the type, verify compatibility
                     if (!fields.ContainsKey(name))
                     {
-                        fields[name] = ToTypeInfo(arrow.Parameters[0].Type!);
+                        fields[name] = ResolveAnnotation(arrow.Parameters[0].Type, arrow.Parameters[0].TypeAnnotationNode)!;
                     }
                 }
                 else if (!fields.ContainsKey(name))
@@ -1301,8 +1301,8 @@ public partial class TypeChecker
                 typeParams = [];
                 foreach (var tp in arrow.TypeParams)
                 {
-                    TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                    TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                    TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                    TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                     var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                     typeParams.Add(typeParam);
                     typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
@@ -1322,7 +1322,7 @@ public partial class TypeChecker
             // Parse explicit 'this' type if present (for object literal method shorthand)
             // Note: Arrow function expressions shouldn't have 'this' parameter in standard TypeScript,
             // but we support it for object literal method shorthand which is parsed as ArrowFunction.
-            thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
+            thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
 
             // For function expressions and object method shorthand (HasOwnThis=true), allow 'this' even without explicit type annotation
             // TypeScript infers 'this' as the containing object type - use _pendingObjectThisType if available
@@ -1347,7 +1347,7 @@ public partial class TypeChecker
                 if (param.Type != null)
                 {
                     // Explicit type annotation - use it
-                    paramType = ToTypeInfo(param.Type);
+                    paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)!;
                 }
                 else if (expectedFuncType != null && i < expectedFuncType.ParamTypes.Count)
                 {
@@ -1400,7 +1400,7 @@ public partial class TypeChecker
             // Determine return type (use expected type if available and no explicit annotation)
             if (arrow.ReturnType != null)
             {
-                returnType = ToTypeInfo(arrow.ReturnType);
+                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
             }
             else if (expectedFuncType != null)
             {
@@ -1897,9 +1897,8 @@ public partial class TypeChecker
                     contextName: $"method '{method.Name.Lexeme}'"
                 );
 
-                TypeInfo returnType = method.ReturnType != null
-                    ? ToTypeInfo(method.ReturnType)
-                    : new TypeInfo.Inferred();
+                TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+                    ?? new TypeInfo.Inferred();
 
                 // Wrap return type for generator/async generator methods (skip when inferring).
                 // An un-annotated generator method stays a plain <inferred> placeholder so the
@@ -1931,7 +1930,7 @@ public partial class TypeChecker
                     continue;
                 var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                     method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-                TypeInfo factoryReturn = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Inferred();
+                TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
                 var computedFunc = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
                 if (method.IsStatic)
                     mutableClass.StaticMethods[memberName] = computedFunc;
@@ -1994,9 +1993,8 @@ public partial class TypeChecker
             foreach (var field in classExpr.Fields)
             {
                 string fieldName = field.Name.Lexeme;
-                TypeInfo fieldType = field.TypeAnnotation != null
-                    ? ToTypeInfo(field.TypeAnnotation)
-                    : new TypeInfo.Any();
+                TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
+                    ?? new TypeInfo.Any();
 
                 if (field.IsStatic)
                     mutableClass.StaticProperties[fieldName] = fieldType;
@@ -2081,7 +2079,8 @@ public partial class TypeChecker
                 else if (itfTypeInfo == null && TryResolveIterableProtocolInterface(
                              interfaceToken.Lexeme,
                              classExpr.InterfaceTypeArgs != null && i < classExpr.InterfaceTypeArgs.Count ? classExpr.InterfaceTypeArgs[i] : null,
-                             out var protocolType))
+                             out var protocolType,
+                             classExpr.InterfaceTypeArgNodes != null && i < classExpr.InterfaceTypeArgNodes.Count ? classExpr.InterfaceTypeArgNodes[i] : null))
                 {
                     // Built-in iterable-protocol interface (Iterable<T>, AsyncIterable<T>, …) — not a
                     // user-declared interface, so validate the class structurally implements it (#756).
@@ -2141,7 +2140,7 @@ public partial class TypeChecker
                     {
                         var (cpt, creq, chr, cpn) = BuildFunctionSignature(
                             method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cr = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Inferred();
+                        TypeInfo cr = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
                         declaredMethodType = new TypeInfo.Function(cpt, cr, creq, chr, null, cpn);
                     }
                 }

@@ -40,11 +40,13 @@ public partial class Parser
 
         // Check for 'this' parameter (explicit this type annotation)
         string? thisType = null;
+        TypeNode? thisTypeNode = null;
         if (Check(TokenType.THIS))
         {
             Advance(); // consume 'this'
             Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
             thisType = ParseTypeAnnotation();
+            thisTypeNode = TakeTypeNode();
             // If there are more parameters, consume the comma
             if (Check(TokenType.COMMA))
             {
@@ -71,8 +73,9 @@ public partial class Parser
                     var pattern = ParseArrayPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators, TypeAnnotationNode: paramTypeNode));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else if (Check(TokenType.LEFT_BRACE))
@@ -83,8 +86,9 @@ public partial class Parser
                     var pattern = ParseObjectPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators, TypeAnnotationNode: paramTypeNode));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else
@@ -135,16 +139,18 @@ public partial class Parser
                     bool isOptional = Match(TokenType.QUESTION);
 
                     string? paramType = null;
+                    TypeNode? paramTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         paramType = ParseTypeAnnotation();
+                        paramTypeNode = TakeTypeNode();
                     }
                     Expr? defaultValue = null;
                     if (Match(TokenType.EQUAL))
                     {
                         defaultValue = Expression();
                     }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional, paramDecorators));
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional, paramDecorators, paramTypeNode));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -157,16 +163,18 @@ public partial class Parser
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
         string? returnType = null;
+        TypeNode? returnTypeNode = null;
         if (Match(TokenType.COLON))
         {
             returnType = ParseTypeAnnotation();
+            returnTypeNode = TakeTypeNode();
         }
 
         // Check for overload signature (semicolon instead of body)
         if (Match(TokenType.SEMICOLON))
         {
             // Overload signature - no body, just declaration
-            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator, IsDeclare: isDeclare, ComputedKey: computedKey);
+            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator, IsDeclare: isDeclare, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
         }
 
         // Save current strict mode state before parsing function body
@@ -229,7 +237,7 @@ public partial class Parser
         // declarations + assignments. Cheap no-op if no `var` keywords are present.
         body = VarHoister.Hoist(body);
 
-        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator, ComputedKey: computedKey);
+        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
     }
 
     /// <summary>
@@ -282,9 +290,11 @@ public partial class Parser
                 bool isOptional = Match(TokenType.QUESTION);
 
                 string? paramType = null;
+                TypeNode? paramTypeNode = null;
                 if (Match(TokenType.COLON))
                 {
                     paramType = ParseTypeAnnotation();
+                    paramTypeNode = TakeTypeNode();
                 }
                 // Abstract methods don't have a body, so no default values make sense
                 // But TypeScript does allow them in the signature, so let's parse them
@@ -293,7 +303,7 @@ public partial class Parser
                 {
                     defaultValue = Expression();
                 }
-                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
 
                 // Rest parameter must be last
                 if (isRest && Check(TokenType.COMMA))

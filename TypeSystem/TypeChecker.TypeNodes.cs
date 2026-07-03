@@ -61,8 +61,20 @@ public partial class TypeChecker
                     string str => new TypeInfo.StringLiteral(str),
                     double num => new TypeInfo.NumberLiteral(num),
                     bool b => new TypeInfo.BooleanLiteral(b),
+                    // Bigint literal types (1n): parity with the string path, which has no bigint
+                    // handling and lets "1n" fall through its unknown-name tail to Any. Real
+                    // bigint literal types need TypeInfo.BigIntLiteral + compat rules (follow-up).
+                    System.Numerics.BigInteger => new TypeInfo.Any(),
                     _ => null,
                 };
+
+            // Standalone `unique symbol` is only valid on const declarations initialized with
+            // Symbol() — VisitConst special-cases that annotation BEFORE resolution ever runs.
+            // Reaching resolution therefore means an invalid position: same TS1331 as the string
+            // path's ToTypeInfoCore.
+            case UniqueSymbolTypeNode:
+                throw new TypeCheckException(
+                    "'unique symbol' type is only valid on const declarations initialized with Symbol().", tsCode: "TS1331");
 
             case ArrayTypeNode arr:
                 return TryToTypeInfo(arr.ElementType) is { } elem ? new TypeInfo.Array(elem) : null;
@@ -240,6 +252,11 @@ public partial class TypeChecker
             // the same shape the string path produces for its "{ new (…) => R }" rendering.
             case ConstructorTypeNode ctor:
             {
+                // A `this: X` pseudo-parameter resolves (bad names fail identically) but is not
+                // carried: ConstructorSignature has no this-type slot, and the string path's
+                // ConvertConstructSignatures drops it the same way.
+                if (ctor.ThisType is { } ctorThisNode && TryToTypeInfo(ctorThisNode) is null)
+                    return null;
                 if (!TryResolveParameters(ctor.Parameters, out var paramTypes, out int requiredParams, out bool hasRestParam))
                     return null;
                 if (TryToTypeInfo(ctor.ReturnType) is not { } returnType) return null;
@@ -446,8 +463,8 @@ public partial class TypeChecker
             // Second pass: resolve constraints/defaults now that all names are in scope.
             foreach (var tp in typeParameters)
             {
-                TypeInfo? constraint = tp.Constraint is not null ? ToTypeInfo(tp.Constraint) : null;
-                TypeInfo? defaultType = tp.Default is not null ? ToTypeInfo(tp.Default) : null;
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var resolved = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 typeParams.Add(resolved);
                 typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, resolved);
@@ -566,7 +583,13 @@ public partial class TypeChecker
             // conditional/mapped form — apply the same post-expansion passes as the string path.
             if (result is TypeInfo.ConditionalType condResult && !ContainsOpenTypeVariable(condResult))
                 result = EvaluateConditionalType(condResult);
-            if (result is TypeInfo.MappedType mappedResult && !ContainsOpenTypeVariable(mappedResult))
+            // A mapped type over a DEFERRED key domain (a generic key-filter such as
+            // Pick<T, FunctionPropertyNames<T>>) must stay a MappedType node: enumerating it now
+            // would yield an empty object and lose the key filter, so it has to reach the relation
+            // rules deferred (#337 item 1). Same guard as the string path's alias branch — without
+            // it, the conditionalTypes1 f7/f8 assignability verdicts flip.
+            if (result is TypeInfo.MappedType mappedResult && !ContainsOpenTypeVariable(mappedResult)
+                && !IsDeferredKeyDomain(ResolveMappedKeyDomain(mappedResult)))
                 result = ExpandMappedType(mappedResult);
 
             result = FlattenTupleSpreads(result);
@@ -656,4 +679,13 @@ public partial class TypeChecker
         TypeNodeStats.StringFallbacks++;
         return ToTypeInfo(annotation);
     }
+
+    /// <summary>
+    /// Resolves the i-th explicit type argument of a call/new/heritage clause node-first
+    /// (type-AST migration): the node twin when the parser produced one, string fallback
+    /// otherwise. The node list, when non-null, is index-aligned with the string list.
+    /// Callers only invoke inside count-guarded branches, so the string list is never null.
+    /// </summary>
+    private TypeInfo ResolveTypeArg(List<string>? typeArgs, List<TypeNode?>? typeArgNodes, int i) =>
+        ResolveAnnotation(typeArgs![i], typeArgNodes is { } nodes && i < nodes.Count ? nodes[i] : null)!;
 }

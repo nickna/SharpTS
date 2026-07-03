@@ -174,8 +174,8 @@ public partial class TypeChecker
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
             {
-                keyType = ToTypeInfo(newExpr.TypeArgs[0]);
-                valueType = ToTypeInfo(newExpr.TypeArgs[1]);
+                keyType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
+                valueType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 1);
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
@@ -205,7 +205,7 @@ public partial class TypeChecker
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
-                elementType = ToTypeInfo(newExpr.TypeArgs[0]);
+                elementType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
@@ -230,8 +230,8 @@ public partial class TypeChecker
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
             {
-                keyType = ToTypeInfo(newExpr.TypeArgs[0]);
-                valueType = ToTypeInfo(newExpr.TypeArgs[1]);
+                keyType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
+                valueType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 1);
 
                 // Validate that key type is not a primitive
                 if (IsPrimitiveType(keyType))
@@ -261,7 +261,7 @@ public partial class TypeChecker
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
-                elementType = ToTypeInfo(newExpr.TypeArgs[0]);
+                elementType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
 
                 // Validate that element type is not a primitive
                 if (IsPrimitiveType(elementType))
@@ -291,7 +291,7 @@ public partial class TypeChecker
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
-                targetType = ToTypeInfo(newExpr.TypeArgs[0]);
+                targetType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
 
                 // Validate that target type is not a primitive
                 if (IsPrimitiveType(targetType))
@@ -547,7 +547,7 @@ public partial class TypeChecker
             TypeInfo valueType = new TypeInfo.Any();
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
-                valueType = ToTypeInfo(newExpr.TypeArgs[0]);
+                valueType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count > 1)
             {
@@ -644,11 +644,11 @@ public partial class TypeChecker
         // Handle interfaces with constructor signatures
         if (calleeType is TypeInfo.Interface itf && itf.IsConstructable)
         {
-            return CheckInterfaceConstructorCall(itf, newExpr.TypeArgs, newExpr.Arguments, qualifiedName);
+            return CheckInterfaceConstructorCall(itf, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
         }
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsConstructable)
         {
-            return CheckGenericInterfaceConstructorCall(gi, newExpr.TypeArgs, newExpr.Arguments, qualifiedName);
+            return CheckGenericInterfaceConstructorCall(gi, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
         }
 
         // For class types, continue with existing logic
@@ -684,7 +684,7 @@ public partial class TypeChecker
             }
             else
             {
-                typeArgs = newExpr.TypeArgs.Select(ToTypeInfo).ToList();
+                typeArgs = newExpr.TypeArgs.Select((_, i) => ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, i)).ToList();
             }
             var instantiated = InstantiateGenericClass(genericClass, typeArgs);
 
@@ -983,7 +983,8 @@ public partial class TypeChecker
         TypeInfo.Interface itf,
         List<string>? typeArgs,
         List<Expr> arguments,
-        string qualifiedName)
+        string qualifiedName,
+        List<TypeNode?>? typeArgNodes = null)
     {
         if (itf.ConstructorSignatures == null || itf.ConstructorSignatures.Count == 0)
         {
@@ -998,7 +999,7 @@ public partial class TypeChecker
             if (ctorSig.IsGeneric)
             {
                 // Generic constructor signature - try to instantiate
-                var result = TryMatchGenericConstructorSignature(ctorSig, typeArgs, argTypes, qualifiedName);
+                var result = TryMatchGenericConstructorSignature(ctorSig, typeArgs, argTypes, qualifiedName, typeArgNodes);
                 if (result != null)
                     return result;
             }
@@ -1032,7 +1033,8 @@ public partial class TypeChecker
         TypeInfo.GenericInterface gi,
         List<string>? typeArgs,
         List<Expr> arguments,
-        string qualifiedName)
+        string qualifiedName,
+        List<TypeNode?>? typeArgNodes = null)
     {
         if (gi.ConstructorSignatures == null || gi.ConstructorSignatures.Count == 0)
         {
@@ -1042,7 +1044,7 @@ public partial class TypeChecker
         // If type args provided, instantiate the interface first
         if (typeArgs != null && typeArgs.Count > 0)
         {
-            var instantiatedTypeArgs = typeArgs.Select(ToTypeInfo).ToList();
+            var instantiatedTypeArgs = typeArgs.Select((_, i) => ResolveTypeArg(typeArgs, typeArgNodes, i)).ToList();
             // Build substitution map
             Dictionary<string, TypeInfo> subs = [];
             for (int i = 0; i < gi.TypeParams.Count && i < instantiatedTypeArgs.Count; i++)
@@ -1078,7 +1080,8 @@ public partial class TypeChecker
         TypeInfo.ConstructorSignature ctorSig,
         List<string>? explicitTypeArgs,
         List<TypeInfo> argTypes,
-        string qualifiedName)
+        string qualifiedName,
+        List<TypeNode?>? explicitTypeArgNodes = null)
     {
         if (ctorSig.TypeParams == null || ctorSig.TypeParams.Count == 0)
             return null;
@@ -1090,7 +1093,7 @@ public partial class TypeChecker
             // Use explicit type arguments
             for (int i = 0; i < ctorSig.TypeParams.Count && i < explicitTypeArgs.Count; i++)
             {
-                inferred[ctorSig.TypeParams[i].Name] = ToTypeInfo(explicitTypeArgs[i]);
+                inferred[ctorSig.TypeParams[i].Name] = ResolveTypeArg(explicitTypeArgs, explicitTypeArgNodes, i);
             }
         }
         else

@@ -125,14 +125,14 @@ public partial class TypeChecker
     /// other name (including other built-in generics such as <c>Array</c>/<c>Map</c>), leaving the
     /// caller's existing "is not an interface" diagnostic intact (#756).
     /// </summary>
-    private bool TryResolveIterableProtocolInterface(string name, List<string>? typeArgStrings, out TypeInfo protocolType)
+    private bool TryResolveIterableProtocolInterface(string name, List<string>? typeArgStrings, out TypeInfo protocolType, List<TypeNode?>? typeArgNodes = null)
     {
         protocolType = null!;
         if (!IterableProtocolInterfaceNames.Contains(name))
             return false;
 
         List<TypeInfo> resolvedArgs = typeArgStrings is { Count: > 0 }
-            ? typeArgStrings.Select(ta => ToTypeInfo(ta)).ToList()
+            ? typeArgStrings.Select((_, i) => ResolveTypeArg(typeArgStrings, typeArgNodes, i)).ToList()
             : [new TypeInfo.Any()];
 
         protocolType = ResolveGenericType(name, resolvedArgs);

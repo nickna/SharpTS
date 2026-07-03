@@ -15,12 +15,16 @@ public enum AccessModifier { Public, Private, Protected }
 /// <param name="Default">Optional default type (after = sign).</param>
 /// <param name="IsConst">Whether this is a const type parameter (TypeScript 5.0+ feature for preserving literal types).</param>
 /// <param name="Variance">Variance annotation (in, out, in out) for TypeScript 4.7+ variance modifiers.</param>
+/// <param name="ConstraintNode">Node twin of <paramref name="Constraint"/> (type-AST migration), when the parser produced one.</param>
+/// <param name="DefaultNode">Node twin of <paramref name="Default"/> (type-AST migration), when the parser produced one.</param>
 public record TypeParam(
     Token Name,
     string? Constraint,
     string? Default = null,
     bool IsConst = false,
-    TypeParameterVariance Variance = TypeParameterVariance.Invariant
+    TypeParameterVariance Variance = TypeParameterVariance.Invariant,
+    TypeNode? ConstraintNode = null,
+    TypeNode? DefaultNode = null
 );
 
 /// <summary>
@@ -86,7 +90,9 @@ public abstract record Expr
         bool IsVarRedeclaration = false,
         string? RedeclarationTypeAnnotation = null,
         TypeNode? RedeclarationTypeAnnotationNode = null) : Expr;
-    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false) : Expr;
+    // TypeArgNodes: per-element node twins of TypeArgs (type-AST migration) — same length as
+    // TypeArgs when non-null; an element without node support is null without discarding siblings.
+    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr;
     // Defaulted: this property read was synthesized by destructuring desugaring and is covered
     // by a default (its own, or a default on an enclosing pattern). The type checker treats a
     // missing property as `undefined` for such reads instead of reporting TS2339, since the
@@ -104,8 +110,9 @@ public abstract record Expr
     /// <summary>
     /// New expression: new Callee(args) or new Callee&lt;T&gt;(args).
     /// Callee can be a Variable (class name), Get (namespace path), or any expression.
+    /// TypeArgNodes: per-element node twins of TypeArgs (type-AST migration), same length when non-null.
     /// </summary>
-    public record New(Expr Callee, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
+    public record New(Expr Callee, List<string>? TypeArgs, List<Expr> Arguments, List<TypeNode?>? TypeArgNodes = null) : Expr;
     /// <summary>
     /// Array literal. Elided positions ([1, , 3]) carry an undefined literal in
     /// Elements (so the type checker and destructuring see a uniform shape) plus
@@ -177,8 +184,10 @@ public abstract record Expr
     /// HasOwnThis indicates this binds its own 'this' (function expressions) vs capturing from enclosing scope (arrows).
     /// IsAsync indicates this is an async function that returns a Promise.
     /// IsGenerator indicates this is a generator function (function*) that can yield values.
+    /// ThisTypeNode/ReturnTypeNode are the node twins of ThisType/ReturnType (type-AST
+    /// migration), populated when the parser produced them.
     /// </summary>
-    public record ArrowFunction(Token? Name, List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool HasOwnThis = false, bool IsAsync = false, bool IsGenerator = false) : Expr
+    public record ArrowFunction(Token? Name, List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool HasOwnThis = false, bool IsAsync = false, bool IsGenerator = false, TypeNode? ThisTypeNode = null, TypeNode? ReturnTypeNode = null) : Expr
     {
         // #945: marks the sync forwarding arrow NestedFunctionLifter substitutes for a capturing nested
         // generator that was hoisted into a generator encloser's body. Tells the generator function-DC
@@ -234,7 +243,11 @@ public abstract record Expr
         List<Token>? Interfaces = null,
         List<List<string>>? InterfaceTypeArgs = null,
         bool IsAbstract = false,
-        List<Stmt>? StaticInitializers = null
+        List<Stmt>? StaticInitializers = null,
+        // Node twins of SuperclassTypeArgs / InterfaceTypeArgs (type-AST migration); inner lists
+        // stay index-aligned with their string twins.
+        List<TypeNode?>? SuperclassTypeArgNodes = null,
+        List<List<TypeNode?>>? InterfaceTypeArgNodes = null
     ) : Expr;
 
     /// <summary>
@@ -325,8 +338,10 @@ public abstract record Stmt
     /// dynamic receiver": the compiler threads a leading <c>__this</c> argument into the generator
     /// state machine's <c>&lt;&gt;4__this</c> field, and the interpreter binds the call receiver
     /// (defaulting to <c>undefined</c>) so <c>this</c> inside the body resolves (#775).
+    /// ThisTypeNode/ReturnTypeNode are the node twins of ThisType/ReturnType (type-AST
+    /// migration), populated when the parser produced them.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, bool HasDynamicThis = false) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, bool HasDynamicThis = false, TypeNode? ThisTypeNode = null, TypeNode? ReturnTypeNode = null) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null, TypeNode? TypeAnnotationNode = null);
     /// <summary>
     /// Class field declaration. For computed property names (e.g., [Symbol("key")]: type),
@@ -350,6 +365,7 @@ public abstract record Stmt
     /// <param name="IsReadonly">Whether this is readonly (no setter).</param>
     /// <param name="IsOverride">Whether this overrides a parent accessor.</param>
     /// <param name="Decorators">Optional list of decorators applied to this accessor.</param>
+    /// <param name="TypeAnnotationNode">Node twin of <paramref name="TypeAnnotation"/> (type-AST migration), when the parser produced one.</param>
     public record AutoAccessor(
         Token Name,
         string? TypeAnnotation,
@@ -358,13 +374,16 @@ public abstract record Stmt
         AccessModifier Access = AccessModifier.Public,
         bool IsReadonly = false,
         bool IsOverride = false,
-        List<Decorator>? Decorators = null
+        List<Decorator>? Decorators = null,
+        TypeNode? TypeAnnotationNode = null
     ) : Stmt;
     /// <summary>
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.
     /// StaticInitializers contains static fields and static blocks in declaration order for proper initialization sequencing.
     /// </summary>
-    public record Class(Token Name, List<TypeParam>? TypeParams, Expr? SuperclassExpr, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Stmt.AutoAccessor>? AutoAccessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false, List<Stmt>? StaticInitializers = null, List<Stmt.IndexSignature>? IndexSignatures = null) : Stmt;
+    // SuperclassTypeArgNodes / InterfaceTypeArgNodes: node twins of the heritage type-argument
+    // string lists (type-AST migration); index-aligned with their string twins when non-null.
+    public record Class(Token Name, List<TypeParam>? TypeParams, Expr? SuperclassExpr, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Stmt.AutoAccessor>? AutoAccessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false, List<Stmt>? StaticInitializers = null, List<Stmt.IndexSignature>? IndexSignatures = null, List<TypeNode?>? SuperclassTypeArgNodes = null, List<List<TypeNode?>>? InterfaceTypeArgNodes = null) : Stmt;
     /// <summary>
     /// Static block: static { statements }
     /// Executes once when the class is initialized, in declaration order with static fields.
@@ -380,7 +399,10 @@ public abstract record Stmt
         List<IndexSignature>? IndexSignatures = null,
         List<string>? Extends = null,
         List<CallSignature>? CallSignatures = null,
-        List<ConstructorSignature>? ConstructorSignatures = null
+        List<ConstructorSignature>? ConstructorSignatures = null,
+        // Whole-entry node twins of Extends (type-AST migration): each entry is a full type
+        // reference ("Base", "Base<T>"), index-aligned with Extends when non-null.
+        List<TypeNode?>? ExtendsNodes = null
     ) : Stmt;
     /// <param name="IsMethod">Declared with method syntax (<c>m(x): T</c>) rather than as a
     /// function-typed property — method members keep bivariant parameter relating under
@@ -397,7 +419,8 @@ public abstract record Stmt
     /// <param name="TypeParams">Optional generic type parameters for this signature.</param>
     /// <param name="Parameters">The parameter list as raw parameter string.</param>
     /// <param name="ReturnType">The return type annotation.</param>
-    public record CallSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType);
+    /// <param name="ReturnTypeNode">Node twin of <paramref name="ReturnType"/> (type-AST migration), when the parser produced one.</param>
+    public record CallSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType, TypeNode? ReturnTypeNode = null);
     /// <summary>
     /// Constructor signature in interfaces: new (params): ReturnType or new &lt;T&gt;(params): ReturnType
     /// Indicates the interface represents a constructable type.
@@ -405,7 +428,8 @@ public abstract record Stmt
     /// <param name="TypeParams">Optional generic type parameters for this signature.</param>
     /// <param name="Parameters">The parameter list as raw parameter string.</param>
     /// <param name="ReturnType">The return type annotation.</param>
-    public record ConstructorSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType);
+    /// <param name="ReturnTypeNode">Node twin of <paramref name="ReturnType"/> (type-AST migration), when the parser produced one.</param>
+    public record ConstructorSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType, TypeNode? ReturnTypeNode = null);
     public record Block(List<Stmt> Statements) : Stmt;
     public record Sequence(List<Stmt> Statements) : Stmt;  // Like Block but without creating a new scope
     public record Return(Token Keyword, Expr? Value) : Stmt;
@@ -426,7 +450,8 @@ public abstract record Stmt
     public record Switch(Expr Subject, List<SwitchCase> Cases, List<Stmt>? DefaultBody) : Stmt;
     // CatchParamType: optional catch-binding annotation text (`catch (e: unknown)`).
     // TS allows only 'any'/'unknown'; anything else is checker error TS1196.
-    public record TryCatch(List<Stmt> TryBlock, Token? CatchParam, List<Stmt>? CatchBlock, List<Stmt>? FinallyBlock, string? CatchParamType = null) : Stmt;
+    // CatchParamTypeNode: node twin of CatchParamType (type-AST migration), when the parser produced one.
+    public record TryCatch(List<Stmt> TryBlock, Token? CatchParam, List<Stmt>? CatchBlock, List<Stmt>? FinallyBlock, string? CatchParamType = null, TypeNode? CatchParamTypeNode = null) : Stmt;
     public record Throw(Token Keyword, Expr Value) : Stmt;
     public record TypeAlias(Token Name, string TypeDefinition, List<TypeParam>? TypeParameters = null, TypeNode? TypeDefinitionNode = null) : Stmt;
     public record EnumMember(Token Name, Expr? Value);
@@ -573,11 +598,13 @@ public abstract record Stmt
     /// <param name="DestructuringPattern">ArrayDestructure or ObjectDestructure pattern (null for simple binding).</param>
     /// <param name="TypeAnnotation">Optional type annotation.</param>
     /// <param name="Initializer">Required initializer expression.</param>
+    /// <param name="TypeAnnotationNode">Node twin of <paramref name="TypeAnnotation"/> (type-AST migration), when the parser produced one.</param>
     public record UsingBinding(
         Token? Name,
         Expr? DestructuringPattern,
         string? TypeAnnotation,
-        Expr Initializer
+        Expr Initializer,
+        TypeNode? TypeAnnotationNode = null
     );
 
     /// <summary>

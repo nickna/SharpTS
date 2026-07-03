@@ -395,7 +395,7 @@ public partial class Parser
             Expr callee = ParseNewCallee();
 
             // Parse optional type arguments: new Class<T>()
-            List<string>? typeArgs = TryParseTypeArguments();
+            List<string>? typeArgs = TryParseTypeArguments(out var typeArgNodes);
 
             // Parse arguments. `new X` without parens is valid JS —
             // equivalent to `new X()`. Spread args (`new X(...iter)`) are allowed.
@@ -407,7 +407,7 @@ public partial class Parser
 
             // Allow operations on new expressions
             // Examples: new Date().toISOString()
-            Expr newExpr = new Expr.New(callee, typeArgs, arguments);
+            Expr newExpr = new Expr.New(callee, typeArgs, arguments, typeArgNodes);
             return ParseCallChain(newExpr);
         }
 
@@ -431,14 +431,15 @@ public partial class Parser
         {
             // Check for type arguments before call: func<T>(args)
             List<string>? typeArgs = null;
+            List<TypeNode?>? typeArgNodes = null;
             if (Check(TokenType.LESS))
             {
-                typeArgs = TryParseTypeArgumentsForCall();
+                typeArgs = TryParseTypeArgumentsForCall(out typeArgNodes);
             }
 
             if (typeArgs != null || Match(TokenType.LEFT_PAREN))
             {
-                expr = FinishCall(expr, typeArgs);
+                expr = FinishCall(expr, typeArgs, typeArgNodes: typeArgNodes);
             }
             else if (Match(TokenType.DOT))
             {
@@ -569,7 +570,7 @@ public partial class Parser
         return expr;
     }
 
-    private Expr FinishCall(Expr callee, List<string>? typeArgs = null, bool optional = false)
+    private Expr FinishCall(Expr callee, List<string>? typeArgs = null, bool optional = false, List<TypeNode?>? typeArgNodes = null)
     {
         List<Expr> arguments = [];
         if (!Check(TokenType.RIGHT_PAREN))
@@ -591,7 +592,7 @@ public partial class Parser
         }
 
         Token paren = Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-        return new Expr.Call(callee, paren, typeArgs, arguments, optional);
+        return new Expr.Call(callee, paren, typeArgs, arguments, optional, typeArgNodes);
     }
 
     /// <summary>
@@ -610,13 +611,13 @@ public partial class Parser
         if (Match(TokenType.NEW))
         {
             Expr innerCallee = ParseNewCallee();
-            List<string>? innerTypeArgs = TryParseTypeArguments();
+            List<string>? innerTypeArgs = TryParseTypeArguments(out var innerTypeArgNodes);
             List<Expr> innerArgs = [];
             if (Match(TokenType.LEFT_PAREN))
             {
                 ParseNewArgumentList(innerArgs);
             }
-            callee = new Expr.New(innerCallee, innerTypeArgs, innerArgs);
+            callee = new Expr.New(innerCallee, innerTypeArgs, innerArgs, innerTypeArgNodes);
         }
         else
         {
@@ -871,19 +872,23 @@ public partial class Parser
                         {
                             Token paramName = ConsumeIdentifierName("Expect setter parameter name.");
                             string? paramType = null;
+                            TypeNode? paramTypeNode = null;
                             if (Match(TokenType.COLON))
                             {
                                 paramType = ParseTypeAnnotation();
+                                paramTypeNode = TakeTypeNode();
                             }
-                            setterParam = new Stmt.Parameter(paramName, paramType, null, false);
+                            setterParam = new Stmt.Parameter(paramName, paramType, null, false, TypeAnnotationNode: paramTypeNode);
                             accessorParams.Add(setterParam);
                             Consume(TokenType.RIGHT_PAREN, "Expect ')' after setter parameter.");
                         }
 
                         string? accessorReturnType = null;
+                        TypeNode? accessorReturnTypeNode = null;
                         if (Match(TokenType.COLON))
                         {
                             accessorReturnType = ParseTypeAnnotation();
+                            accessorReturnTypeNode = TakeTypeNode();
                         }
 
                         Consume(TokenType.LEFT_BRACE, isGetter
@@ -900,7 +905,8 @@ public partial class Parser
                             ExpressionBody: null,
                             BlockBody: accessorBody,
                             ReturnType: accessorReturnType,
-                            HasOwnThis: true
+                            HasOwnThis: true,
+                            ReturnTypeNode: accessorReturnTypeNode
                         );
                         properties.Add(new Expr.Property(
                             accessorKey,
@@ -1074,6 +1080,7 @@ public partial class Parser
         Consume(TokenType.LEFT_PAREN, "Expect '(' in method shorthand.");
 
         string? thisType = null;
+        TypeNode? thisTypeNode = null;
         List<Stmt.Parameter> parameters = [];
         List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
 
@@ -1083,6 +1090,7 @@ public partial class Parser
             Advance();
             Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
             thisType = ParseTypeAnnotation();
+            thisTypeNode = TakeTypeNode();
             if (Check(TokenType.COMMA))
             {
                 Advance();
@@ -1102,8 +1110,9 @@ public partial class Parser
                     var pattern = ParseArrayPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? pType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? pTypeNode = pType is not null ? TakeTypeNode() : null;
                     Expr? pDefault = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault));
+                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault, TypeAnnotationNode: pTypeNode));
                     destructuredParams.Add((synthName, pattern));
                     continue;
                 }
@@ -1114,8 +1123,9 @@ public partial class Parser
                     var pattern = ParseObjectPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? pType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? pTypeNode = pType is not null ? TakeTypeNode() : null;
                     Expr? pDefault = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault));
+                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault, TypeAnnotationNode: pTypeNode));
                     destructuredParams.Add((synthName, pattern));
                     continue;
                 }
@@ -1124,16 +1134,18 @@ public partial class Parser
                 Token paramName = ConsumeIdentifierName("Expect parameter name.");
                 bool isOptional = Match(TokenType.QUESTION);
                 string? paramType = null;
+                TypeNode? paramTypeNode = null;
                 if (Match(TokenType.COLON))
                 {
                     paramType = ParseTypeAnnotation();
+                    paramTypeNode = TakeTypeNode();
                 }
                 Expr? defaultValue = null;
                 if (Match(TokenType.EQUAL))
                 {
                     defaultValue = Expression();
                 }
-                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
 
                 if (isRest && Check(TokenType.COMMA))
                 {
@@ -1144,9 +1156,11 @@ public partial class Parser
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");
 
         string? returnType = null;
+        TypeNode? returnTypeNode = null;
         if (Match(TokenType.COLON))
         {
             returnType = ParseTypeAnnotation();
+            returnTypeNode = TakeTypeNode();
         }
 
         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
@@ -1181,7 +1195,9 @@ public partial class Parser
             ReturnType: returnType,
             HasOwnThis: true,
             IsAsync: isAsync,
-            IsGenerator: isGenerator);
+            IsGenerator: isGenerator,
+            ThisTypeNode: thisTypeNode,
+            ReturnTypeNode: returnTypeNode);
     }
 
     private Expr ParseTemplateLiteral()
@@ -1295,8 +1311,9 @@ public partial class Parser
                         var pattern = ParseArrayPattern();
                         Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                         string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                        TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                         Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
                         destructuredParams.Add((synthName, pattern));
                     }
                     catch
@@ -1316,8 +1333,9 @@ public partial class Parser
                         var pattern = ParseObjectPattern();
                         Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                         string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                        TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                         Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
                         destructuredParams.Add((synthName, pattern));
                     }
                     catch
@@ -1346,16 +1364,18 @@ public partial class Parser
                     // outer speculative parse backtracks, so consuming '?' here is safe).
                     bool isOptional = Match(TokenType.QUESTION);
                     string? paramType = null;
+                    TypeNode? paramTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         paramType = ParseTypeAnnotation();
+                        paramTypeNode = TakeTypeNode();
                     }
                     Expr? defaultValue = null;
                     if (Match(TokenType.EQUAL))
                     {
                         defaultValue = Expression();
                     }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -1375,6 +1395,7 @@ public partial class Parser
 
         // Check for optional return type
         string? returnType = null;
+        TypeNode? returnTypeNode = null;
         if (Match(TokenType.COLON))
         {
             // This could be return type OR ternary colon - need to check for arrow after
@@ -1382,6 +1403,7 @@ public partial class Parser
             try
             {
                 returnType = ParseFunctionTypeAnnotation();
+                returnTypeNode = TakeTypeNode();
             }
             catch
             {
@@ -1447,7 +1469,7 @@ public partial class Parser
         if (body != null)
             body = VarHoister.Hoist(body);
 
-        return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync);
+        return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync, ReturnTypeNode: returnTypeNode);
     }
 
     /// <summary>
@@ -1515,11 +1537,13 @@ public partial class Parser
 
         // Check for 'this' parameter (explicit this type annotation)
         string? thisType = null;
+        TypeNode? thisTypeNode = null;
         if (Check(TokenType.THIS))
         {
             Advance(); // consume 'this'
             Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
             thisType = ParseTypeAnnotation();
+            thisTypeNode = TakeTypeNode();
             // If there are more parameters, consume the comma
             if (Check(TokenType.COMMA))
             {
@@ -1543,8 +1567,9 @@ public partial class Parser
                     var pattern = ParseArrayPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else if (Check(TokenType.LEFT_BRACE))
@@ -1555,8 +1580,9 @@ public partial class Parser
                     var pattern = ParseObjectPattern();
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else
@@ -1570,16 +1596,18 @@ public partial class Parser
                     bool isOptional = Match(TokenType.QUESTION);
 
                     string? paramType = null;
+                    TypeNode? paramTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         paramType = ParseTypeAnnotation();
+                        paramTypeNode = TakeTypeNode();
                     }
                     Expr? defaultValue = null;
                     if (Match(TokenType.EQUAL))
                     {
                         defaultValue = Expression();
                     }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -1592,9 +1620,11 @@ public partial class Parser
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
         string? returnType = null;
+        TypeNode? returnTypeNode = null;
         if (Match(TokenType.COLON))
         {
             returnType = ParseTypeAnnotation();
+            returnTypeNode = TakeTypeNode();
         }
 
         Consume(TokenType.LEFT_BRACE, "Expect '{' before function body.");
@@ -1631,7 +1661,9 @@ public partial class Parser
             ReturnType: returnType,
             HasOwnThis: true,
             IsAsync: isAsync,
-            IsGenerator: isGenerator
+            IsGenerator: isGenerator,
+            ThisTypeNode: thisTypeNode,
+            ReturnTypeNode: returnTypeNode
         );
     }
 

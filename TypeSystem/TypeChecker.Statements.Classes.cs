@@ -98,9 +98,8 @@ public partial class TypeChecker
                 contextName: $"method '{method.Name.Lexeme}'"
             );
 
-            TypeInfo returnType = method.ReturnType != null
-                ? ToTypeInfo(method.ReturnType)
-                : new TypeInfo.Inferred();
+            TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+                ?? new TypeInfo.Inferred();
 
             // Wrap return type for generator/async generator methods (skip when inferring)
             if (method.ReturnType != null && method.IsGenerator)
@@ -135,7 +134,7 @@ public partial class TypeChecker
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
             var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                 method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Inferred();
+            TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
             var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
             if (method.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
@@ -356,7 +355,7 @@ public partial class TypeChecker
                 TypeInfo accessorType;
                 if (autoAccessor.TypeAnnotation != null)
                 {
-                    accessorType = ToTypeInfo(autoAccessor.TypeAnnotation);
+                    accessorType = ResolveAnnotation(autoAccessor.TypeAnnotation, autoAccessor.TypeAnnotationNode)!;
                 }
                 else if (autoAccessor.Initializer != null)
                 {
@@ -447,6 +446,9 @@ public partial class TypeChecker
                 List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
                     ? classStmt.InterfaceTypeArgs[i]
                     : null;
+                List<TypeNode?>? typeArgNodes = classStmt.InterfaceTypeArgNodes != null && i < classStmt.InterfaceTypeArgNodes.Count
+                    ? classStmt.InterfaceTypeArgNodes[i]
+                    : null;
 
                 TypeInfo.Interface? interfaceType = null;
 
@@ -464,7 +466,7 @@ public partial class TypeChecker
                     }
 
                     // Resolve type arguments
-                    var resolvedTypeArgs = typeArgs.Select(ta => ToTypeInfo(ta)).ToList();
+                    var resolvedTypeArgs = typeArgs.Select((_, j) => ResolveTypeArg(typeArgs, typeArgNodes, j)).ToList();
 
                     // Instantiate the generic interface
                     var instantiated = InstantiateGenericInterface(genericInterface, resolvedTypeArgs);
@@ -486,7 +488,7 @@ public partial class TypeChecker
                         substitutedMembers,
                         genericInterface.OptionalMembers);
                 }
-                else if (itfTypeInfo == null && TryResolveIterableProtocolInterface(interfaceToken.Lexeme, typeArgs, out var protocolType))
+                else if (itfTypeInfo == null && TryResolveIterableProtocolInterface(interfaceToken.Lexeme, typeArgs, out var protocolType, typeArgNodes))
                 {
                     // Built-in iterable-protocol interface (Iterable<T>, AsyncIterable<T>, …) — not a
                     // user-declared interface, so validate the class structurally implements it (#756).
@@ -549,13 +551,16 @@ public partial class TypeChecker
                     List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
                         ? classStmt.InterfaceTypeArgs[i]
                         : null;
+                    List<TypeNode?>? typeArgNodes = classStmt.InterfaceTypeArgNodes != null && i < classStmt.InterfaceTypeArgNodes.Count
+                        ? classStmt.InterfaceTypeArgNodes[i]
+                        : null;
 
                     // Construct the instantiation directly (rather than InstantiateGenericInterface)
                     // to avoid its constraint-validation throw aborting this check.
                     TypeInfo? resolvedInterface = itfTypeInfo switch
                     {
                         TypeInfo.GenericInterface gi when typeArgs is { Count: > 0 } =>
-                            new TypeInfo.InstantiatedGeneric(gi, typeArgs.Select(ta => ToTypeInfo(ta)).ToList()),
+                            new TypeInfo.InstantiatedGeneric(gi, typeArgs.Select((_, j) => ResolveTypeArg(typeArgs, typeArgNodes, j)).ToList()),
                         TypeInfo.Interface plain => plain,
                         _ => null,
                     };
@@ -722,7 +727,7 @@ public partial class TypeChecker
                     {
                         var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                             method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cReturn = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Inferred();
+                        TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
                         declaredMethodType = new TypeInfo.Function(cParamTypes, cReturn, cRequired, cHasRest, null, cParamNames);
                     }
                 }
@@ -1004,8 +1009,9 @@ public partial class TypeChecker
         {
             if (superType is TypeInfo.GenericClass gc)
             {
-                // Convert type argument strings to TypeInfo
-                var typeArgs = classStmt.SuperclassTypeArgs.Select(ToTypeInfo).ToList();
+                // Resolve type arguments (node-first with string fallback)
+                var typeArgs = classStmt.SuperclassTypeArgs
+                    .Select((_, i) => ResolveTypeArg(classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes, i)).ToList();
                 // Instantiate the generic class with the type arguments. A type-argument constraint
                 // violation here (TS2344) is recorded at the class name's line and instantiation
                 // continues with the offending argument, so the rest of this class (its index-sig
@@ -1021,8 +1027,8 @@ public partial class TypeChecker
                 // Any in value position; `extends Promise<T>` must not be
                 // rejected as "non-generic" (#233). Validate the type args
                 // resolve, then fall through to the Any placeholder below.
-                foreach (var typeArg in classStmt.SuperclassTypeArgs)
-                    ToTypeInfo(typeArg);
+                for (int i = 0; i < classStmt.SuperclassTypeArgs.Count; i++)
+                    ResolveTypeArg(classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes, i);
             }
             else
             {
@@ -1055,7 +1061,7 @@ public partial class TypeChecker
                 // the type argument is otherwise dropped; recovering it lets an instance's for...of /
                 // yield* / spread bind the real element type, and lets a genuinely non-iterable instance
                 // be told apart from an iterable one (#593).
-                if (TryGetBuiltInIterableElement(leafName, classStmt.SuperclassTypeArgs, out var iterableElement))
+                if (TryGetBuiltInIterableElement(leafName, classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes, out var iterableElement))
                 {
                     placeholder.Methods["@@iterator"] = new TypeInfo.Function(
                         [], new TypeInfo.Iterator(iterableElement), RequiredParams: 0, HasRestParam: false);
@@ -1077,9 +1083,9 @@ public partial class TypeChecker
     /// base (Error, Date, Promise, WeakMap, …), so such a subclass instance stays correctly non-iterable
     /// (#593). A missing/omitted type argument degrades to <c>any</c>, matching <c>class C extends Array</c>.
     /// </summary>
-    private bool TryGetBuiltInIterableElement(string baseName, List<string>? typeArgs, out TypeInfo element)
+    private bool TryGetBuiltInIterableElement(string baseName, List<string>? typeArgs, List<TypeNode?>? typeArgNodes, out TypeInfo element)
     {
-        TypeInfo Arg(int i) => typeArgs != null && i < typeArgs.Count ? ToTypeInfo(typeArgs[i]) : new TypeInfo.Any();
+        TypeInfo Arg(int i) => typeArgs != null && i < typeArgs.Count ? ResolveTypeArg(typeArgs, typeArgNodes, i) : new TypeInfo.Any();
         switch (baseName)
         {
             case "Array" or "ReadonlyArray" or "Set" or "ReadonlySet":
@@ -1123,8 +1129,8 @@ public partial class TypeChecker
         {
             foreach (var tp in classStmt.TypeParams)
             {
-                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                 classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
@@ -1168,9 +1174,8 @@ public partial class TypeChecker
                 contextName: $"method '{method.Name.Lexeme}'"
             );
 
-            TypeInfo returnType = method.ReturnType != null
-                ? ToTypeInfo(method.ReturnType)
-                : new TypeInfo.Inferred();
+            TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
+                ?? new TypeInfo.Inferred();
 
             // Wrap return type for generator/async generator methods (skip when inferring)
             if (method.ReturnType != null && method.IsGenerator)

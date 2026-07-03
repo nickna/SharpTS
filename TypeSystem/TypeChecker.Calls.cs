@@ -441,7 +441,7 @@ public partial class TypeChecker
             if (call.TypeArgs != null && call.TypeArgs.Count > 0)
             {
                 // Explicit type arguments provided
-                typeArgs = call.TypeArgs.Select(ToTypeInfo).ToList();
+                typeArgs = call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList();
             }
             else
             {
@@ -620,16 +620,16 @@ public partial class TypeChecker
         // Handle interfaces with call signatures (callable interfaces)
         if (calleeType is TypeInfo.Interface itf && itf.IsCallable)
         {
-            return CheckCallableInterfaceCall(itf, call.TypeArgs, call.Arguments);
+            return CheckCallableInterfaceCall(itf, call.TypeArgs, call.Arguments, call.TypeArgNodes);
         }
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsCallable)
         {
-            return CheckGenericCallableInterfaceCall(gi, call.TypeArgs, call.Arguments);
+            return CheckGenericCallableInterfaceCall(gi, call.TypeArgs, call.Arguments, call.TypeArgNodes);
         }
         // Handle callable inline object types: `{ (x): T }`
         if (calleeType is TypeInfo.Record callableRec && callableRec.IsCallable)
         {
-            return CheckCallSignaturesCall(callableRec.CallSignatures!, "object type", call.TypeArgs, call.Arguments);
+            return CheckCallSignaturesCall(callableRec.CallSignatures!, "object type", call.TypeArgs, call.Arguments, call.TypeArgNodes);
         }
 
         // Handle union types containing functions (e.g., from property access on union type)
@@ -692,14 +692,15 @@ public partial class TypeChecker
     private TypeInfo CheckCallableInterfaceCall(
         TypeInfo.Interface itf,
         List<string>? typeArgs,
-        List<Expr> arguments)
+        List<Expr> arguments,
+        List<TypeNode?>? typeArgNodes = null)
     {
         if (itf.CallSignatures == null || itf.CallSignatures.Count == 0)
         {
             throw new TypeCheckException($"Interface '{itf.Name}' is not callable.", tsCode: "TS2349");
         }
 
-        return CheckCallSignaturesCall(itf.CallSignatures, $"interface '{itf.Name}'", typeArgs, arguments);
+        return CheckCallSignaturesCall(itf.CallSignatures, $"interface '{itf.Name}'", typeArgs, arguments, typeArgNodes);
     }
 
     /// <summary>
@@ -710,7 +711,8 @@ public partial class TypeChecker
         List<TypeInfo.CallSignature> callSignatures,
         string calleeDescription,
         List<string>? typeArgs,
-        List<Expr> arguments)
+        List<Expr> arguments,
+        List<TypeNode?>? typeArgNodes = null)
     {
         List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
 
@@ -720,7 +722,7 @@ public partial class TypeChecker
             if (callSig.IsGeneric)
             {
                 // Generic call signature - try to instantiate
-                var result = TryMatchGenericCallSignature(callSig, typeArgs, argTypes);
+                var result = TryMatchGenericCallSignature(callSig, typeArgs, argTypes, typeArgNodes);
                 if (result != null)
                     return result;
             }
@@ -743,7 +745,8 @@ public partial class TypeChecker
     private TypeInfo CheckGenericCallableInterfaceCall(
         TypeInfo.GenericInterface gi,
         List<string>? typeArgs,
-        List<Expr> arguments)
+        List<Expr> arguments,
+        List<TypeNode?>? typeArgNodes = null)
     {
         if (gi.CallSignatures == null || gi.CallSignatures.Count == 0)
         {
@@ -753,7 +756,7 @@ public partial class TypeChecker
         // If type args provided, substitute and check
         if (typeArgs != null && typeArgs.Count > 0)
         {
-            var instantiatedTypeArgs = typeArgs.Select(ToTypeInfo).ToList();
+            var instantiatedTypeArgs = typeArgs.Select((_, i) => ResolveTypeArg(typeArgs, typeArgNodes, i)).ToList();
             Dictionary<string, TypeInfo> subs = [];
             for (int i = 0; i < gi.TypeParams.Count && i < instantiatedTypeArgs.Count; i++)
             {
@@ -780,7 +783,8 @@ public partial class TypeChecker
     private TypeInfo? TryMatchGenericCallSignature(
         TypeInfo.CallSignature callSig,
         List<string>? explicitTypeArgs,
-        List<TypeInfo> argTypes)
+        List<TypeInfo> argTypes,
+        List<TypeNode?>? explicitTypeArgNodes = null)
     {
         if (callSig.TypeParams == null || callSig.TypeParams.Count == 0)
             return null;
@@ -792,7 +796,7 @@ public partial class TypeChecker
             // Use explicit type arguments
             for (int i = 0; i < callSig.TypeParams.Count && i < explicitTypeArgs.Count; i++)
             {
-                inferred[callSig.TypeParams[i].Name] = ToTypeInfo(explicitTypeArgs[i]);
+                inferred[callSig.TypeParams[i].Name] = ResolveTypeArg(explicitTypeArgs, explicitTypeArgNodes, i);
             }
         }
         else
@@ -955,7 +959,7 @@ public partial class TypeChecker
         if (call.TypeArgs != null && call.TypeArgs.Count > 0)
         {
             // Explicit type arguments provided
-            typeArgs = call.TypeArgs.Select(ToTypeInfo).ToList();
+            typeArgs = call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList();
         }
         else
         {

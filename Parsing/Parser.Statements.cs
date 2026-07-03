@@ -378,6 +378,7 @@ public partial class Parser
 
         Token? catchParam = null;
         string? catchParamType = null;
+        TypeNode? catchParamTypeNode = null;
         List<Stmt>? catchBlock = null;
         List<Stmt>? finallyBlock = null;
 
@@ -394,6 +395,7 @@ public partial class Parser
                 if (Match(TokenType.COLON))
                 {
                     catchParamType = ParseTypeAnnotation();
+                    catchParamTypeNode = TakeTypeNode();
                 }
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after catch parameter.");
             }
@@ -414,7 +416,7 @@ public partial class Parser
             throw new Exception("Try statement must have catch or finally clause.");
         }
 
-        return new Stmt.TryCatch(tryBlock, catchParam, catchBlock, finallyBlock, catchParamType);
+        return new Stmt.TryCatch(tryBlock, catchParam, catchBlock, finallyBlock, catchParamType, catchParamTypeNode);
     }
 
     private Stmt ThrowStatement()

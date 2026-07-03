@@ -26,8 +26,8 @@ public partial class TypeChecker
             result = [];
             foreach (var tp in decls)
             {
-                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                 result.Add(typeParam);
                 env.DefineTypeParameter(tp.Name.Lexeme, typeParam);
@@ -301,9 +301,8 @@ public partial class TypeChecker
 
             foreach (var param in arrow.Parameters)
             {
-                TypeInfo paramType = param.Type != null
-                    ? ToTypeInfo(param.Type)
-                    : new TypeInfo.Any();
+                TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)
+                    ?? new TypeInfo.Any();
 
                 if (param.IsRest)
                 {
@@ -323,7 +322,7 @@ public partial class TypeChecker
             if (typeAnnotation != null)
             {
                 // Use the declared type annotation on the const
-                var declaredType = ToTypeInfo(typeAnnotation);
+                var declaredType = ResolveAnnotation(typeAnnotation, typeAnnotationNode);
                 if (declaredType is TypeInfo.Function funcType)
                 {
                     returnType = funcType.ReturnType;
@@ -336,7 +335,7 @@ public partial class TypeChecker
             else if (arrow.ReturnType != null)
             {
                 // Use the return type from the arrow function
-                returnType = ToTypeInfo(arrow.ReturnType);
+                returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
             }
             else
             {
@@ -346,7 +345,7 @@ public partial class TypeChecker
             }
 
             // Handle 'this' type
-            TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
+            TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
             if (arrow.HasOwnThis && thisType == null)
             {
                 thisType = new TypeInfo.Any();
@@ -404,11 +403,10 @@ public partial class TypeChecker
                     contextName: $"function '{funcStmt.Name.Lexeme}'"
                 );
 
-                TypeInfo returnType = funcStmt.ReturnType != null
-                    ? ToTypeInfo(funcStmt.ReturnType)
-                    : new TypeInfo.Any(); // Any during hoisting — real type inferred when body is checked
+                TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+                    ?? new TypeInfo.Any(); // Any during hoisting — real type inferred when body is checked
 
-                TypeInfo? thisType = funcStmt.ThisType != null ? ToTypeInfo(funcStmt.ThisType) : null;
+                TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
 
                 // Restore environment before defining function type
                 _environment = previousEnvForParsing;
@@ -490,16 +488,15 @@ public partial class TypeChecker
             funcEnv.Define(paramNames[i], paramTypes[i]);
 
         bool inferringReturnType = funcStmt.ReturnType == null;
-        TypeInfo returnType = funcStmt.ReturnType != null
-            ? ToTypeInfo(funcStmt.ReturnType)
-            : new TypeInfo.Inferred();
+        TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
+            ?? new TypeInfo.Inferred();
 
         // Validate type predicate return types
         if (!inferringReturnType)
             ValidateTypePredicateReturnType(returnType, funcStmt.Parameters, funcStmt.Name.Lexeme);
 
         // Parse explicit 'this' type if present
-        TypeInfo? thisType = funcStmt.ThisType != null ? ToTypeInfo(funcStmt.ThisType) : null;
+        TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
 
         _environment = previousEnvForParsing;
 
