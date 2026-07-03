@@ -311,11 +311,17 @@ public partial class TypeChecker
             }
             else
             {
-                // Non-generic recursive alias
+                // Non-generic recursive alias: resolve the stored definition node under the stack
+                // entry pushed above (so self-references become placeholders), string fallback.
+                // Resolving the DEFINITION — not the alias name — is load-bearing: the name is
+                // already on the expansion stack, so name resolution would just hand back another
+                // RecursiveTypeAlias placeholder.
                 var alias = _environment.GetTypeAlias(rta.AliasName);
-                if (alias != null)
+                if (alias is { } aliasEntry)
                 {
-                    expanded = ToTypeInfo(alias);
+                    expanded = aliasEntry.DefinitionNode is { } definitionNode
+                        ? TryToTypeInfo(definitionNode) ?? ToTypeInfo(aliasEntry.Definition)
+                        : ToTypeInfo(aliasEntry.Definition);
                 }
                 else
                 {

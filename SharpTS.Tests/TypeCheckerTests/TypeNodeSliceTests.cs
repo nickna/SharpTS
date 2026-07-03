@@ -415,6 +415,27 @@ public class TypeNodeSliceTests
     }
 
     [Fact]
+    public void NodeResolved_DistributiveConditionalAliasMatchesStringPath()
+    {
+        // Node-path parity for a naked-type-parameter conditional alias instantiated with a
+        // union. Full tsc distribution (NoStr<string | number> = number, rejecting "x") is a
+        // PRE-EXISTING gap on BOTH paths — the retired string expander produced the same
+        // permissive verdicts — so this pins parity, not tsc: both assignments stay accepted,
+        // and the concrete single-member instantiation still selects the right branch.
+        TestHarness.RunInterpreted("""
+            type NoStr<T> = T extends string ? never : T;
+            var n: NoStr<string | number> = 5;
+            var s: NoStr<string | number> = "x";
+            """);
+        // Concrete non-union instantiation takes the false branch: number survives, so a
+        // string initializer is rejected — identical on both paths.
+        Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            type NoStr<T> = T extends string ? never : T;
+            var m: NoStr<number> = "x";
+            """));
+    }
+
+    [Fact]
     public void NodeResolved_ConditionalEvaluatesToSelectedBranch()
     {
         // IsNum<number> resolves to the true branch ("yes"), so "no" must be rejected — the same

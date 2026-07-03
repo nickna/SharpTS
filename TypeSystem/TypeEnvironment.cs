@@ -18,7 +18,7 @@ namespace SharpTS.TypeSystem;
 /// <seealso cref="TypeInfo"/>
 public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 {
-    private readonly Dictionary<string, string> _typeAliases = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Definition, TypeNode? DefinitionNode)> _typeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Definition, List<string> TypeParams, TypeNode? DefinitionNode)> _genericTypeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
@@ -85,16 +85,18 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
         // Variable not defined, will be caught by Get() usually
     }
 
-    // Type alias support
-    public void DefineTypeAlias(string name, string definition)
+    // Type alias support. <paramref name="definitionNode"/> is the structured form of the
+    // definition when the parser produced one (type-AST migration); the string stays stored —
+    // it keys the checker's expansion cache and discriminates same-named aliases across scopes.
+    public void DefineTypeAlias(string name, string definition, TypeNode? definitionNode = null)
     {
-        _typeAliases[name] = definition;
+        _typeAliases[name] = (definition, definitionNode);
     }
 
-    public string? GetTypeAlias(string name)
+    public (string Definition, TypeNode? DefinitionNode)? GetTypeAlias(string name)
     {
-        if (_typeAliases.TryGetValue(name, out var definition))
-            return definition;
+        if (_typeAliases.TryGetValue(name, out var alias))
+            return alias;
         return Enclosing?.GetTypeAlias(name);
     }
 

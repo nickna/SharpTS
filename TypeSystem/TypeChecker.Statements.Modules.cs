@@ -224,11 +224,11 @@ public partial class TypeChecker
                 if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
                 {
                     var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
-                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
+                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames, typeAlias.TypeDefinitionNode);
                 }
                 else
                 {
-                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeAlias.TypeDefinitionNode);
                 }
                 break;
 

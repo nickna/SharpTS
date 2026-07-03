@@ -97,7 +97,7 @@ public partial class TypeChecker
         }
         else
         {
-            _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition);
+            _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition, stmt.TypeDefinitionNode);
         }
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.

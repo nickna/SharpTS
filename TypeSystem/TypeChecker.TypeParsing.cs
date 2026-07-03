@@ -17,10 +17,24 @@ public partial class TypeChecker
 {
     private TypeInfo ToTypeInfo(string typeName)
     {
-        // Backstop against runaway recursion through the string-based type resolver
-        // (e.g. self-referential mapped/indexed-access/generic type strings). Throwing a
-        // catchable exception here prevents an uncatchable StackOverflowException from
-        // tearing down the whole process.
+        return ToTypeInfoCore(typeName);
+    }
+
+    /// <summary>
+    /// Resolves a bare type NAME — type parameters in scope, alias expansion (node-first),
+    /// primitives/keywords, the hot lib globals, typed-array and Error names, open mapped-type
+    /// variables, and finally the environment (classes/interfaces/enums), falling through to
+    /// <c>any</c>. This is the shared name tail of both resolution paths: the node path's
+    /// <c>NamedTypeNode</c> case enters here directly, and the string scanner delegates to it
+    /// after its composite branches. Never lexes or scans — names have no structure.
+    /// </summary>
+    private TypeInfo ResolveTypeName(string typeName)
+    {
+        // Backstop against runaway recursion through type resolution (e.g. self-referential
+        // mapped/indexed-access/generic types). Every unbounded resolution cycle traverses a
+        // name hop (alias/generic reference), so guarding here covers both the node path and
+        // the string scanner. Throwing a catchable exception prevents an uncatchable
+        // StackOverflowException from tearing down the whole process.
         if (++_typeResolutionDepth > MaxTypeResolutionDepth)
         {
             _typeResolutionDepth--;
@@ -29,7 +43,7 @@ public partial class TypeChecker
         }
         try
         {
-            return ToTypeInfoCore(typeName);
+            return ResolveTypeNameCore(typeName);
         }
         finally
         {
@@ -56,66 +70,6 @@ public partial class TypeChecker
                 TypeInfo.Tuple tup => tup with { IsReadonly = true },
                 _ => inner
             };
-        }
-
-        // Check for type parameter in current scope first
-        var typeParam = _environment.GetTypeParameter(typeName);
-        if (typeParam != null)
-        {
-            return typeParam;
-        }
-
-        // Check for type alias
-        var aliasExpansion = _environment.GetTypeAlias(typeName);
-        if (aliasExpansion != null)
-        {
-            // Check cache first - reusing the same TypeInfo object enables identity-based caching.
-            // Keyed by name AND definition: two same-named aliases in different scopes (e.g.
-            // namespace-local `type T = …` redeclarations) must not share an expansion — the
-            // name alone served one namespace's T for another's.
-            string aliasCacheKey = $"{typeName}={aliasExpansion}";
-            _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
-            if (_expandedTypeAliasCache.TryGetValue(aliasCacheKey, out var cached))
-            {
-                return cached;
-            }
-
-            _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
-
-            // Recursive reference detected - return deferred placeholder
-            if (_typeAliasExpansionStack.Contains(typeName))
-            {
-                return new TypeInfo.RecursiveTypeAlias(typeName);
-            }
-
-            _typeAliasExpansionStack.Add(typeName);
-            try
-            {
-                if (++_typeAliasExpansionDepth > MaxTypeAliasExpansionDepth)
-                {
-                    throw new TypeCheckException(
-                        $"Type alias '{typeName}' circularly references itself.", tsCode: "TS2456");
-                }
-
-                var expanded = ToTypeInfo(aliasExpansion);
-
-                // Validate: direct self-reference without indirection is illegal
-                if (IsDirectCircularReference(expanded, typeName))
-                {
-                    throw new TypeCheckException(
-                        $"Type alias '{typeName}' circularly references itself.", tsCode: "TS2456");
-                }
-
-                // Cache the expanded type for future use
-                _expandedTypeAliasCache[aliasCacheKey] = expanded;
-
-                return expanded;
-            }
-            finally
-            {
-                _typeAliasExpansionStack.Remove(typeName);
-                _typeAliasExpansionDepth--;
-            }
         }
 
         // Handle type predicate return types: "asserts x is T", "asserts x", "x is T"
@@ -319,17 +273,91 @@ public partial class TypeChecker
             return new TypeInfo.NumberLiteral(numValue);
         }
 
-        if (typeName == "string") return new TypeInfo.String();
-        if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-        if (typeName == "symbol") return new TypeInfo.Symbol();
-
-        // Reject standalone "unique symbol" - it's only valid on const declarations with Symbol() initializer
+        // Reject standalone "unique symbol" - it's only valid on const declarations with Symbol()
+        // initializer. Stays on the string path (not in ResolveTypeName): a NamedTypeNode can never
+        // carry a space, but scanner recursion (union parts, substituted generic-alias strings)
+        // still reaches here with this exact spelling.
         if (typeName == "unique symbol")
         {
             throw new TypeCheckException(
                 "'unique symbol' type is only valid on const declarations initialized with Symbol().", tsCode: "TS1331");
         }
+
+        // Everything structural has been handled above; what remains is a bare name.
+        return ResolveTypeName(typeName);
+    }
+
+    /// <summary>Body of <see cref="ResolveTypeName"/> (which wraps it in the recursion guard).</summary>
+    private TypeInfo ResolveTypeNameCore(string typeName)
+    {
+        // Check for type parameter in current scope first
+        var typeParam = _environment.GetTypeParameter(typeName);
+        if (typeParam != null)
+        {
+            return typeParam;
+        }
+
+        // Check for type alias
+        if (_environment.GetTypeAlias(typeName) is { } aliasEntry)
+        {
+            // Check cache first - reusing the same TypeInfo object enables identity-based caching.
+            // Keyed by name AND definition STRING: two same-named aliases in different scopes (e.g.
+            // namespace-local `type T = …` redeclarations) must not share an expansion — the
+            // name alone served one namespace's T for another's. The string key also stays stable
+            // across the node-first expansion below (nodes have no canonical rendering).
+            string aliasCacheKey = $"{typeName}={aliasEntry.Definition}";
+            _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+            if (_expandedTypeAliasCache.TryGetValue(aliasCacheKey, out var cached))
+            {
+                return cached;
+            }
+
+            _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
+
+            // Recursive reference detected - return deferred placeholder
+            if (_typeAliasExpansionStack.Contains(typeName))
+            {
+                return new TypeInfo.RecursiveTypeAlias(typeName);
+            }
+
+            _typeAliasExpansionStack.Add(typeName);
+            try
+            {
+                if (++_typeAliasExpansionDepth > MaxTypeAliasExpansionDepth)
+                {
+                    throw new TypeCheckException(
+                        $"Type alias '{typeName}' circularly references itself.", tsCode: "TS2456");
+                }
+
+                // Node-first: resolve the stored definition node; the definition string is the
+                // fallback for any construct the node path can't yet resolve.
+                var expanded = aliasEntry.DefinitionNode is { } definitionNode
+                    ? TryToTypeInfo(definitionNode) ?? ToTypeInfo(aliasEntry.Definition)
+                    : ToTypeInfo(aliasEntry.Definition);
+
+                // Validate: direct self-reference without indirection is illegal
+                if (IsDirectCircularReference(expanded, typeName))
+                {
+                    throw new TypeCheckException(
+                        $"Type alias '{typeName}' circularly references itself.", tsCode: "TS2456");
+                }
+
+                // Cache the expanded type for future use
+                _expandedTypeAliasCache[aliasCacheKey] = expanded;
+
+                return expanded;
+            }
+            finally
+            {
+                _typeAliasExpansionStack.Remove(typeName);
+                _typeAliasExpansionDepth--;
+            }
+        }
+
+        if (typeName == "string") return new TypeInfo.String();
+        if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if (typeName == "symbol") return new TypeInfo.Symbol();
         if (typeName == "bigint") return new TypeInfo.BigInt();
         // The global Function type: any callable, i.e. (...args: any[]) => any. Parsing it to
         // Any made `T[K] extends Function` filters (FunctionPropertyNames et al.) match every

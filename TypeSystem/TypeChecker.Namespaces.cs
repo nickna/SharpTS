@@ -169,7 +169,9 @@ public partial class TypeChecker
 
             case Stmt.TypeAlias typeAlias:
                 CheckStmt(typeAlias);
-                var aliasType = ToTypeInfo(_environment.GetTypeAlias(typeAlias.Name.Lexeme)!);
+                // Resolve through the shared name resolver: node-first alias expansion with the
+                // standard cache/recursion guards, instead of re-parsing the definition string.
+                var aliasType = ResolveTypeName(typeAlias.Name.Lexeme);
                 types[typeAlias.Name.Lexeme] = aliasType;
                 break;
 

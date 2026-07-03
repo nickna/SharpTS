@@ -1056,7 +1056,7 @@ public partial class TypeChecker
         }
         else
         {
-            _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+            _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeAlias.TypeDefinitionNode);
         }
         RecordAliasParamConstraints(typeAlias);
     }
