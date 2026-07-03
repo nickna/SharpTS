@@ -20,9 +20,24 @@ public static partial class RuntimeTypes
             AddressFamily? family = null;
             if (options is double d) family = (int)d == 6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
-            var addr = family != null
-                ? entry.AddressList.FirstOrDefault(a => a.AddressFamily == family)
-                : entry.AddressList.FirstOrDefault();
+            IPAddress? addr;
+            if (family != null)
+            {
+                addr = entry.AddressList.FirstOrDefault(a => a.AddressFamily == family);
+            }
+            else
+            {
+                // Default result order (#1072): the emitted setter syncs
+                // DnsConfig via late-binding, so this observes guest updates.
+                addr = Runtime.BuiltIns.Modules.DnsConfig.DefaultResultOrder switch
+                {
+                    "ipv4first" => entry.AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)
+                                   ?? entry.AddressList.FirstOrDefault(),
+                    "ipv6first" => entry.AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetworkV6)
+                                   ?? entry.AddressList.FirstOrDefault(),
+                    _ => entry.AddressList.FirstOrDefault()
+                };
+            }
 
             if (addr == null) throw new SocketException((int)SocketError.HostNotFound);
 
@@ -33,6 +48,22 @@ public static partial class RuntimeTypes
             };
         });
     }
+
+    /// <summary>
+    /// Late-binding bridge for the emitted dns.setDefaultResultOrder (#1072): keeps
+    /// the SharpTS.dll-side DnsConfig in sync with the emitted static so the
+    /// Resolver/promises paths (which run in SharpTS.dll) observe guest updates.
+    /// </summary>
+    public static object? DnsSetDefaultResultOrder(object? order)
+    {
+        if (order is string s && Runtime.BuiltIns.Modules.DnsConfig.ValidResultOrders.Contains(s))
+            Runtime.BuiltIns.Modules.DnsConfig.SetDefaultResultOrder(s);
+        return null;
+    }
+
+    /// <summary>Late-binding bridge mirror of dns.getDefaultResultOrder (#1072).</summary>
+    public static object? DnsGetDefaultResultOrder()
+        => Runtime.BuiltIns.Modules.DnsConfig.DefaultResultOrder;
 
     public static Task<object?> DnsPromisesResolve(object? hostname, object? rrtype)
     {
@@ -178,7 +209,23 @@ public static partial class RuntimeTypes
             ["resolvePtr"] = DnsRecordMethod(instance, h => instance.ResolvePtr(h)),
             ["resolveCaa"] = DnsRecordMethod(instance, h => instance.ResolveCaa(h)),
             ["resolveNaptr"] = DnsRecordMethod(instance, h => instance.ResolveNaptr(h)),
-            ["cancel"] = (Func<object?[], object?>)(_ => null)
+            // cancel() aborts the instance's outstanding queries (#1072). Compiled-mode
+            // resolver callbacks run inline-synchronously, so there is never a pending
+            // query when guest code runs — prompt mid-flight rejection is
+            // interpreter-only (documented deviation; cf. the tls/http compiled
+            // deferral precedent).
+            ["cancel"] = (Func<object?[], object?>)(_ =>
+            {
+                instance.Cancel();
+                return null;
+            }),
+            ["setLocalAddress"] = (Func<object?[], object?>)(args =>
+            {
+                string? v4 = args.Length > 0 ? args[0] as string : null;
+                string? v6 = args.Length > 1 ? args[1] as string : null;
+                instance.SetLocalAddress(v4, v6);
+                return null;
+            })
         };
     }
 

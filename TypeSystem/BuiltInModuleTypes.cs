@@ -1350,6 +1350,10 @@ public static class BuiltInModuleTypes
             // dns.Resolver class constructor
             ["Resolver"] = new TypeInfo.Function([], anyType, RequiredParams: 0),
 
+            // Default lookup result order (#1072)
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType),
+
             // dns.promises sub-module
             ["promises"] = anyType,
 
@@ -1446,7 +1450,9 @@ public static class BuiltInModuleTypes
                 new TypeInfo.Promise(anyType)),
             ["resolveNaptr"] = new TypeInfo.Function(
                 [stringType],
-                new TypeInfo.Promise(anyType))
+                new TypeInfo.Promise(anyType)),
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType)
         };
     }
 

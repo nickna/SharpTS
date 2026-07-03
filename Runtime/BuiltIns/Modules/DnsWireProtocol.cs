@@ -59,12 +59,14 @@ public static class DnsWireProtocol
 
     /// <summary>
     /// Resolves DNS records using a specific DNS server address.
-    /// Used by dns.Resolver instances with custom servers.
+    /// Used by dns.Resolver instances with custom servers. The optional
+    /// <paramref name="localAddress"/> binds the outgoing UDP socket
+    /// (Resolver.setLocalAddress, #1072).
     /// </summary>
-    public static object Query(string hostname, int queryType, string serverAddress)
+    public static object Query(string hostname, int queryType, string serverAddress, string? localAddress = null)
     {
         var queryPacket = BuildQuery(hostname, queryType);
-        var response = SendReceive(queryPacket, serverAddress);
+        var response = SendReceive(queryPacket, serverAddress, localAddress);
         return ParseResponse(response, queryType, hostname);
     }
 
@@ -140,8 +142,9 @@ public static class DnsWireProtocol
 
     /// <summary>
     /// Sends a DNS query to a specific DNS server and waits for the response.
+    /// The optional <paramref name="localAddress"/> binds the outgoing UDP socket.
     /// </summary>
-    public static byte[] SendReceive(byte[] query, string dnsServer)
+    public static byte[] SendReceive(byte[] query, string dnsServer, string? localAddress = null)
     {
         // Parse optional port from server address (e.g., "8.8.8.8:5353" or "[::1]:5353")
         int port = DnsPort;
@@ -172,8 +175,10 @@ public static class DnsWireProtocol
             UdpClient? udp = null;
             try
             {
-                // Try UDP first
-                udp = new UdpClient();
+                // Try UDP first, bound to the resolver's local address when set
+                udp = localAddress != null && IPAddress.TryParse(localAddress, out var localIp)
+                    ? new UdpClient(new IPEndPoint(localIp, 0))
+                    : new UdpClient();
                 udp.Client.SendTimeout = TimeoutMs;
                 udp.Send(query, query.Length, endpoint);
 

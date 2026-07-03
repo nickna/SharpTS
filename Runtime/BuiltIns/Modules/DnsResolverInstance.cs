@@ -11,6 +11,9 @@ namespace SharpTS.Runtime.BuiltIns.Modules;
 public sealed class DnsResolverInstance
 {
     private string[] _servers = [];
+    private CancellationTokenSource _cts = new();
+    private string? _localAddressV4;
+    private string? _localAddressV6;
 
     public string[] GetServers() => (string[])_servers.Clone();
 
@@ -24,6 +27,46 @@ public sealed class DnsResolverInstance
                 throw new Exception($"Runtime Error: dns.setServers invalid address: {server}");
         }
         _servers = (string[])servers.Clone();
+    }
+
+    /// <summary>
+    /// The token observed by outstanding queries; replaced on <see cref="Cancel"/>
+    /// so subsequent queries run normally (Node: cancel() aborts all *outstanding*
+    /// queries made by this resolver).
+    /// </summary>
+    public CancellationToken CancellationToken => Volatile.Read(ref _cts).Token;
+
+    /// <summary>
+    /// Cancels all outstanding queries (their callbacks/promises reject with
+    /// ECANCELLED); later queries use a fresh token (#1072).
+    /// </summary>
+    public void Cancel()
+    {
+        var old = Interlocked.Exchange(ref _cts, new CancellationTokenSource());
+        old.Cancel();
+    }
+
+    /// <summary>
+    /// Sets the local address(es) the resolver binds outgoing queries to (#1072).
+    /// </summary>
+    public void SetLocalAddress(string? ipv4, string? ipv6)
+    {
+        if (ipv4 != null && (!IPAddress.TryParse(ipv4, out var a4) || a4.AddressFamily != AddressFamily.InterNetwork))
+            throw new NodeError("ERR_INVALID_IP_ADDRESS", $"Invalid IP address: {ipv4}");
+        if (ipv6 != null && (!IPAddress.TryParse(ipv6, out var a6) || a6.AddressFamily != AddressFamily.InterNetworkV6))
+            throw new NodeError("ERR_INVALID_IP_ADDRESS", $"Invalid IP address: {ipv6}");
+        _localAddressV4 = ipv4;
+        _localAddressV6 = ipv6;
+    }
+
+    /// <summary>
+    /// Picks the local bind address matching the target server's family.
+    /// </summary>
+    private string? LocalAddressFor(string server)
+    {
+        var addr = StripPort(server);
+        var isV6 = IPAddress.TryParse(addr, out var ip) && ip.AddressFamily == AddressFamily.InterNetworkV6;
+        return isV6 ? _localAddressV6 : _localAddressV4;
     }
 
     /// <summary>Returns the first configured server, or null to use system default.</summary>
@@ -42,7 +85,7 @@ public sealed class DnsResolverInstance
         // A records always use system DNS (Dns.GetHostEntry); wire protocol for custom server
         var server = GetPreferredServer();
         if (server != null)
-            return (List<object?>)DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeA, server);
+            return (List<object?>)DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeA, server, LocalAddressFor(server));
         return DnsRecordResolver.ResolveA(hostname);
     }
 
@@ -50,7 +93,7 @@ public sealed class DnsResolverInstance
     {
         var server = GetPreferredServer();
         if (server != null)
-            return (List<object?>)DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeAAAA, server);
+            return (List<object?>)DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeAAAA, server, LocalAddressFor(server));
         return DnsRecordResolver.ResolveAaaa(hostname);
     }
 
@@ -63,7 +106,7 @@ public sealed class DnsResolverInstance
             if (!IPAddress.TryParse(ip, out var addr))
                 throw new Exception($"Runtime Error: dns.reverse invalid address {ip}");
             var arpaName = BuildArpaName(addr);
-            return (List<object?>)DnsWireProtocol.Query(arpaName, DnsWireProtocol.TypePTR, server);
+            return (List<object?>)DnsWireProtocol.Query(arpaName, DnsWireProtocol.TypePTR, server, LocalAddressFor(server));
         }
 
         if (!IPAddress.TryParse(ip, out var ipAddress))
@@ -86,7 +129,7 @@ public sealed class DnsResolverInstance
     {
         var server = GetPreferredServer();
         return server != null
-            ? DnsWireProtocol.Query(hostname, GetQType(rrtype), server)
+            ? DnsWireProtocol.Query(hostname, GetQType(rrtype), server, LocalAddressFor(server))
             : defaultResolver(hostname);
     }
 
@@ -94,7 +137,7 @@ public sealed class DnsResolverInstance
     {
         var server = GetPreferredServer();
         return server != null
-            ? DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeSOA, server)
+            ? DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeSOA, server, LocalAddressFor(server))
             : DnsRecordResolver.ResolveSoa(hostname);
     }
 

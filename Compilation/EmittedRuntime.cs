@@ -2614,6 +2614,10 @@ public class EmittedRuntime
 
     // DNS module methods
     public MethodBuilder DnsLookup { get; set; } = null!;
+
+    // dns default result order (#1072)
+    public MethodBuilder DnsGetDefaultResultOrder { get; set; } = null!;
+    public MethodBuilder DnsSetDefaultResultOrder { get; set; } = null!;
     public MethodBuilder DnsLookupService { get; set; } = null!;
     public MethodBuilder DnsGetLookup { get; set; } = null!;
     public MethodBuilder DnsGetLookupService { get; set; } = null!;

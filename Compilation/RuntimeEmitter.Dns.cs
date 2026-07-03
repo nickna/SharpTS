@@ -12,8 +12,17 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    // Emitted static holding the default result order (#1072); null = "verbatim".
+    // Kept in the output assembly so dns.lookup ordering works standalone; the
+    // setter also best-effort syncs SharpTS.dll's DnsConfig (late-bound) so the
+    // Resolver/promises paths observe it.
+    private FieldBuilder _dnsResultOrderField = null!;
+
     private void EmitDnsModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        _dnsResultOrderField = typeBuilder.DefineField("_dnsResultOrder", _types.String,
+            FieldAttributes.Private | FieldAttributes.Static);
+        EmitDnsResultOrderAccessors(typeBuilder, runtime);
         EmitDnsLookup(typeBuilder, runtime);
         EmitDnsLookupService(typeBuilder, runtime);
         EmitDnsGetLookup(typeBuilder, runtime);
@@ -52,6 +61,123 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits DnsGetDefaultResultOrder / DnsSetDefaultResultOrder (#1072).
+    /// The setter validates ('ipv4first'|'ipv6first'|'verbatim'), stores the emitted
+    /// static, and best-effort late-binds RuntimeTypes.DnsSetDefaultResultOrder so
+    /// SharpTS.dll-side dns paths (Resolver, promises) stay in sync. dns already
+    /// records the "dns module" soft-dependency; when SharpTS.dll is absent the
+    /// sync silently no-ops and the standalone lookup path still honors the order.
+    /// </summary>
+    private void EmitDnsResultOrderAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // getDefaultResultOrder(): return _dnsResultOrder ?? "verbatim"
+        {
+            var method = typeBuilder.DefineMethod(
+                "DnsGetDefaultResultOrder",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                Type.EmptyTypes
+            );
+            runtime.DnsGetDefaultResultOrder = method;
+            runtime.RegisterBuiltInModuleMethod("dns", "getDefaultResultOrder", method);
+            runtime.RegisterBuiltInModuleMethod("dns/promises", "getDefaultResultOrder", method);
+
+            var il = method.GetILGenerator();
+            var haveValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Brtrue, haveValue);
+            il.Emit(OpCodes.Ldstr, "verbatim");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(haveValue);
+            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // setDefaultResultOrder(order)
+        {
+            var method = typeBuilder.DefineMethod(
+                "DnsSetDefaultResultOrder",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object]
+            );
+            runtime.DnsSetDefaultResultOrder = method;
+            runtime.RegisterBuiltInModuleMethod("dns", "setDefaultResultOrder", method);
+            runtime.RegisterBuiltInModuleMethod("dns/promises", "setDefaultResultOrder", method);
+
+            var il = method.GetILGenerator();
+            var strLocal = il.DeclareLocal(_types.String);
+            var valid = il.DefineLabel();
+            var invalid = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stloc, strLocal);
+            il.Emit(OpCodes.Brfalse, invalid);
+
+            foreach (var allowed in new[] { "ipv4first", "ipv6first", "verbatim" })
+            {
+                il.Emit(OpCodes.Ldloc, strLocal);
+                il.Emit(OpCodes.Ldstr, allowed);
+                il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+                il.Emit(OpCodes.Brtrue, valid);
+            }
+
+            il.MarkLabel(invalid);
+            il.Emit(OpCodes.Ldstr, "The argument 'order' must be one of: 'ipv4first', 'ipv6first', 'verbatim'");
+            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Throw);
+
+            il.MarkLabel(valid);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Stsfld, _dnsResultOrderField);
+
+            // try { Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS")
+            //           ?.GetMethod("DnsSetDefaultResultOrder")?.Invoke(null, [order]) } catch { }
+            il.BeginExceptionBlock();
+            {
+                var typeLocal = il.DeclareLocal(typeof(Type));
+                var methodLocal = il.DeclareLocal(typeof(MethodInfo));
+                var syncDone = il.DefineLabel();
+
+                il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
+                il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetType", [_types.String])!);
+                il.Emit(OpCodes.Stloc, typeLocal);
+                il.Emit(OpCodes.Ldloc, typeLocal);
+                il.Emit(OpCodes.Brfalse, syncDone);
+
+                il.Emit(OpCodes.Ldloc, typeLocal);
+                il.Emit(OpCodes.Ldstr, "DnsSetDefaultResultOrder");
+                il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [_types.String])!);
+                il.Emit(OpCodes.Stloc, methodLocal);
+                il.Emit(OpCodes.Ldloc, methodLocal);
+                il.Emit(OpCodes.Brfalse, syncDone);
+
+                il.Emit(OpCodes.Ldloc, methodLocal);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, strLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [_types.Object, typeof(object[])])!);
+                il.Emit(OpCodes.Pop);
+
+                il.MarkLabel(syncDone);
+            }
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Pop);
+            il.EndExceptionBlock();
+
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
+    /// <summary>
     /// Emits DnsLookup: resolves a hostname to an IP address.
     /// Signature: object DnsLookup(object hostname, object options)
     /// Returns a Dictionary with { address: string, family: number }.
@@ -78,6 +204,8 @@ public partial class RuntimeEmitter
         var addressListLocal = il.DeclareLocal(typeof(IPAddress[])); // 5
         var indexLocal = il.DeclareLocal(_types.Int32);              // 6
         var currentAddressLocal = il.DeclareLocal(typeof(IPAddress)); // 7
+        var firstAnyLocal = il.DeclareLocal(typeof(IPAddress));      // first address regardless of family
+        var softPreferenceLocal = il.DeclareLocal(_types.Boolean);   // family derived from result order, not options
 
         // Labels
         var parseOptionsLabel = il.DefineLabel();
@@ -124,6 +252,43 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(parseOptionsLabel);
 
+        // Result order (#1072): with no explicit family, derive a SOFT family
+        // preference from _dnsResultOrder ('ipv4first'/'ipv6first'); 'verbatim'
+        // (or unset) keeps first-answer selection.
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, softPreferenceLocal);
+
+            var orderDone = il.DefineLabel();
+            var tryV6First = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
+            il.Emit(OpCodes.Brtrue, orderDone); // explicit family wins
+            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Brfalse, orderDone); // unset = verbatim
+
+            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldstr, "ipv4first");
+            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Brfalse, tryV6First);
+            il.Emit(OpCodes.Ldc_I4_4);
+            il.Emit(OpCodes.Stloc, requestedFamilyLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, softPreferenceLocal);
+            il.Emit(OpCodes.Br, orderDone);
+
+            il.MarkLabel(tryV6First);
+            il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
+            il.Emit(OpCodes.Ldstr, "ipv6first");
+            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Brfalse, orderDone);
+            il.Emit(OpCodes.Ldc_I4_6);
+            il.Emit(OpCodes.Stloc, requestedFamilyLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, softPreferenceLocal);
+
+            il.MarkLabel(orderDone);
+        }
+
         // Try-catch block for Dns.GetHostEntry
         il.BeginExceptionBlock();
 
@@ -137,9 +302,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("AddressList")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, addressListLocal);
 
-        // selectedAddress = null
+        // selectedAddress = null; firstAny = null
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Stloc, selectedAddressLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, firstAnyLocal);
 
         // index = 0
         il.Emit(OpCodes.Ldc_I4_0);
@@ -158,6 +325,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, currentAddressLocal);
+
+        // if (firstAny == null) firstAny = currentAddress — order-preference fallback
+        {
+            var haveFirst = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, firstAnyLocal);
+            il.Emit(OpCodes.Brtrue, haveFirst);
+            il.Emit(OpCodes.Ldloc, currentAddressLocal);
+            il.Emit(OpCodes.Stloc, firstAnyLocal);
+            il.MarkLabel(haveFirst);
+        }
 
         // if (requestedFamily == 0) { selectedAddress = currentAddress; break; }
         il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
@@ -205,6 +382,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
+
+        // Soft order preference (#1072): no address of the preferred family →
+        // fall back to the first address instead of failing.
+        {
+            var noFallback = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, selectedAddressLocal);
+            il.Emit(OpCodes.Brtrue, noFallback);
+            il.Emit(OpCodes.Ldloc, softPreferenceLocal);
+            il.Emit(OpCodes.Brfalse, noFallback);
+            il.Emit(OpCodes.Ldloc, firstAnyLocal);
+            il.Emit(OpCodes.Stloc, selectedAddressLocal);
+            il.MarkLabel(noFallback);
+        }
 
         // if (selectedAddress == null) throw ENOTFOUND
         il.Emit(OpCodes.Ldloc, selectedAddressLocal);

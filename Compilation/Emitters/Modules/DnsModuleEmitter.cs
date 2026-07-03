@@ -21,6 +21,7 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
         "resolveMx", "resolveTxt", "resolveSrv", "resolveCname", "resolveNs",
         "resolveSoa", "resolvePtr", "resolveCaa", "resolveNaptr",
         "promises", "Resolver",
+        "setDefaultResultOrder", "getDefaultResultOrder",
         "ADDRCONFIG", "V4MAPPED", "ALL",
         "NODATA", "FORMERR", "SERVFAIL", "NOTFOUND", "NOTIMP", "REFUSED",
         "BADQUERY", "BADNAME", "BADFAMILY", "BADRESP", "CONNREFUSED", "TIMEOUT",
@@ -36,8 +37,36 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
         {
             "lookup" => EmitLookup(emitter, arguments),
             "lookupService" => EmitLookupService(emitter, arguments),
+            "setDefaultResultOrder" => EmitSetDefaultResultOrder(emitter, arguments),
+            "getDefaultResultOrder" => EmitGetDefaultResultOrder(emitter),
             _ => false
         };
+    }
+
+    /// <summary>Emits: dns.setDefaultResultOrder(order) (#1072)</summary>
+    private static bool EmitSetDefaultResultOrder(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.DnsSetDefaultResultOrder);
+        return true;
+    }
+
+    /// <summary>Emits: dns.getDefaultResultOrder() (#1072)</summary>
+    private static bool EmitGetDefaultResultOrder(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.DnsGetDefaultResultOrder);
+        return true;
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
