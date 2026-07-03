@@ -18,10 +18,28 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
         "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey",
-        "pbkdf2", "scrypt", "generateKeyPair", "hkdf"
+        "pbkdf2", "scrypt", "generateKeyPair", "hkdf",
+        // epic #1054 additions
+        "hash", "sign", "verify", "getCipherInfo", "getCurves",
+        "generatePrime", "generatePrimeSync", "checkPrime", "checkPrimeSync",
+        "randomFill", "constants",
+        // #1059/#1060
+        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup",
+        // #1064
+        "X509Certificate",
+        // WebCrypto (#1063)
+        "webcrypto", "subtle", "getRandomValues"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
+
+    /// <summary>
+    /// webcrypto/subtle resolve to the $WebCrypto singleton at each access site (#1063)
+    /// — the import-time namespace-dict snapshot has no value form for them.
+    /// </summary>
+    public bool HasLivePropertyGet(string memberName) => memberName is "webcrypto" or "subtle";
+
+    public bool IsExportedProperty(string memberName) => memberName is "webcrypto" or "subtle";
 
     public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {
@@ -45,6 +63,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "generateKeyPairSync" => EmitGenerateKeyPairSync(emitter, arguments),
             "createDiffieHellman" => EmitCreateDiffieHellman(emitter, arguments),
             "getDiffieHellman" => EmitGetDiffieHellman(emitter, arguments),
+            // createDiffieHellmanGroup is an alias for getDiffieHellman (#1060)
+            "createDiffieHellmanGroup" => EmitGetDiffieHellman(emitter, arguments),
             "createECDH" => EmitCreateECDH(emitter, arguments),
             "publicEncrypt" => EmitPublicEncrypt(emitter, arguments),
             "privateDecrypt" => EmitPrivateDecrypt(emitter, arguments),
@@ -60,8 +80,30 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // crypto module has no properties
-        return false;
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        switch (propertyName)
+        {
+            case "constants":  // crypto.constants (#1056)
+                il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetConstants);
+                return true;
+            case "fips":
+                // crypto.fips — always false (non-FIPS build) (#1060)
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Box, ctx.Types.Boolean);
+                return true;
+            // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
+            case "webcrypto":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                return true;
+            case "subtle":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                il.Emit(OpCodes.Ldstr, "subtle");
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static bool EmitCreateHash(IEmitterContext emitter, List<Expr> arguments)
@@ -79,6 +121,17 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Optional options ({ outputLength } for XOF hashes, #1062)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
         }
 
         // Call runtime helper to create hash

@@ -13,6 +13,10 @@ public partial class RuntimeEmitter
         // Scrypt helpers (must be emitted first - scrypt methods are used by EmitCryptoScryptSync)
         EmitScryptMethods(typeBuilder, runtime);
 
+        // Option readers first — CryptoCreateHash and the RSA/cipher option paths use them (#1054)
+        EmitGetOptionInt(typeBuilder, runtime);
+        EmitGetOptionString(typeBuilder, runtime);
+
         EmitCryptoCreateHash(typeBuilder, runtime);
         EmitCryptoCreateHmac(typeBuilder, runtime);
         EmitCryptoCreateCipheriv(typeBuilder, runtime);
@@ -33,8 +37,6 @@ public partial class RuntimeEmitter
         EmitRsaEncryptRaw(typeBuilder, runtime);
         EmitRsaDecryptRaw(typeBuilder, runtime);
         // Key pair generation helpers
-        EmitGetOptionInt(typeBuilder, runtime);
-        EmitGetOptionString(typeBuilder, runtime);
         EmitGenerateRsaKeyPairRaw(typeBuilder, runtime);
         EmitGenerateEcKeyPairRaw(typeBuilder, runtime);
 
@@ -65,8 +67,23 @@ public partial class RuntimeEmitter
         EmitCryptoCreatePublicKey(typeBuilder, runtime);
         EmitCryptoCreatePrivateKey(typeBuilder, runtime);
 
+        // Epic #1054 additions (one-shot sign/verify/hash, constants, getCipherInfo,
+        // getCurves, primes). $CryptoPrimitives is already emitted (RuntimeEmitter.cs);
+        // these helpers live on the $Runtime type.
+        EmitCryptoKeyToPem(typeBuilder, runtime);
+        EmitCryptoSignOneShot(typeBuilder, runtime);
+        EmitCryptoVerifyOneShot(typeBuilder, runtime);
+        EmitCryptoHashOneShot(typeBuilder, runtime);
+        EmitCryptoGetConstants(typeBuilder, runtime);
+        EmitCryptoGetCipherInfo(typeBuilder, runtime);
+        EmitCryptoGetCurves(typeBuilder, runtime);
+        EmitCryptoPrimeHelpers(typeBuilder, runtime);
+
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
+
+        // #1059/#1060 — generateKey/generateKeySync/getFips/setFips wrappers
+        EmitCryptoCompletionWrappers(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -75,11 +92,12 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCryptoMethodWrappers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // createHash(algorithm) -> $Hash
-        EmitCryptoMethodWrapper(typeBuilder, runtime, "createHash", 1, il =>
+        // createHash(algorithm, options?) -> $Hash
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createHash", 2, il =>
         {
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);  // options (can be null)
             il.Emit(OpCodes.Call, runtime.CryptoCreateHash);
         });
 
@@ -396,6 +414,92 @@ public partial class RuntimeEmitter
         // generateKeyPair(type, options, callback) -> null
         // Special: callback is (err, publicKey, privateKey) not (err, result)
         EmitCryptoGenerateKeyPairAsyncWrapper(typeBuilder, runtime);
+
+        // === Epic #1054 module-level wrappers (named-import support) ===
+
+        // hash(algorithm, data, outputEncoding?) -> string|Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "hash", 3, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToStringOrNull(il);
+            il.Emit(OpCodes.Call, runtime.CryptoHashOneShot);
+        });
+
+        // sign(algorithm, data, key, callback?) -> Buffer (sync form; callback form handled by module emitter)
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "sign", 3, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToStringOrNull(il);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.CryptoSignDataEx);
+        });
+
+        // verify(algorithm, data, key, signature, callback?) -> bool
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "verify", 4, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToStringOrNull(il);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Call, runtime.CryptoVerifyDataEx);
+        });
+
+        // getCipherInfo(nameOrNid, options?) -> object|undefined
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "getCipherInfo", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.CryptoGetCipherInfo);
+        });
+
+        // getCurves() -> string[]
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "getCurves", 0, il =>
+        {
+            il.Emit(OpCodes.Call, runtime.CryptoGetCurves);
+        });
+
+        // generatePrimeSync(size, options?) -> Buffer|bigint
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "generatePrimeSync", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToInt32(il);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.CryptoGeneratePrimeSyncObj);
+        });
+
+        // checkPrimeSync(candidate, options?) -> bool
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "checkPrimeSync", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.CryptoCheckPrimeSyncObj);
+        });
+
+        // Callback-based async wrappers owned by this slice: randomFill, generatePrime,
+        // checkPrime. (generateKey/getFips/setFips/diffieHellman/ECDH live in #1059/#1060.)
+        EmitCryptoRandomFillAsyncWrapper(typeBuilder, runtime);
+        EmitCryptoGeneratePrimeAsyncWrapper(typeBuilder, runtime);
+        EmitCryptoCheckPrimeAsyncWrapper(typeBuilder, runtime);
+    }
+
+    /// <summary>obj?.ToString() or null (unlike EmitObjectToString which yields "").</summary>
+    private void EmitObjectToStringOrNull(ILGenerator il)
+    {
+        var nullLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldnull);
+        il.MarkLabel(endLabel);
     }
 
     /// <summary>

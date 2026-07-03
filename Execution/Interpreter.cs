@@ -137,6 +137,8 @@ public partial class Interpreter : IDisposable
             BuiltInNames.Console, BuiltInNames.Process, BuiltInNames.GlobalThis,
             BuiltInNames.Reflect, BuiltInNames.Promise, BuiltInNames.Atomics,
             "Buffer",
+            // WebCrypto global (#1063): bare `crypto` — an import binding shadows it.
+            "crypto",
         ];
         foreach (var name in singletonNames)
         {

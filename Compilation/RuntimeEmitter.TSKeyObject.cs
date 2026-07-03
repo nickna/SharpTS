@@ -434,10 +434,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, createObjectLabel);
 
         il.MarkLabel(ecCheckLabel);
-        // EC: Get namedCurve (simplified - just return "P-256" for now)
+        // EC: namedCurve = NodeCurveName(ecdsaKey.ExportParameters(false).Curve.Oid.FriendlyName) (#1060)
+        var ecParamsLocal = il.DeclareLocal(typeof(ECParameters));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, ecdsaKeyField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, typeof(ECDsa).GetMethod("ExportParameters", [_types.Boolean])!);
+        il.Emit(OpCodes.Stloc, ecParamsLocal);
+
+        var friendlyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloca, ecParamsLocal);
+        il.Emit(OpCodes.Ldflda, typeof(ECParameters).GetField("Curve")!);
+        il.Emit(OpCodes.Call, typeof(ECCurve).GetProperty("Oid")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, typeof(System.Security.Cryptography.Oid).GetProperty("FriendlyName")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, friendlyLocal);
+
+        // namedLocal defaults to friendly; remap the three NIST spellings to Node names.
+        var namedLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, friendlyLocal);
+        il.Emit(OpCodes.Stloc, namedLocal);
+
+        void RemapCurve(string a, string b, string nodeName)
+        {
+            var hitLabel = il.DefineLabel();
+            var afterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, friendlyLocal);
+            il.Emit(OpCodes.Ldstr, a);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, hitLabel);
+            il.Emit(OpCodes.Ldloc, friendlyLocal);
+            il.Emit(OpCodes.Ldstr, b);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, afterLabel);
+            il.MarkLabel(hitLabel);
+            il.Emit(OpCodes.Ldstr, nodeName);
+            il.Emit(OpCodes.Stloc, namedLocal);
+            il.MarkLabel(afterLabel);
+        }
+        RemapCurve("nistP256", "ECDSA_P256", "prime256v1");
+        RemapCurve("nistP384", "ECDSA_P384", "secp384r1");
+        RemapCurve("nistP521", "ECDSA_P521", "secp521r1");
+
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "namedCurve");
-        il.Emit(OpCodes.Ldstr, "P-256");
+        il.Emit(OpCodes.Ldloc, namedLocal);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
 
         il.MarkLabel(createObjectLabel);

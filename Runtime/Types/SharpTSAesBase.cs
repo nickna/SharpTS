@@ -38,18 +38,30 @@ public abstract class SharpTSAesBase : IDisposable
     protected readonly List<byte> _gcmBuffer = new();
     protected byte[]? _authTag;
     protected byte[]? _aad;
+    protected int _tagLength = 16;
 
     protected bool _finalized;
     protected bool _autoPadding = true;
     private bool _disposed;
 
     /// <param name="forEncryption">True for a Cipher, false for a Decipher.</param>
-    protected SharpTSAesBase(string algorithm, byte[] key, byte[] iv, bool forEncryption)
+    /// <param name="authTagLength">GCM auth tag length in bytes (-1 = 16). The BCL supports 12–16 (#1057).</param>
+    protected SharpTSAesBase(string algorithm, byte[] key, byte[] iv, bool forEncryption, int authTagLength = -1)
     {
         _forEncryption = forEncryption;
         _algorithm = algorithm.ToLowerInvariant();
 
         (_keySize, _isGcm) = ParseAlgorithm(_algorithm);
+
+        if (authTagLength > 0)
+        {
+            if (!_isGcm)
+                throw new ArgumentException($"authTagLength is only supported for GCM mode ciphers");
+            if (authTagLength is < 12 or > 16)
+                throw new NotSupportedException(
+                    $"authTagLength {authTagLength} is not supported on this runtime (.NET AesGcm supports 12-16 bytes)");
+            _tagLength = authTagLength;
+        }
 
         // Validate key size
         if (key.Length != _keySize / 8)
@@ -66,7 +78,7 @@ public abstract class SharpTSAesBase : IDisposable
 
         if (_isGcm)
         {
-            _aesGcm = new AesGcm(_key, AesGcm.TagByteSizes.MaxSize);
+            _aesGcm = new AesGcm(_key, _tagLength);
         }
         else
         {

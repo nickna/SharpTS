@@ -160,6 +160,9 @@ public partial class RuntimeEmitter
         // to crypto's own emit files; no central-dispatch fallout.
         if (features.UsesCrypto)
         {
+            // Shared digest/encoding primitives — must precede the crypto value
+            // types below, whose bodies call into it (#1054).
+            EmitCryptoPrimitivesClass(moduleBuilder, runtime);
             EmitTSHashClass(moduleBuilder, runtime);
             EmitTSHmacClass(moduleBuilder, runtime);
             EmitTSCipherClass(moduleBuilder, runtime);
@@ -167,6 +170,7 @@ public partial class RuntimeEmitter
             EmitTSSignTypeDefinition(moduleBuilder, runtime);
             EmitTSVerifyTypeDefinition(moduleBuilder, runtime);
             EmitTSKeyObjectClass(moduleBuilder, runtime);
+            EmitTSX509Class(moduleBuilder, runtime); // crypto.X509Certificate (#1064); needs $TSKeyObject
             EmitTSECDHTypeDefinition(moduleBuilder, runtime);
             EmitBoundECDHMethodTypeDefinition(moduleBuilder, runtime);
             EmitTSDHTypeDefinition(moduleBuilder, runtime);

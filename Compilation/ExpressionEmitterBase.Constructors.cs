@@ -196,6 +196,14 @@ public abstract partial class ExpressionEmitterBase
                 SetStackUnknown();
                 return true;
 
+            // crypto.X509Certificate (#1064). Guarded on the emitted ctor being
+            // present (UsesCrypto) so a user class with the same name still resolves.
+            case "X509Certificate" when Ctx.Runtime?.X509CertificateCtor != null:
+                EmitBoxedArgOrNull(arguments, 0);
+                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.X509CertificateCtor);
+                SetStackUnknown();
+                return true;
+
             case "AbortController":
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateAbortController);
                 SetStackUnknown();
@@ -656,6 +664,7 @@ public abstract partial class ExpressionEmitterBase
             "Resolver" => TryEmitResolverConstructor(),
             "BlockList" => TryEmitBuiltInConstructor("BlockList", arguments),
             "SocketAddress" => TryEmitBuiltInConstructor("SocketAddress", arguments),
+            "X509Certificate" => TryEmitBuiltInConstructor("X509Certificate", arguments),
             _ => false
         };
     }

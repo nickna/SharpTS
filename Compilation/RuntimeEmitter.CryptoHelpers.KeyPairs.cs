@@ -221,20 +221,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnDefaultLabel);
 
-        // options must be emitted $Object in standalone mode.
-        var optionsObjLocal = il.DeclareLocal(runtime.TSObjectType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Stloc, optionsObjLocal);
-        il.Emit(OpCodes.Ldloc, optionsObjLocal);
-        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
-
-        // var value = options.GetProperty(name)
+        // Read the option from an emitted $Object OR a Dictionary<string,object?>
+        // literal (compiled object literals may be either) (#1060).
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, optionsObjLocal);
-        il.Emit(OpCodes.Ldarg_1);  // name
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
-        il.Emit(OpCodes.Stloc, valueLocal);
+        EmitReadObjectOption(il, runtime, valueLocal, returnDefaultLabel);
 
         // if (value is double d) return (int)d
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -272,20 +262,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnDefaultLabel);
 
-        // options must be emitted $Object in standalone mode.
-        var optionsObjLocal = il.DeclareLocal(runtime.TSObjectType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Stloc, optionsObjLocal);
-        il.Emit(OpCodes.Ldloc, optionsObjLocal);
-        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
-
-        // var value = options.GetProperty(name)
+        // Read the option from an emitted $Object OR a Dictionary<string,object?>
+        // literal (compiled object literals may be either) (#1060).
         var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, optionsObjLocal);
-        il.Emit(OpCodes.Ldarg_1);  // name
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
-        il.Emit(OpCodes.Stloc, valueLocal);
+        EmitReadObjectOption(il, runtime, valueLocal, returnDefaultLabel);
 
         // if (value is string s) return s
         il.Emit(OpCodes.Ldloc, valueLocal);

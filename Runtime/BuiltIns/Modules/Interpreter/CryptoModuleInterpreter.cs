@@ -24,10 +24,10 @@ public static class CryptoModuleInterpreter
     {
         return new Dictionary<string, object?>
         {
-            ["createHash"] = BuiltInMethod.CreateV2("createHash", 1, CreateHash),
+            ["createHash"] = BuiltInMethod.CreateV2("createHash", 1, 2, CreateHash),
             ["createHmac"] = BuiltInMethod.CreateV2("createHmac", 2, CreateHmac),
-            ["createCipheriv"] = BuiltInMethod.CreateV2("createCipheriv", 3, CreateCipheriv),
-            ["createDecipheriv"] = BuiltInMethod.CreateV2("createDecipheriv", 3, CreateDecipheriv),
+            ["createCipheriv"] = BuiltInMethod.CreateV2("createCipheriv", 3, 4, CreateCipheriv),
+            ["createDecipheriv"] = BuiltInMethod.CreateV2("createDecipheriv", 3, 4, CreateDecipheriv),
             ["randomBytes"] = BuiltInMethod.CreateV2("randomBytes", 1, RandomBytes),
             ["randomFillSync"] = BuiltInMethod.CreateV2("randomFillSync", 1, 3, RandomFillSync),
             ["randomUUID"] = BuiltInMethod.CreateV2("randomUUID", 0, RandomUUID),
@@ -43,6 +43,11 @@ public static class CryptoModuleInterpreter
             ["createDiffieHellman"] = BuiltInMethod.CreateV2("createDiffieHellman", 1, 2, CreateDiffieHellman),
             ["getDiffieHellman"] = BuiltInMethod.CreateV2("getDiffieHellman", 1, GetDiffieHellman),
             ["createECDH"] = BuiltInMethod.CreateV2("createECDH", 1, CreateECDH),
+            // ECDH "class" surface: only the static convertKey is exposed (#1060)
+            ["ECDH"] = new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["convertKey"] = BuiltInMethod.CreateV2("convertKey", 2, 5, EcdhConvertKey)
+            }),
             // RSA encryption/decryption
             ["publicEncrypt"] = BuiltInMethod.CreateV2("publicEncrypt", 2, PublicEncrypt),
             ["privateDecrypt"] = BuiltInMethod.CreateV2("privateDecrypt", 2, PrivateDecrypt),
@@ -58,8 +63,53 @@ public static class CryptoModuleInterpreter
             ["pbkdf2"] = BuiltInMethod.CreateV2("pbkdf2", 6, Pbkdf2Async),
             ["scrypt"] = BuiltInMethod.CreateV2("scrypt", 4, 5, ScryptAsync),
             ["generateKeyPair"] = BuiltInMethod.CreateV2("generateKeyPair", 2, 3, GenerateKeyPairAsync),
-            ["hkdf"] = BuiltInMethod.CreateV2("hkdf", 6, HkdfAsync)
+            ["hkdf"] = BuiltInMethod.CreateV2("hkdf", 6, HkdfAsync),
+            // One-shot digest/sign/verify (#1055)
+            ["hash"] = BuiltInMethod.CreateV2("hash", 2, 3, HashOneShot),
+            ["sign"] = BuiltInMethod.CreateV2("sign", 3, 4, SignOneShot),
+            ["verify"] = BuiltInMethod.CreateV2("verify", 4, 5, VerifyOneShot),
+            // crypto.constants (#1056)
+            ["constants"] = BuildConstants(),
+            // Cipher/curve discovery (#1057, #1058)
+            ["getCipherInfo"] = BuiltInMethod.CreateV2("getCipherInfo", 1, 2, GetCipherInfo),
+            ["getCurves"] = BuiltInMethod.CreateV2("getCurves", 0, GetCurves),
+            // Small wins (#1058)
+            ["randomFill"] = BuiltInMethod.CreateV2("randomFill", 2, 4, RandomFillAsync),
+            ["generateKey"] = BuiltInMethod.CreateV2("generateKey", 3, GenerateKeyAsync),
+            ["generateKeySync"] = BuiltInMethod.CreateV2("generateKeySync", 2, GenerateKeySync),
+            // DH/ECDH completeness + FIPS shims (#1060)
+            ["diffieHellman"] = BuiltInMethod.CreateV2("diffieHellman", 1, DiffieHellmanOneShot),
+            ["createDiffieHellmanGroup"] = BuiltInMethod.CreateV2("createDiffieHellmanGroup", 1, GetDiffieHellman),
+            ["getFips"] = BuiltInMethod.CreateV2("getFips", 0, GetFips),
+            ["setFips"] = BuiltInMethod.CreateV2("setFips", 1, SetFips),
+            ["fips"] = false,
+            // Primes (#1062)
+            ["generatePrime"] = BuiltInMethod.CreateV2("generatePrime", 2, 3, GeneratePrimeAsync),
+            ["generatePrimeSync"] = BuiltInMethod.CreateV2("generatePrimeSync", 1, 2, GeneratePrimeSync),
+            ["checkPrime"] = BuiltInMethod.CreateV2("checkPrime", 2, 3, CheckPrimeAsync),
+            ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync),
+            // X509Certificate class (#1064) — constructable via `new crypto.X509Certificate(...)`
+            // (the interpreter invokes a BuiltInMethod export when used with `new`, like net.BlockList)
+            ["X509Certificate"] = BuiltInMethod.CreateV2("X509Certificate", 1, CreateX509Certificate),
+            // WebCrypto (#1063): module surface — same objects as globalThis.crypto
+            ["webcrypto"] = SharpTSWebCrypto.Instance,
+            ["subtle"] = SharpTSWebCrypto.Instance.Subtle,
+            ["getRandomValues"] = BuiltInMethod.CreateV2("getRandomValues", 1, (_, _, args) =>
+            {
+                if (args.Length == 0)
+                    throw new Exception("crypto.getRandomValues requires a typed array argument");
+                return RuntimeValue.FromBoxed(SharpTSWebCrypto.GetRandomValues(args[0].ToObject()));
+            })
         };
+    }
+
+    /// <summary>new crypto.X509Certificate(pemOrDer) (#1064).</summary>
+    private static RuntimeValue CreateX509Certificate(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("X509Certificate constructor requires a PEM string or Buffer argument");
+        var source = args[0].ToObject() ?? throw new Exception("X509Certificate: argument must not be null");
+        return RuntimeValue.FromObject(new SharpTSX509Certificate(source));
     }
 
     private static RuntimeValue CreateSign(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -86,7 +136,13 @@ public static class CryptoModuleInterpreter
             throw new Exception("crypto.createHash requires an algorithm name");
         var algorithm = args[0].AsStringUnsafe();
 
-        return RuntimeValue.FromObject(new SharpTSHash(algorithm));
+        // Optional options: { outputLength } for the XOF hashes (shake128/shake256)
+        int outputLength = -1;
+        if (args.Length > 1 && args[1].ToObject() is SharpTSObject options &&
+            options.Fields.TryGetValue("outputLength", out var ol) && ol is double d)
+            outputLength = (int)d;
+
+        return RuntimeValue.FromObject(new SharpTSHash(algorithm, outputLength));
     }
 
     private static RuntimeValue CreateHmac(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -108,7 +164,16 @@ public static class CryptoModuleInterpreter
         var key = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.createCipheriv requires a key");
         var iv = ConvertToBytes(args[2].ToObject()) ?? throw new Exception("crypto.createCipheriv requires an iv");
 
-        return RuntimeValue.FromObject(new SharpTSCipher(algorithm, key, iv));
+        return RuntimeValue.FromObject(new SharpTSCipher(algorithm, key, iv, ParseAuthTagLength(args)));
+    }
+
+    /// <summary>Reads the { authTagLength } cipher option (4th argument), if present (#1057).</summary>
+    private static int ParseAuthTagLength(ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length > 3 && args[3].ToObject() is SharpTSObject options &&
+            options.Fields.TryGetValue("authTagLength", out var atl) && atl is double d)
+            return (int)d;
+        return -1;
     }
 
     private static RuntimeValue CreateDecipheriv(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -120,7 +185,7 @@ public static class CryptoModuleInterpreter
         var key = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.createDecipheriv requires a key");
         var iv = ConvertToBytes(args[2].ToObject()) ?? throw new Exception("crypto.createDecipheriv requires an iv");
 
-        return RuntimeValue.FromObject(new SharpTSDecipher(algorithm, key, iv));
+        return RuntimeValue.FromObject(new SharpTSDecipher(algorithm, key, iv, ParseAuthTagLength(args)));
     }
 
     /// <summary>
@@ -316,7 +381,7 @@ public static class CryptoModuleInterpreter
     /// </summary>
     private static RuntimeValue GetHashes(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        return RuntimeValue.FromObject(new SharpTSArray(new List<object?> { "md5", "sha1", "sha256", "sha384", "sha512" }));
+        return RuntimeValue.FromObject(new SharpTSArray(CryptoAlgorithms.SupportedHashNames()));
     }
 
     /// <summary>
@@ -346,6 +411,8 @@ public static class CryptoModuleInterpreter
         {
             "rsa" => RuntimeValue.FromObject(GenerateRsaKeyPair(options)),
             "ec" => RuntimeValue.FromObject(GenerateEcKeyPair(options)),
+            "ed25519" or "ed448" or "x25519" or "x448" => throw new Exception(
+                $"crypto.generateKeyPairSync: '{keyType}' keys are not supported on this runtime (.NET BCL has no EdDSA/X-curve support)"),
             _ => throw new Exception($"crypto.generateKeyPairSync: unsupported key type '{keyType}'")
         };
     }
@@ -434,43 +501,50 @@ public static class CryptoModuleInterpreter
         return RuntimeValue.FromObject(new SharpTSECDH(curveName));
     }
 
+    /// <summary>
+    /// ECDH.convertKey(key, curve[, inputEncoding[, outputEncoding[, format]]]) (#1060).
+    /// </summary>
+    private static RuntimeValue EcdhConvertKey(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length < 2 || !args[1].IsString)
+            throw new Exception("ECDH.convertKey requires key and curve arguments");
+
+        var key = args[0].ToObject() ?? throw new Exception("ECDH.convertKey: key must not be null");
+        var curve = args[1].AsStringUnsafe();
+        var inputEncoding = args.Length > 2 ? args[2].ToObject() as string : null;
+        var outputEncoding = args.Length > 3 ? args[3].ToObject() as string : null;
+        var format = args.Length > 4 ? args[4].ToObject() as string : null;
+
+        return RuntimeValue.FromBoxed(SharpTSECDH.ConvertKey(key, curve, inputEncoding, outputEncoding, format));
+    }
+
     #region RSA Encryption/Decryption
 
     /// <summary>
-    /// Encrypts data using a public key with RSA-OAEP padding (SHA-1 by default, matching Node.js).
+    /// Encrypts data using a public key. Defaults to RSA-OAEP-SHA1 (matching Node);
+    /// honors { padding, oaepHash } options (#1056/#1057).
     /// </summary>
     private static RuntimeValue PublicEncrypt(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length < 2)
             throw new Exception("crypto.publicEncrypt requires key and buffer arguments");
 
-        var keyPem = ExtractKeyPem(args[0].ToObject());
         var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.publicEncrypt: buffer must be a Buffer or string");
-
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(keyPem);
-
-        // Node.js default is OAEP with SHA-1
-        var encrypted = rsa.Encrypt(data, RSAEncryptionPadding.OaepSHA1);
+        var encrypted = CryptoKeyUtil.RsaEncryptDecrypt(args[0].ToObject(), data, encrypt: true, "crypto.publicEncrypt");
         return RuntimeValue.FromObject(new SharpTSBuffer(encrypted));
     }
 
     /// <summary>
-    /// Decrypts data using a private key with RSA-OAEP padding (SHA-1 by default, matching Node.js).
+    /// Decrypts data using a private key. Defaults to RSA-OAEP-SHA1 (matching Node);
+    /// honors { padding, oaepHash } options (#1056/#1057).
     /// </summary>
     private static RuntimeValue PrivateDecrypt(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length < 2)
             throw new Exception("crypto.privateDecrypt requires key and buffer arguments");
 
-        var keyPem = ExtractKeyPem(args[0].ToObject());
         var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.privateDecrypt: buffer must be a Buffer or string");
-
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(keyPem);
-
-        // Node.js default is OAEP with SHA-1
-        var decrypted = rsa.Decrypt(data, RSAEncryptionPadding.OaepSHA1);
+        var decrypted = CryptoKeyUtil.RsaEncryptDecrypt(args[0].ToObject(), data, encrypt: false, "crypto.privateDecrypt");
         return RuntimeValue.FromObject(new SharpTSBuffer(decrypted));
     }
 
@@ -483,16 +557,8 @@ public static class CryptoModuleInterpreter
         if (args.Length < 2)
             throw new Exception("crypto.privateEncrypt requires key and buffer arguments");
 
-        var keyPem = ExtractKeyPem(args[0].ToObject());
         var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.privateEncrypt: buffer must be a Buffer or string");
-
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(keyPem);
-
-        // privateEncrypt uses PKCS#1 v1.5 padding (raw RSA operation with padding)
-        // In .NET, we can use Decrypt with Pkcs1 padding as a workaround
-        // This performs: result = data^d mod n (the private key operation)
-        var encrypted = rsa.Decrypt(data, RSAEncryptionPadding.Pkcs1);
+        var encrypted = CryptoKeyUtil.RsaSignaturePrimitive(args[0].ToObject(), data, privateOp: true, "crypto.privateEncrypt");
         return RuntimeValue.FromObject(new SharpTSBuffer(encrypted));
     }
 
@@ -505,35 +571,9 @@ public static class CryptoModuleInterpreter
         if (args.Length < 2)
             throw new Exception("crypto.publicDecrypt requires key and buffer arguments");
 
-        var keyPem = ExtractKeyPem(args[0].ToObject());
         var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.publicDecrypt: buffer must be a Buffer or string");
-
-        using var rsa = RSA.Create();
-        rsa.ImportFromPem(keyPem);
-
-        // publicDecrypt uses PKCS#1 v1.5 padding (raw RSA operation with padding)
-        // In .NET, we can use Encrypt with Pkcs1 padding as a workaround
-        // This performs: result = data^e mod n (the public key operation)
-        var decrypted = rsa.Encrypt(data, RSAEncryptionPadding.Pkcs1);
+        var decrypted = CryptoKeyUtil.RsaSignaturePrimitive(args[0].ToObject(), data, privateOp: false, "crypto.publicDecrypt");
         return RuntimeValue.FromObject(new SharpTSBuffer(decrypted));
-    }
-
-    /// <summary>
-    /// Extracts PEM key string from various input formats.
-    /// </summary>
-    private static string ExtractKeyPem(object? key)
-    {
-        return key switch
-        {
-            string pem => pem,
-            SharpTSKeyObject keyObj => keyObj.RsaKey != null
-                ? (keyObj.Type == KeyObjectType.Private
-                    ? keyObj.RsaKey.ExportPkcs8PrivateKeyPem()
-                    : keyObj.RsaKey.ExportSubjectPublicKeyInfoPem())
-                : throw new Exception("KeyObject must contain an RSA key"),
-            SharpTSObject obj when obj.Fields.TryGetValue("key", out var k) && k is string keyStr => keyStr,
-            _ => throw new Exception("Key must be a PEM string, KeyObject, or object with 'key' property")
-        };
     }
 
     #endregion
@@ -612,66 +652,83 @@ public static class CryptoModuleInterpreter
     }
 
     /// <summary>
-    /// Creates a public KeyObject from a PEM-encoded public key.
+    /// Creates a public KeyObject. Accepts a PEM string/Buffer, a private KeyObject
+    /// (derives the public key), or an options object with { key, format: 'pem'|'der'|'jwk', type }.
     /// </summary>
     private static RuntimeValue CreatePublicKey(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0)
             throw new Exception("crypto.createPublicKey requires a key argument");
 
-        string pem;
-
-        if (args[0].IsString)
-        {
-            pem = args[0].AsStringUnsafe();
-        }
-        else if (args[0].ToObject() is SharpTSObject obj && obj.Fields.TryGetValue("key", out var keyVal) && keyVal is string keyPem)
-        {
-            pem = keyPem;
-        }
-        else if (args[0].ToObject() is SharpTSBuffer buf)
-        {
-            // PEM as buffer
-            pem = System.Text.Encoding.UTF8.GetString(buf.Data);
-        }
-        else
-        {
-            throw new Exception("crypto.createPublicKey: key must be a PEM string, Buffer, or object with 'key' property");
-        }
-
-        return RuntimeValue.FromObject(SharpTSKeyObject.CreatePublicKey(pem));
+        return RuntimeValue.FromObject(CreateAsymmetricKey(args[0], isPrivate: false, "crypto.createPublicKey"));
     }
 
     /// <summary>
-    /// Creates a private KeyObject from a PEM-encoded private key.
+    /// Creates a private KeyObject. Accepts a PEM string/Buffer or an options object
+    /// with { key, format: 'pem'|'der'|'jwk', type: 'pkcs8'|'pkcs1'|'sec1' }.
     /// </summary>
     private static RuntimeValue CreatePrivateKey(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0)
             throw new Exception("crypto.createPrivateKey requires a key argument");
 
-        string pem;
-
-        if (args[0].IsString)
-        {
-            pem = args[0].AsStringUnsafe();
-        }
-        else if (args[0].ToObject() is SharpTSObject obj && obj.Fields.TryGetValue("key", out var keyVal) && keyVal is string keyPem)
-        {
-            pem = keyPem;
-        }
-        else if (args[0].ToObject() is SharpTSBuffer buf)
-        {
-            // PEM as buffer
-            pem = System.Text.Encoding.UTF8.GetString(buf.Data);
-        }
-        else
-        {
-            throw new Exception("crypto.createPrivateKey: key must be a PEM string, Buffer, or object with 'key' property");
-        }
-
-        return RuntimeValue.FromObject(SharpTSKeyObject.CreatePrivateKey(pem));
+        return RuntimeValue.FromObject(CreateAsymmetricKey(args[0], isPrivate: true, "crypto.createPrivateKey"));
     }
+
+    /// <summary>Shared input handling for createPublicKey/createPrivateKey (#1059: pem/der/jwk).</summary>
+    private static SharpTSKeyObject CreateAsymmetricKey(RuntimeValue arg, bool isPrivate, string context)
+    {
+        if (arg.IsString)
+            return CreateFromPem(arg.AsStringUnsafe(), isPrivate);
+
+        switch (arg.ToObject())
+        {
+            case SharpTSBuffer buf:
+                return CreateFromPem(System.Text.Encoding.UTF8.GetString(buf.Data), isPrivate);
+
+            // createPublicKey(privateKeyObject) derives the public key
+            case SharpTSKeyObject keyObj when !isPrivate:
+                if (keyObj.RsaKey != null || keyObj.EcdsaKey != null)
+                    return SharpTSKeyObject.CreateFromDer(
+                        keyObj.RsaKey != null
+                            ? keyObj.RsaKey.ExportSubjectPublicKeyInfo()
+                            : keyObj.EcdsaKey!.ExportSubjectPublicKeyInfo(),
+                        "spki", isPrivate: false);
+                throw new Exception($"{context}: cannot derive a public key from a secret KeyObject");
+
+            case SharpTSObject obj:
+            {
+                var format = obj.Fields.TryGetValue("format", out var f) ? f as string : null;
+                obj.Fields.TryGetValue("key", out var keyVal);
+                var type = obj.Fields.TryGetValue("type", out var t) ? t as string : null;
+
+                switch (format?.ToLowerInvariant())
+                {
+                    case "jwk":
+                        if (keyVal is not SharpTSObject jwk)
+                            throw new Exception($"{context}: JWK format requires an object 'key'");
+                        return SharpTSKeyObject.CreateFromJwk(jwk, isPrivate);
+                    case "der":
+                        if (keyVal is not SharpTSBuffer derBuf)
+                            throw new Exception($"{context}: DER format requires a Buffer 'key'");
+                        return SharpTSKeyObject.CreateFromDer(derBuf.Data, type, isPrivate);
+                    default:
+                        return keyVal switch
+                        {
+                            string pemStr => CreateFromPem(pemStr, isPrivate),
+                            SharpTSBuffer pemBuf => CreateFromPem(System.Text.Encoding.UTF8.GetString(pemBuf.Data), isPrivate),
+                            _ => throw new Exception($"{context}: key must be a PEM string, Buffer, KeyObject, or JWK object")
+                        };
+                }
+            }
+
+            default:
+                throw new Exception($"{context}: key must be a PEM string, Buffer, KeyObject, or options object");
+        }
+    }
+
+    private static SharpTSKeyObject CreateFromPem(string pem, bool isPrivate)
+        => isPrivate ? SharpTSKeyObject.CreatePrivateKey(pem) : SharpTSKeyObject.CreatePublicKey(pem);
 
     #endregion
 
@@ -831,6 +888,8 @@ public static class CryptoModuleInterpreter
                 {
                     "rsa" => GenerateRsaKeyPair(options),
                     "ec" => GenerateEcKeyPair(options),
+                    "ed25519" or "ed448" or "x25519" or "x448" => throw new Exception(
+                        $"'{keyType}' keys are not supported on this runtime (.NET BCL has no EdDSA/X-curve support)"),
                     _ => throw new Exception($"unsupported key type '{keyType}'")
                 };
                 // Node.js generateKeyPair callback is (err, publicKey, privateKey)
@@ -890,6 +949,409 @@ public static class CryptoModuleInterpreter
             catch (Exception ex)
             {
                 ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "hkdf"), null);
+            }
+        });
+
+        return RuntimeValue.Undefined;
+    }
+
+    #endregion
+
+    #region One-shot digest / sign / verify (#1055)
+
+    /// <summary>
+    /// crypto.hash(algorithm, data[, outputEncoding]) — one-shot digest (Node 21+).
+    /// Default outputEncoding is 'hex' (unlike hash.digest(), which defaults to Buffer).
+    /// </summary>
+    private static RuntimeValue HashOneShot(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length < 2 || !args[0].IsString)
+            throw new Exception("crypto.hash requires algorithm and data arguments");
+
+        var algorithm = args[0].AsStringUnsafe();
+        var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.hash: data must be a string or Buffer");
+        var encoding = args.Length > 2 && args[2].ToObject() is string enc ? enc : "hex";
+
+        var digest = CryptoAlgorithms.OneShotHash(algorithm, data);
+        return RuntimeValue.FromBoxed(encoding == "buffer"
+            ? new SharpTSBuffer(digest)
+            : CryptoEncoding.ToBufferOrString(digest, encoding));
+    }
+
+    /// <summary>
+    /// crypto.sign(algorithm, data, key[, callback]) — one-shot sign. Wraps the
+    /// streaming Sign core; honors { padding, saltLength, dsaEncoding } key options.
+    /// </summary>
+    private static RuntimeValue SignOneShot(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length < 3)
+            throw new Exception("crypto.sign requires algorithm, data, and key arguments");
+
+        var algorithm = args[0].IsString ? args[0].AsStringUnsafe() : null;
+        var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.sign: data must be a string or Buffer");
+        var key = args[2].ToObject();
+
+        if (args.Length > 3 && args[3].ToObject() is ISharpTSCallable callback)
+        {
+            interpreter.Ref();
+            try
+            {
+                var sig = CryptoKeyUtil.SignData(algorithm, data, key, "crypto.sign");
+                ScheduleCallbackAndUnref(interpreter, callback, null, new SharpTSBuffer(sig));
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "sign"), null);
+            }
+            return RuntimeValue.Undefined;
+        }
+
+        var signature = CryptoKeyUtil.SignData(algorithm, data, key, "crypto.sign");
+        return RuntimeValue.FromObject(new SharpTSBuffer(signature));
+    }
+
+    /// <summary>
+    /// crypto.verify(algorithm, data, key, signature[, callback]) — one-shot verify.
+    /// </summary>
+    private static RuntimeValue VerifyOneShot(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length < 4)
+            throw new Exception("crypto.verify requires algorithm, data, key, and signature arguments");
+
+        var algorithm = args[0].IsString ? args[0].AsStringUnsafe() : null;
+        var data = ConvertToBytes(args[1].ToObject()) ?? throw new Exception("crypto.verify: data must be a string or Buffer");
+        var key = args[2].ToObject();
+        var signature = ConvertToBytes(args[3].ToObject()) ?? throw new Exception("crypto.verify: signature must be a Buffer");
+
+        if (args.Length > 4 && args[4].ToObject() is ISharpTSCallable callback)
+        {
+            interpreter.Ref();
+            try
+            {
+                var ok = CryptoKeyUtil.VerifyData(algorithm, data, key, signature, "crypto.verify");
+                ScheduleCallbackAndUnref(interpreter, callback, null, ok);
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "verify"), null);
+            }
+            return RuntimeValue.Undefined;
+        }
+
+        var result = CryptoKeyUtil.VerifyData(algorithm, data, key, signature, "crypto.verify");
+        return RuntimeValue.FromBoolean(result);
+    }
+
+    #endregion
+
+    #region constants / cipher info / curves (#1056, #1057, #1058)
+
+    /// <summary>Builds the crypto.constants object from the shared table.</summary>
+    private static SharpTSObject BuildConstants()
+    {
+        var fields = new Dictionary<string, object?>();
+        foreach (var (name, value) in CryptoInfoTables.NumericConstants)
+            fields[name] = value;
+        foreach (var (name, value) in CryptoInfoTables.StringConstants)
+            fields[name] = value;
+        return new SharpTSObject(fields);
+    }
+
+    /// <summary>
+    /// crypto.getCipherInfo(nameOrNid[, options]) → { name, nid, blockSize, ivLength, keyLength, mode } or undefined.
+    /// </summary>
+    private static RuntimeValue GetCipherInfo(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            return RuntimeValue.Undefined;
+
+        CryptoInfoTables.CipherInfo? match = null;
+        if (args[0].IsString)
+        {
+            var name = args[0].AsStringUnsafe().ToLowerInvariant();
+            foreach (var info in CryptoInfoTables.CipherInfos)
+                if (info.Name == name) { match = info; break; }
+        }
+        else if (args[0].IsNumber)
+        {
+            var nid = (int)args[0].AsNumberUnsafe();
+            foreach (var info in CryptoInfoTables.CipherInfos)
+                if (info.Nid == nid) { match = info; break; }
+        }
+
+        if (match is not { } m)
+            return RuntimeValue.Undefined;
+
+        // Test options: a keyLength/ivLength differing from the cipher's fixed
+        // lengths means the combination is unsupported → undefined (Node behavior).
+        if (args.Length > 1 && args[1].ToObject() is SharpTSObject options)
+        {
+            if (options.Fields.TryGetValue("keyLength", out var kl) && kl is double kld && (int)kld != m.KeyLength)
+                return RuntimeValue.Undefined;
+            if (options.Fields.TryGetValue("ivLength", out var il) && il is double ild && (int)ild != m.IvLength)
+                return RuntimeValue.Undefined;
+        }
+
+        return RuntimeValue.FromObject(new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["name"] = m.Name,
+            ["nid"] = (double)m.Nid,
+            ["blockSize"] = (double)m.BlockSize,
+            ["ivLength"] = (double)m.IvLength,
+            ["keyLength"] = (double)m.KeyLength,
+            ["mode"] = m.Mode
+        }));
+    }
+
+    /// <summary>crypto.getCurves() → supported EC curve names.</summary>
+    private static RuntimeValue GetCurves(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        return RuntimeValue.FromObject(new SharpTSArray(
+            CryptoInfoTables.SupportedCurves.Select(c => (object?)c).ToList()));
+    }
+
+    #endregion
+
+    #region randomFill / generateKey (#1058)
+
+    /// <summary>
+    /// crypto.randomFill(buffer[, offset][, size], callback) — async randomFillSync.
+    /// </summary>
+    private static RuntimeValue RandomFillAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var callback = GetCallback(args);
+        if (args.Length < 2 || args[0].ToObject() is not SharpTSBuffer buffer)
+            throw new Exception("crypto.randomFill requires a Buffer and a callback");
+
+        int offset = args.Length > 2 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
+        int size = args.Length > 3 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : buffer.Data.Length - offset;
+
+        interpreter.Ref();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (offset < 0 || offset > buffer.Data.Length)
+                    throw new Exception($"offset out of range (0-{buffer.Data.Length})");
+                if (size < 0 || offset + size > buffer.Data.Length)
+                    throw new Exception("size out of range");
+
+                var randomBytes = RandomNumberGenerator.GetBytes(size);
+                Array.Copy(randomBytes, 0, buffer.Data, offset, size);
+                ScheduleCallbackAndUnref(interpreter, callback, null, buffer);
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "randomFill"), null);
+            }
+        });
+
+        return RuntimeValue.Undefined;
+    }
+
+    /// <summary>Shared core for generateKey/generateKeySync: 'hmac' | 'aes' with { length } in bits.</summary>
+    internal static SharpTSKeyObject GenerateSecretKey(string? type, SharpTSObject? options, string context)
+    {
+        if (type is not ("hmac" or "aes"))
+            throw new Exception($"{context}: type must be 'hmac' or 'aes'");
+
+        if (options?.Fields.TryGetValue("length", out var l) != true || l is not double lengthBits)
+            throw new Exception($"{context}: options.length is required");
+
+        var length = (int)lengthBits;
+        if (type == "aes")
+        {
+            if (length is not (128 or 192 or 256))
+                throw new Exception($"{context}: AES key length must be 128, 192, or 256 bits");
+        }
+        else
+        {
+            if (length < 8 || length % 8 != 0)
+                throw new Exception($"{context}: HMAC key length must be a positive multiple of 8 bits");
+        }
+
+        return new SharpTSKeyObject(RandomNumberGenerator.GetBytes(length / 8));
+    }
+
+    /// <summary>crypto.generateKeySync(type, options) → KeyObject.</summary>
+    private static RuntimeValue GenerateKeySync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var type = args.Length > 0 ? args[0].ToObject() as string : null;
+        var options = args.Length > 1 ? args[1].ToObject() as SharpTSObject : null;
+        return RuntimeValue.FromObject(GenerateSecretKey(type, options, "crypto.generateKeySync"));
+    }
+
+    /// <summary>crypto.generateKey(type, options, callback).</summary>
+    private static RuntimeValue GenerateKeyAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var callback = GetCallback(args);
+        var type = args[0].ToObject() as string;
+        var options = args.Length > 1 ? args[1].ToObject() as SharpTSObject : null;
+
+        interpreter.Ref();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var key = GenerateSecretKey(type, options, "crypto.generateKey");
+                ScheduleCallbackAndUnref(interpreter, callback, null, key);
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "generateKey"), null);
+            }
+        });
+
+        return RuntimeValue.Undefined;
+    }
+
+    #endregion
+
+    #region One-shot diffieHellman / FIPS shims (#1060)
+
+    /// <summary>
+    /// crypto.diffieHellman({ privateKey, publicKey }) — one-shot key agreement over
+    /// EC KeyObjects (raw shared secret, matching Node). x25519/x448 are a documented
+    /// .NET ceiling; classic DH KeyObjects are not supported by createPrivateKey.
+    /// </summary>
+    private static RuntimeValue DiffieHellmanOneShot(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0 || args[0].ToObject() is not SharpTSObject options)
+            throw new Exception("crypto.diffieHellman requires an options object with privateKey and publicKey");
+
+        options.Fields.TryGetValue("privateKey", out var priv);
+        options.Fields.TryGetValue("publicKey", out var pub);
+        if (priv is not SharpTSKeyObject privateKey || pub is not SharpTSKeyObject publicKey)
+            throw new Exception("crypto.diffieHellman: privateKey and publicKey must be KeyObjects");
+
+        if (privateKey.EcdsaKey == null || publicKey.EcdsaKey == null)
+            throw new Exception("crypto.diffieHellman: only EC keys are supported (x25519/x448 are not available on this runtime)");
+
+        using var privEcdh = ECDiffieHellman.Create();
+        privEcdh.ImportParameters(privateKey.EcdsaKey.ExportParameters(true));
+        using var pubEcdh = ECDiffieHellman.Create();
+        pubEcdh.ImportParameters(publicKey.EcdsaKey.ExportParameters(false));
+
+        var secret = privEcdh.DeriveRawSecretAgreement(pubEcdh.PublicKey);
+        return RuntimeValue.FromObject(new SharpTSBuffer(secret));
+    }
+
+    /// <summary>crypto.getFips() → 0 (no FIPS mode on this runtime).</summary>
+    private static RuntimeValue GetFips(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromNumber(0);
+
+    /// <summary>crypto.setFips(bool) — enabling FIPS throws (non-FIPS build), disabling is a no-op.</summary>
+    private static RuntimeValue SetFips(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length > 0 && args[0].IsTruthy())
+            throw new Exception("Cannot set FIPS mode in a non-FIPS build.");
+        return RuntimeValue.Undefined;
+    }
+
+    #endregion
+
+    #region Primes (#1062)
+
+    private static System.Numerics.BigInteger ParsePrimeCandidate(object? candidate, string context)
+    {
+        return candidate switch
+        {
+            SharpTSBigInt bi => bi.Value,
+            System.Numerics.BigInteger raw => raw,
+            SharpTSBuffer buf => CryptoPrimes.FromUnsignedBigEndian(buf.Data),
+            _ => throw new Exception($"{context}: candidate must be a bigint or Buffer")
+        };
+    }
+
+    private static (int Checks, bool Safe, bool AsBigInt) ParsePrimeOptions(object? options, string context)
+    {
+        int checks = 0;
+        bool safe = false, asBigInt = false;
+        if (options is SharpTSObject obj)
+        {
+            if (obj.Fields.TryGetValue("checks", out var c) && c is double cd)
+                checks = (int)cd;
+            if (obj.Fields.TryGetValue("safe", out var s) && s is bool sb)
+                safe = sb;
+            if (obj.Fields.TryGetValue("bigint", out var b) && b is bool bb)
+                asBigInt = bb;
+            if (obj.Fields.ContainsKey("add") || obj.Fields.ContainsKey("rem"))
+                throw new Exception($"{context}: the add/rem options are not supported on this runtime");
+        }
+        return (checks, safe, asBigInt);
+    }
+
+    /// <summary>crypto.checkPrimeSync(candidate[, options]) → boolean.</summary>
+    private static RuntimeValue CheckPrimeSync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0)
+            throw new Exception("crypto.checkPrimeSync requires a candidate argument");
+        var candidate = ParsePrimeCandidate(args[0].ToObject(), "crypto.checkPrimeSync");
+        var (checks, _, _) = ParsePrimeOptions(args.Length > 1 ? args[1].ToObject() : null, "crypto.checkPrimeSync");
+        return RuntimeValue.FromBoolean(CryptoPrimes.IsProbablyPrime(candidate, checks));
+    }
+
+    /// <summary>crypto.checkPrime(candidate[, options], callback).</summary>
+    private static RuntimeValue CheckPrimeAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var callback = GetCallback(args);
+        var candidateObj = args[0].ToObject();
+        var optionsObj = args.Length > 2 ? args[1].ToObject() : null;
+
+        interpreter.Ref();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var candidate = ParsePrimeCandidate(candidateObj, "crypto.checkPrime");
+                var (checks, _, _) = ParsePrimeOptions(optionsObj, "crypto.checkPrime");
+                ScheduleCallbackAndUnref(interpreter, callback, null, CryptoPrimes.IsProbablyPrime(candidate, checks));
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "checkPrime"), null);
+            }
+        });
+
+        return RuntimeValue.Undefined;
+    }
+
+    /// <summary>crypto.generatePrimeSync(size[, options]) → Buffer (or bigint with { bigint: true }).</summary>
+    private static RuntimeValue GeneratePrimeSync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (args.Length == 0 || !args[0].IsNumber)
+            throw new Exception("crypto.generatePrimeSync requires a size (bits) argument");
+        var bits = (int)args[0].AsNumberUnsafe();
+        var (_, safe, asBigInt) = ParsePrimeOptions(args.Length > 1 ? args[1].ToObject() : null, "crypto.generatePrimeSync");
+
+        var prime = CryptoPrimes.GeneratePrime(bits, safe);
+        return asBigInt
+            ? RuntimeValue.FromBigInt(prime)
+            : RuntimeValue.FromObject(new SharpTSBuffer(CryptoPrimes.ToUnsignedBigEndian(prime)));
+    }
+
+    /// <summary>crypto.generatePrime(size[, options], callback).</summary>
+    private static RuntimeValue GeneratePrimeAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        var callback = GetCallback(args);
+        var bits = args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
+        var optionsObj = args.Length > 2 ? args[1].ToObject() : null;
+
+        interpreter.Ref();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var (_, safe, asBigInt) = ParsePrimeOptions(optionsObj, "crypto.generatePrime");
+                var prime = CryptoPrimes.GeneratePrime(bits, safe);
+                object result = asBigInt
+                    ? new SharpTSBigInt(prime)
+                    : new SharpTSBuffer(CryptoPrimes.ToUnsignedBigEndian(prime));
+                ScheduleCallbackAndUnref(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                ScheduleCallbackAndUnref(interpreter, callback, CreateCryptoError(ex, "generatePrime"), null);
             }
         });
 

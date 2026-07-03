@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
@@ -9,13 +8,16 @@ namespace SharpTS.Runtime.Types;
 /// Represents a Node.js-compatible Sign object for cryptographic signing.
 /// </summary>
 /// <remarks>
-/// Wraps .NET's RSA/ECDsa APIs to provide the Node.js Sign API:
+/// Accumulates data and delegates the final signature to
+/// <see cref="CryptoKeyUtil.SignData"/>, so the streaming form and the one-shot
+/// <c>crypto.sign()</c> (#1055) share one key/options/padding core:
 /// - sign.update(data) - adds data to be signed
-/// - sign.sign(privateKey, encoding?) - signs the data and returns the signature
+/// - sign.sign(privateKey[, encoding]) - signs; the key may be a PEM string,
+///   KeyObject, or options object with { key, padding, saltLength, dsaEncoding }
 /// </remarks>
 public class SharpTSSign
 {
-    private readonly HashAlgorithmName _hashAlgorithm;
+    private readonly string _algorithm;
     private readonly List<byte> _data = new();
     private bool _finalized;
 
@@ -25,16 +27,11 @@ public class SharpTSSign
     /// <param name="algorithm">The hash algorithm name: sha1, sha256, sha384, sha512, or RSA-SHA256 style names</param>
     public SharpTSSign(string algorithm)
     {
-        _hashAlgorithm = ParseAlgorithm(algorithm);
+        // Validate eagerly so a bad algorithm fails at createSign (Node behavior).
+        CryptoAlgorithms.ParseHashName(algorithm, stripSignaturePrefix: true, context: "signing");
+        _algorithm = algorithm;
         _finalized = false;
     }
-
-    /// <summary>
-    /// Parses the algorithm string into a HashAlgorithmName.
-    /// Supports both simple names (sha256) and prefixed names (RSA-SHA256).
-    /// </summary>
-    private static HashAlgorithmName ParseAlgorithm(string algorithm) =>
-        CryptoAlgorithms.ParseHashName(algorithm, stripSignaturePrefix: true, context: "signing");
 
     /// <summary>
     /// Updates the signer with the given data.
@@ -43,12 +40,7 @@ public class SharpTSSign
     /// <returns>This Sign object for chaining.</returns>
     public SharpTSSign Update(string data)
     {
-        if (_finalized)
-            throw new InvalidOperationException("Cannot update Sign after sign() has been called");
-
-        var bytes = Encoding.UTF8.GetBytes(data);
-        _data.AddRange(bytes);
-        return this;
+        return Update(Encoding.UTF8.GetBytes(data));
     }
 
     /// <summary>
@@ -64,61 +56,20 @@ public class SharpTSSign
     }
 
     /// <summary>
-    /// Signs the accumulated data using the provided private key.
+    /// Signs the accumulated data using the provided private key (PEM string,
+    /// KeyObject, or options object).
     /// </summary>
-    /// <param name="privateKeyPem">PEM-encoded private key (RSA or EC)</param>
+    /// <param name="key">The private key argument.</param>
     /// <param name="encoding">Output encoding: "hex", "base64", or null for Buffer</param>
     /// <returns>The signature as a string or Buffer.</returns>
-    public object Sign(string privateKeyPem, string? encoding = null)
+    public object Sign(object key, string? encoding = null)
     {
         if (_finalized)
             throw new InvalidOperationException("sign() has already been called");
 
         _finalized = true;
-        var dataBytes = _data.ToArray();
-
-        byte[] signature;
-
-        // Detect key type from PEM header
-        if (privateKeyPem.Contains("EC PRIVATE KEY") || privateKeyPem.Contains("-----BEGIN PRIVATE KEY-----"))
-        {
-            // Try EC first, fall back to RSA
-            try
-            {
-                using var ecdsa = ECDsa.Create();
-                ecdsa.ImportFromPem(privateKeyPem);
-                signature = ecdsa.SignData(dataBytes, _hashAlgorithm);
-            }
-            catch
-            {
-                // Fall back to RSA
-                using var rsa = RSA.Create();
-                rsa.ImportFromPem(privateKeyPem);
-                signature = rsa.SignData(dataBytes, _hashAlgorithm, RSASignaturePadding.Pkcs1);
-            }
-        }
-        else
-        {
-            // Assume RSA
-            using var rsa = RSA.Create();
-            rsa.ImportFromPem(privateKeyPem);
-            signature = rsa.SignData(dataBytes, _hashAlgorithm, RSASignaturePadding.Pkcs1);
-        }
-
+        var signature = CryptoKeyUtil.SignData(_algorithm, _data.ToArray(), key, "sign");
         return CryptoEncoding.ToBufferOrString(signature, encoding);
-    }
-
-    /// <summary>
-    /// Signs the accumulated data using a key object.
-    /// </summary>
-    public object Sign(SharpTSObject keyObject, string? encoding = null)
-    {
-        // Extract the key from the object
-        if (!keyObject.Fields.TryGetValue("key", out var keyValue))
-            throw new ArgumentException("Key object must have a 'key' property");
-
-        var keyPem = keyValue?.ToString() ?? throw new ArgumentException("Key must be a string");
-        return Sign(keyPem, encoding);
     }
 
     /// <summary>
@@ -145,13 +96,8 @@ public class SharpTSSign
                     throw new ArgumentException("sign() requires a private key argument");
 
                 var encoding = args.Length > 1 ? args[1].ToObject()?.ToString() : null;
-
-                if (args[0].IsString)
-                    return RuntimeValue.FromBoxed(Sign(args[0].AsStringUnsafe(), encoding));
-                if (args[0].ToObject() is SharpTSObject keyObj)
-                    return RuntimeValue.FromBoxed(Sign(keyObj, encoding));
-
-                throw new ArgumentException("sign() key must be a string or object");
+                var key = args[0].ToObject() ?? throw new ArgumentException("sign() key must not be null");
+                return RuntimeValue.FromBoxed(Sign(key, encoding));
             }),
             _ => null
         };

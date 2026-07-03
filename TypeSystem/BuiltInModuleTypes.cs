@@ -754,7 +754,41 @@ public static class BuiltInModuleTypes
             // hkdf(digest, ikm, salt, info, keylen, callback) -> void
             ["hkdf"] = new TypeInfo.Function(
                 [stringType, bufferOrStringType, bufferOrStringType, bufferOrStringType, numberType, anyType],
-                voidType)
+                voidType),
+
+            // === Epic #1054 additions ===
+            // One-shot digest/sign/verify (#1055)
+            ["hash"] = new TypeInfo.Function([stringType, bufferOrStringType, stringType], anyType, RequiredParams: 2),
+            ["sign"] = new TypeInfo.Function([anyType, bufferOrStringType, anyType, anyType], anyType, RequiredParams: 3),
+            ["verify"] = new TypeInfo.Function([anyType, bufferOrStringType, anyType, bufferOrStringType, anyType], anyType, RequiredParams: 4),
+            // crypto.constants (#1056)
+            ["constants"] = anyType,
+            // Cipher/curve discovery (#1057/#1058)
+            ["getCipherInfo"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 1),
+            ["getCurves"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+            // Small wins (#1058)
+            ["randomFill"] = new TypeInfo.Function([bufferType, anyType, anyType, anyType], voidType, RequiredParams: 2),
+            ["generateKey"] = new TypeInfo.Function([stringType, anyType, anyType], voidType, RequiredParams: 3),
+            ["generateKeySync"] = new TypeInfo.Function([stringType, anyType], anyType),
+            // DH/ECDH completeness + FIPS shims (#1060)
+            ["diffieHellman"] = new TypeInfo.Function([anyType], bufferType),
+            ["createDiffieHellmanGroup"] = new TypeInfo.Function([stringType], anyType),
+            ["getFips"] = new TypeInfo.Function([], numberType),
+            ["setFips"] = new TypeInfo.Function([BooleanType], voidType),
+            ["ECDH"] = anyType,
+            // Primes (#1062)
+            ["generatePrime"] = new TypeInfo.Function([numberType, anyType, anyType], voidType, RequiredParams: 2),
+            ["generatePrimeSync"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
+            ["checkPrime"] = new TypeInfo.Function([anyType, anyType, anyType], voidType, RequiredParams: 2),
+            ["checkPrimeSync"] = new TypeInfo.Function([anyType, anyType], BooleanType, RequiredParams: 1),
+            // X509Certificate class (#1064) — any-typed so `new crypto.X509Certificate(...)`
+            // and instance member access type-check; a refined shape lands with #1065.
+            ["X509Certificate"] = anyType,
+            // WebCrypto (#1063): crypto.webcrypto / crypto.subtle / crypto.getRandomValues.
+            // Kept as `any` here; the full SubtleCrypto shape is #1065's type pass.
+            ["webcrypto"] = anyType,
+            ["subtle"] = anyType,
+            ["getRandomValues"] = new TypeInfo.Function([anyType], anyType)
         };
     }
 

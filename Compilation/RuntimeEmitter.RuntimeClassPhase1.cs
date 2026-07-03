@@ -78,6 +78,16 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes);
 
+        // Reserve GetWebCryptoObject() → object — the $WebCrypto singleton (#1063).
+        // Body emitted by EmitWebCryptoTypes (crypto in use) or the stub; the
+        // signature must exist earlier because GlobalThisGetProperty resolves
+        // `globalThis.crypto` through it.
+        runtime.GetWebCryptoObject = typeBuilder.DefineMethod(
+            "GetWebCryptoObject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+
         // Reserve GlobalThisGetProperty(string) → object and
         // GlobalThisSetProperty(string, object) → void. EmitGlobalThisMethods
         // (run much later) fills the bodies, but GetProperty/GetIndex/SetProperty/

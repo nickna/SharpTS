@@ -209,6 +209,7 @@ public sealed class BuiltInRegistry
         RegisterVerifyType(registry);
         RegisterDiffieHellmanType(registry);
         RegisterECDHType(registry);
+        RegisterX509CertificateType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
@@ -239,6 +240,8 @@ public sealed class BuiltInRegistry
         RegisterIntlSegmenterType(registry);
         RegisterIntlDisplayNamesType(registry);
         RegisterAsyncLocalStorageType(registry);
+        RegisterWebCryptoNamespace(registry);
+        RegisterWebCryptoTypes(registry);
 
         // Register fast category-indexed dispatch for built-in types.
         // These use the already-computed TypeCategory from ClassifyRuntime() to skip
@@ -792,6 +795,29 @@ public sealed class BuiltInRegistry
             ((SharpTSClassPrototype)instance).GetMember(name));
     }
 
+    private static void RegisterWebCryptoNamespace(BuiltInRegistry registry)
+    {
+        // globalThis.crypto / bare `crypto` → the WebCrypto object (#1063).
+        // An `import ... from 'crypto'` binding shadows this via normal scoping.
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "crypto",
+            IsSingleton: true,
+            SingletonFactory: () => SharpTSWebCrypto.Instance,
+            GetMethod: name => SharpTSWebCrypto.Instance.GetMember(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterWebCryptoTypes(BuiltInRegistry registry)
+    {
+        // WebCrypto instance surfaces (#1063): crypto.subtle.digest, key.type, ...
+        registry.RegisterInstanceType(typeof(SharpTSWebCrypto), (instance, name) =>
+            ((SharpTSWebCrypto)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSSubtleCrypto), (instance, name) =>
+            ((SharpTSSubtleCrypto)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSCryptoKey), (instance, name) =>
+            ((SharpTSCryptoKey)instance).GetMember(name));
+    }
+
     private static void RegisterGlobalThisNamespace(BuiltInRegistry registry)
     {
         registry.RegisterNamespace(new BuiltInNamespace(
@@ -876,6 +902,13 @@ public sealed class BuiltInRegistry
         // ECDH members accessed via property access (ecdh.generateKeys, ecdh.computeSecret, etc.)
         registry.RegisterInstanceType(typeof(SharpTSECDH), (instance, name) =>
             ((SharpTSECDH)instance).GetMember(name));
+    }
+
+    private static void RegisterX509CertificateType(BuiltInRegistry registry)
+    {
+        // X509Certificate members accessed via property access (cert.subject, cert.checkHost, ...) (#1064)
+        registry.RegisterInstanceType(typeof(SharpTSX509Certificate), (instance, name) =>
+            ((SharpTSX509Certificate)instance).GetMember(name));
     }
 
     private static void RegisterStreamTypes(BuiltInRegistry registry)
