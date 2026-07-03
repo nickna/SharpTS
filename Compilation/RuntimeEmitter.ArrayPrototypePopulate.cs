@@ -42,14 +42,7 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        // Idempotent: if dict already has entries, return early. cctor calls
-        // this once, but a future static-init reordering shouldn't double-fill.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, runtime.ArrayPrototypeField);
 
         // ECMA-262 23.1.3 Array prototype "length" property is 0. Without
         // this entry, `Array.prototype.length` reads as undefined.
@@ -59,32 +52,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, setItem);
 
+        var arrDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+
         // ECMA-262 23.1.3 Array.prototype.constructor === Array. Compiled
         // bare `Array` resolves to typeof(IList<object>) (per
         // GlobalThisStaticEmitter). Mirror it here so
         // `Array.prototype.hasOwnProperty("constructor") === true` and
         // `Array.prototype.constructor === Array` both hold.
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, setItem);
-        // Non-enumerable PDS descriptor for "constructor" per ECMA-262 §17.
-        var arrCtorDesc = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-        il.Emit(OpCodes.Stloc, arrCtorDesc);
-        il.Emit(OpCodes.Ldloc, arrCtorDesc);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ldloc, arrCtorDesc);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldloc, arrCtorDesc);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-        il.Emit(OpCodes.Pop);
+        EmitInstallConstructor(il, runtime, runtime.ArrayPrototypeField, arrDescLocal, setItem, () =>
+        {
+            il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        });
 
         // For each named method: dict[jsName] = new $TSFunction(null, methodInfo)
         // The 2-arg ctor without name/length is fine — IsConstructor only needs
@@ -99,53 +78,15 @@ public partial class RuntimeEmitter
         // Length is the user-callable arg count (the receiver is implicit).
         // Also install a non-enumerable PDS descriptor (built-in §17 attrs)
         // so `gOPD(Array.prototype, "push").enumerable === false` per spec.
-        var arrDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        void InstallNonEnumerableArr(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, arrDescLocal);
-            il.Emit(OpCodes.Ldloc, arrDescLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, arrDescLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, arrDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
+        // The "__this" rename lets $TSFunction.InvokeWithThis prepend the
+        // call-site receiver. Stage 4z35 added a List<object> coercion branch
+        // in CoercePrimitiveArgs that materializes non-list receivers via
+        // $Runtime.ArrayLikeMaterialize before the helper's Castclass —
+        // unblocks borrowed Array.prototype.X patterns
+        // (`obj.map = Array.prototype.map; obj.map(cb)`).
         void Wire(string jsName, MethodBuilder? helper, int jsLength)
-        {
-            if (helper is null) return;
-            // Name first param "__this" so $TSFunction.InvokeWithThis prepends
-            // the call-site receiver. Stage 4z35 added a List<object> coercion
-            // branch in CoercePrimitiveArgs that materializes non-list receivers
-            // via $Runtime.ArrayLikeMaterialize before the helper's Castclass —
-            // unblocks borrowed Array.prototype.X patterns
-            // (`obj.map = Array.prototype.map; obj.map(cb)`).
-            try { helper.DefineParameter(1, System.Reflection.ParameterAttributes.None, "__this"); }
-            catch { /* already named — ignore */ }
-            var arrWrapperLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldnull); // target
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-            il.Emit(OpCodes.Stloc, arrWrapperLocal);
-            // Fast-path dict store
-            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, arrWrapperLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            // Non-enumerable PDS descriptor
-            InstallNonEnumerableArr(jsName, () => il.Emit(OpCodes.Ldloc, arrWrapperLocal));
-        }
+            => EmitWirePrototypeMethod(il, runtime, runtime.ArrayPrototypeField, arrDescLocal,
+                setItem, jsName, helper, jsLength);
 
         Wire("map",            runtime.ArrayMap,            1);
         Wire("filter",         runtime.ArrayFilter,         1);

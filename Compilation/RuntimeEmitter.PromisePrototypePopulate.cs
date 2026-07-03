@@ -298,63 +298,23 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
-
-        // Promise.prototype.constructor === Promise (= typeof(Task<object>)).
-        il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, setItem);
+        EmitPrototypePopulateGuard(il, runtime.PromisePrototypeField);
 
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        void InstallNonEnumerableDescriptor(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, descLocal);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
-        InstallNonEnumerableDescriptor("constructor", () =>
+
+        // Promise.prototype.constructor === Promise (= typeof(Task<object>)).
+        EmitInstallConstructor(il, runtime, runtime.PromisePrototypeField, descLocal, setItem, () =>
         {
             il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         });
 
-        // Wire then/catch/finally with their helper MethodInfos.
+        // Wire then/catch/finally with their helper MethodInfos. The helpers
+        // take the receiver as __this (named at their emit site — nameThisParam:
+        // false skips the rename).
         void Wire(string jsName, MethodBuilder helper, int jsLength)
-        {
-            var fnLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldnull); // target — helpers take receiver as __this
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-            il.Emit(OpCodes.Stloc, fnLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            InstallNonEnumerableDescriptor(jsName, () => il.Emit(OpCodes.Ldloc, fnLocal));
-        }
+            => EmitWirePrototypeMethod(il, runtime, runtime.PromisePrototypeField, descLocal,
+                setItem, jsName, helper, jsLength, nameThisParam: false);
 
         // ECMA-262 §27.2.5: then/catch take 2 and 1 args respectively;
         // finally takes 1 (onFinally). Spec lengths matter for length.js tests.

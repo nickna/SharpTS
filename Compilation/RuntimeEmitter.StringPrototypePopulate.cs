@@ -40,37 +40,17 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        // Idempotent: if dict already has entries, return early.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, runtime.StringPrototypeField);
+
+        var strDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
 
         // ECMA-262 22.1.3 String.prototype.constructor === String. Compiled
         // bare `String` resolves to typeof(string).
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, setItem);
-        // Non-enumerable PDS descriptor for "constructor" per ECMA-262 §17.
-        var strCtorDesc = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-        il.Emit(OpCodes.Stloc, strCtorDesc);
-        il.Emit(OpCodes.Ldloc, strCtorDesc);
-        il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ldloc, strCtorDesc);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldloc, strCtorDesc);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-        il.Emit(OpCodes.Pop);
+        EmitInstallConstructor(il, runtime, runtime.StringPrototypeField, strDescLocal, setItem, () =>
+        {
+            il.Emit(OpCodes.Ldtoken, _types.String);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        });
 
         // Wire with explicit JS-spec name + length via TSFunctionCtorWithCache.
         // Length is the user-callable arg count per ECMA-262 (e.g. substring
@@ -79,45 +59,9 @@ public partial class RuntimeEmitter
         // `String.prototype.substring.length === 2` returns 3.
         // Built-in §17 attrs: W:T, E:F, C:T. Install a PDS data descriptor
         // alongside the dict store so gOPD reports the spec attributes.
-        var strDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        void InstallNonEnumerableStr(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, strDescLocal);
-            il.Emit(OpCodes.Ldloc, strDescLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, strDescLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, strDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
         void Wire(string jsName, MethodBuilder? helper, int jsLength)
-        {
-            if (helper is null) return;
-            try { helper.DefineParameter(1, System.Reflection.ParameterAttributes.None, "__this"); }
-            catch { /* parameter already defined elsewhere — ignore */ }
-            var strWrapperLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-            il.Emit(OpCodes.Stloc, strWrapperLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, strWrapperLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            InstallNonEnumerableStr(jsName, () => il.Emit(OpCodes.Ldloc, strWrapperLocal));
-        }
+            => EmitWirePrototypeMethod(il, runtime, runtime.StringPrototypeField, strDescLocal,
+                setItem, jsName, helper, jsLength);
 
         Wire("charAt",         runtime.StringCharAt,         1);
         Wire("charCodeAt",     runtime.StringCharCodeAt,     1);

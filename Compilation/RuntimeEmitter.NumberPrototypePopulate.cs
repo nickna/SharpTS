@@ -33,21 +33,18 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, runtime.NumberPrototypeField);
+
+        var numDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
 
         // ECMA-262 21.1.3 Number.prototype.constructor === Number. Compiled
         // bare `Number` resolves to typeof(double) (per ILEmitter.Expressions
         // and InstanceOf semantics).
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, setItem);
+        EmitInstallConstructor(il, runtime, runtime.NumberPrototypeField, numDescLocal, setItem, () =>
+        {
+            il.Emit(OpCodes.Ldtoken, _types.Double);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        });
 
         // Wire with explicit JS-spec name + length per ECMA-262. Number's
         // prototype methods take (thisNumberValue, digits/precision/radix);
@@ -55,61 +52,9 @@ public partial class RuntimeEmitter
         // the receiver. Without this, `n.toExponential(1000)` would map
         // 1000 to value (the first arg) and lose the receiver.
         // Built-in §17 attrs: W:T, E:F, C:T. Install a PDS data descriptor.
-        var numDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        // Also install non-enumerable PDS descriptor for "constructor" per
-        // ECMA-262 §17 (built-in constructor property is W:T,E:F,C:T).
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-        il.Emit(OpCodes.Stloc, numDescLocal);
-        il.Emit(OpCodes.Ldloc, numDescLocal);
-        il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ldloc, numDescLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldloc, numDescLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-        il.Emit(OpCodes.Pop);
-        void InstallNonEnumerableNum(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, numDescLocal);
-            il.Emit(OpCodes.Ldloc, numDescLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, numDescLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, numDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
         void Wire(string jsName, MethodBuilder? helper, int jsLength)
-        {
-            if (helper is null) return;
-            try { helper.DefineParameter(1, System.Reflection.ParameterAttributes.None, "__this"); }
-            catch { /* already named — ignore */ }
-            var numWrapperLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-            il.Emit(OpCodes.Stloc, numWrapperLocal);
-            il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, numWrapperLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            InstallNonEnumerableNum(jsName, () => il.Emit(OpCodes.Ldloc, numWrapperLocal));
-        }
+            => EmitWirePrototypeMethod(il, runtime, runtime.NumberPrototypeField, numDescLocal,
+                setItem, jsName, helper, jsLength);
 
         Wire("toFixed",        runtime.NumberToFixed,         1);
         Wire("toPrecision",    runtime.NumberToPrecision,     1);

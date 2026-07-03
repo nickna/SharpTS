@@ -43,37 +43,17 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        // Idempotent guard.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, runtime.RegExpPrototypeField);
 
         // ECMA-262 §22.2.6 RegExp.prototype.constructor === RegExp.
         // Plant in dict for fast-read + install a non-enumerable PDS descriptor
         // so Object.keys / for-in skip it per spec (§17 built-in attrs).
-        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, setItem);
         var ctorDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-        il.Emit(OpCodes.Stloc, ctorDescLocal);
-        il.Emit(OpCodes.Ldloc, ctorDescLocal);
-        il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ldloc, ctorDescLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldloc, ctorDescLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-        il.Emit(OpCodes.Pop);
+        EmitInstallConstructor(il, runtime, runtime.RegExpPrototypeField, ctorDescLocal, setItem, () =>
+        {
+            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        });
 
         // Populate the symbol-keyed slots. The dispatch path
         // (RuntimeEmitter.Objects.Index.cs `symbolKeyLabel`) reads from

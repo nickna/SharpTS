@@ -34,13 +34,7 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        // Idempotent guard.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.ErrorPrototypeField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, runtime.ErrorPrototypeField);
 
         // ECMA-262 20.5.3 Error.prototype.constructor === Error. Compiled
         // bare `Error` resolves to typeof($Error).
@@ -86,21 +80,7 @@ public partial class RuntimeEmitter
         // W:T,E:F,C:T).
         var errDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         void InstallNonEnumerableErr(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, errDescLocal);
-            il.Emit(OpCodes.Ldloc, errDescLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, errDescLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, runtime.ErrorPrototypeField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, errDescLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
+            => EmitInstallNonEnumerable(il, runtime, runtime.ErrorPrototypeField, errDescLocal, jsName, emitValue);
         InstallNonEnumerableErr("constructor", () =>
         {
             il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
@@ -315,13 +295,7 @@ public partial class RuntimeEmitter
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
 
-        // Idempotent guard — Count > 0 means already populated.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, protoField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, protoField);
 
         // constructor = typeof(<ctorType>)
         il.Emit(OpCodes.Ldsfld, protoField);
@@ -344,21 +318,7 @@ public partial class RuntimeEmitter
         // (ECMA-262 §17 — built-in data properties are W:T, E:F, C:T).
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         void InstallNonEnum(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, descLocal);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, protoField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
+            => EmitInstallNonEnumerable(il, runtime, protoField, descLocal, jsName, emitValue);
         InstallNonEnum("constructor", () =>
         {
             il.Emit(OpCodes.Ldtoken, ctorType);
