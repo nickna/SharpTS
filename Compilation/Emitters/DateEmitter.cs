@@ -170,62 +170,62 @@ public sealed class DateEmitter : ITypeEmitterStrategy
             // Multi-argument setters (variadic, packaged as object[]). The $Runtime
             // wrapper honors the optional trailing arguments (#536).
             case "setFullYear":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetFullYear);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setMonth":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetMonth);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setHours":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetHours);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setMinutes":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetMinutes);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setSeconds":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetSeconds);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             // UTC multi-argument setters (variadic, packaged as object[])
             case "setUTCFullYear":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCFullYear);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setUTCMonth":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCMonth);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setUTCHours":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCHours);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setUTCMinutes":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCMinutes);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "setUTCSeconds":
-                EmitArgsArray(emitter, arguments);
+                emitter.EmitArgsArray(arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCSeconds);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
@@ -347,33 +347,13 @@ public sealed class DateEmitter : ITypeEmitterStrategy
         if (arguments.Count > 0 && ctx.Runtime!.DateToLocaleWithOptions != null)
         {
             il.Emit(OpCodes.Ldc_I4, kind);
-            EmitArgsArray(emitter, arguments);
+            emitter.EmitArgsArray(arguments);
             il.Emit(OpCodes.Call, ctx.Runtime.DateToLocaleWithOptions);
             ctx.Runtime.RequireSharpTSRuntime("Date.prototype.toLocale* with locale/options");
         }
         else
         {
             il.Emit(OpCodes.Call, bclMethod);
-        }
-    }
-
-    /// <summary>
-    /// Emits all arguments as an object array.
-    /// </summary>
-    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        il.Emit(OpCodes.Ldc_I4, arguments.Count);
-        il.Emit(OpCodes.Newarr, ctx.Types.Object);
-        for (int i = 0; i < arguments.Count; i++)
-        {
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4, i);
-            emitter.EmitExpression(arguments[i]);
-            emitter.EmitBoxIfNeeded(arguments[i]);
-            il.Emit(OpCodes.Stelem_Ref);
         }
     }
 

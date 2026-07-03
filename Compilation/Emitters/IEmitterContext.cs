@@ -68,6 +68,15 @@ public interface IEmitterContext
     void EmitFetchCall(List<Expr> arguments);
 
     /// <summary>
+    /// Evaluates <paramref name="args"/> and leaves a single <c>object[]</c> of the boxed argument
+    /// values on the IL stack. No spread expansion — use <see cref="EmitArgsArrayWithSpread"/> when
+    /// arguments may contain <see cref="Expr.Spread"/>. When <paramref name="argLocals"/> is supplied
+    /// (await-safe pre-spilled args, #850) elements are loaded from those locals instead of
+    /// re-evaluated.
+    /// </summary>
+    void EmitArgsArray(IReadOnlyList<Expr> args, LocalBuilder[]? argLocals = null);
+
+    /// <summary>
     /// Evaluates <paramref name="args"/> and leaves a single <c>object[]</c> on the IL stack with
     /// any <see cref="Expr.Spread"/> arguments flattened in place (numeric <c>$Array</c> + arbitrary
     /// iterables). Use when a type-emitter strategy needs the full, spread-expanded argument list as
