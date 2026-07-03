@@ -119,6 +119,15 @@ public partial class CompilationContext
     public HashSet<string>? CapturedTopLevelVars { get; set; }
 
     /// <summary>
+    /// #1201: names of top-level BLOCK-scoped let/const bindings lifted onto the entry-point
+    /// display class for this module (subset of <see cref="CapturedTopLevelVars"/>). The
+    /// declaration emitter routes these to their DC field even though they sit in a nested
+    /// scope — every lifted name is declared exactly once in the module, so the name-keyed
+    /// check cannot collide with a shadowing declaration.
+    /// </summary>
+    public HashSet<string>? LiftedBlockScopedTopLevelVars { get; set; }
+
+    /// <summary>
     /// Maps arrow functions to their $entryPointDC field (if they capture top-level vars).
     /// Used when creating capturing arrows to populate the reference to the entry-point display class.
     /// </summary>
