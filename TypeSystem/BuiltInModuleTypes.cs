@@ -993,7 +993,9 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
-    /// Gets the exported types for the zlib module.
+    /// Gets the exported types for <c>primitive:zlib</c> — the narrow compression
+    /// surface behind the stdlib/node/zlib.ts facade (sync one-shots, streaming
+    /// create*, crc32). The facade owns constants/codes and the async forms.
     /// </summary>
     public static Dictionary<string, TypeInfo> GetZlibModuleTypes()
     {
@@ -1088,38 +1090,18 @@ public static class BuiltInModuleTypes
                 [anyType], transformType, RequiredParams: 0),
             ["createBrotliDecompress"] = new TypeInfo.Function(
                 [anyType], transformType, RequiredParams: 0),
+            ["createZstdCompress"] = new TypeInfo.Function(
+                [anyType], transformType, RequiredParams: 0),
+            ["createZstdDecompress"] = new TypeInfo.Function(
+                [anyType], transformType, RequiredParams: 0),
             ["createUnzip"] = new TypeInfo.Function(
                 [anyType], transformType, RequiredParams: 0),
-
-            // Async callback APIs
-            ["gzip"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["gunzip"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["deflate"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["inflate"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["deflateRaw"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["inflateRaw"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["brotliCompress"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["brotliDecompress"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
-            ["unzip"] = new TypeInfo.Function(
-                [inputType, anyType, anyType], new TypeInfo.Void(), RequiredParams: 2),
 
             // Checksums (Node 22+): crc32(data[, value]) -> number
             ["crc32"] = new TypeInfo.Function(
                 [inputType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
                 new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-                RequiredParams: 1),
-
-            // Constants and error-code objects
-            ["constants"] = anyType,
-            ["codes"] = anyType
+                RequiredParams: 1)
         };
     }
 
@@ -1149,7 +1131,8 @@ public static class BuiltInModuleTypes
             //   Primitive-layer types for primitive:readline reuse GetReadlineModuleTypes via GetPrimitiveTypes.
             "child_process" => GetChildProcessModuleTypes(),
             "buffer" => GetBufferModuleTypes(),
-            "zlib" => GetZlibModuleTypes(),
+            // "zlib" — migrated to stdlib/node/zlib.ts; types flow from the TS source.
+            //   Primitive-layer types for primitive:zlib reuse GetZlibModuleTypes via GetPrimitiveTypes.
             // "events" — migrated to stdlib/node/events.ts; types flow from the TS source.
             // "timers" / "timers/promises" — migrated to stdlib/node/timers{,/promises}.ts;
             //   types flow from the TS source. Primitive-layer types reuse the
@@ -1206,6 +1189,10 @@ public static class BuiltInModuleTypes
             // the sync ops and derives the callback forms from primitive:fs/promises.
             "fs" => GetFsModuleTypes(),
             "fs/promises" => GetFsPromisesModuleTypes(),
+            // Primitive zlib types are the narrow compression surface (sync one-shots,
+            // streaming create*, crc32); the TS facade owns constants/codes and the
+            // async callback forms.
+            "zlib" => GetZlibModuleTypes(),
             _ => null
         };
     }

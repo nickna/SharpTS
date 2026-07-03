@@ -916,6 +916,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new ReadlinePrimitiveEmitter());
         _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
+        // "zlib" — migrated to stdlib/node/zlib.ts; emitter registered under primitive:zlib only.
         _builtInModuleEmitterRegistry.Register(new ZlibModuleEmitter());
         // "events" — migrated to stdlib/node/events.ts (pure-TS EventEmitter).
         // "timers" and "timers/promises" migrated to stdlib/node/timers{,/promises}.ts

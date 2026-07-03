@@ -193,6 +193,10 @@ public sealed class RuntimeFeatureDetector
             case "crypto/promises":
                 _set.UsesCrypto = true; break;
             case "zlib":
+            // The stdlib/node/zlib.ts facade's own primitive import — detected when
+            // the bundled facade AST is scanned, so zlib IL helpers are emitted even
+            // if the user-facing 'zlib' specifier escaped detection (e.g. dynamic require).
+            case "primitive:zlib":
                 _set.UsesZlib = true; break;
             case "buffer":
                 // `import { atob, isUtf8, ... } from 'buffer'` may not reference the

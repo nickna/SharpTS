@@ -27,7 +27,8 @@ public static class BuiltInModuleRegistry
         //   class-instance-via-primitive pattern like async_hooks).
         "child_process",
         "buffer",
-        "zlib",
+        // "zlib" — migrated to stdlib/node/zlib.ts (TS facade over primitive:zlib;
+        //   compression cores + Transform streams stay C#/IL behind the primitive).
         // "events" — migrated to stdlib/node/events.ts (pure-TS EventEmitter).
         // "timers" / "timers/promises" — migrated to stdlib/node/timers{,/promises}.ts
         //   (TS facades over primitive:timers and primitive:timers/promises).
