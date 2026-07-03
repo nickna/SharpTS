@@ -56,9 +56,16 @@ public class SharpTSReadableStreamAsyncIterator : SharpTSObject
             }
             var readTask = _stream.ReadInternal();
             // Wrap in a continuation that flips _done when the result is done:true.
+            // No ConfigureAwait(false) on the parked read: the resume must ride the
+            // interpreter's SynchronizationContext so the producer's TrySetResult
+            // posts it into the event loop's callback queue synchronously —
+            // a thread-pool resume is invisible to the loop's exit check and the
+            // program can exit before the loop body runs (#1211's web-stream twin).
             async Task<object?> AwaitAndObserve()
             {
-                var result = await readTask.ConfigureAwait(false);
+                bool parked = !readTask.IsCompleted;
+                var result = await readTask;
+                if (parked) EventLoopTestHooks.ParkedResumeDelay();
                 if (result is IDictionary<string, object?> dict &&
                     dict.TryGetValue("done", out var d) && d is bool db && db)
                 {

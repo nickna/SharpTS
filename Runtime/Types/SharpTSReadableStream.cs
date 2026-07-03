@@ -332,14 +332,15 @@ public class SharpTSReadableStream : ITypeCategorized
         }
 
         // Queue empty, stream still readable — park the read.
-        // NOTE: default TaskCreationOptions (NOT RunContinuationsAsynchronously).
-        // With the InterpreterSynchronizationContext set up at the top of
-        // InterpretModules, the await captured inside an async script
-        // function correctly posts its continuation back through the
-        // interpreter's callback queue. Using default options means
-        // TrySetResult below can hand off via the continuation mechanism
-        // rather than inlining on the timer-callback thread.
-        var pending = new TaskCompletionSource<object?>();
+        // RunContinuationsAsynchronously: awaiters of a parked read (the pipeTo
+        // pump, the async iterator, guest `await reader.read()`) capture the
+        // InterpreterSynchronizationContext, so TrySetResult posts each resume
+        // into the event loop's callback queue synchronously — visible to the
+        // loop's exit check from the instant of settling (#1212, the #320
+        // liveness family). Without this flag a same-context settle (producer
+        // enqueue() on the loop thread) would inline the consumer's resume
+        // inside the enqueue call — reentrancy the streams spec doesn't allow.
+        var pending = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         Reader!.PendingReads.Enqueue(pending);
         CallPullIfNeeded();
         return pending.Task;
