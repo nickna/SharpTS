@@ -18,28 +18,19 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Phase 1: Define type, fields, constructor, and Update method.
-    /// Called before EmitRuntimeClass.
+    /// Called before EmitRuntimeClass. Shares the definition with $Verify via
+    /// <see cref="EmitStreamingSignVerifyTypeDefinition"/>.
     /// </summary>
     private void EmitTSSignTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        // Define class: public sealed class $Sign
-        _tsSignTypeBuilder = moduleBuilder.DefineType(
-            "$Sign",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            _types.Object
-        );
-        _ = _tsSignTypeBuilder;
-
-        // Fields
-        _tsSignHashAlgorithmField = _tsSignTypeBuilder.DefineField("_hashAlgorithm", _types.HashAlgorithmName, FieldAttributes.Private);
-        _tsSignDataField = _tsSignTypeBuilder.DefineField("_data", typeof(List<byte>), FieldAttributes.Private);
-        _tsSignFinalizedField = _tsSignTypeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
-
-        // Constructor
-        EmitTSSignCtor(_tsSignTypeBuilder, runtime);
-
-        // Update method (doesn't need runtime helpers)
-        EmitTSSignUpdate(_tsSignTypeBuilder, runtime);
+        var parts = EmitStreamingSignVerifyTypeDefinition(moduleBuilder, "$Sign",
+            unsupportedAlgorithmPrefix: "Unsupported signing algorithm: ",
+            updateFinalizedMessage: "Cannot update Sign after sign() has been called");
+        _tsSignTypeBuilder = parts.Type;
+        _tsSignHashAlgorithmField = parts.HashAlgorithmField;
+        _tsSignDataField = parts.DataField;
+        _tsSignFinalizedField = parts.FinalizedField;
+        runtime.TSSignCtor = parts.Ctor;
     }
 
     /// <summary>
@@ -52,192 +43,6 @@ public partial class RuntimeEmitter
         EmitTSSignSign(_tsSignTypeBuilder, runtime);
 
         _tsSignTypeBuilder.CreateType();
-    }
-
-    /// <summary>
-    /// Emits: public $Sign(string algorithm)
-    /// </summary>
-    private void EmitTSSignCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var ctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public,
-            CallingConventions.Standard,
-            [_types.String]
-        );
-        runtime.TSSignCtor = ctor;
-
-        var il = ctor.GetILGenerator();
-
-        // Local for algorithm string (normalized)
-        var normalizedLocal = il.DeclareLocal(_types.String);
-        var hashNameLocal = il.DeclareLocal(_types.HashAlgorithmName);
-
-        // Call base constructor
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
-
-        // normalized = algorithm.ToLowerInvariant()
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
-        il.Emit(OpCodes.Stloc, normalizedLocal);
-
-        // Remove "rsa-" or "ecdsa-" prefix if present
-        var checkEcdsaLabel = il.DefineLabel();
-        var afterPrefixLabel = il.DefineLabel();
-
-        // if (normalized.StartsWith("rsa-")) normalized = normalized.Substring(4)
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "rsa-");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
-        il.Emit(OpCodes.Brfalse, checkEcdsaLabel);
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldc_I4_4);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
-        il.Emit(OpCodes.Stloc, normalizedLocal);
-        il.Emit(OpCodes.Br, afterPrefixLabel);
-
-        // if (normalized.StartsWith("ecdsa-")) normalized = normalized.Substring(6)
-        il.MarkLabel(checkEcdsaLabel);
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "ecdsa-");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
-        il.Emit(OpCodes.Brfalse, afterPrefixLabel);
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldc_I4_6);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
-        il.Emit(OpCodes.Stloc, normalizedLocal);
-
-        il.MarkLabel(afterPrefixLabel);
-
-        // Switch on algorithm name
-        var sha1Label = il.DefineLabel();
-        var sha256Label = il.DefineLabel();
-        var sha384Label = il.DefineLabel();
-        var sha512Label = il.DefineLabel();
-        var setHashLabel = il.DefineLabel();
-        var defaultLabel = il.DefineLabel();
-
-        // Check "sha1"
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "sha1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha1Label);
-
-        // Check "sha256"
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "sha256");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha256Label);
-
-        // Check "sha384"
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "sha384");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha384Label);
-
-        // Check "sha512"
-        il.Emit(OpCodes.Ldloc, normalizedLocal);
-        il.Emit(OpCodes.Ldstr, "sha512");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha512Label);
-
-        // Default - throw exception
-        il.Emit(OpCodes.Br, defaultLabel);
-
-        // SHA1
-        il.MarkLabel(sha1Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA1")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, setHashLabel);
-
-        // SHA256
-        il.MarkLabel(sha256Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA256")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, setHashLabel);
-
-        // SHA384
-        il.MarkLabel(sha384Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA384")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, setHashLabel);
-
-        // SHA512
-        il.MarkLabel(sha512Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA512")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, setHashLabel);
-
-        // Default - throw ArgumentException
-        il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldstr, "Unsupported signing algorithm: ");
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        // Set hash algorithm field
-        il.MarkLabel(setHashLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, hashNameLocal);
-        il.Emit(OpCodes.Stfld, _tsSignHashAlgorithmField);
-
-        // _data = new List<byte>()
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListByteDefaultCtor);
-        il.Emit(OpCodes.Stfld, _tsSignDataField);
-
-        // _finalized = false
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _tsSignFinalizedField);
-
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public $Sign Update(string data)
-    /// </summary>
-    private void EmitTSSignUpdate(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "Update",
-            MethodAttributes.Public,
-            typeBuilder,
-            [_types.String]
-        );
-        _ = method;
-
-        var il = method.GetILGenerator();
-
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsSignFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "Cannot update Sign after sign() has been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
-
-        // var bytes = Encoding.UTF8.GetBytes(data)
-        var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
-        il.Emit(OpCodes.Stloc, bytesLocal);
-
-        // _data.AddRange(bytes)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsSignDataField);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListByteAddRange);
-
-        // return this
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -255,17 +60,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsSignFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "sign() has already been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsSignFinalizedField, "sign() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);

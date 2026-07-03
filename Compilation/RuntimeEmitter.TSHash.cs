@@ -102,17 +102,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHashFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "Cannot update hash after digest() has been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsHashFinalizedField, "Cannot update hash after digest() has been called");
 
         // var bytes = CryptoBytesFromAny(data)
         var bytesLocal = il.DeclareLocal(_types.ByteArray);
@@ -150,17 +140,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHashFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "digest() has already been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsHashFinalizedField, "digest() has already been called");
 
         // _finalized = true
         il.Emit(OpCodes.Ldarg_0);
@@ -197,17 +177,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // if (_finalized) throw InvalidOperationException
-        var notFinalizedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHashFinalizedField);
-        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
-
-        il.Emit(OpCodes.Ldstr, "Cannot copy hash after digest() has been called");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(notFinalizedLabel);
+        EmitThrowIfFinalized(il, _tsHashFinalizedField, "Cannot copy hash after digest() has been called");
 
         // int outputLength = _outputLength;
         var outputLengthLocal = il.DeclareLocal(_types.Int32);
