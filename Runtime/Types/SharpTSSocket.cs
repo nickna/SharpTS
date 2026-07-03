@@ -39,6 +39,18 @@ public class SharpTSSocket : SharpTSEventEmitter
     private Task _writeChain = Task.CompletedTask;
     private readonly object _writeLock = new();
 
+    // Half-close state (#1070). With allowHalfOpen (default false) a received FIN
+    // auto-finishes the writable side and closes; with it set, the socket stays
+    // writable until end() is called.
+    protected internal bool _allowHalfOpen;
+    private bool _endReceived;
+
+    /// <summary>
+    /// Invoked once when 'close' is emitted — lets the owning server prune its
+    /// connection list so maxConnections/getConnections track live sockets.
+    /// </summary>
+    internal Action? OnClosed;
+
     /// <summary>
     /// Creates a new Socket wrapping an existing TcpClient (server-side).
     /// </summary>
@@ -94,6 +106,9 @@ public class SharpTSSocket : SharpTSEventEmitter
             "remoteFamily" => _isIpc ? "pipe" : (_client?.Client?.RemoteEndPoint is IPEndPoint rep3 ? (rep3.AddressFamily == AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4") : null),
             "localAddress" => _isIpc ? (object?)null : (_client?.Client?.LocalEndPoint is IPEndPoint lep ? lep.Address.ToString() : null),
             "localPort" => _isIpc ? (object?)null : (_client?.Client?.LocalEndPoint is IPEndPoint lep2 ? (double)lep2.Port : null),
+            "localFamily" => _isIpc ? (object?)null : (_client?.Client?.LocalEndPoint is IPEndPoint lep3 ? (lep3.AddressFamily == AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4") : null),
+            "pending" => _connecting || _stream == null,
+            "allowHalfOpen" => _allowHalfOpen,
             "bytesRead" => (double)_bytesRead,
             "bytesWritten" => (double)_bytesWritten,
             "connecting" => _connecting,
@@ -110,11 +125,18 @@ public class SharpTSSocket : SharpTSEventEmitter
 
     private string GetReadyState()
     {
+        // Derived from our own lifecycle state, not TcpClient.Connected — that
+        // property reflects "as of the last I/O" and flips non-deterministically
+        // around shutdown, which would make readyState racy.
         if (_connecting) return "opening";
         if (_destroyed) return "closed";
-        if (_isIpc) return _stream != null ? "open" : "closed";
-        if (_client?.Connected == true) return "open";
-        return "closed";
+        if (_stream == null) return "closed";
+        if (_ended && _endReceived) return "closed";
+        // Half-close states (#1070): readable-only after end(), writable-only
+        // after a received FIN with allowHalfOpen.
+        if (_ended) return "readOnly";
+        if (_endReceived) return "writeOnly";
+        return "open";
     }
 
     /// <summary>
@@ -192,9 +214,12 @@ public class SharpTSSocket : SharpTSEventEmitter
             {
                 await _client.ConnectAsync(capturedHost, capturedPort);
                 _stream = _client.GetStream();
-                _connecting = false;
+                // _connecting clears on the loop thread at 'connect' delivery, so
+                // socket.pending/readyState stay "connecting" until the event fires
+                // (Node semantics) instead of racing the worker thread.
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
+                    _connecting = false;
                     EmitEvent(interpreter, "connect", []);
                     StartReading(interpreter);
                     interpreter.Unref();
@@ -202,10 +227,10 @@ public class SharpTSSocket : SharpTSEventEmitter
             }
             catch (Exception ex)
             {
-                _connecting = false;
                 var error = CreateSocketError(ex, "connect", $"{capturedHost}:{capturedPort}");
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
+                    _connecting = false;
                     EmitEvent(interpreter, "error", [error]);
                     interpreter.Unref();
                 }, isInterval: false);
@@ -256,9 +281,9 @@ public class SharpTSSocket : SharpTSEventEmitter
                     _stream = new NetworkStream(unixSocket, ownsSocket: true);
                 }
 
-                _connecting = false;
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
+                    _connecting = false;
                     // For IPC: start reading BEFORE emitting 'connect' so the
                     // server can write immediately (Windows InOut pipe requirement)
                     var readReady = new ManualResetEventSlim(false);
@@ -270,10 +295,10 @@ public class SharpTSSocket : SharpTSEventEmitter
             }
             catch (Exception ex)
             {
-                _connecting = false;
                 var error = CreateSocketError(ex, "connect", path);
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
+                    _connecting = false;
                     EmitEvent(interpreter, "error", [error]);
                     interpreter.Unref();
                 }, isInterval: false);
@@ -286,7 +311,8 @@ public class SharpTSSocket : SharpTSEventEmitter
     /// <summary>
     /// Applies Node socket construction options. Recognized here:
     /// writableHighWaterMark / highWaterMark (stream.Duplex options, honored by
-    /// net.Socket in Node because Socket forwards its options to the Duplex ctor).
+    /// net.Socket in Node because Socket forwards its options to the Duplex ctor)
+    /// and allowHalfOpen (#1070).
     /// </summary>
     internal void ConfigureFromOptions(SharpTSObject options)
     {
@@ -294,6 +320,8 @@ public class SharpTSSocket : SharpTSEventEmitter
             _writableHighWaterMark = (int)whwm;
         else if (options.GetProperty("highWaterMark") is double hwm && hwm >= 0)
             _writableHighWaterMark = (int)hwm;
+        if (options.GetProperty("allowHalfOpen") is bool aho)
+            _allowHalfOpen = aho;
     }
 
     /// <summary>
@@ -484,12 +512,39 @@ public class SharpTSSocket : SharpTSEventEmitter
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
                     callback?.Call(interpreter, []);
+                    // If the peer already FIN'd (half-open drained the readable
+                    // side first), finishing our side completes the close (#1070).
+                    if (_endReceived && !_destroyed)
+                        DestroyCore(interpreter, null);
                     interpreter.Unref();
                 }, isInterval: false);
             }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         return RuntimeValue.FromObject(this);
+    }
+
+    /// <summary>
+    /// Auto-finish after a received FIN when allowHalfOpen is off (#1070): flush
+    /// queued writes, shut the writable side down, then close and emit 'close'.
+    /// </summary>
+    private void FinishAfterEnd(Interp interpreter)
+    {
+        _ended = true;
+        interpreter.Ref();
+        lock (_writeLock)
+        {
+            _writeChain = _writeChain.ContinueWith(_ =>
+            {
+                ShutdownWritable();
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    if (!_destroyed)
+                        DestroyCore(interpreter, null);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        }
     }
 
     /// <summary>
@@ -528,7 +583,18 @@ public class SharpTSSocket : SharpTSEventEmitter
     /// </summary>
     private RuntimeValue Destroy(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (_destroyed) return RuntimeValue.FromObject(this);
+        DestroyCore(interpreter, args.Length > 0 ? args[0].ToObject() : null);
+        return RuntimeValue.FromObject(this);
+    }
+
+    /// <summary>
+    /// Tears the socket down: closes the transport, emits 'error' (when given one)
+    /// and 'close', and releases the read-loop handle. Shared by destroy(), the
+    /// read-loop EOF/error paths, and the post-end() close (#1070).
+    /// </summary>
+    internal void DestroyCore(Interp interpreter, object? error)
+    {
+        if (_destroyed) return;
 
         _destroyed = true;
         _readCts?.Cancel();
@@ -543,20 +609,18 @@ public class SharpTSSocket : SharpTSEventEmitter
             // Ignore close errors
         }
 
-        bool hadError = args.Length > 0 && args[0].ToObject() is not null;
-        if (hadError)
+        if (error != null)
         {
-            EmitEvent(interpreter, "error", [args[0].ToObject()]);
+            EmitEvent(interpreter, "error", [error]);
         }
 
-        EmitClose(interpreter, hadError);
+        EmitClose(interpreter, error != null);
         // Only unref if reading was started (StartReading does Ref)
         if (_readingStarted)
         {
             _readingStarted = false;
             _interpreter?.Unref();
         }
-        return RuntimeValue.FromObject(this);
     }
 
     /// <summary>
@@ -569,6 +633,7 @@ public class SharpTSSocket : SharpTSEventEmitter
         if (_closeEmitted) return;
         _closeEmitted = true;
         EmitEvent(interpreter, "close", [hadError]);
+        OnClosed?.Invoke();
     }
 
     private RuntimeValue SetEncoding(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -694,19 +759,35 @@ public class SharpTSSocket : SharpTSEventEmitter
 
                     if (bytesRead == 0)
                     {
-                        // Remote end closed
+                        // Remote end closed (FIN)
                         interpreter.ScheduleTimer(0, 0, () =>
                         {
-                            if (!_destroyed)
+                            if (_destroyed)
                             {
-                                EmitEvent(interpreter, "end", []);
-                                EmitClose(interpreter, false);
+                                if (_readingStarted)
+                                {
+                                    _readingStarted = false;
+                                    interpreter.Unref();
+                                }
+                                return;
                             }
-                            if (_readingStarted)
+
+                            _endReceived = true;
+                            EmitEvent(interpreter, "end", []);
+
+                            if (_ended)
                             {
-                                _readingStarted = false;
-                                interpreter.Unref();
+                                // Writable side already finished — both directions done.
+                                DestroyCore(interpreter, null);
                             }
+                            else if (!_allowHalfOpen)
+                            {
+                                // Default: auto-finish the writable side (after pending
+                                // writes flush), then close.
+                                FinishAfterEnd(interpreter);
+                            }
+                            // else: half-open — the socket stays writable (and its
+                            // read handle keeps the loop alive) until end()/destroy().
                         }, isInterval: false);
                         break;
                     }
@@ -730,13 +811,7 @@ public class SharpTSSocket : SharpTSEventEmitter
                 {
                     interpreter.ScheduleTimer(0, 0, () =>
                     {
-                        EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
-                        EmitClose(interpreter, true);
-                        if (_readingStarted)
-                        {
-                            _readingStarted = false;
-                            interpreter.Unref();
-                        }
+                        DestroyCore(interpreter, new SharpTSError(ex.Message));
                     }, isInterval: false);
                 }
             }

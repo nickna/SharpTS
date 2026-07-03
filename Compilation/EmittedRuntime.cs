@@ -1973,6 +1973,12 @@ public class EmittedRuntime
     public MethodBuilder? BlockListCheckIp { get; set; }
     public ConstructorBuilder? SocketAddressCtor { get; set; }
 
+    // autoSelectFamily default knobs (#1070)
+    public MethodBuilder NetGetDefaultAutoSelectFamily { get; set; } = null!;
+    public MethodBuilder NetSetDefaultAutoSelectFamily { get; set; } = null!;
+    public MethodBuilder NetGetDefaultAutoSelectFamilyAttemptTimeout { get; set; } = null!;
+    public MethodBuilder NetSetDefaultAutoSelectFamilyAttemptTimeout { get; set; } = null!;
+
     // TLS module methods
     public MethodBuilder TlsCreateServer { get; set; } = null!;
     public MethodBuilder TlsConnect { get; set; } = null!;

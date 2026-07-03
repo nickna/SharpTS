@@ -22,6 +22,116 @@ public partial class RuntimeEmitter
         EmitNetIsIPv6(typeBuilder, runtime);
         EmitNetCreateBlockList(typeBuilder, runtime);
         EmitNetCreateSocketAddress(typeBuilder, runtime);
+        EmitNetAutoSelectFamilyDefaults(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the autoSelectFamily default knobs (#1070). Connection establishment
+    /// delegates to .NET's TcpClient (which already attempts every resolved address
+    /// sequentially), so the knobs are API-compatibility state. Static fields use
+    /// inverted defaults (disabled=false ⇒ true; timeout 0 ⇒ 250) so no type
+    /// initializer is required.
+    /// </summary>
+    private void EmitNetAutoSelectFamilyDefaults(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var disabledField = typeBuilder.DefineField("_netAutoSelectFamilyDisabled", _types.Boolean,
+            FieldAttributes.Private | FieldAttributes.Static);
+        var timeoutField = typeBuilder.DefineField("_netAutoSelectFamilyTimeout", _types.Double,
+            FieldAttributes.Private | FieldAttributes.Static);
+
+        // getDefaultAutoSelectFamily(): return !_disabled
+        {
+            var method = typeBuilder.DefineMethod(
+                "NetGetDefaultAutoSelectFamily",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                Type.EmptyTypes
+            );
+            runtime.NetGetDefaultAutoSelectFamily = method;
+            runtime.RegisterBuiltInModuleMethod("net", "getDefaultAutoSelectFamily", method);
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldsfld, disabledField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // setDefaultAutoSelectFamily(v): if (v is bool) _disabled = !(bool)v
+        {
+            var method = typeBuilder.DefineMethod(
+                "NetSetDefaultAutoSelectFamily",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object]
+            );
+            runtime.NetSetDefaultAutoSelectFamily = method;
+            runtime.RegisterBuiltInModuleMethod("net", "setDefaultAutoSelectFamily", method);
+            var il = method.GetILGenerator();
+            var skip = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typeof(bool));
+            il.Emit(OpCodes.Brfalse, skip);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Stsfld, disabledField);
+            il.MarkLabel(skip);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // getDefaultAutoSelectFamilyAttemptTimeout(): return _timeout > 0 ? _timeout : 250
+        {
+            var method = typeBuilder.DefineMethod(
+                "NetGetDefaultAutoSelectFamilyAttemptTimeout",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                Type.EmptyTypes
+            );
+            runtime.NetGetDefaultAutoSelectFamilyAttemptTimeout = method;
+            runtime.RegisterBuiltInModuleMethod("net", "getDefaultAutoSelectFamilyAttemptTimeout", method);
+            var il = method.GetILGenerator();
+            var useDefault = il.DefineLabel();
+            il.Emit(OpCodes.Ldsfld, timeoutField);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Ble_Un, useDefault);
+            il.Emit(OpCodes.Ldsfld, timeoutField);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(useDefault);
+            il.Emit(OpCodes.Ldc_R8, 250.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // setDefaultAutoSelectFamilyAttemptTimeout(v): if (v is double && v > 0) _timeout = v
+        {
+            var method = typeBuilder.DefineMethod(
+                "NetSetDefaultAutoSelectFamilyAttemptTimeout",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object]
+            );
+            runtime.NetSetDefaultAutoSelectFamilyAttemptTimeout = method;
+            runtime.RegisterBuiltInModuleMethod("net", "setDefaultAutoSelectFamilyAttemptTimeout", method);
+            var il = method.GetILGenerator();
+            var skip = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typeof(double));
+            il.Emit(OpCodes.Brfalse, skip);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Unbox_Any, _types.Double);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Ble_Un, skip);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Unbox_Any, _types.Double);
+            il.Emit(OpCodes.Stsfld, timeoutField);
+            il.MarkLabel(skip);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>
@@ -146,6 +256,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Stfld, _netServerBlockListField);
             il.MarkLabel(noBlockList);
+
+            // allowHalfOpen (bool) → server._socketAllowHalfOpen (#1070)
+            var noAho = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldstr, "allowHalfOpen");
+            il.Emit(OpCodes.Ldloca, valLocal);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, noAho);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Isinst, typeof(bool));
+            il.Emit(OpCodes.Brfalse, noAho);
+            il.Emit(OpCodes.Ldloc, serverLocal);
+            il.Emit(OpCodes.Ldloc, valLocal);
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Stfld, _netServerSocketAllowHalfOpenField);
+            il.MarkLabel(noAho);
         }
         il.MarkLabel(noOptions);
 

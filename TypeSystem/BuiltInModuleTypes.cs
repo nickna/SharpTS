@@ -1509,7 +1509,10 @@ public static class BuiltInModuleTypes
             ["readyState"] = stringType,
             ["writableLength"] = numberType,
             ["writableHighWaterMark"] = numberType,
-            ["writableNeedDrain"] = booleanType
+            ["writableNeedDrain"] = booleanType,
+            ["localFamily"] = stringType,
+            ["pending"] = booleanType,
+            ["allowHalfOpen"] = booleanType
         };
         var socketType = new TypeInfo.Record(socketMembers.ToFrozenDictionary());
 
@@ -1559,7 +1562,11 @@ public static class BuiltInModuleTypes
             ["Server"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
             ["Socket"] = new TypeInfo.Function([anyType], socketType, RequiredParams: 0),
             ["BlockList"] = new TypeInfo.Function([], blockListType, RequiredParams: 0),
-            ["SocketAddress"] = new TypeInfo.Function([anyType], socketAddressType, RequiredParams: 0)
+            ["SocketAddress"] = new TypeInfo.Function([anyType], socketAddressType, RequiredParams: 0),
+            ["getDefaultAutoSelectFamily"] = new TypeInfo.Function([], booleanType),
+            ["setDefaultAutoSelectFamily"] = new TypeInfo.Function([booleanType], voidType),
+            ["getDefaultAutoSelectFamilyAttemptTimeout"] = new TypeInfo.Function([], numberType),
+            ["setDefaultAutoSelectFamilyAttemptTimeout"] = new TypeInfo.Function([numberType], voidType)
         };
     }
 

@@ -27,7 +27,11 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         "Server",
         "Socket",
         "BlockList",
-        "SocketAddress"
+        "SocketAddress",
+        "getDefaultAutoSelectFamily",
+        "setDefaultAutoSelectFamily",
+        "getDefaultAutoSelectFamilyAttemptTimeout",
+        "setDefaultAutoSelectFamilyAttemptTimeout"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -41,8 +45,36 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
             "isIP" => EmitIsIP(emitter, arguments),
             "isIPv4" => EmitIsIPv4(emitter, arguments),
             "isIPv6" => EmitIsIPv6(emitter, arguments),
+            "getDefaultAutoSelectFamily" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamily),
+            "setDefaultAutoSelectFamily" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamily),
+            "getDefaultAutoSelectFamilyAttemptTimeout" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamilyAttemptTimeout),
+            "setDefaultAutoSelectFamilyAttemptTimeout" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamilyAttemptTimeout),
             _ => false
         };
+    }
+
+    private static bool EmitZeroArgCall(IEmitterContext emitter, System.Reflection.MethodInfo method)
+    {
+        emitter.Context.IL.Emit(OpCodes.Call, method);
+        emitter.SetStackUnknown();
+        return true;
+    }
+
+    private static bool EmitOneArgCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.MethodInfo method)
+    {
+        var il = emitter.Context.IL;
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, method);
+        emitter.SetStackUnknown();
+        return true;
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)

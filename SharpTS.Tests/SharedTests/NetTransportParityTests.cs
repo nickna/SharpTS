@@ -287,6 +287,109 @@ public class NetTransportParityTests
 
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Server_AllowHalfOpen_KeepsWritableSideAfterFin(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                const server = net.createServer({ allowHalfOpen: true }, (sock: any) => {
+                    sock.setEncoding('utf8');
+                    let got = '';
+                    sock.on('data', (d: string) => { got += d; });
+                    sock.on('end', () => {
+                        console.log('server end, readyState ' + sock.readyState);
+                        sock.write('reply:' + got);
+                        sock.end();
+                    });
+                });
+                server.listen(0, '127.0.0.1', () => {
+                    const port = server.address().port;
+                    const client = net.createConnection({ port: port, host: '127.0.0.1' });
+                    client.setEncoding('utf8');
+                    console.log('pending ' + client.pending);
+                    let recv = '';
+                    client.on('connect', () => {
+                        console.log('pending ' + client.pending);
+                        client.write('hi');
+                        client.end();
+                        console.log('client readyState ' + client.readyState);
+                    });
+                    client.on('data', (d: string) => { recv += d; });
+                    client.on('close', () => {
+                        console.log('recv ' + recv);
+                        server.close();
+                    });
+                });
+                """
+        };
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal(
+            "pending true\npending false\nclient readyState readOnly\nserver end, readyState writeOnly\nrecv reply:hi\n",
+            output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Server_Drop_FiresPastMaxConnections(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                const server = net.createServer((sock: any) => {
+                    sock.on('data', () => {});
+                    sock.on('end', () => { sock.end(); });
+                });
+                server.maxConnections = 1;
+                server.on('drop', (data: any) => {
+                    console.log('drop ' + (typeof data.remoteAddress) + ' ' + (typeof data.remotePort) + ' ' + data.localFamily);
+                });
+                server.listen(0, '127.0.0.1', () => {
+                    const port = server.address().port;
+                    const c1 = net.createConnection({ port: port, host: '127.0.0.1' });
+                    c1.on('error', () => {});
+                    c1.on('connect', () => {
+                        const c2 = net.createConnection({ port: port, host: '127.0.0.1' });
+                        c2.on('error', () => {});
+                        c2.on('close', () => {
+                            console.log('c2 closed');
+                            c1.end();
+                        });
+                        setTimeout(() => { c2.destroy(); }, 500);
+                    });
+                    c1.on('close', () => { server.close(); });
+                });
+                """
+        };
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("drop string number IPv4\nc2 closed\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Net_AutoSelectFamilyDefaults_GetAndSet(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                console.log(net.getDefaultAutoSelectFamily());
+                console.log(net.getDefaultAutoSelectFamilyAttemptTimeout());
+                net.setDefaultAutoSelectFamily(false);
+                net.setDefaultAutoSelectFamilyAttemptTimeout(500);
+                console.log(net.getDefaultAutoSelectFamily());
+                console.log(net.getDefaultAutoSelectFamilyAttemptTimeout());
+                net.setDefaultAutoSelectFamily(true);
+                net.setDefaultAutoSelectFamilyAttemptTimeout(250);
+                """
+        };
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("true\n250\nfalse\n500\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void BlockList_NamedImport_Constructible(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

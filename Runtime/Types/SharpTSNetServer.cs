@@ -32,6 +32,7 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
     private bool _isClusterWorker;
     private int? _socketHighWaterMark;
     private SharpTSBlockList? _blockList;
+    private bool _socketAllowHalfOpen;
 
     /// <summary>
     /// Applies createServer(options) settings that configure accepted sockets.
@@ -42,15 +43,21 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
             _socketHighWaterMark = (int)hwm;
         if (options.GetProperty("blockList") is SharpTSBlockList blockList)
             _blockList = blockList;
+        if (options.GetProperty("allowHalfOpen") is bool aho)
+            _socketAllowHalfOpen = aho;
     }
 
     /// <summary>
-    /// Applies per-server socket settings to a freshly accepted connection.
+    /// Applies per-server socket settings to a freshly accepted connection, and
+    /// hooks the socket's close so the connection list tracks live sockets
+    /// (maxConnections / getConnections accuracy, #1070).
     /// </summary>
     private void ConfigureAcceptedSocket(SharpTSSocket socket)
     {
         if (_socketHighWaterMark is int hwm)
             socket._writableHighWaterMark = hwm;
+        socket._allowHalfOpen = _socketAllowHalfOpen;
+        socket.OnClosed = () => _connections.Remove(socket);
     }
 
     /// <summary>
@@ -437,14 +444,18 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                         continue;
                     }
 
-                    if (_connections.Count >= _maxConnections)
-                    {
-                        tcpClient.Close();
-                        continue;
-                    }
-
                     interpreter.ScheduleTimer(0, 0, () =>
                     {
+                        // maxConnections gate on the loop thread, where _connections
+                        // is mutated — a refused connection emits 'drop' with the
+                        // Node data shape, then closes (#1070).
+                        if (_connections.Count >= _maxConnections)
+                        {
+                            EmitEvent(interpreter, "drop", [BuildDropData(tcpClient)]);
+                            try { tcpClient.Close(); } catch { }
+                            return;
+                        }
+
                         var socket = new SharpTSSocket(tcpClient);
                         ConfigureAcceptedSocket(socket);
                         _connections.Add(socket);
@@ -473,6 +484,34 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
                 }
             }
         }, token);
+    }
+
+    /// <summary>
+    /// Builds the 'drop' event payload: local/remote endpoint triads (Node shape).
+    /// </summary>
+    private static SharpTSObject BuildDropData(TcpClient tcpClient)
+    {
+        var data = new Dictionary<string, object?>();
+        try
+        {
+            if (tcpClient.Client.LocalEndPoint is IPEndPoint local)
+            {
+                data["localAddress"] = local.Address.ToString();
+                data["localPort"] = (double)local.Port;
+                data["localFamily"] = local.AddressFamily == AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4";
+            }
+            if (tcpClient.Client.RemoteEndPoint is IPEndPoint remote)
+            {
+                data["remoteAddress"] = remote.Address.ToString();
+                data["remotePort"] = (double)remote.Port;
+                data["remoteFamily"] = remote.AddressFamily == AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4";
+            }
+        }
+        catch
+        {
+            // Endpoint may be unavailable if the peer already disconnected
+        }
+        return new SharpTSObject(data);
     }
 
     /// <summary>

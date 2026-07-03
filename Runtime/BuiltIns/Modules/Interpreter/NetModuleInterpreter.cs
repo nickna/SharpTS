@@ -33,9 +33,32 @@ public static class NetModuleInterpreter
             ["Server"] = BuiltInMethod.CreateV2("Server", 0, 2, CreateServer),
             ["Socket"] = BuiltInMethod.CreateV2("Socket", 0, 1, CreateSocket),
             ["BlockList"] = BuiltInMethod.CreateV2("BlockList", 0, 0, CreateBlockList),
-            ["SocketAddress"] = BuiltInMethod.CreateV2("SocketAddress", 0, 1, CreateSocketAddress)
+            ["SocketAddress"] = BuiltInMethod.CreateV2("SocketAddress", 0, 1, CreateSocketAddress),
+            // autoSelectFamily defaults (#1070). Connection establishment itself
+            // delegates to .NET's TcpClient, which already attempts every resolved
+            // address sequentially — the knobs are surfaced for API compatibility.
+            ["getDefaultAutoSelectFamily"] = BuiltInMethod.CreateV2("getDefaultAutoSelectFamily", 0,
+                (Interp i, RuntimeValue r, ReadOnlySpan<RuntimeValue> a) => RuntimeValue.FromBoolean(_defaultAutoSelectFamily)),
+            ["setDefaultAutoSelectFamily"] = BuiltInMethod.CreateV2("setDefaultAutoSelectFamily", 1,
+                (Interp i, RuntimeValue r, ReadOnlySpan<RuntimeValue> a) =>
+                {
+                    if (a[0].IsBoolean) _defaultAutoSelectFamily = a[0].AsBooleanUnsafe();
+                    return RuntimeValue.Undefined;
+                }),
+            ["getDefaultAutoSelectFamilyAttemptTimeout"] = BuiltInMethod.CreateV2("getDefaultAutoSelectFamilyAttemptTimeout", 0,
+                (Interp i, RuntimeValue r, ReadOnlySpan<RuntimeValue> a) => RuntimeValue.FromNumber(_defaultAutoSelectFamilyAttemptTimeout)),
+            ["setDefaultAutoSelectFamilyAttemptTimeout"] = BuiltInMethod.CreateV2("setDefaultAutoSelectFamilyAttemptTimeout", 1,
+                (Interp i, RuntimeValue r, ReadOnlySpan<RuntimeValue> a) =>
+                {
+                    if (a[0].IsNumber && a[0].AsNumberUnsafe() > 0) _defaultAutoSelectFamilyAttemptTimeout = a[0].AsNumberUnsafe();
+                    return RuntimeValue.Undefined;
+                })
         };
     }
+
+    // Node defaults: autoSelectFamily true (v20+), attempt timeout 250 ms.
+    private static bool _defaultAutoSelectFamily = true;
+    private static double _defaultAutoSelectFamilyAttemptTimeout = 250;
 
     /// <summary>
     /// Creates a new net.BlockList (#1069).
