@@ -95,7 +95,7 @@ KQIDAQAB
 
                 console.log(cert.checkHost('sharpts.test') === 'sharpts.test');
                 console.log(cert.checkHost('a.wild.sharpts.test') === 'a.wild.sharpts.test');
-                console.log(cert.checkHost('nope.example') === undefined);
+                console.log(cert.checkHost('nope.invalid') === undefined);
                 console.log(cert.checkHost('deep.a.wild.sharpts.test') === undefined);
                 console.log(cert.checkIP('127.0.0.1') === '127.0.0.1');
                 console.log(cert.checkIP('10.0.0.1') === undefined);
