@@ -811,6 +811,10 @@ public partial class ILCompiler
         // Emit method body
         if (method.Body != null)
         {
+            // #1237: materialize inner function declarations in place, matching the public-method
+            // path so an inner `function` declared inside a private method becomes a binding.
+            WireInPlaceInnerFunctions(ctx);
+
             foreach (var stmt in method.Body)
             {
                 emitter.EmitStatement(stmt);
@@ -1185,6 +1189,15 @@ public partial class ILCompiler
         // Abstract methods have no body to emit
         if (method.Body != null)
         {
+            // #1237: an inner `function` declared inside a method is collected (its method/display
+            // class are emitted) but was never materialized into a binding here, so every reference
+            // fell through to ThrowUndefinedVariable. Wire the in-place materializer so each inner
+            // function declaration is created at its textual position by the statement emitter's
+            // Stmt.Function arm. Methods have no function-level display class, so a top-of-body hoist
+            // (EmitInnerFunctionHoisting) would snapshot captured method-locals before they are
+            // assigned; in-place materialization captures them correctly. See WireInPlaceInnerFunctions.
+            WireInPlaceInnerFunctions(ctx);
+
             foreach (var stmt in method.Body)
             {
                 emitter.EmitStatement(stmt);

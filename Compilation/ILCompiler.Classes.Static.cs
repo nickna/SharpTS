@@ -505,6 +505,10 @@ public partial class ILCompiler
         // Abstract methods have no body to emit
         if (method.Body != null)
         {
+            // #1237: materialize inner function declarations in place, matching the instance-method
+            // path so an inner `function` declared inside a static method becomes a binding.
+            WireInPlaceInnerFunctions(ctx);
+
             foreach (var stmt in method.Body)
             {
                 emitter.EmitStatement(stmt);

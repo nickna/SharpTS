@@ -718,6 +718,27 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Wires the in-place inner-function materializer (<see cref="EmitBlockScopedInnerFunctionDeclaration"/>)
+    /// onto <paramref name="ctx"/> WITHOUT running the top-of-body two-pass hoist that
+    /// <see cref="EmitInnerFunctionHoisting"/> performs. Class-method bodies (#1237) use this: unlike a
+    /// plain function or arrow, a method has no function-level display class, so hoisting a capturing
+    /// inner function to the top of the body would snapshot its captured method-locals BEFORE the body
+    /// assigns them — leaving the closure's capture fields null. Leaving
+    /// <see cref="CompilationContext.HoistedInnerFunctions"/> empty means every inner function
+    /// declaration — top-level-of-body or block-nested — is materialized in place at its textual
+    /// position by the statement emitter's <c>Stmt.Function</c> arm, so its capture snapshot sees the
+    /// values already assigned. This matches how arrows inside methods capture (snapshot at creation),
+    /// and admits every program the type checker allows: it rejects forward references to a method's
+    /// inner functions (unlike function bodies, which it hoists), so no valid program needs the two-pass
+    /// pre-materialization here.
+    /// </summary>
+    private void WireInPlaceInnerFunctions(CompilationContext ctx)
+    {
+        ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
+    }
+
+    /// <summary>
     /// Materializes a single inner <c>function</c> declaration nested inside a block/loop/if at its
     /// textual position: creates its TSFunction and binds a block-scoped local, then snapshots its
     /// captures. Unlike the callable-body pre-pass (<see cref="EmitInnerFunctionHoisting"/>), this
