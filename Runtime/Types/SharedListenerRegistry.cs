@@ -126,6 +126,7 @@ internal class SharedTcpListener
 {
     private readonly TcpListener _listener;
     private readonly ConcurrentDictionary<double, WorkerRegistration> _workers = new();
+    private readonly object _startGate = new();
     private int _roundRobinIndex;
     private CancellationTokenSource? _cts;
     private bool _started;
@@ -140,12 +141,22 @@ internal class SharedTcpListener
     public void AddWorker(double workerId, Action<TcpClient> onConnection, Interp workerInterpreter)
     {
         _workers[workerId] = new WorkerRegistration(workerId, onConnection, workerInterpreter);
-        if (!_started)
+
+        // Start the underlying listener exactly once. Two cluster workers calling server.listen() on
+        // the same port register concurrently on their own interpreter threads and are handed the SAME
+        // SharedTcpListener by GetOrAdd, so this start-once transition MUST be synchronized. Without the
+        // lock both workers can pass the `!_started` check, both call _listener.Start(), and the second
+        // Bind on the same socket throws — the throwing worker's ListenAsClusterWorker then never fires
+        // its `listening` callback / 'ready' message, deadlocking a round-robin test until its timeout.
+        // Publish `_started` only after Start succeeds so a genuinely failed first Start can be retried.
+        if (Volatile.Read(ref _started)) return;
+        lock (_startGate)
         {
-            _started = true;
+            if (_started) return;
             _cts = new CancellationTokenSource();
             _listener.Start();
             StartAccepting();
+            Volatile.Write(ref _started, true);
         }
     }
 
@@ -156,9 +167,12 @@ internal class SharedTcpListener
 
     public void Stop()
     {
-        _cts?.Cancel();
-        try { _listener.Stop(); } catch { }
-        _started = false;
+        lock (_startGate)
+        {
+            _cts?.Cancel();
+            try { _listener.Stop(); } catch { }
+            Volatile.Write(ref _started, false);
+        }
     }
 
     private void StartAccepting()
@@ -207,6 +221,7 @@ internal class SharedHttpListener
 {
     private HttpListener? _listener;
     private readonly ConcurrentDictionary<double, HttpWorkerRegistration> _workers = new();
+    private readonly object _startGate = new();
     private int _roundRobinIndex;
     private CancellationTokenSource? _cts;
     private bool _started;
@@ -222,9 +237,15 @@ internal class SharedHttpListener
     public void AddWorker(double workerId, Action<HttpListenerContext> onRequest, Interp workerInterpreter)
     {
         _workers[workerId] = new HttpWorkerRegistration(workerId, onRequest, workerInterpreter);
-        if (!_started)
+
+        // Start the underlying HttpListener exactly once — see SharedTcpListener.AddWorker for the race:
+        // two workers sharing a port register concurrently on the same SharedHttpListener, so the
+        // start-once transition must be synchronized or the second Start() throws and its worker never
+        // reports `listening`/`ready`, hanging the test. Publish `_started` only after Start succeeds.
+        if (Volatile.Read(ref _started)) return;
+        lock (_startGate)
         {
-            _started = true;
+            if (_started) return;
             _cts = new CancellationTokenSource();
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://+:{_port}/");
@@ -239,6 +260,7 @@ internal class SharedHttpListener
                 _listener.Start();
             }
             StartAccepting();
+            Volatile.Write(ref _started, true);
         }
     }
 
@@ -249,10 +271,13 @@ internal class SharedHttpListener
 
     public void Stop()
     {
-        _cts?.Cancel();
-        try { _listener?.Stop(); } catch { }
-        try { _listener?.Close(); } catch { }
-        _started = false;
+        lock (_startGate)
+        {
+            _cts?.Cancel();
+            try { _listener?.Stop(); } catch { }
+            try { _listener?.Close(); } catch { }
+            Volatile.Write(ref _started, false);
+        }
     }
 
     private void StartAccepting()
