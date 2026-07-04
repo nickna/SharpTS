@@ -33,6 +33,9 @@ namespace SharpTS.Compilation;
 ///         ambiguity / shadowing without full scope resolution);</item>
 ///   <item>the name is not captured by any closure (a captured binding is routed to an <c>object</c>
 ///         display-class field, never a typed local slot the call site can key on).</item>
+///   <item>the name is not exported (an exported binding escapes through its module's export field and
+///         is invoked cross-module via the generic reflective dispatch, not the local-slot fast path — so
+///         the bare display-class instance would surface as a non-callable object, #1229).</item>
 /// </list>
 ///
 /// <para>The catch-all is <see cref="Visitor.VisitVariable"/>: any bare variable occurrence not consumed
@@ -117,6 +120,37 @@ public static class NonEscapingArrowLocalAnalyzer
 
         protected override void VisitVariable(Expr.Variable expr) =>
             Disqualified.Add(expr.Name.Lexeme);
+
+        protected override void VisitExport(Stmt.Export stmt)
+        {
+            // An exported binding escapes this module: its value is copied into the module's
+            // export field (read by `$GetNamespace` and by importing modules, which call it
+            // through the generic reflective `InvokeMethodValue` dispatch — never the local-slot
+            // direct-call fast path this optimization relies on). Storing the bare display-class
+            // instance without a `$TSFunction` wrapper would then surface a plain object where a
+            // callable is expected ("object is not a function", #1229). Disqualify the exported
+            // name(s), then fall through to the base walk so uses INSIDE the declaration's
+            // initializer still count toward other candidates.
+            DisqualifyExportedNames(stmt.Declaration);
+            if (stmt.NamedExports != null)
+                foreach (var spec in stmt.NamedExports)
+                    Disqualified.Add(spec.LocalName.Lexeme);
+
+            base.VisitExport(stmt);
+        }
+
+        private void DisqualifyExportedNames(Stmt? decl)
+        {
+            switch (decl)
+            {
+                case Stmt.Const c: Disqualified.Add(c.Name.Lexeme); break;
+                case Stmt.Var v: Disqualified.Add(v.Name.Lexeme); break;
+                case Stmt.Sequence seq:
+                    foreach (var inner in seq.Statements)
+                        DisqualifyExportedNames(inner);
+                    break;
+            }
+        }
 
         protected override void VisitAssign(Expr.Assign expr)
         {
