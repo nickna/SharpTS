@@ -92,7 +92,7 @@ public partial class TypeChecker
     private TypeInfo InferConstLiteralType(TypeInfo argType)
     {
         // Already literal? Keep it
-        if (argType is TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral)
+        if (argType is TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigIntLiteral)
             return argType;
 
         // Tuple: preserve element literal types + mark readonly

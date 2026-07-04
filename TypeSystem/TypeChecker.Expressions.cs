@@ -877,6 +877,7 @@ public partial class TypeChecker
             TypeInfo.NumberLiteral => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
             TypeInfo.StringLiteral => new TypeInfo.String(),
             TypeInfo.BooleanLiteral => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            TypeInfo.BigIntLiteral => new TypeInfo.BigInt(),
             TypeInfo.Union u => new TypeInfo.Union(u.FlattenedTypes.Select(WidenLiteralType).ToList()),
             // `as const` (and other readonly) arrays/tuples/records keep their literal element/member
             // types — readonly literal types are never widened (#493). Without this, an `as const`
@@ -1822,7 +1823,7 @@ public partial class TypeChecker
         if (value is double d) return new TypeInfo.NumberLiteral(d);
         if (value is string s) return new TypeInfo.StringLiteral(s);
         if (value is bool b) return new TypeInfo.BooleanLiteral(b);
-        if (value is System.Numerics.BigInteger) return new TypeInfo.BigInt();
+        if (value is System.Numerics.BigInteger bi) return new TypeInfo.BigIntLiteral(bi);
         return new TypeInfo.Void();
     }
 

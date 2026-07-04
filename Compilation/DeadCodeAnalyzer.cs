@@ -203,9 +203,14 @@ public class DeadCodeAnalyzer
         // Check for exhaustive switch on union types
         if (subjectType is TypeInfo.Union union)
         {
+            // Bigint case values get an "n" suffix so `case 1n:` and `case 1:` stay distinct keys.
             var coveredTypes = sw.Cases
                 .Where(c => c.Value is Expr.Literal)
-                .Select(c => ((Expr.Literal)c.Value).Value?.ToString() ?? "null")
+                .Select(c => ((Expr.Literal)c.Value).Value switch
+                {
+                    System.Numerics.BigInteger bi => bi + "n",
+                    var v => v?.ToString() ?? "null"
+                })
                 .ToHashSet();
 
             bool allCovered = union.FlattenedTypes.All(t => t switch
@@ -213,6 +218,7 @@ public class DeadCodeAnalyzer
                 TypeInfo.StringLiteral sl => coveredTypes.Contains(sl.Value),
                 TypeInfo.NumberLiteral nl => coveredTypes.Contains(nl.Value.ToString()),
                 TypeInfo.BooleanLiteral bl => coveredTypes.Contains(bl.Value.ToString()),
+                TypeInfo.BigIntLiteral bil => coveredTypes.Contains(bil.Value + "n"),
                 TypeInfo.Null => coveredTypes.Contains("null"),
                 _ => false
             });
@@ -411,6 +417,7 @@ public class DeadCodeAnalyzer
         "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
+        "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
         "function" => type is TypeInfo.Function,
         "undefined" => false, // SharpTS doesn't have undefined as a type

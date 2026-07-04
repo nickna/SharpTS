@@ -54,7 +54,7 @@ public partial class TypeChecker
                 throw new TypeCheckException("BigInt() requires exactly one argument.", tsCode: "TS2554");
             }
             var argType = CheckExpr(call.Arguments[0]);
-            if (!IsNumber(argType) && !IsString(argType) && argType is not TypeInfo.BigInt && argType is not TypeInfo.Any)
+            if (!IsNumber(argType) && !IsString(argType) && !IsBigInt(argType) && argType is not TypeInfo.Any)
             {
                 throw new TypeCheckException($"BigInt() argument must be a number, string, or bigint, got '{argType}'.", tsCode: "TS2345");
             }

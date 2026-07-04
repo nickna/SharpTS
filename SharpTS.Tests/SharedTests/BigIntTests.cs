@@ -627,4 +627,75 @@ public class BigIntTests
     }
 
     #endregion
+
+    #region Bigint Literal Types (#1207)
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void BigInt_LiteralTypedOperands_UseBigintArithmetic(ExecutionMode mode)
+    {
+        // const-bound operands carry TypeInfo.BigIntLiteral in the type map; the
+        // compiled bigint-arithmetic detection must treat them as bigint, not fall
+        // through to the number path.
+        var source = """
+            const a = 2n;
+            const b = 3n;
+            console.log(a + b);
+            console.log((a * b).toString(2));
+            console.log(a < b);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("5n\n110\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void BigInt_TypeofGuard_BranchSurvivesDeadCodeAnalysis(ExecutionMode mode)
+    {
+        // The compiled dead-code analyzer had no "bigint" arm in its typeof matcher,
+        // so `typeof x === "bigint"` on a bigint-typed variable read as never-true and
+        // the guarded branch was folded out of the emitted IL.
+        var source = """
+            let x = 5n;
+            if (typeof x === "bigint") { console.log("big"); } else { console.log("not"); }
+            const c = 7n;
+            if (typeof c === "bigint") { console.log("lit"); } else { console.log("not"); }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("big\nlit\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void BigInt_LiteralTypedReceiver_MethodCallWorks(ExecutionMode mode)
+    {
+        // toString(radix) on a BigIntLiteral-typed receiver must route through the
+        // bigint helper (which honors the radix), same as a bigint-typed one.
+        var source = """
+            const c = 255n;
+            console.log(c.toString(16));
+            console.log(c.toString());
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ff\n255\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void BigInt_LiteralUnionNarrowing_RunsCorrectBranch(ExecutionMode mode)
+    {
+        var source = """
+            function g(x: 1n | 2n | "z"): string {
+                if (x === 1n) {
+                    return "one";
+                }
+                return typeof x === "bigint" ? "two" : x;
+            }
+            console.log(g(1n), g(2n), g("z"));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("one two z\n", output);
+    }
+
+    #endregion
 }

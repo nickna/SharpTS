@@ -30,9 +30,8 @@ public class TypeNodeSliceTests
     [Fact]
     public void NodePath_EngagesForBigintLiteralType()
     {
-        // Bigint literal types (1n) now carry a node. Resolution keeps parity with the string
-        // path, which had no bigint handling and let "1n" fall through its unknown-name tail to
-        // any — so the annotation resolves (node-first) without constraining the value.
+        // Bigint literal types (1n) carry a node and resolve to TypeInfo.BigIntLiteral (#1207);
+        // BigIntLiteralTypeTests pins the semantics — here we only pin the node path engaging.
         TypeNodeStats.Reset();
         TestHarness.RunInterpreted("""
             let x: 1n;

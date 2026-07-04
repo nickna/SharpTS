@@ -364,6 +364,7 @@ public partial class TypeChecker
         TypeInfo.StringLiteral sl => $"\"{sl.Value}\"",
         TypeInfo.NumberLiteral nl => nl.Value.ToString(),
         TypeInfo.BooleanLiteral bl => bl.Value ? "true" : "false",
+        TypeInfo.BigIntLiteral bil => $"{bil.Value}n",
         TypeInfo.Array arr => $"{TypeInfoToString(arr.ElementType)}[]",
         TypeInfo.Union u => string.Join(" | ", u.FlattenedTypes.Select(TypeInfoToString)),
         TypeInfo.Intersection i => string.Join(" & ", i.FlattenedTypes.Select(TypeInfoToString)),
@@ -618,6 +619,8 @@ public partial class TypeChecker
             return nl1.Value == nl2.Value;
         if (expected is TypeInfo.BooleanLiteral bl1 && actual is TypeInfo.BooleanLiteral bl2)
             return bl1.Value == bl2.Value;
+        if (expected is TypeInfo.BigIntLiteral bil1 && actual is TypeInfo.BigIntLiteral bil2)
+            return bil1.Value == bil2.Value;
 
         // Literal to primitive widening
         if (expected is TypeInfo.String && actual is TypeInfo.StringLiteral)
@@ -625,6 +628,8 @@ public partial class TypeChecker
         if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } && actual is TypeInfo.NumberLiteral)
             return true;
         if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } && actual is TypeInfo.BooleanLiteral)
+            return true;
+        if (expected is TypeInfo.BigInt && actual is TypeInfo.BigIntLiteral)
             return true;
 
         // Template literal type compatibility

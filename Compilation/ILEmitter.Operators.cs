@@ -2001,21 +2001,22 @@ public partial class ILEmitter
         var leftType = _ctx.TypeMap.Get(b.Left);
         var rightType = _ctx.TypeMap.Get(b.Right);
 
-        return leftType is TypeInfo.BigInt || rightType is TypeInfo.BigInt;
+        return leftType is TypeInfo.BigInt or TypeInfo.BigIntLiteral
+            || rightType is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
     }
 
     private bool IsBigIntExpr(Expr expr)
     {
         if (_ctx.TypeMap == null) return false;
         var type = _ctx.TypeMap.Get(expr);
-        return type is TypeInfo.BigInt;
+        return type is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
     }
 
     private bool IsBothBigInt(Expr.Binary b)
     {
         if (_ctx.TypeMap == null) return false;
-        return _ctx.TypeMap.Get(b.Left) is TypeInfo.BigInt
-            && _ctx.TypeMap.Get(b.Right) is TypeInfo.BigInt;
+        return _ctx.TypeMap.Get(b.Left) is TypeInfo.BigInt or TypeInfo.BigIntLiteral
+            && _ctx.TypeMap.Get(b.Right) is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ public static class TypeCategoryResolver
         TypeInfo.NumberLiteral => TypeCategory.Number,
         TypeInfo.Primitive p when p.Type == TokenType.TYPE_BOOLEAN => TypeCategory.Boolean,
         TypeInfo.BooleanLiteral => TypeCategory.Boolean,
-        TypeInfo.BigInt => TypeCategory.BigInt,
+        TypeInfo.BigInt or TypeInfo.BigIntLiteral => TypeCategory.BigInt,
         TypeInfo.Symbol or TypeInfo.UniqueSymbol => TypeCategory.Symbol,
 
         // Built-in object types
