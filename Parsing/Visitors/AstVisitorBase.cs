@@ -74,7 +74,8 @@ public abstract class AstVisitorBase
             // Fail loud on an unhandled node rather than silently skipping its subtree. A newly
             // added Expr kind that nobody wired here would otherwise be invisible to every analyzer
             // built on AstVisitorBase (closure/suspension/variable analysis) — a latent miscompile,
-            // not just missing coverage (#1107).
+            // not just missing coverage (#1107). AstDispatchTests validates this switch against the
+            // canonical AstNodeCatalog so an omission fails a test, not just at visit time (#1243).
             default:
                 throw new NotSupportedException(
                     $"AstVisitorBase has no dispatch case for expression node '{expr.GetType().Name}'. " +
@@ -130,6 +131,7 @@ public abstract class AstVisitorBase
             case Stmt.DeclareGlobal s: VisitDeclareGlobal(s); break;
             case Stmt.Using s: VisitUsing(s); break;
             // Fail loud on an unhandled node rather than silently skipping its subtree (#1107).
+            // AstDispatchTests validates this switch against the canonical AstNodeCatalog (#1243).
             default:
                 throw new NotSupportedException(
                     $"AstVisitorBase has no dispatch case for statement node '{stmt.GetType().Name}'. " +
