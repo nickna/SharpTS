@@ -244,7 +244,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262: `(42).constructor === Number`, `true.constructor === Boolean`.
         // Compiled `Number` resolves to typeof(double); `Boolean` to typeof(bool).
-        // (String is handled inline in EmitGetProperty's stringLabel branch.)
+        // (String is handled by EmitGetProperty's EmitStringGetBranch arm.)
         var afterPrimCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "constructor");
@@ -936,10 +936,6 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
-        var namespaceLabel = il.DefineLabel();
-        var dictLabel = il.DefineLabel();
-        var listLabel = il.DefineLabel();
-        var stringLabel = il.DefineLabel();
 
         // null check
         il.Emit(OpCodes.Ldarg_0);
@@ -1001,39 +997,35 @@ public partial class RuntimeEmitter
         il.MarkLabel(notProxyLabel);
 
         // $TSNamespace - call ns.Get(name)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSNamespaceType);
-        il.Emit(OpCodes.Brtrue, namespaceLabel);
+        var notNamespaceLabel = il.DefineLabel();
+        EmitNamespaceGetBranch(il, runtime, notNamespaceLabel);
+        il.MarkLabel(notNamespaceLabel);
 
-        // $Object (with getter/setter support) - call obj.GetProperty(name)
-        var tsObjectLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Brtrue, tsObjectLabel);
+        // $Object (with getter/setter support) - obj.GetProperty(name) + PDS + proto walk.
+        var notTSObjectLabel = il.DefineLabel();
+        EmitTSObjectGetBranch(il, runtime, method, notTSObjectLabel);
+        il.MarkLabel(notTSObjectLabel);
 
-        // Map (Dictionary<object, object>) - check for "size" property.
-        // Gated together with the handler body below.
-        var mapLabel = il.DefineLabel();
+        // Map (Dictionary<object, object>) - "size" + $BoundMapMethod wrappers.
         if (_features.UsesMap)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, _types.DictionaryObjectObject);
-            il.Emit(OpCodes.Brtrue, mapLabel);
+            var notMapLabel = il.DefineLabel();
+            EmitMapGetBranch(il, runtime, notMapLabel);
+            il.MarkLabel(notMapLabel);
         }
 
         // Set (HashSet<object>) - duck-typed access via GetSetProperty.
-        var setLabel = il.DefineLabel();
         if (_features.UsesSet)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, _types.HashSetOfObject);
-            il.Emit(OpCodes.Brtrue, setLabel);
+            var notSetLabel = il.DefineLabel();
+            EmitSetGetBranch(il, runtime, notSetLabel);
+            il.MarkLabel(notSetLabel);
         }
 
-        // Dictionary (regular object)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, dictLabel);
+        // Dictionary (regular object) - own entries, PDS, prototype chain, Object.prototype.
+        var notDictLabel = il.DefineLabel();
+        EmitDictGetBranch(il, runtime, method, notDictLabel);
+        il.MarkLabel(notDictLabel);
 
         // User Array subclass (#233): a guest class extending Array derives
         // from $Array AND implements $IHasFields. Its class members (declared
@@ -1060,69 +1052,62 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.MarkLabel(notArraySubclassLabel);
 
-        // $Array - check for "length" (inherits List<object?>; MUST come
-        // BEFORE the plain List check so sparse-aware length is used —
-        // otherwise `new Array(10_000_000).length` returns 0).
-        var sharpTSArrayLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
+        // $Array - "length"/"constructor"/index/methods. MUST come BEFORE the plain
+        // List arm so sparse-aware length is used ($Array inherits List<object?>);
+        // otherwise `new Array(10_000_000).length` returns 0.
+        var notSharpTSArrayLabel = il.DefineLabel();
+        EmitSharpTSArrayGetBranch(il, runtime, notSharpTSArrayLabel);
+        il.MarkLabel(notSharpTSArrayLabel);
 
-        // List - check for "length"
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brtrue, listLabel);
+        // List - "length"/"constructor"/index/methods.
+        var notListLabel = il.DefineLabel();
+        EmitListGetBranch(il, runtime, notListLabel);
+        il.MarkLabel(notListLabel);
 
-        // object[] (compiled `arguments` representation) - check for "length"
-        var objectArrayLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ObjectArray);
-        il.Emit(OpCodes.Brtrue, objectArrayLabel);
+        // object[] (compiled `arguments` representation) - "length"/index.
+        var notObjectArrayLabel = il.DefineLabel();
+        EmitObjectArrayGetBranch(il, runtime, notObjectArrayLabel);
+        il.MarkLabel(notObjectArrayLabel);
 
-        // String - check for "length"
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, stringLabel);
+        // String - "length"/"constructor"/index/String.prototype methods.
+        var notStringArmLabel = il.DefineLabel();
+        EmitStringGetBranch(il, runtime, method, notStringArmLabel);
+        il.MarkLabel(notStringArmLabel);
 
-        // $Buffer - check for "length" and "toString". Only meaningful when
-        // some feature emitted $Buffer (crypto/fs/zlib/http/fetch/dgram/net).
-        var tsBufferLabel = il.DefineLabel();
+        // $Buffer - "length" and "toString". Only meaningful when some feature
+        // emitted $Buffer (crypto/fs/zlib/http/fetch/dgram/net).
         if (_features.UsesBuffer)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
-            il.Emit(OpCodes.Brtrue, tsBufferLabel);
+            var notBufferLabel = il.DefineLabel();
+            EmitBufferGetBranch(il, runtime, notBufferLabel);
+            il.MarkLabel(notBufferLabel);
         }
 
-        // $Stats - check for isFile, isDirectory, size, etc. Only when fs is on.
-        var tsStatsLabel = il.DefineLabel();
+        // $Stats - isFile, isDirectory, size, etc. Only when fs is on.
         if (_features.UsesFs)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.StatsType);
-            il.Emit(OpCodes.Brtrue, tsStatsLabel);
+            var notStatsLabel = il.DefineLabel();
+            EmitStatsGetBranch(il, runtime, notStatsLabel);
+            il.MarkLabel(notStatsLabel);
         }
 
         // $TSFunction - check for bind/call/apply
-        var tsFunctionLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brtrue, tsFunctionLabel);
+        var notTSFunctionLabel = il.DefineLabel();
+        EmitFunctionGetBranch(il, runtime, runtime.TSFunctionType, notTSFunctionLabel);
+        il.MarkLabel(notTSFunctionLabel);
 
         // $BoundTSFunction - also check for bind/call/apply
-        var boundFunctionLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Brtrue, boundFunctionLabel);
+        var notBoundFunctionLabel = il.DefineLabel();
+        EmitFunctionGetBranch(il, runtime, runtime.BoundTSFunctionType, notBoundFunctionLabel);
+        il.MarkLabel(notBoundFunctionLabel);
 
         // $CJSModule - route to the module's GetMember(name) for exports/id/filename/etc.
         // Only emitted when the program uses CommonJS (require/module/exports).
-        var cjsModuleGetLabel = il.DefineLabel();
         if (_features.UsesCjsRequire)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.CjsModuleType);
-            il.Emit(OpCodes.Brtrue, cjsModuleGetLabel);
+            var notCjsModuleLabel = il.DefineLabel();
+            EmitCjsModuleGetBranch(il, runtime, notCjsModuleLabel);
+            il.MarkLabel(notCjsModuleLabel);
         }
 
         // $RegExp — surface the built-in slots (`lastIndex`, `source`, `flags`,
@@ -1133,12 +1118,11 @@ public partial class RuntimeEmitter
         // vs "LastIndex") and silently returns undefined. Test262's
         // builtin-coerce-lastindex.js + many coerce/builtin-* tests require the
         // internal slot value to round-trip through `r.lastIndex` reads/writes.
-        var tsRegExpGetLabel = il.DefineLabel();
         if (_features.UsesRegExp)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
-            il.Emit(OpCodes.Brtrue, tsRegExpGetLabel);
+            var notRegExpLabel = il.DefineLabel();
+            EmitRegExpGetBranch(il, runtime, method, notRegExpLabel);
+            il.MarkLabel(notRegExpLabel);
         }
 
         // Task<object?> (Promise) - check for then/catch/finally
@@ -1790,359 +1774,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // Namespace handler - call ns.Get(name)
-        il.MarkLabel(namespaceLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSNamespaceType);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSNamespaceGet);
-        il.Emit(OpCodes.Ret);
-
-        // $Object handler - call obj.GetProperty(name) which handles getters.
-        // If the property is missing (HasProperty=false) and there's no own PDS
-        // descriptor either, walk the prototype chain via PDSGetPrototype.
-        // Required for Test262 `Con.prototype = proto; new Con(); obj.length`
-        // patterns where length lives on the prototype, and conversely
-        // `Object.defineProperty(child, "length", {value:2})` (PDS-only) must
-        // override an inherited accessor on proto.
-        il.MarkLabel(tsObjectLabel);
-        // Object.prototype method short-circuits (Stage 4z15 follow-on):
-        // expose hasOwnProperty + isPrototypeOf as $TSFunction wrappers
-        // bound to this $Object.
-        void EmitTSObjProtoCheck(string jsName, MethodBuilder helper)
-        {
-            var skip = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, skip);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(skip);
-        }
-        EmitTSObjProtoCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
-        EmitTSObjProtoCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod);
-
-        var tsObjectInstanceLocal = il.DeclareLocal(runtime.TSObjectType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Stloc, tsObjectInstanceLocal);
-        // if (obj.HasProperty(name)) return obj.GetProperty(name)
-        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
-        var tsObjectCheckPDS = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, tsObjectCheckPDS);
-        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
-        il.Emit(OpCodes.Ret);
-        // Check PDS for own data descriptor / accessor before walking chain
-        il.MarkLabel(tsObjectCheckPDS);
-        var tsObjectPDSDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, tsObjectPDSDescLocal);
-        var tsObjectWalkProto = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Brfalse, tsObjectWalkProto);
-        // Has own descriptor: getter wins, else return value
-        var tsObjectPDSValue = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, tsObjectPDSValue);
-        // Invoke getter via InvokeMethodValue(obj, getter, [])
-        var tsObjectGetterLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Stloc, tsObjectGetterLocal);
-        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Ldloc, tsObjectGetterLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsObjectPDSValue);
-        il.Emit(OpCodes.Pop); // discard the null getter
-        il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        // Walk prototype chain
-        il.MarkLabel(tsObjectWalkProto);
-        var tsObjectProtoLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
-        il.Emit(OpCodes.Stloc, tsObjectProtoLocal);
-        var tsObjectNoProto = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, tsObjectProtoLocal);
-        il.Emit(OpCodes.Brfalse, tsObjectNoProto);
-        // Recursively call GetProperty(prototype, name)
-        il.Emit(OpCodes.Ldloc, tsObjectProtoLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsObjectNoProto);
-        // No own prototype — fall back to Object.prototype singleton (mirrors
-        // the dict-branch fallback). Catches `({}.toString)` style accesses on
-        // $Object instances created without an explicit prototype link.
-        var tsObjProtoFallbackMissLabel = il.DefineLabel();
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        var tsObjProtoFallbackLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, tsObjProtoFallbackLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
-            [_types.String, _types.Object.MakeByRefType()])!);
-        il.Emit(OpCodes.Brfalse, tsObjProtoFallbackMissLabel);
-        il.Emit(OpCodes.Ldloc, tsObjProtoFallbackLocal);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsObjProtoFallbackMissLabel);
-        // Property absent on object and Object.prototype — return undefined.
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
-
-        // $TSFunction handler - call GetFunctionMethod(func, name)
-        il.MarkLabel(tsFunctionLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
-        il.Emit(OpCodes.Ret);
-
-        // $BoundTSFunction handler - call GetFunctionMethod(func, name)
-        il.MarkLabel(boundFunctionLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
-        il.Emit(OpCodes.Ret);
-
-        // $CJSModule handler - call module.GetMember(name) — only emitted when
-        // UsesCjsRequire is on (matching the dispatch arm above).
-        if (_features.UsesCjsRequire)
-        {
-            il.MarkLabel(cjsModuleGetLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.CjsModuleType);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.CjsModuleType.GetMethod("GetMember", [_types.String])!);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // $RegExp handler — surface built-in slots via typed getters, plus
-        // flag-string-parsed accessors (sticky/unicode/hasIndices/dotAll/
-        // unicodeSets) for the JS-spec flags that don't have dedicated
-        // .NET-side fields. Unknown property names fall through to
-        // GetFieldsProperty so user-set data (`r.foo = 1`, descriptor-
-        // installed properties) still resolves correctly.
-        if (_features.UsesRegExp)
-        {
-            il.MarkLabel(tsRegExpGetLabel);
-            var rxLocal = il.DeclareLocal(runtime.TSRegExpType);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
-            il.Emit(OpCodes.Stloc, rxLocal);
-
-            // ECMA-262 §22.2.6.* read paths go through ordinary Get, so
-            // user-installed Object.defineProperty(r, 'flags', {get}) etc.
-            // must win over the internal slot. Check PDS first for any name;
-            // when a descriptor is present, surface its value (data) or
-            // invoke its getter (accessor) before reaching the typed slot
-            // fast-paths below. Symbol.match's get-flags-err.js,
-            // builtin-coerce-lastindex.js and friends rely on the override
-            // path running before the internal-slot read.
-            var pdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-            il.Emit(OpCodes.Stloc, pdsDescLocal);
-            var noPdsDescLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Brfalse, noPdsDescLabel);
-            // Accessor descriptor? Getter != null → invoke fn(thisArg=rx).
-            var dataDescLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
-            var regexpGetterLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Stloc, regexpGetterLocal);
-            il.Emit(OpCodes.Ldloc, regexpGetterLocal);
-            il.Emit(OpCodes.Brfalse, dataDescLabel);
-            // Cast getter to $TSFunction and InvokeWithThis(rx). If the
-            // descriptor's getter slot isn't a $TSFunction (shouldn't
-            // happen normally), fall through to the data path.
-            var regexpFnLocal = il.DeclareLocal(runtime.TSFunctionType);
-            il.Emit(OpCodes.Ldloc, regexpGetterLocal);
-            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-            il.Emit(OpCodes.Stloc, regexpFnLocal);
-            il.Emit(OpCodes.Ldloc, regexpFnLocal);
-            il.Emit(OpCodes.Brfalse, dataDescLabel);
-            il.Emit(OpCodes.Ldloc, regexpFnLocal);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.GetMethod(typeof(System.Array), "Empty").MakeGenericMethod(_types.Object));
-            il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(dataDescLabel);
-            // Data descriptor — return descriptor.Value.
-            il.Emit(OpCodes.Ldloc, pdsDescLocal);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(noPdsDescLabel);
-
-            // Helper closure to emit a name-equality test + branch to a
-            // labelled body. Keeps the dispatch table readable.
-            void NameMatchBranch(string propName, System.Action emitBody)
-            {
-                var notThisName = il.DefineLabel();
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Ldstr, propName);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-                il.Emit(OpCodes.Brfalse, notThisName);
-                emitBody();
-                il.Emit(OpCodes.Ret);
-                il.MarkLabel(notThisName);
-            }
-
-            // "lastIndex" — return the raw boxed value when a non-numeric value
-            // was assigned (object identity preserved per spec); otherwise the
-            // typed int as a boxed double.
-            NameMatchBranch("lastIndex", () =>
-            {
-                var numericLabel = il.DefineLabel();
-                var doneLabel = il.DefineLabel();
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Ldfld, _tsRegExpLastIndexBoxedField);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Brfalse, numericLabel);
-                il.Emit(OpCodes.Br, doneLabel);            // boxed non-null → return it
-                il.MarkLabel(numericLabel);
-                il.Emit(OpCodes.Pop);                      // drop the null
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpLastIndexGetter);
-                il.Emit(OpCodes.Conv_R8);
-                il.Emit(OpCodes.Box, _types.Double);
-                il.MarkLabel(doneLabel);
-            });
-            // "constructor" — inherited from RegExp.prototype.constructor, which
-            // is the RegExp constructor (the $RegExp Type token, == what `RegExp`
-            // evaluates to as a value). Without this an instance read returns
-            // undefined and `re.constructor === RegExp` is false, blocking the
-            // §22.2.4.1 call-form same-object check. PDS is checked above, so a
-            // user `Object.defineProperty(re,'constructor',…)` / `re.constructor=x`
-            // still wins.
-            NameMatchBranch("constructor", () =>
-            {
-                il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-            });
-            // "source" / "flags" — string fields.
-            NameMatchBranch("source", () =>
-            {
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
-            });
-            // Spec-aligned ECMA-262 §22.2.6.4 — assemble the flags string from
-            // individual property reads so user-installed `Object.defineProperty
-            // (r, 'global', {get})` overrides participate in the chain. Each
-            // Get(rx, propName) goes through this very GetProperty recursively,
-            // so PDS-first lookup on the per-flag property fires first; the
-            // typed slot fallback returns the same boxed bool we'd have read
-            // directly, keeping the assembled string identical to _flags for
-            // ordinary $RegExp without overrides. Unlocks Symbol.match/replace/
-            // split/search's get-global-err / coerce-global / get-unicode-error
-            // test262 family.
-            NameMatchBranch("flags", () =>
-            {
-                var sbLocal = il.DeclareLocal(typeof(System.Text.StringBuilder));
-                il.Emit(OpCodes.Newobj, typeof(System.Text.StringBuilder).GetConstructor(Type.EmptyTypes)!);
-                il.Emit(OpCodes.Stloc, sbLocal);
-
-                var sbAppendChar = typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(char)])!;
-                void AppendIfTruthy(string propName, char ch)
-                {
-                    var skipLabel = il.DefineLabel();
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldstr, propName);
-                    il.Emit(OpCodes.Call, method);
-                    il.Emit(OpCodes.Call, runtime.IsTruthy);
-                    il.Emit(OpCodes.Brfalse, skipLabel);
-                    il.Emit(OpCodes.Ldloc, sbLocal);
-                    il.Emit(OpCodes.Ldc_I4, (int)ch);
-                    il.Emit(OpCodes.Callvirt, sbAppendChar);
-                    il.Emit(OpCodes.Pop);
-                    il.MarkLabel(skipLabel);
-                }
-
-                // Order per ECMA-262 §22.2.6.4.
-                AppendIfTruthy("hasIndices", 'd');
-                AppendIfTruthy("global", 'g');
-                AppendIfTruthy("ignoreCase", 'i');
-                AppendIfTruthy("multiline", 'm');
-                AppendIfTruthy("dotAll", 's');
-                AppendIfTruthy("unicode", 'u');
-                AppendIfTruthy("unicodeSets", 'v');
-                AppendIfTruthy("sticky", 'y');
-
-                il.Emit(OpCodes.Ldloc, sbLocal);
-                il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
-            });
-            // "global" / "ignoreCase" / "multiline" — boolean fields.
-            NameMatchBranch("global", () =>
-            {
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
-                il.Emit(OpCodes.Box, _types.Boolean);
-            });
-            NameMatchBranch("ignoreCase", () =>
-            {
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpIgnoreCaseGetter);
-                il.Emit(OpCodes.Box, _types.Boolean);
-            });
-            NameMatchBranch("multiline", () =>
-            {
-                il.Emit(OpCodes.Ldloc, rxLocal);
-                il.Emit(OpCodes.Callvirt, runtime.TSRegExpMultilineGetter);
-                il.Emit(OpCodes.Box, _types.Boolean);
-            });
-
-            // "sticky" / "unicode" / "hasIndices" / "dotAll" / "unicodeSets"
-            // — parsed from the flags string. There's no dedicated field for
-            // these, so we Contains-check the appropriate char (per ECMA-262
-            // §22.2.5.3 flags-string assembly).
-            void FlagCharBranch(string propName, char ch)
-            {
-                NameMatchBranch(propName, () =>
-                {
-                    il.Emit(OpCodes.Ldloc, rxLocal);
-                    il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
-                    // s.Contains(ch) – use Contains(char) overload to dodge
-                    // string-literal allocation for the single-char arg.
-                    il.Emit(OpCodes.Ldc_I4, (int)ch);
-                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
-                    il.Emit(OpCodes.Box, _types.Boolean);
-                });
-            }
-            FlagCharBranch("sticky", 'y');
-            FlagCharBranch("unicode", 'u');
-            FlagCharBranch("hasIndices", 'd');
-            FlagCharBranch("dotAll", 's');
-            FlagCharBranch("unicodeSets", 'v');
-
-            // Other property names fall through to GetFieldsProperty so
-            // user-set data (`r.foo = 1`) and prototype walks still resolve.
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
-            il.Emit(OpCodes.Ret);
-        }
 
         // Promise (Task<object?> or $Promise) handler - return TSFunction wrappers for then/catch/finally
         il.MarkLabel(promiseLabel);
@@ -2253,708 +1887,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        il.MarkLabel(dictLabel);
-        // Object.prototype methods short-circuit: return $TSFunction wrappers
-        // for the helper. target=null + cached name+length means the wrapper
-        // dispatches via InvokeWithThis (the helper's first param is "__this"
-        // so _expectsThis=true), letting .call(receiver, ...) inject the right
-        // receiver instead of being shadowed by a target-bound prepending
-        // that double-applies and trims the wrong tail. Direct dispatch
-        // (`obj.method(args)`) still works because compiled-mode method calls
-        // route through InvokeMethodValue → InvokeWithThis with the receiver
-        // as thisArg. JS-spec name + length surface to user code via fn.name
-        // / fn.length introspection.
-        void EmitObjProtoMethodCheck(string jsName, MethodBuilder helper, int jsLength)
-        {
-            var skip = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, skip);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(skip);
-        }
-        EmitObjProtoMethodCheck("hasOwnProperty", runtime.HasOwnPropertyHelperMethod, 1);
-        EmitObjProtoMethodCheck("isPrototypeOf",  runtime.IsPrototypeOfHelperMethod, 1);
-
-        // Check for getter accessor via $PropertyDescriptorStore - fully standalone, no reflection
-        var getterLocal = il.DeclareLocal(_types.Object);
-        var noGetterLabel = il.DefineLabel();
-
-        // Call PDSTryGetGetter(obj, name, out getter)
-        il.Emit(OpCodes.Ldarg_0);  // obj
-        il.Emit(OpCodes.Ldarg_1);  // name
-        il.Emit(OpCodes.Ldloca, getterLocal);  // out getter
-        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
-        il.Emit(OpCodes.Brfalse, noGetterLabel);
-
-        // Getter was found - invoke it via InvokeMethodValue(obj, getter, emptyArgs)
-        il.Emit(OpCodes.Ldarg_0);  // receiver (obj)
-        il.Emit(OpCodes.Ldloc, getterLocal);  // function (getter)
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);  // empty args array
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(noGetterLabel);
-
-        // dict.TryGetValue(name, out value) ? value : check prototype chain
-        var valueLocal = il.DeclareLocal(_types.Object);
-        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var protoLocal = il.DeclareLocal(_types.Object);
-
-        // Store the dictionary in a local for later use with BindThis
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, dictLocal);
-
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
-        var foundLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, foundLabel);
-
-        // $AbortSignal dict surface (#224, #985): the properties "aborted"/"reason"/
-        // "onabort" AND the methods "addEventListener"/"removeEventListener"/
-        // "throwIfAborted" on a dynamically-typed (`any`) signal receiver. The typed
-        // path intercepts at compile time (AbortSignalEmitter); an `any` receiver lands
-        // here. The methods are returned as $TSFunction wrappers (target=null,
-        // _expectsThis=true via the "__this" first parameter) so a subsequent
-        // InvokeMethodValue injects the signal as the receiver — i.e.
-        // `signal.addEventListener('abort', cb)` works from inside a helper, not only at
-        // a statically-typed call site. Signals are identified by their "_reasonSet"
-        // internal slot — the public keys are computed from the CancellationToken, so
-        // they are never own dict entries and always reach this miss path. Name screen
-        // runs first to keep ordinary dict misses cheap.
-        if (_features.UsesAbortController)
-        {
-            var notSignalPropLabel = il.DefineLabel();
-            var signalNameMatchLabel = il.DefineLabel();
-            var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
-
-            // Returns a $TSFunction wrapping `helper`, bound to no target, so the
-            // wrapper's _expectsThis is set (helper's first param is "__this") and
-            // InvokeMethodValue passes the signal receiver through. Same shape as
-            // EmitObjProtoMethodCheck's hasOwnProperty/isPrototypeOf wrappers.
-            void EmitSignalMethodWrapper(MethodBuilder helper, string jsName, int jsLength)
-            {
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldtoken, helper);
-                il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                    _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                il.Emit(OpCodes.Ldstr, jsName);
-                il.Emit(OpCodes.Ldc_I4, jsLength);
-                il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-                il.Emit(OpCodes.Ret);
-            }
-
-            foreach (var signalProp in new[]
-                { "aborted", "reason", "onabort", "addEventListener", "removeEventListener", "throwIfAborted" })
-            {
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Ldstr, signalProp);
-                il.Emit(OpCodes.Call, strEq);
-                il.Emit(OpCodes.Brtrue, signalNameMatchLabel);
-            }
-            il.Emit(OpCodes.Br, notSignalPropLabel);
-
-            il.MarkLabel(signalNameMatchLabel);
-            il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, "_reasonSet");
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
-            il.Emit(OpCodes.Brfalse, notSignalPropLabel);
-
-            var notSignalAbortedLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "aborted");
-            il.Emit(OpCodes.Call, strEq);
-            il.Emit(OpCodes.Brfalse, notSignalAbortedLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetAborted);
-            il.Emit(OpCodes.Box, _types.Boolean);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notSignalAbortedLabel);
-
-            var notSignalReasonLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "reason");
-            il.Emit(OpCodes.Call, strEq);
-            il.Emit(OpCodes.Brfalse, notSignalReasonLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetReason);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notSignalReasonLabel);
-
-            var notSignalOnAbortLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "onabort");
-            il.Emit(OpCodes.Call, strEq);
-            il.Emit(OpCodes.Brfalse, notSignalOnAbortLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.AbortSignalGetOnAbort);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notSignalOnAbortLabel);
-
-            var notSignalAelLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "addEventListener");
-            il.Emit(OpCodes.Call, strEq);
-            il.Emit(OpCodes.Brfalse, notSignalAelLabel);
-            EmitSignalMethodWrapper(runtime.AbortSignalAddEventListenerThis, "addEventListener", 2);
-            il.MarkLabel(notSignalAelLabel);
-
-            var notSignalRelLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "removeEventListener");
-            il.Emit(OpCodes.Call, strEq);
-            il.Emit(OpCodes.Brfalse, notSignalRelLabel);
-            EmitSignalMethodWrapper(runtime.AbortSignalRemoveEventListenerThis, "removeEventListener", 2);
-            il.MarkLabel(notSignalRelLabel);
-
-            // Only "throwIfAborted" remains among the screened names.
-            EmitSignalMethodWrapper(runtime.AbortSignalThrowIfAbortedThis, "throwIfAborted", 0);
-
-            il.MarkLabel(notSignalPropLabel);
-        }
-
-        // Property not found on object - check prototype chain
-        // Get prototype: $PropertyDescriptorStore.GetPrototype(obj)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
-        il.Emit(OpCodes.Stloc, protoLocal);
-
-        // If prototype is null, return undefined
-        var returnUndefinedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, protoLocal);
-        il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
-
-        // Recursively call GetProperty(prototype, name) to check prototype chain
-        il.Emit(OpCodes.Ldloc, protoLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);  // Recursive call to GetProperty
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(returnUndefinedLabel);
-        // ECMA-262: `({}).constructor === Object`. If user hasn't set a custom
-        // constructor and no prototype overrides it, return typeof(object) which
-        // matches what compiled-mode `Object` resolves to via globalThis.
-        var notDictCtorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notDictCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notDictCtorLabel);
-        // ECMA-262 19.1.3: every plain object inherits from Object.prototype.
-        // For Dictionary literals (`{}` etc.) without an explicit prototype,
-        // fall back to the ObjectPrototypeField singleton — that's where
-        // `valueOf`, `toString`, `propertyIsEnumerable`, and the toLocaleString
-        // wrapper live. Required for Test262 patterns that do
-        // `({}).toString.call(receiver)` or for ToPrimitive coercion to find
-        // the inherited methods on plain dicts. Lazy-populates on first read.
-        var protoFallbackMissLabel = il.DefineLabel();
-        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-        var objProtoFallbackLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, objProtoFallbackLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
-            [_types.String, _types.Object.MakeByRefType()])!);
-        il.Emit(OpCodes.Brfalse, protoFallbackMissLabel);
-        il.Emit(OpCodes.Ldloc, objProtoFallbackLocal);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(protoFallbackMissLabel);
-        // Return $Undefined.Instance for non-existent properties (JavaScript semantics)
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(foundLabel);
-
-        // If value is a TSFunction, call BindThis(dict) on it
-        // to bind 'this' for object method shorthand
-        var notTSFunction = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, notTSFunction);
-
-        // Call func.BindThis(dict)
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionBindThis);
-
-        il.MarkLabel(notTSFunction);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ret);
-
-        // Map (Dictionary<object, object>) handler - check for "size" property.
-        // Gated together with the dispatch arm above.
-        if (_features.UsesMap)
-        {
-            il.MarkLabel(mapLabel);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "size");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notMapSizeLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notMapSizeLabel);
-            // Return map.Count as double
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
-            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryObjectObject, "Count").GetGetMethod()!);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notMapSizeLabel);
-            // For other Map properties, dispatch via GetMapProperty — returns a $BoundMapMethod
-            // wrapper for known methods (get/set/has/...) so that `typeof m.get === 'function'`
-            // and `m.get.call(m, k)` work on a Map received from another module.
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetMapProperty);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // Set (HashSet<object>) handler - dispatch via GetSetProperty for size +
-        // $BoundSetMethod wrappers on known methods (add/has/delete/... plus ES2025
-        // set ops). Mirrors the Map handler above.
-        if (_features.UsesSet)
-        {
-            il.MarkLabel(setLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, _types.HashSetOfObject);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetSetProperty);
-            il.Emit(OpCodes.Ret);
-        }
-
-        il.MarkLabel(listLabel);
-        // Check for "length"
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notLengthLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notLengthLabel);
-        // ECMA-262: `[].constructor === Array`. Compiled `Array` resolves to
-        // typeof(IList<object>) — return that here.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notListCtorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notListCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notListCtorLabel);
-        // Numeric-string index — `GetProperty(list, "0")` must return list[0] so
-        // that `f[0]` for `f.__proto__ === [1,2,3]` walks the prototype chain
-        // and finds the array element. Without this branch the proto-chain walk
-        // bottoms out in GetListProperty's null fallback.
-        var listIdxLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, listIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        var listNotIndexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, listNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, listNotIndexLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(listNotIndexLabel);
-        // PDS-stored own descriptor (e.g., RegExp.exec result has `index` /
-        // `input` / `groups` attached via PropertyDescriptorStore so the
-        // returned value can be a real Array exotic — `instanceof Array` true
-        // — while still answering `result.index` / `result.input` correctly).
-        // Without this, those metadata properties are invisible.
-        var listPdsLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, listPdsLocal);
-        il.Emit(OpCodes.Ldloc, listPdsLocal);
-        var listSkipPdsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, listSkipPdsLabel);
-        il.Emit(OpCodes.Ldloc, listPdsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(listSkipPdsLabel);
-        // For other properties on List (like methods push, pop, etc.), use GetListProperty
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetListProperty);
-        il.Emit(OpCodes.Ret);
-
-        // object[] handler — `arguments`-shape receiver. "length" → array.Length;
-        // numeric-string indexes return the element; anything else → undefined.
-        il.MarkLabel(objectArrayLabel);
-        var objArrNotLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, objArrNotLengthLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ObjectArray);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(objArrNotLengthLabel);
-        // Try numeric-string index: int.TryParse(name, out i)
-        var objArrIdxLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, objArrIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        var objArrNotIndexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, objArrNotIndexLabel);
-        // Bounds check: i >= 0 && i < arr.Length
-        il.Emit(OpCodes.Ldloc, objArrIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, objArrNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, objArrIdxLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ObjectArray);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Bge, objArrNotIndexLabel);
-        // Read element at index
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ObjectArray);
-        il.Emit(OpCodes.Ldloc, objArrIdxLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(objArrNotIndexLabel);
-        // Other property → undefined
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-
-        // $Array handler - access Elements.Count for "length"
-        il.MarkLabel(sharpTSArrayLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notSharpTSArrayLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notSharpTSArrayLengthLabel);
-        // Use the LongLength getter — not the int-clamped Length — so `.length`
-        // reads up to 2^32 - 1 survive (M3 acceptance: `a.length === 2147483649`).
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notSharpTSArrayLengthLabel);
-        // ECMA-262: `[].constructor === Array`. Mirror the listLabel branch.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notTSArrayCtorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notTSArrayCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notTSArrayCtorLabel);
-        // Numeric-string index — same purpose as the listLabel branch above:
-        // proto-chain walks (`f.__proto__ === [1,2,3]; f[0]`) bottom out here
-        // when the prototype is a $Array. Without this, GetListProperty returns
-        // null for any digit-string name and the array element is invisible.
-        var tsArrIdxLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, tsArrIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        var tsArrNotIndexLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, tsArrNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, tsArrNotIndexLabel);
-        il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, tsArrNotIndexLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsArrNotIndexLabel);
-        // For other properties on $Array (method names like push/pop/sort/etc.),
-        // reuse GetListProperty — it returns the $BoundArrayMethod wrapper, and
-        // $Array IS a List<object?> by inheritance, so the cast works.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetListProperty);
-        il.Emit(OpCodes.Ret);
-
-        // $Buffer handler - "length" and "toString". Gated together with the
-        // dispatch arm above.
-        if (_features.UsesBuffer)
-        {
-            il.MarkLabel(tsBufferLabel);
-            // Check for "length"
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "length");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notBufferLenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notBufferLenLabel);
-            // Get buf.Length
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
-            il.Emit(OpCodes.Call, runtime.TSBufferLengthGetter);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notBufferLenLabel);
-            // Check for "toString" - return a wrapper that calls ToEncodedString
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "toString");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notBufferToStringLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notBufferToStringLabel);
-            // Create a TSFunction wrapper for ToEncodedString
-            // For dynamically generated types, we need both method and type tokens
-            il.Emit(OpCodes.Ldarg_0);  // target (the buffer)
-            il.Emit(OpCodes.Ldtoken, runtime.TSBufferToString);
-            il.Emit(OpCodes.Ldtoken, runtime.TSBufferType);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notBufferToStringLabel);
-            // Unknown buffer property - return null
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // $Stats handler - return method wrappers or property values.
-        // Whole block is gated; without UsesFs there's no Stats type to dispatch on.
-        if (_features.UsesFs)
-        {
-        il.MarkLabel(tsStatsLabel);
-        // Check for "size" property
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "size");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsSizeLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsSizeLabel);
-        // Return stats.size
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.StatsType);
-        il.Emit(OpCodes.Call, runtime.StatsSizeGetter);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsSizeLabel);
-        // Check for "isFile" method - return TSFunction wrapper
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isFile");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsFileLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsFileLabel);
-        // Create TSFunction wrapper for isFile
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsFile);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsFileLabel);
-        // Check for "isDirectory" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isDirectory");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsDirLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsDirLabel);
-        // Create TSFunction wrapper for isDirectory
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsDirectory);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsDirLabel);
-        // Check for "isSymbolicLink" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isSymbolicLink");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsSymlinkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsSymlinkLabel);
-        // Create TSFunction wrapper for isSymbolicLink
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsSymbolicLink);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsSymlinkLabel);
-        // Check for "isBlockDevice" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isBlockDevice");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsBlockLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsBlockLabel);
-        // Create TSFunction wrapper for isBlockDevice
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsBlockDevice);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsBlockLabel);
-        // Check for "isCharacterDevice" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isCharacterDevice");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsCharLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsCharLabel);
-        // Create TSFunction wrapper for isCharacterDevice
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsCharacterDevice);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsCharLabel);
-        // Check for "isFIFO" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isFIFO");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsFIFOLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsFIFOLabel);
-        // Create TSFunction wrapper for isFIFO
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsFIFO);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsFIFOLabel);
-        // Check for "isSocket" method
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "isSocket");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStatsIsSocketLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStatsIsSocketLabel);
-        // Create TSFunction wrapper for isSocket
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsIsSocket);
-        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notStatsIsSocketLabel);
-        // Unknown stats property - return null
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-        }  // end if (_features.UsesFs) — $Stats handler block
-
-        il.MarkLabel(stringLabel);
-        // Check for "length"
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStrLenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStrLenLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notStrLenLabel);
-        // ECMA-262: `"hello".constructor === String`. Compiled mode resolves
-        // bare `String` to `typeof(string)` — returning that here makes the
-        // strict-equality check hold.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notStrCtorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notStrCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notStrCtorLabel);
-
-        // Numeric index: `"hello"[0]` returns "h". Pre-fix returned null
-        // because the string fallback didn't honor numeric-string keys —
-        // only the typed-string dispatch did.
-        var notNumericKeyLabel = il.DefineLabel();
-        var strIdxLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, strIdxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, notNumericKeyLabel);
-        il.Emit(OpCodes.Ldloc, strIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, notNumericKeyLabel);
-        il.Emit(OpCodes.Ldloc, strIdxLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, notNumericKeyLabel);
-        // Return str[idx].ToString()
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloc, strIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
-        var charLocalStr = il.DeclareLocal(_types.Char);
-        il.Emit(OpCodes.Stloc, charLocalStr);
-        il.Emit(OpCodes.Ldloca, charLocalStr);
-        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notNumericKeyLabel);
-
-        // ECMA-262 7.3.2: walk String.prototype for borrowed-method patterns
-        // (`s.valueOf`, `s.toString`, `s.toLowerCase`, etc.). Pre-fix returned
-        // null for any property other than length/constructor.
-        il.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
