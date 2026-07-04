@@ -227,12 +227,9 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
 
         var missingTypes = new List<string>();
 
-        // Get all concrete Expr types (nested types in Expr that inherit from Expr)
-        var allExprTypes = typeof(Expr).GetNestedTypes(BindingFlags.Public)
-            .Where(t => typeof(Expr).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Expr))
-            .ToList();
-
-        foreach (var exprType in allExprTypes)
+        // The canonical node lists come from AstNodeCatalog so this check, AutoRegister, and the
+        // AstVisitorBase dispatch switch all agree on the node set by construction (#1243).
+        foreach (var exprType in AstNodeCatalog.ExprTypes)
         {
             if (!_exprHandlers.ContainsKey(exprType))
             {
@@ -240,12 +237,7 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
             }
         }
 
-        // Get all concrete Stmt types (nested types in Stmt that inherit from Stmt)
-        var allStmtTypes = typeof(Stmt).GetNestedTypes(BindingFlags.Public)
-            .Where(t => typeof(Stmt).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Stmt))
-            .ToList();
-
-        foreach (var stmtType in allStmtTypes)
+        foreach (var stmtType in AstNodeCatalog.StmtTypes)
         {
             if (!_stmtHandlers.ContainsKey(stmtType))
             {
@@ -282,11 +274,7 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
 
         var missingAsyncTypes = new List<string>();
 
-        var allExprTypes = typeof(Expr).GetNestedTypes(BindingFlags.Public)
-            .Where(t => typeof(Expr).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Expr))
-            .ToList();
-
-        foreach (var exprType in allExprTypes)
+        foreach (var exprType in AstNodeCatalog.ExprTypes)
         {
             if (!_asyncExprHandlers.ContainsKey(exprType))
             {
@@ -351,12 +339,8 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
         var contextType = typeof(TContext);
         var missingMethods = new List<string>();
 
-        // Register all expression types
-        var allExprTypes = typeof(Expr).GetNestedTypes(BindingFlags.Public)
-            .Where(t => typeof(Expr).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Expr))
-            .ToList();
-
-        foreach (var exprType in allExprTypes)
+        // Register all expression types (node list from AstNodeCatalog — see Freeze). #1243
+        foreach (var exprType in AstNodeCatalog.ExprTypes)
         {
             var methodName = $"Visit{exprType.Name}";
             var method = contextType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, [exprType]);
@@ -372,11 +356,7 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
         }
 
         // Register all statement types
-        var allStmtTypes = typeof(Stmt).GetNestedTypes(BindingFlags.Public)
-            .Where(t => typeof(Stmt).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Stmt))
-            .ToList();
-
-        foreach (var stmtType in allStmtTypes)
+        foreach (var stmtType in AstNodeCatalog.StmtTypes)
         {
             var methodName = $"Visit{stmtType.Name}";
             var method = contextType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, [stmtType]);
