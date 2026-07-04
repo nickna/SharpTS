@@ -16,374 +16,8 @@ public partial class TypeChecker
 {
     private TypeInfo CheckCall(Expr.Call call)
     {
-        // Handle all console.* methods
-        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
-        {
-            var methodName = v.Name.Lexeme["console.".Length..];
-            var methodType = BuiltInTypes.GetConsoleStaticMethodType(methodName);
-            if (methodType is TypeInfo.Function)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return new TypeInfo.Void();
-            }
-        }
-
-        // Handle Symbol() constructor - creates unique symbols
-        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
-        {
-            if (call.Arguments.Count > 1)
-            {
-                throw new TypeCheckException("Symbol() accepts at most one argument (description).", tsCode: "TS2554");
-            }
-            if (call.Arguments.Count == 1)
-            {
-                var argType = CheckExpr(call.Arguments[0]);
-                if (!IsString(argType) && argType is not TypeInfo.Any)
-                {
-                    throw new TypeCheckException($"Symbol() description must be a string, got '{argType}'.", tsCode: "TS2345");
-                }
-            }
-            return new TypeInfo.Symbol();
-        }
-
-        // Handle BigInt() constructor - converts number or string to bigint
-        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
-        {
-            if (call.Arguments.Count != 1)
-            {
-                throw new TypeCheckException("BigInt() requires exactly one argument.", tsCode: "TS2554");
-            }
-            var argType = CheckExpr(call.Arguments[0]);
-            if (!IsNumber(argType) && !IsString(argType) && !IsBigInt(argType) && argType is not TypeInfo.Any)
-            {
-                throw new TypeCheckException($"BigInt() argument must be a number, string, or bigint, got '{argType}'.", tsCode: "TS2345");
-            }
-            return new TypeInfo.BigInt();
-        }
-
-        // Handle Date() function call - returns current date as string (without 'new')
-        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
-        {
-            // Date() called as a function (not with new) ignores arguments and returns a string
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.String();
-        }
-
-        // Handle Error() and error subtypes called without 'new' - still creates error objects
-        if (call.Callee is Expr.Variable errorVar && BuiltInNames.IsErrorTypeName(errorVar.Name.Lexeme))
-        {
-            // Error constructors accept 0-2 arguments (message, options)
-            // AggregateError accepts 0-3 arguments (errors array, message, options)
-            int maxArgs = errorVar.Name.Lexeme == "AggregateError" ? 3 : 2;
-            if (call.Arguments.Count > maxArgs)
-            {
-                throw new TypeCheckException($"{errorVar.Name.Lexeme}() accepts at most {maxArgs} argument(s).", tsCode: "TS2554");
-            }
-
-            // Validate argument types
-            if (call.Arguments.Count >= 1)
-            {
-                var firstArgType = CheckExpr(call.Arguments[0]);
-                if (errorVar.Name.Lexeme == "AggregateError")
-                {
-                    // First argument should be an array of errors
-                    if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
-                    {
-                        throw new TypeCheckException($"AggregateError first argument must be an array, got '{firstArgType}'.", tsCode: "TS2345");
-                    }
-                }
-                else
-                {
-                    // For other error types, first argument should be a string message
-                    if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
-                    {
-                        throw new TypeCheckException($"{errorVar.Name.Lexeme}() message must be a string, got '{firstArgType}'.", tsCode: "TS2345");
-                    }
-                }
-            }
-
-            // Validate remaining arguments
-            for (int i = 1; i < call.Arguments.Count; i++)
-            {
-                var argType = CheckExpr(call.Arguments[i]);
-                if (errorVar.Name.Lexeme == "AggregateError" && i == 1)
-                {
-                    // AggregateError second arg is message (string)
-                    if (!IsString(argType) && argType is not TypeInfo.Any)
-                    {
-                        throw new TypeCheckException($"AggregateError message must be a string, got '{argType}'.", tsCode: "TS2345");
-                    }
-                }
-                // Options argument (last arg) is an object - accept any type
-            }
-
-            return new TypeInfo.Error(errorVar.Name.Lexeme);
-        }
-
-        // Handle Object.keys(), Object.values(), Object.entries()
-        if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable objVar &&
-            objVar.Name.Lexeme == "Object")
-        {
-            var methodType = BuiltInTypes.GetObjectStaticMethodType(get.Name.Lexeme);
-            if (methodType is TypeInfo.Function objMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return objMethodType.ReturnType;
-            }
-        }
-
-        // Handle Array.isArray()
-        if (call.Callee is Expr.Get arrGet &&
-            arrGet.Object is Expr.Variable arrVar &&
-            arrVar.Name.Lexeme == "Array")
-        {
-            var methodType = BuiltInTypes.GetArrayStaticMethodType(arrGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function arrMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return arrMethodType.ReturnType;
-            }
-        }
-
-        // Handle Map.groupBy()
-        if (call.Callee is Expr.Get mapGet &&
-            mapGet.Object is Expr.Variable mapVar &&
-            mapVar.Name.Lexeme == "Map")
-        {
-            var methodType = BuiltInTypes.GetMapStaticMethodType(mapGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function mapMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return mapMethodType.ReturnType;
-            }
-        }
-
-        // Handle JSON.parse(), JSON.stringify()
-        if (call.Callee is Expr.Get jsonGet &&
-            jsonGet.Object is Expr.Variable jsonVar &&
-            jsonVar.Name.Lexeme == "JSON")
-        {
-            var methodType = BuiltInTypes.GetJSONStaticMethodType(jsonGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function jsonMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return jsonMethodType.ReturnType;
-            }
-        }
-
-        // Handle Number.parseInt(), Number.parseFloat(), Number.isNaN(), etc.
-        if (call.Callee is Expr.Get numGet &&
-            numGet.Object is Expr.Variable numVar &&
-            numVar.Name.Lexeme == "Number")
-        {
-            var methodType = BuiltInTypes.GetNumberStaticMemberType(numGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function numMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return numMethodType.ReturnType;
-            }
-        }
-
-        // Handle Date.now()
-        if (call.Callee is Expr.Get dateGet &&
-            dateGet.Object is Expr.Variable dateStaticVar &&
-            dateStaticVar.Name.Lexeme == "Date")
-        {
-            var methodType = BuiltInTypes.GetDateStaticMemberType(dateGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function dateMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return dateMethodType.ReturnType;
-            }
-        }
-
-        // Handle Buffer.from(), Buffer.alloc(), Buffer.isBuffer(), etc.
-        if (call.Callee is Expr.Get bufferGet &&
-            bufferGet.Object is Expr.Variable bufferVar &&
-            bufferVar.Name.Lexeme == "Buffer")
-        {
-            var methodType = BuiltInTypes.GetBufferStaticMethodType(bufferGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function bufferMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return bufferMethodType.ReturnType;
-            }
-        }
-
-        // Handle AbortSignal.abort(), AbortSignal.timeout(), AbortSignal.any()
-        if (call.Callee is Expr.Get abortSignalGet &&
-            abortSignalGet.Object is Expr.Variable abortSignalVar &&
-            abortSignalVar.Name.Lexeme == "AbortSignal")
-        {
-            var methodType = BuiltInTypes.GetAbortSignalStaticMethodType(abortSignalGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function abortSignalMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return abortSignalMethodType.ReturnType;
-            }
-        }
-
-        // Handle Response.json(), Response.redirect(), Response.error()
-        if (call.Callee is Expr.Get responseGet &&
-            responseGet.Object is Expr.Variable responseVar &&
-            responseVar.Name.Lexeme == "Response" &&
-            responseGet.Name.Lexeme is "json" or "redirect" or "error")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Any();
-        }
-
-        // Handle String.fromCharCode(), String.raw()
-        if (call.Callee is Expr.Get stringGet &&
-            stringGet.Object is Expr.Variable stringVar &&
-            stringVar.Name.Lexeme == "String")
-        {
-            var methodType = BuiltInTypes.GetStringStaticMethodType(stringGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function stringMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return stringMethodType.ReturnType;
-            }
-        }
-
-        // Handle Iterator.from()
-        if (call.Callee is Expr.Get iterGet &&
-            iterGet.Object is Expr.Variable iterVar &&
-            iterVar.Name.Lexeme == "Iterator")
-        {
-            var methodType = BuiltInTypes.GetIteratorStaticMethodType(iterGet.Name.Lexeme);
-            if (methodType is TypeInfo.Function iterMethodType)
-            {
-                foreach (var arg in call.Arguments) CheckExpr(arg);
-                return iterMethodType.ReturnType;
-            }
-        }
-
-        // Handle global parseInt()
-        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
-        }
-
-        // Handle global parseFloat()
-        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
-        }
-
-        // Handle global isNaN()
-        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN);
-        }
-
-        // Handle global isFinite()
-        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN);
-        }
-
-        // Handle global eval() — typed as (s: string) => any. The argument string is
-        // not statically analyzed (matching tsc's `eval` lib typing), so the result is Any.
-        if (call.Callee is Expr.Variable evalVar && evalVar.Name.Lexeme == "eval")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Any();
-        }
-
-        // Timer functions (setTimeout / clearTimeout / setInterval / clearInterval)
-        // have two resolutions: the JS globals (untyped, `_environment.Get` returns
-        // null — handled here) and imports from stdlib/node/timers{,/promises}.ts
-        // (which return a proper Function with a concrete signature — generic
-        // function-call validation handles them, so this block is skipped).
-        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout"
-            && _environment.Get(setTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
-        {
-            if (call.Arguments.Count < 1)
-                throw new TypeCheckException("setTimeout() requires at least one argument (callback).", tsCode: "TS2554");
-
-            var callbackType = CheckExpr(call.Arguments[0]);
-            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
-                throw new TypeCheckException($"setTimeout() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
-
-            if (call.Arguments.Count >= 2)
-            {
-                var delayType = CheckExpr(call.Arguments[1]);
-                if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
-                    throw new TypeCheckException($"setTimeout() delay must be a number, got '{delayType}'.", tsCode: "TS2345");
-            }
-
-            for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
-            return new TypeInfo.Timeout();
-        }
-
-        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout"
-            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
-            return CheckClearTimerCall(call, "clearTimeout");
-
-        if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval"
-            && _environment.Get(setIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
-        {
-            if (call.Arguments.Count < 1)
-                throw new TypeCheckException("setInterval() requires at least one argument (callback).", tsCode: "TS2554");
-
-            var callbackType = CheckExpr(call.Arguments[0]);
-            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
-                throw new TypeCheckException($"setInterval() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
-
-            if (call.Arguments.Count >= 2)
-            {
-                var delayType = CheckExpr(call.Arguments[1]);
-                if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
-                    throw new TypeCheckException($"setInterval() delay must be a number, got '{delayType}'.", tsCode: "TS2345");
-            }
-
-            for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
-            return new TypeInfo.Timeout();
-        }
-
-        if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval"
-            && _environment.Get(clearIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
-            return CheckClearTimerCall(call, "clearInterval");
-
-        // Handle queueMicrotask(callback)
-        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask")
-        {
-            if (call.Arguments.Count != 1)
-            {
-                throw new TypeCheckException("queueMicrotask() requires exactly one argument (callback).", tsCode: "TS2554");
-            }
-
-            // Argument must be a function
-            var callbackType = CheckExpr(call.Arguments[0]);
-            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
-            {
-                throw new TypeCheckException($"queueMicrotask() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
-            }
-
-            return new TypeInfo.Void(); // queueMicrotask returns undefined
-        }
-
-        // Handle __objectRest (internal helper for object rest patterns)
-        if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
-        {
-            foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Any(); // Returns an object with remaining properties
-        }
-
-        // Handle __arrayDestructure (internal helper for array binding patterns, #685).
-        // Normalizes the destructuring source so the desugared positional index
-        // access types correctly for non-indexable iterables.
-        if (call.Callee is Expr.Variable arrDestVar && arrDestVar.Name.Lexeme == BuiltInNames.ArrayDestructure)
-        {
-            var sourceType = call.Arguments.Count == 1 ? CheckExpr(call.Arguments[0]) : new TypeInfo.Any();
-            return NormalizeArrayDestructureSourceType(sourceType);
-        }
+        if (TryCheckBuiltinCall(call, out var builtinCallResult))
+            return builtinCallResult;
 
         // Invalidate property narrowings for method calls on objects
         // e.g., obj.mutate() should invalidate narrowings on obj's properties
@@ -689,6 +323,390 @@ public partial class TypeChecker
     /// Checks a call on an interface with call signatures.
     /// Returns the return type of the matching call signature.
     /// </summary>
+    /// <summary>
+    /// Handles the special-cased builtin call forms that short-circuit ordinary
+    /// callable resolution: bare-identifier globals (console.*, Symbol, BigInt, Date,
+    /// Error family, parseInt/parseFloat/isNaN/isFinite/eval, timers, queueMicrotask,
+    /// the __objectRest/__arrayDestructure desugaring helpers) and namespace statics
+    /// (Object/Array/Map/JSON/Number/Date/Buffer/AbortSignal/Response/String/Iterator).
+    /// Returns <c>true</c> with <paramref name="result"/> set when the call is one of
+    /// these; <c>false</c> (leaving the general path to run) otherwise. Extracted from
+    /// CheckCall (#1140); no behaviour change.
+    /// </summary>
+    private bool TryCheckBuiltinCall(Expr.Call call, out TypeInfo result)
+    {
+        // Handle all console.* methods
+        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
+        {
+            var methodName = v.Name.Lexeme["console.".Length..];
+            var methodType = BuiltInTypes.GetConsoleStaticMethodType(methodName);
+            if (methodType is TypeInfo.Function)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = new TypeInfo.Void(); return true; }
+            }
+        }
+
+        // Handle Symbol() constructor - creates unique symbols
+        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
+        {
+            if (call.Arguments.Count > 1)
+            {
+                throw new TypeCheckException("Symbol() accepts at most one argument (description).", tsCode: "TS2554");
+            }
+            if (call.Arguments.Count == 1)
+            {
+                var argType = CheckExpr(call.Arguments[0]);
+                if (!IsString(argType) && argType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($"Symbol() description must be a string, got '{argType}'.", tsCode: "TS2345");
+                }
+            }
+            { result = new TypeInfo.Symbol(); return true; }
+        }
+
+        // Handle BigInt() constructor - converts number or string to bigint
+        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("BigInt() requires exactly one argument.", tsCode: "TS2554");
+            }
+            var argType = CheckExpr(call.Arguments[0]);
+            if (!IsNumber(argType) && !IsString(argType) && !IsBigInt(argType) && argType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($"BigInt() argument must be a number, string, or bigint, got '{argType}'.", tsCode: "TS2345");
+            }
+            { result = new TypeInfo.BigInt(); return true; }
+        }
+
+        // Handle Date() function call - returns current date as string (without 'new')
+        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        {
+            // Date() called as a function (not with new) ignores arguments and returns a string
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.String(); return true; }
+        }
+
+        // Handle Error() and error subtypes called without 'new' - still creates error objects
+        if (call.Callee is Expr.Variable errorVar && BuiltInNames.IsErrorTypeName(errorVar.Name.Lexeme))
+        {
+            // Error constructors accept 0-2 arguments (message, options)
+            // AggregateError accepts 0-3 arguments (errors array, message, options)
+            int maxArgs = errorVar.Name.Lexeme == "AggregateError" ? 3 : 2;
+            if (call.Arguments.Count > maxArgs)
+            {
+                throw new TypeCheckException($"{errorVar.Name.Lexeme}() accepts at most {maxArgs} argument(s).", tsCode: "TS2554");
+            }
+
+            // Validate argument types
+            if (call.Arguments.Count >= 1)
+            {
+                var firstArgType = CheckExpr(call.Arguments[0]);
+                if (errorVar.Name.Lexeme == "AggregateError")
+                {
+                    // First argument should be an array of errors
+                    if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($"AggregateError first argument must be an array, got '{firstArgType}'.", tsCode: "TS2345");
+                    }
+                }
+                else
+                {
+                    // For other error types, first argument should be a string message
+                    if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($"{errorVar.Name.Lexeme}() message must be a string, got '{firstArgType}'.", tsCode: "TS2345");
+                    }
+                }
+            }
+
+            // Validate remaining arguments
+            for (int i = 1; i < call.Arguments.Count; i++)
+            {
+                var argType = CheckExpr(call.Arguments[i]);
+                if (errorVar.Name.Lexeme == "AggregateError" && i == 1)
+                {
+                    // AggregateError second arg is message (string)
+                    if (!IsString(argType) && argType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($"AggregateError message must be a string, got '{argType}'.", tsCode: "TS2345");
+                    }
+                }
+                // Options argument (last arg) is an object - accept any type
+            }
+
+            { result = new TypeInfo.Error(errorVar.Name.Lexeme); return true; }
+        }
+
+        // Handle Object.keys(), Object.values(), Object.entries()
+        if (call.Callee is Expr.Get get &&
+            get.Object is Expr.Variable objVar &&
+            objVar.Name.Lexeme == "Object")
+        {
+            var methodType = BuiltInTypes.GetObjectStaticMethodType(get.Name.Lexeme);
+            if (methodType is TypeInfo.Function objMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = objMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Array.isArray()
+        if (call.Callee is Expr.Get arrGet &&
+            arrGet.Object is Expr.Variable arrVar &&
+            arrVar.Name.Lexeme == "Array")
+        {
+            var methodType = BuiltInTypes.GetArrayStaticMethodType(arrGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function arrMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = arrMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Map.groupBy()
+        if (call.Callee is Expr.Get mapGet &&
+            mapGet.Object is Expr.Variable mapVar &&
+            mapVar.Name.Lexeme == "Map")
+        {
+            var methodType = BuiltInTypes.GetMapStaticMethodType(mapGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function mapMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = mapMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle JSON.parse(), JSON.stringify()
+        if (call.Callee is Expr.Get jsonGet &&
+            jsonGet.Object is Expr.Variable jsonVar &&
+            jsonVar.Name.Lexeme == "JSON")
+        {
+            var methodType = BuiltInTypes.GetJSONStaticMethodType(jsonGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function jsonMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = jsonMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Number.parseInt(), Number.parseFloat(), Number.isNaN(), etc.
+        if (call.Callee is Expr.Get numGet &&
+            numGet.Object is Expr.Variable numVar &&
+            numVar.Name.Lexeme == "Number")
+        {
+            var methodType = BuiltInTypes.GetNumberStaticMemberType(numGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function numMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = numMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Date.now()
+        if (call.Callee is Expr.Get dateGet &&
+            dateGet.Object is Expr.Variable dateStaticVar &&
+            dateStaticVar.Name.Lexeme == "Date")
+        {
+            var methodType = BuiltInTypes.GetDateStaticMemberType(dateGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function dateMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = dateMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Buffer.from(), Buffer.alloc(), Buffer.isBuffer(), etc.
+        if (call.Callee is Expr.Get bufferGet &&
+            bufferGet.Object is Expr.Variable bufferVar &&
+            bufferVar.Name.Lexeme == "Buffer")
+        {
+            var methodType = BuiltInTypes.GetBufferStaticMethodType(bufferGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function bufferMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = bufferMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle AbortSignal.abort(), AbortSignal.timeout(), AbortSignal.any()
+        if (call.Callee is Expr.Get abortSignalGet &&
+            abortSignalGet.Object is Expr.Variable abortSignalVar &&
+            abortSignalVar.Name.Lexeme == "AbortSignal")
+        {
+            var methodType = BuiltInTypes.GetAbortSignalStaticMethodType(abortSignalGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function abortSignalMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = abortSignalMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Response.json(), Response.redirect(), Response.error()
+        if (call.Callee is Expr.Get responseGet &&
+            responseGet.Object is Expr.Variable responseVar &&
+            responseVar.Name.Lexeme == "Response" &&
+            responseGet.Name.Lexeme is "json" or "redirect" or "error")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Any(); return true; }
+        }
+
+        // Handle String.fromCharCode(), String.raw()
+        if (call.Callee is Expr.Get stringGet &&
+            stringGet.Object is Expr.Variable stringVar &&
+            stringVar.Name.Lexeme == "String")
+        {
+            var methodType = BuiltInTypes.GetStringStaticMethodType(stringGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function stringMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = stringMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle Iterator.from()
+        if (call.Callee is Expr.Get iterGet &&
+            iterGet.Object is Expr.Variable iterVar &&
+            iterVar.Name.Lexeme == "Iterator")
+        {
+            var methodType = BuiltInTypes.GetIteratorStaticMethodType(iterGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function iterMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                { result = iterMethodType.ReturnType; return true; }
+            }
+        }
+
+        // Handle global parseInt()
+        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER); return true; }
+        }
+
+        // Handle global parseFloat()
+        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER); return true; }
+        }
+
+        // Handle global isNaN()
+        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN); return true; }
+        }
+
+        // Handle global isFinite()
+        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN); return true; }
+        }
+
+        // Handle global eval() — typed as (s: string) => any. The argument string is
+        // not statically analyzed (matching tsc's `eval` lib typing), so the result is Any.
+        if (call.Callee is Expr.Variable evalVar && evalVar.Name.Lexeme == "eval")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Any(); return true; }
+        }
+
+        // Timer functions (setTimeout / clearTimeout / setInterval / clearInterval)
+        // have two resolutions: the JS globals (untyped, `_environment.Get` returns
+        // null — handled here) and imports from stdlib/node/timers{,/promises}.ts
+        // (which return a proper Function with a concrete signature — generic
+        // function-call validation handles them, so this block is skipped).
+        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout"
+            && _environment.Get(setTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+        {
+            if (call.Arguments.Count < 1)
+                throw new TypeCheckException("setTimeout() requires at least one argument (callback).", tsCode: "TS2554");
+
+            var callbackType = CheckExpr(call.Arguments[0]);
+            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
+                throw new TypeCheckException($"setTimeout() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
+
+            if (call.Arguments.Count >= 2)
+            {
+                var delayType = CheckExpr(call.Arguments[1]);
+                if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
+                    throw new TypeCheckException($"setTimeout() delay must be a number, got '{delayType}'.", tsCode: "TS2345");
+            }
+
+            for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
+            { result = new TypeInfo.Timeout(); return true; }
+        }
+
+        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout"
+            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+            { result = CheckClearTimerCall(call, "clearTimeout"); return true; }
+
+        if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval"
+            && _environment.Get(setIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+        {
+            if (call.Arguments.Count < 1)
+                throw new TypeCheckException("setInterval() requires at least one argument (callback).", tsCode: "TS2554");
+
+            var callbackType = CheckExpr(call.Arguments[0]);
+            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
+                throw new TypeCheckException($"setInterval() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
+
+            if (call.Arguments.Count >= 2)
+            {
+                var delayType = CheckExpr(call.Arguments[1]);
+                if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
+                    throw new TypeCheckException($"setInterval() delay must be a number, got '{delayType}'.", tsCode: "TS2345");
+            }
+
+            for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
+            { result = new TypeInfo.Timeout(); return true; }
+        }
+
+        if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval"
+            && _environment.Get(clearIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+            { result = CheckClearTimerCall(call, "clearInterval"); return true; }
+
+        // Handle queueMicrotask(callback)
+        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask")
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("queueMicrotask() requires exactly one argument (callback).", tsCode: "TS2554");
+            }
+
+            // Argument must be a function
+            var callbackType = CheckExpr(call.Arguments[0]);
+            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($"queueMicrotask() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
+            }
+
+            { result = new TypeInfo.Void(); return true; } // queueMicrotask returns undefined
+        }
+
+        // Handle __objectRest (internal helper for object rest patterns)
+        if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            { result = new TypeInfo.Any(); return true; } // Returns an object with remaining properties
+        }
+
+        // Handle __arrayDestructure (internal helper for array binding patterns, #685).
+        // Normalizes the destructuring source so the desugared positional index
+        // access types correctly for non-indexable iterables.
+        if (call.Callee is Expr.Variable arrDestVar && arrDestVar.Name.Lexeme == BuiltInNames.ArrayDestructure)
+        {
+            var sourceType = call.Arguments.Count == 1 ? CheckExpr(call.Arguments[0]) : new TypeInfo.Any();
+            { result = NormalizeArrayDestructureSourceType(sourceType); return true; }
+        }
+        result = null!;
+        return false;
+    }
+
     private TypeInfo CheckCallableInterfaceCall(
         TypeInfo.Interface itf,
         List<string>? typeArgs,

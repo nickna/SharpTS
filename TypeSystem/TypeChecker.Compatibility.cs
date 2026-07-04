@@ -506,152 +506,15 @@ public partial class TypeChecker
                 && IsCompatible(targetCond.FalseType, actual);
         }
 
-        // Type predicate compatibility:
-        // - Regular type predicate (x is T): expects boolean return
-        // - Assertion type predicate (asserts x is T): expects void return (function throws if assertion fails)
-        // - AssertsNonNull (asserts x): expects void return
-        if (expected is TypeInfo.TypePredicate pred)
-        {
-            if (pred.IsAssertion)
-            {
-                // Assertion predicates return void (or throw)
-                return actual is TypeInfo.Void or TypeInfo.Never;
-            }
-            else
-            {
-                // Regular type predicates return boolean
-                return actual is TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN }
-                    or TypeInfo.BooleanLiteral;
-            }
-        }
-        if (expected is TypeInfo.AssertsNonNull)
-        {
-            // AssertsNonNull returns void (or throws)
-            return actual is TypeInfo.Void or TypeInfo.Never;
-        }
+        if (TryRelateTypePredicate(expected, actual, out var predicateRel)) return predicateRel;
 
-        // Type-parameter compatibility (TypeScript: "type parameters are not assignable to one
-        // another unless directly or indirectly constrained to one another").
-        if (expected is TypeInfo.TypeParameter expectedTp && actual is TypeInfo.TypeParameter actualTp)
-        {
-            // The same parameter, or a source transitively constrained to the target (U extends … extends T).
-            return expectedTp.Name == actualTp.Name || TypeParameterConstrainedTo(actualTp, expectedTp.Name);
-        }
+        if (TryRelateTypeParameters(expected, actual, out var typeParamRel)) return typeParamRel;
 
-        // Expected is a bare type parameter and the source is some other type. An arbitrary concrete
-        // type is NOT assignable to a type parameter — only `never`, or an intersection one of whose
-        // constituents is (T & Function → T). (any / inferred and, under non-strict, null / undefined
-        // are already accepted earlier in IsCompatibleCore; a source type parameter is handled by the
-        // case above.) This is the strict TypeScript rule.
-        if (expected is TypeInfo.TypeParameter)
-        {
-            if (actual is TypeInfo.Intersection actIntForTp)
-                return actIntForTp.FlattenedTypes.Any(t => IsCompatible(expected, t));
-            return actual is TypeInfo.Never;
-        }
+        if (TryRelateNeverUnknownObject(expected, actual, out var neverUnknownObjectRel)) return neverUnknownObjectRel;
 
-        // Source is a type parameter assigned to a non-parameter target: it is assignable wherever its
-        // apparent (constraint) type is assignable. Also assignable into a union that contains it.
-        if (actual is TypeInfo.TypeParameter actualTpOnly)
-        {
-            if (expected is TypeInfo.Any or TypeInfo.Unknown) return true;
-            if (expected is TypeInfo.Union expUnionForTp &&
-                expUnionForTp.FlattenedTypes.Any(t =>
-                    t is TypeInfo.TypeParameter unionTp && unionTp.Name == actualTpOnly.Name))
-            {
-                return true;
-            }
-            var apparent = ApparentTypeOf(actualTpOnly);
-            return apparent != null && IsCompatible(expected, apparent);
-        }
+        if (TryRelateNullUndefinedStrict(expected, actual, out var nullUndefinedRel)) return nullUndefinedRel;
 
-        // never as actual: assignable to anything (bottom type)
-        if (actual is TypeInfo.Never) return true;
-
-        // never as expected: nothing assignable to never except never
-        if (expected is TypeInfo.Never) return actual is TypeInfo.Never;
-
-        // unknown as expected: anything can be assigned TO unknown (top type)
-        if (expected is TypeInfo.Unknown) return true;
-
-        // unknown as actual: can only be assigned to unknown or any
-        if (actual is TypeInfo.Unknown)
-            return expected is TypeInfo.Unknown || expected is TypeInfo.Any;
-
-        // object type: accepts non-primitive, non-null values
-        if (expected is TypeInfo.Object)
-        {
-            if (actual is TypeInfo.Never) return true;  // never is bottom type
-            if (actual is TypeInfo.Any) return true;    // any is assignable to anything
-            if (actual is TypeInfo.Object) return true; // object to object
-            if (IsPrimitiveType(actual)) return false;  // reject primitives
-            if (actual is TypeInfo.Null or TypeInfo.Undefined) return false;
-            // Accept: Record, Array, Instance, Class, Function, Map, Set, etc.
-            return true;
-        }
-
-        // object as actual: can only assign to object, any, unknown
-        if (actual is TypeInfo.Object)
-        {
-            return expected is TypeInfo.Object or TypeInfo.Any or TypeInfo.Unknown;
-        }
-
-        // Null compatibility (strictNullChecks: on — the off case is handled early in IsCompatibleCore)
-        if (actual is TypeInfo.Null)
-        {
-            if (expected is TypeInfo.Union u && u.ContainsNull) return true;
-            if (expected is TypeInfo.Null) return true;
-            return false;
-        }
-
-        // Undefined compatibility (strictNullChecks: on)
-        if (actual is TypeInfo.Undefined)
-        {
-            if (expected is TypeInfo.Union u && u.ContainsUndefined) return true;
-            if (expected is TypeInfo.Undefined) return true;
-            return false;
-        }
-
-        // Literal type compatibility - literal to literal (must have same value)
-        if (expected is TypeInfo.StringLiteral sl1 && actual is TypeInfo.StringLiteral sl2)
-            return sl1.Value == sl2.Value;
-        if (expected is TypeInfo.NumberLiteral nl1 && actual is TypeInfo.NumberLiteral nl2)
-            return nl1.Value == nl2.Value;
-        if (expected is TypeInfo.BooleanLiteral bl1 && actual is TypeInfo.BooleanLiteral bl2)
-            return bl1.Value == bl2.Value;
-        if (expected is TypeInfo.BigIntLiteral bil1 && actual is TypeInfo.BigIntLiteral bil2)
-            return bil1.Value == bil2.Value;
-
-        // Literal to primitive widening
-        if (expected is TypeInfo.String && actual is TypeInfo.StringLiteral)
-            return true;
-        if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } && actual is TypeInfo.NumberLiteral)
-            return true;
-        if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } && actual is TypeInfo.BooleanLiteral)
-            return true;
-        if (expected is TypeInfo.BigInt && actual is TypeInfo.BigIntLiteral)
-            return true;
-
-        // Template literal type compatibility
-
-        // Template literal widens to string
-        if (expected is TypeInfo.String && actual is TypeInfo.TemplateLiteralType)
-            return true;
-
-        // String literal matches template literal pattern
-        if (expected is TypeInfo.TemplateLiteralType expectedTL && actual is TypeInfo.StringLiteral actualSL)
-            return MatchesTemplateLiteralPattern(expectedTL, actualSL.Value);
-
-        // Template literal to template literal: structural compatibility
-        if (expected is TypeInfo.TemplateLiteralType expTL && actual is TypeInfo.TemplateLiteralType actTL)
-            return TemplatePatternStructurallyCompatible(expTL, actTL);
-
-        // Intrinsic string type: evaluate and check
-        if (actual is TypeInfo.IntrinsicStringType ist)
-        {
-            var evaluated = EvaluateIntrinsicStringType(ist.Inner, ist.Operation);
-            return IsCompatible(expected, evaluated);
-        }
+        if (TryRelateLiteralTypes(expected, actual, out var literalRel)) return literalRel;
 
         // Union-to-union: each type in actual must be compatible with at least one type in expected
         if (expected is TypeInfo.Union expectedUnion && actual is TypeInfo.Union actualUnion)
