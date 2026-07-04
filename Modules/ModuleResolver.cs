@@ -831,6 +831,16 @@ public class ModuleResolver
                 }
             }
 
+            // ESM modules (and scripts) can also reach modules via bare require() — it's a
+            // global in SharpTS, mirroring Node's createRequire interop. Walk the body for
+            // literal require() specifiers that resolve to embedded stdlib facades so they
+            // get bundled into compiled output (#1217); without this the emitter's require()
+            // lowering finds the facade in neither CommonJsGetExportsMethods nor
+            // ModuleExportFields and lowers the call to a runtime MODULE_NOT_FOUND throw.
+            // Scoped to stdlib on purpose: user modules reached only via require() stay
+            // runtime-lazy in the interpreter and out of the static type-check graph.
+            CollectCjsRequireDependencies(module, statements, absolutePath, decoratorMode, stdlibOnly: true);
+
             return module;
         }
         finally
@@ -912,17 +922,21 @@ public class ModuleResolver
     }
 
     /// <summary>
-    /// Walks a CommonJS module's body for literal `require('./literal')` calls and recursively
+    /// Walks a module's body for literal `require('./literal')` calls and recursively
     /// loads each target. Adds resolved targets to <see cref="ParsedModule.Dependencies"/>.
     /// Non-literal specifiers are ignored here — the IL compiler will reject them later.
     /// Unresolvable specifiers are also ignored — they'll either resolve via the optional-dep
     /// runtime throw path or surface as a compile error from the IL emitter.
     /// </summary>
+    /// <param name="stdlibOnly">When true (ESM/script callers, #1217), only specifiers that
+    /// resolve to embedded stdlib modules are loaded; user modules reached via require()
+    /// from non-CJS files stay runtime-lazy.</param>
     private void CollectCjsRequireDependencies(
         ParsedModule module,
         List<Stmt> statements,
         string absolutePath,
-        DecoratorMode decoratorMode)
+        DecoratorMode decoratorMode,
+        bool stdlibOnly = false)
     {
         var walker = new CjsRequireWalker();
         foreach (var stmt in statements)
@@ -939,13 +953,19 @@ public class ModuleResolver
             string requiredPath;
             try
             {
-                // Literal require() in a CJS body — pass Cjs so dual-export packages
-                // route to the "require" entry, not "import" (matches Node semantics).
+                // Literal require() — pass Cjs so dual-export packages route to the
+                // "require" entry, not "import" (matches Node semantics).
                 requiredPath = ResolveModulePath(specifier, absolutePath, ResolutionKind.Cjs);
             }
             catch
             {
                 // Optional dep / will be handled at runtime by the optional-dep throw path.
+                continue;
+            }
+
+            if (stdlibOnly &&
+                !requiredPath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal))
+            {
                 continue;
             }
 
