@@ -1,10 +1,17 @@
+using SharpTS.Modules;
+using SharpTS.Modules.Stdlib;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.BuiltIns.Modules;
+using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
+using SharpTS.Runtime.DotNet;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
+using System.Collections.Frozen;
+using System.Threading;
 
 namespace SharpTS.Execution;
 
@@ -1654,4 +1661,746 @@ public partial class Interpreter
         // For other types, return null (no symbol property access)
         return null;
     }
+
+    /// <summary>
+    /// Internal wrapper for Execute that allows evaluation contexts to dispatch statements.
+    /// </summary>
+    /// <param name="stmt">The statement to execute.</param>
+    /// <returns>The execution result.</returns>
+    internal ExecutionResult ExecuteStatement(Stmt stmt) => Execute(stmt);
+
+    /// <summary>
+    /// Internal async wrapper for statement execution using registry-based dispatch.
+    /// Uses DispatchStmtAsync which falls back to sync handlers when no async handler exists.
+    /// </summary>
+    /// <param name="stmt">The statement to execute.</param>
+    /// <returns>A task containing the execution result.</returns>
+    internal async Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt)
+    {
+        return await _registry.DispatchStmtAsync(stmt, this);
+    }
+
+    /// <summary>
+    /// Dispatches a statement to the appropriate execution handler using the registry.
+    /// </summary>
+    /// <param name="stmt">The statement AST node to execute.</param>
+    /// <remarks>
+    /// Handles all statement types including control flow (if, while, for, switch),
+    /// declarations (var, function, class, enum), and control transfer (return, break, continue, throw).
+    /// Control flow uses <see cref="ExecutionResult"/> for non-local jumps.
+    /// </remarks>
+    private ExecutionResult Execute(Stmt stmt)
+    {
+        return _registry.DispatchStmt(stmt, this);
+    }
+
+    // Statement handlers - called by the registry
+
+    internal ExecutionResult VisitBlock(Stmt.Block block) =>
+        ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));
+
+    internal ExecutionResult VisitLabeledStatement(Stmt.LabeledStatement labeledStmt) =>
+        ExecuteLabeledStatement(labeledStmt);
+
+    internal ExecutionResult VisitSequence(Stmt.Sequence seq)
+    {
+        // Execute in current scope (no new environment)
+        foreach (var s in seq.Statements)
+        {
+            var result = Execute(s);
+            if (result.IsAbrupt) return result;
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitExpression(Stmt.Expression exprStmt)
+    {
+        Evaluate(exprStmt.Expr);
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitIf(Stmt.If ifStmt)
+    {
+        if (IsTruthy(Evaluate(ifStmt.Condition)))
+        {
+            return Execute(ifStmt.ThenBranch);
+        }
+        else if (ifStmt.ElseBranch != null)
+        {
+            return Execute(ifStmt.ElseBranch);
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitWhile(Stmt.While whileStmt)
+    {
+        var labels = TakePendingLoopLabels();
+        return ExecuteWhileCore(_syncContext, whileStmt, labels).GetAwaiter().GetResult();
+    }
+
+    internal ExecutionResult VisitDoWhile(Stmt.DoWhile doWhileStmt)
+    {
+        var labels = TakePendingLoopLabels();
+        return ExecuteDoWhileCore(_syncContext, doWhileStmt, labels).GetAwaiter().GetResult();
+    }
+
+    internal ExecutionResult VisitFor(Stmt.For forStmt)
+    {
+        // Drain labels parked by an enclosing labeled statement before running the initializer,
+        // so `continue <label>`/`break <label>` resolve to this loop (#558).
+        var labels = TakePendingLoopLabels();
+        return ExecuteForCore(_syncContext, forStmt, labels).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Core C-style for-loop execution logic shared by the sync and async evaluators. The evaluation
+    /// context supplies the per-clause evaluation strategy and the between-iteration scheduler yield
+    /// (<see cref="IEvaluationContext.YieldToSchedulerAsync"/>), so a single body serves both paths.
+    /// </summary>
+    private async ValueTask<ExecutionResult> ExecuteForCore(IEvaluationContext ctx, Stmt.For forStmt, IReadOnlyList<string>? labels)
+    {
+        // Create scope for loop variables (ES6 let/const block scoping)
+        // Variables declared with let/const in the initializer are scoped to the loop
+        RuntimeEnvironment loopEnv = new(_environment);
+        using (PushScope(loopEnv))
+        {
+            // Execute initializer once (defines loop variable in loopEnv)
+            if (forStmt.Initializer != null)
+                await ctx.ExecuteStmtAsync(forStmt.Initializer);
+            // ECMA-262 13.7.4: a `for (let/const …)` loop gives each iteration its
+            // own bindings for the loop variables, so closures created in different
+            // iterations capture distinct values (#633). `var`/expression
+            // initializers share a single binding and keep the no-copy fast path.
+            var perIterationNames = CollectPerIterationBindings(forStmt.Initializer);
+            if (perIterationNames != null)
+                CreatePerIterationEnvironment(loopEnv, perIterationNames);
+            // Loop with proper continue handling - increment always runs
+            while (forStmt.Condition == null || (await ctx.EvaluateExprAsync(forStmt.Condition)).IsTruthy())
+            {
+                var result = await ctx.ExecuteStmtAsync(forStmt.Body);
+                var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
+                if (shouldBreak) break;
+                // On continue (unlabeled or to this loop), execute increment then re-test
+                if (shouldContinue)
+                {
+                    if (perIterationNames != null)
+                        CreatePerIterationEnvironment(loopEnv, perIterationNames);
+                    if (forStmt.Increment != null)
+                        await ctx.EvaluateExprAsync(forStmt.Increment);
+                    // Yield to allow timer callbacks and other threads to execute
+                    await ctx.YieldToSchedulerAsync();
+                    continue;
+                }
+                if (abruptResult.HasValue) return abruptResult.Value;
+                // Normal completion: fresh per-iteration binding, then increment
+                if (perIterationNames != null)
+                    CreatePerIterationEnvironment(loopEnv, perIterationNames);
+                if (forStmt.Increment != null)
+                    await ctx.EvaluateExprAsync(forStmt.Increment);
+                // Process any pending timer callbacks
+                ProcessPendingCallbacks();
+            }
+            return ExecutionResult.Success();
+        }
+    }
+
+    /// <summary>
+    /// Returns the variable names a <c>for</c> initializer binds that require a
+    /// fresh binding per iteration (ECMA-262 13.7.4): <c>let</c>/<c>const</c>
+    /// declarations. Returns <c>null</c> for <c>var</c> or expression
+    /// initializers, which share a single binding across the whole loop.
+    /// </summary>
+    private static List<string>? CollectPerIterationBindings(Stmt? initializer)
+    {
+        switch (initializer)
+        {
+            // `let`/`const` in a for-initializer parse to Stmt.Var with IsVar=false.
+            case Stmt.Var v when !v.IsVar:
+                return [v.Name.Lexeme];
+            case Stmt.Const c:
+                return [c.Name.Lexeme];
+            // Multi-declarator initializers (`for (let i = 0, j = 10; …)`).
+            case Stmt.Sequence seq:
+                List<string>? names = null;
+                foreach (var s in seq.Statements)
+                {
+                    var sub = CollectPerIterationBindings(s);
+                    if (sub != null) (names ??= []).AddRange(sub);
+                }
+                return names;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// ECMA-262 13.7.4.8 CreatePerIterationEnvironment: copies the current value
+    /// of each loop variable into a fresh environment that is a sibling of the
+    /// loop environment (same enclosing scope, so the resolver's static scope
+    /// distances stay valid) and makes it the active scope. Closures created in
+    /// the next iteration capture this distinct binding rather than a shared slot.
+    /// </summary>
+    private void CreatePerIterationEnvironment(RuntimeEnvironment loopEnv, List<string> names)
+    {
+        var iterationEnv = new RuntimeEnvironment(loopEnv.Enclosing);
+        foreach (var name in names)
+            iterationEnv.Define(name, _environment.GetAt(0, name));
+        _environment = iterationEnv;
+    }
+
+    internal ExecutionResult VisitForOf(Stmt.ForOf forOf) => ExecuteForOf(forOf);
+
+    internal ExecutionResult VisitForIn(Stmt.ForIn forIn) => ExecuteForIn(forIn);
+
+    internal ExecutionResult VisitBreak(Stmt.Break breakStmt) =>
+        ExecutionResult.Break(breakStmt.Label?.Lexeme);
+
+    internal ExecutionResult VisitContinue(Stmt.Continue continueStmt) =>
+        ExecutionResult.Continue(continueStmt.Label?.Lexeme);
+
+    internal ExecutionResult VisitSwitch(Stmt.Switch switchStmt) => ExecuteSwitch(switchStmt);
+
+    internal ExecutionResult VisitTryCatch(Stmt.TryCatch tryCatch) => ExecuteTryCatch(tryCatch);
+
+    internal ExecutionResult VisitThrow(Stmt.Throw throwStmt) =>
+        ExecutionResult.Throw(Evaluate(throwStmt.Value));
+
+    internal ExecutionResult VisitVar(Stmt.Var varStmt)
+    {
+        object? value = SharpTSUndefined.Instance;
+        if (varStmt.Initializer != null)
+        {
+            value = Evaluate(varStmt.Initializer);
+        }
+        _environment.Define(varStmt.Name.Lexeme, value);
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitConst(Stmt.Const constStmt)
+    {
+        // Const declarations always have an initializer (enforced by parser)
+        object? constValue = Evaluate(constStmt.Initializer);
+        _environment.Define(constStmt.Name.Lexeme, constValue);
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitFunction(Stmt.Function functionStmt)
+    {
+        // Skip overload signatures (no body) - they're type-checking only
+        if (functionStmt.Body == null) return ExecutionResult.Success();
+        // Skip if already hoisted
+        if (_environment.IsDefinedLocally(functionStmt.Name.Lexeme)) return ExecutionResult.Success();
+        if (functionStmt.IsGenerator && functionStmt.IsAsync)
+        {
+            // Async generator: async function* foo() { yield await ... }
+            SharpTSAsyncGeneratorFunction asyncGenFunction = new(functionStmt, _environment);
+            _environment.Define(functionStmt.Name.Lexeme, asyncGenFunction);
+        }
+        else if (functionStmt.IsGenerator)
+        {
+            SharpTSGeneratorFunction generatorFunction = new(functionStmt, _environment);
+            _environment.Define(functionStmt.Name.Lexeme, generatorFunction);
+        }
+        else if (functionStmt.IsAsync)
+        {
+            SharpTSAsyncFunction asyncFunction = new(functionStmt, _environment);
+            _environment.Define(functionStmt.Name.Lexeme, asyncFunction);
+        }
+        else
+        {
+            SharpTSFunction function = new(functionStmt, _environment);
+            _environment.Define(functionStmt.Name.Lexeme, function);
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitClass(Stmt.Class classStmt)
+    {
+        // @DotNetType declare class: bind a DotNet wrapper into the environment
+        // instead of creating an empty SharpTSClass. Non-DotNet declare classes still
+        // fall through and produce an empty SharpTSClass for type-only compatibility.
+        if (classStmt.IsDeclare)
+        {
+            if (TryRegisterDotNetType(classStmt)) return ExecutionResult.Success();
+        }
+
+        object? superclass = null;
+        if (classStmt.SuperclassExpr != null)
+        {
+            superclass = Evaluate(classStmt.SuperclassExpr);
+
+            // `extends Array` (#233): the Array global is a constructor
+            // singleton, not a SharpTSClass — substitute the SharpTSArrayClass
+            // bridge so the class machinery (super(), method lookup,
+            // instanceof) sees a real superclass.
+            if (superclass is SharpTSArrayGlobal)
+            {
+                superclass = SharpTSArrayClass.ArrayBase;
+            }
+
+            // `extends Promise` (#242): same substitution for the Promise
+            // constructor sentinel.
+            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
+            {
+                superclass = SharpTSPromiseClass.PromiseBase;
+            }
+
+            if (superclass is not SharpTSClass)
+            {
+                // Built-in constructors that don't have a class bridge yet
+                // get a precise error instead of the generic
+                // "Superclass must be a class".
+                if (superclass is SharpTSBuiltInConstructor builtInCtor)
+                {
+                    throw new InterpreterException(
+                        $"Class '{classStmt.Name.Lexeme}' cannot extend built-in '{builtInCtor.Name}': subclassing this built-in is not supported yet.");
+                }
+                throw new InterpreterException("Superclass must be a class.");
+            }
+        }
+
+        _environment.Define(classStmt.Name.Lexeme, null);
+
+        if (classStmt.SuperclassExpr != null)
+        {
+            _environment = new RuntimeEnvironment(_environment);
+            _environment.Define("super", superclass);
+        }
+
+        Dictionary<string, ISharpTSCallable> methods = [];
+        Dictionary<string, ISharpTSCallable> staticMethods = [];
+        Dictionary<string, object?> staticProperties = [];
+        List<Stmt.Field> instanceFields = [];
+        // ES2022 private class elements
+        List<Stmt.Field> instancePrivateFields = [];
+        Dictionary<string, ISharpTSCallable> privateMethods = [];
+        Dictionary<string, object?> staticPrivateFields = [];
+        Dictionary<string, ISharpTSCallable> staticPrivateMethods = [];
+
+        // Process fields: collect instance fields, defer static field initialization if using StaticInitializers
+        // Note: Declare fields are processed normally - they can't have initializers (enforced by parser),
+        // so they'll be added with null/undefined values and can be set externally later.
+        bool hasStaticInitializers = classStmt.StaticInitializers != null && classStmt.StaticInitializers.Count > 0;
+
+        foreach (Stmt.Field field in classStmt.Fields)
+        {
+            if (field.IsPrivate)
+            {
+                // ES2022 private fields
+                if (field.IsStatic)
+                {
+                    if (!hasStaticInitializers)
+                    {
+                        // Old behavior: evaluate immediately
+                        object? fieldValue = field.Initializer != null
+                            ? Evaluate(field.Initializer)
+                            : null;
+                        staticPrivateFields[field.Name.Lexeme] = fieldValue;
+                    }
+                    // else: will be evaluated via StaticInitializers with proper 'this' binding
+                }
+                else
+                {
+                    // Collect instance private fields - they'll be initialized when instances are created
+                    instancePrivateFields.Add(field);
+                }
+            }
+            else if (field.IsStatic)
+            {
+                if (!hasStaticInitializers)
+                {
+                    // Old behavior: evaluate immediately
+                    object? fieldValue = field.Initializer != null
+                        ? Evaluate(field.Initializer)
+                        : null;
+                    staticProperties[field.Name.Lexeme] = fieldValue;
+                }
+                // else: will be evaluated via StaticInitializers with proper 'this' binding
+            }
+            else
+            {
+                // Collect instance fields - they'll be initialized when instances are created
+                instanceFields.Add(field);
+            }
+        }
+
+        // Symbol-keyed computed methods (`[Symbol.iterator]() {...}`) can't go into the string
+        // dictionaries; collected here and attached to the class after construction.
+        List<(SharpTSSymbol Symbol, ISharpTSCallable Func, bool IsStatic)>? symbolMethods = null;
+
+        // Separate static and instance methods (skip overload signatures with no body)
+        foreach (Stmt.Function method in classStmt.Methods.Where(m => m.Body != null))
+        {
+            // Create the appropriate function type based on async/generator flags
+            ISharpTSCallable func;
+            if (method.IsGenerator && method.IsAsync)
+                func = new SharpTSAsyncGeneratorFunction(method, _environment);
+            else if (method.IsAsync)
+                func = new SharpTSAsyncFunction(method, _environment);
+            else if (method.IsGenerator)
+                func = new SharpTSGeneratorFunction(method, _environment);
+            else
+                func = new SharpTSFunction(method, _environment);
+
+            // Computed method keys (`[Symbol.iterator]()`, `[expr]()`) are evaluated at
+            // class-definition time, like computed field keys and accessors. Symbol keys land
+            // in the symbol-method table; other keys fold to a string-named method.
+            if (method.ComputedKey != null)
+            {
+                object? key = Evaluate(method.ComputedKey);
+                if (key is SharpTSSymbol symbolKey)
+                {
+                    (symbolMethods ??= []).Add((symbolKey, func, method.IsStatic));
+                    continue;
+                }
+                string keyStr = PropertyKeyConverter.ToPropertyKeyString(key);
+                (method.IsStatic ? staticMethods : methods)[keyStr] = func;
+                continue;
+            }
+
+            if (method.IsPrivate)
+            {
+                // ES2022 private methods
+                if (method.IsStatic)
+                {
+                    staticPrivateMethods[method.Name.Lexeme] = func;
+                }
+                else
+                {
+                    privateMethods[method.Name.Lexeme] = func;
+                }
+            }
+            else if (method.IsStatic)
+            {
+                staticMethods[method.Name.Lexeme] = func;
+            }
+            else
+            {
+                methods[method.Name.Lexeme] = func;
+            }
+        }
+
+        // Create accessor functions
+        Dictionary<string, SharpTSFunction> getters = [];
+        Dictionary<string, SharpTSFunction> setters = [];
+        Dictionary<string, SharpTSFunction> staticGetters = [];
+        Dictionary<string, SharpTSFunction> staticSetters = [];
+
+        // Symbol-keyed accessors can't go into the string dictionaries; collected
+        // here and attached to the class after construction.
+        List<(SharpTSSymbol Symbol, SharpTSFunction Func, bool IsStatic, bool IsGetter)>? symbolAccessors = null;
+
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                // Create a synthetic function for the accessor
+                var funcStmt = new Stmt.Function(
+                    accessor.Name,
+                    null,  // No type parameters for accessor
+                    null,  // No this type annotation
+                    accessor.SetterParam != null ? [accessor.SetterParam] : [],
+                    accessor.Body,
+                    accessor.ReturnType);
+
+                SharpTSFunction func = new(funcStmt, _environment);
+                bool isGetter = accessor.Kind.Type == TokenType.GET;
+
+                // Computed accessor names (`get [Symbol.toStringTag]()`,
+                // `static get [Symbol.species]()`) are evaluated at
+                // class-definition time, like computed field keys.
+                if (accessor.ComputedKey != null)
+                {
+                    object? key = Evaluate(accessor.ComputedKey);
+                    if (key is SharpTSSymbol symbolKey)
+                    {
+                        (symbolAccessors ??= []).Add((symbolKey, func, accessor.IsStatic, isGetter));
+                        continue;
+                    }
+                    string keyStr = PropertyKeyConverter.ToPropertyKeyString(key);
+                    if (isGetter) (accessor.IsStatic ? staticGetters : getters)[keyStr] = func;
+                    else (accessor.IsStatic ? staticSetters : setters)[keyStr] = func;
+                    continue;
+                }
+
+                var targetGet = accessor.IsStatic ? staticGetters : getters;
+                var targetSet = accessor.IsStatic ? staticSetters : setters;
+
+                if (isGetter)
+                {
+                    targetGet[accessor.Name.Lexeme] = func;
+                }
+                else
+                {
+                    targetSet[accessor.Name.Lexeme] = func;
+                }
+            }
+        }
+
+        // Process auto-accessors (TypeScript 4.9+)
+        List<Stmt.AutoAccessor> instanceAutoAccessors = [];
+        Dictionary<string, object?> staticAutoAccessors = [];
+
+        if (classStmt.AutoAccessors != null)
+        {
+            foreach (var autoAccessor in classStmt.AutoAccessors)
+            {
+                if (autoAccessor.IsStatic)
+                {
+                    // Evaluate static auto-accessor initializer now
+                    object? initValue = autoAccessor.Initializer != null
+                        ? Evaluate(autoAccessor.Initializer)
+                        : null;
+                    staticAutoAccessors[autoAccessor.Name.Lexeme] = initValue;
+                }
+                else
+                {
+                    // Collect instance auto-accessors for later initialization
+                    instanceAutoAccessors.Add(autoAccessor);
+                }
+            }
+        }
+
+        // If the superclass is an Error type, create a SharpTSErrorClass so that
+        // instances carry error fields (name, message, stack) and instanceof works.
+        // Likewise an Array superclass produces a SharpTSArrayClass whose
+        // instances are real arrays (#233), and a Promise superclass produces a
+        // SharpTSPromiseClass whose instances are real promises (#242).
+        SharpTSClass klass = superclass is SharpTSErrorClass errorSuper
+            ? new SharpTSErrorClass(
+                classStmt.Name.Lexeme,
+                errorSuper,
+                methods,
+                staticMethods,
+                staticProperties,
+                getters,
+                setters,
+                classStmt.IsAbstract,
+                instanceFields,
+                instancePrivateFields,
+                privateMethods,
+                staticPrivateFields,
+                staticPrivateMethods,
+                instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
+                staticAutoAccessors.Count > 0 ? staticAutoAccessors : null,
+                staticGetters.Count > 0 ? staticGetters : null,
+                staticSetters.Count > 0 ? staticSetters : null)
+            : superclass is SharpTSArrayClass arraySuper
+            ? new SharpTSArrayClass(
+                classStmt.Name.Lexeme,
+                arraySuper,
+                methods,
+                staticMethods,
+                staticProperties,
+                getters,
+                setters,
+                classStmt.IsAbstract,
+                instanceFields,
+                instancePrivateFields,
+                privateMethods,
+                staticPrivateFields,
+                staticPrivateMethods,
+                instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
+                staticAutoAccessors.Count > 0 ? staticAutoAccessors : null,
+                staticGetters.Count > 0 ? staticGetters : null,
+                staticSetters.Count > 0 ? staticSetters : null)
+            : superclass is SharpTSPromiseClass promiseSuper
+            ? new SharpTSPromiseClass(
+                classStmt.Name.Lexeme,
+                promiseSuper,
+                methods,
+                staticMethods,
+                staticProperties,
+                getters,
+                setters,
+                classStmt.IsAbstract,
+                instanceFields,
+                instancePrivateFields,
+                privateMethods,
+                staticPrivateFields,
+                staticPrivateMethods,
+                instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
+                staticAutoAccessors.Count > 0 ? staticAutoAccessors : null,
+                staticGetters.Count > 0 ? staticGetters : null,
+                staticSetters.Count > 0 ? staticSetters : null)
+            : new SharpTSClass(
+                classStmt.Name.Lexeme,
+                (SharpTSClass?)superclass,
+                methods,
+                staticMethods,
+                staticProperties,
+                getters,
+                setters,
+                classStmt.IsAbstract,
+                instanceFields,
+                instancePrivateFields,
+                privateMethods,
+                staticPrivateFields,
+                staticPrivateMethods,
+                instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
+                staticAutoAccessors.Count > 0 ? staticAutoAccessors : null,
+                staticGetters.Count > 0 ? staticGetters : null,
+                staticSetters.Count > 0 ? staticSetters : null);
+
+        if (symbolAccessors != null)
+        {
+            foreach (var (symbol, func, isStatic, isGetter) in symbolAccessors)
+            {
+                klass.AddSymbolAccessor(symbol, func, isStatic, isGetter);
+            }
+        }
+
+        if (symbolMethods != null)
+        {
+            foreach (var (symbol, func, isStatic) in symbolMethods)
+            {
+                klass.AddSymbolMethod(symbol, func, isStatic);
+            }
+        }
+
+        // Execute static initializers in declaration order (if present)
+        if (hasStaticInitializers)
+        {
+            // Create temporary environment with 'this' bound to the class
+            // Also make the class name available so code like Foo.x works
+            var staticEnv = new RuntimeEnvironment(_environment);
+            staticEnv.Define("this", klass);
+            staticEnv.Define(classStmt.Name.Lexeme, klass);
+
+            var prevEnv = _environment;
+            _environment = staticEnv;
+
+            try
+            {
+                foreach (var initializer in classStmt.StaticInitializers!)
+                {
+                    switch (initializer)
+                    {
+                        case Stmt.Field field when field.IsStatic:
+                            object? fieldValue = field.Initializer != null
+                                ? Evaluate(field.Initializer)
+                                : null;
+                            if (field.IsPrivate)
+                                klass.SetStaticPrivateField(field.Name.Lexeme, fieldValue);
+                            else
+                                klass.SetStaticProperty(field.Name.Lexeme, fieldValue);
+                            break;
+
+                        case Stmt.StaticBlock block:
+                            foreach (var blockStmt in block.Body)
+                            {
+                                var result = Execute(blockStmt);
+                                if (result.IsAbrupt)
+                                {
+                                    // Handle throw from static block
+                                    if (result.Type == ExecutionResult.ResultType.Throw)
+                                    {
+                                        throw new InterpreterException($"Error in static block: {Stringify(result.Value.ToObject())}");
+                                    }
+                                    // Return, break, continue are not allowed (validated by type checker)
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+            finally
+            {
+                _environment = prevEnv;
+            }
+        }
+
+        // Apply decorators in the correct order
+        klass = ApplyAllDecorators(classStmt, klass, methods, staticMethods, getters, setters);
+
+        if (classStmt.SuperclassExpr != null)
+        {
+            _environment = _environment.Enclosing!;
+        }
+
+        _environment.Assign(classStmt.Name, klass);
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitTypeAlias(Stmt.TypeAlias typeAlias) =>
+        // Type-only declarations - compile-time only, no runtime effect
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitInterface(Stmt.Interface iface) =>
+        // Type-only declarations - compile-time only, no runtime effect
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitFileDirective(Stmt.FileDirective fileDirective) =>
+        // Type-only declarations - compile-time only, no runtime effect
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitField(Stmt.Field field) =>
+        // Class member declarations - handled within class processing, not executed directly
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitAccessor(Stmt.Accessor accessor) =>
+        // Class member declarations - handled within class processing, not executed directly
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitAutoAccessor(Stmt.AutoAccessor autoAccessor) =>
+        // Class member declarations - handled within class processing, not executed directly
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitStaticBlock(Stmt.StaticBlock staticBlock) =>
+        // Class member declarations - handled within class processing, not executed directly
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitEnum(Stmt.Enum enumStmt)
+    {
+        ExecuteEnumDeclaration(enumStmt);
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitNamespace(Stmt.Namespace ns) => ExecuteNamespace(ns);
+
+    internal ExecutionResult VisitImportAlias(Stmt.ImportAlias importAlias) => ExecuteImportAlias(importAlias);
+
+    internal ExecutionResult VisitReturn(Stmt.Return returnStmt)
+    {
+        // A bare `return;` completes with `undefined` — distinct from `return null;`. Emitting the
+        // undefined sentinel here (rather than C# null, which represents JS null) is what makes a
+        // generator's completion value and a plain function's return value `undefined` instead of
+        // conflating them with null (#480). `return <expr>` preserves whatever the expression
+        // evaluates to, so an explicit `return null;` still yields null.
+        if (returnStmt.Value == null)
+            return ExecutionResult.Return(RuntimeValue.Undefined);
+        return ExecutionResult.Return(Evaluate(returnStmt.Value));
+    }
+
+    internal ExecutionResult VisitPrint(Stmt.Print printStmt)
+    {
+        Out.WriteLine(Stringify(Evaluate(printStmt.Expr)));
+        return ExecutionResult.Success();
+    }
+
+    internal ExecutionResult VisitImport(Stmt.Import import) =>
+        // Imports are handled in BindModuleImports before execution
+        // In single-file mode, imports are a no-op (type checker would have errored)
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitImportRequire(Stmt.ImportRequire importReq) => ExecuteImportRequire(importReq);
+
+    internal ExecutionResult VisitExport(Stmt.Export exportStmt) => ExecuteExport(exportStmt);
+
+    internal ExecutionResult VisitDirective(Stmt.Directive directive) =>
+        // Directives are processed at the start of interpretation for their side effects (strict mode)
+        // When encountered during execution, they are a no-op
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitDeclareModule(Stmt.DeclareModule declareModule) =>
+        // Module/global augmentations and ambient declarations are type-only
+        // No runtime effect - types were merged during type checking
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitDeclareGlobal(Stmt.DeclareGlobal declareGlobal) =>
+        // Module/global augmentations and ambient declarations are type-only
+        // No runtime effect - types were merged during type checking
+        ExecutionResult.Success();
+
+    internal ExecutionResult VisitUsing(Stmt.Using usingStmt) => ExecuteUsingDeclaration(usingStmt);
 }
