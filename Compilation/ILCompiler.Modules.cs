@@ -713,6 +713,14 @@ public partial class ILCompiler
             }
         }
 
+        // Initialize namespace static fields before any module/script $Initialize body runs.
+        // Namespace objects live in flat static fields ($ns_*) on $Program shared across every
+        // module, but a module's $Initialize only POPULATES them (EmitNamespace does
+        // $ns_X.Set(...)); it never creates them. The single-file entry point calls this at the
+        // top of Main; the multi-module entry point must too, or the first Set() dereferences a
+        // null namespace field (#1245).
+        InitializeNamespaceFields(il);
+
         // Call each module/script's $Initialize method in dependency order.
         // CommonJS modules are initialized lazily — only the entry CJS module is run eagerly,
         // and require() triggers the rest. This matches Node semantics for the visible execution
