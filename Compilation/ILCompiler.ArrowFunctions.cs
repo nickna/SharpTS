@@ -338,8 +338,15 @@ public partial class ILCompiler
 
                 foreach (var capturedVar in captures)
                 {
-                    // Skip top-level captured vars - they'll be accessed through $entryPointDC
-                    if (_closures.CapturedTopLevelVars.Contains(capturedVar))
+                    // Skip top-level captured vars - they'll be accessed through $entryPointDC.
+                    // #1222 exception: when THIS arrow's capture is an unlifted top-level
+                    // BLOCK-scoped binding, the same-named entry-DC field belongs to a
+                    // DIFFERENT binding (typically the module-level one the block binding
+                    // shadows — the declared-more-than-once name is exactly what the #1201
+                    // lift declined). Give the capture its own copy field so it snapshots
+                    // the creating scope's local like any ordinary local capture.
+                    if (_closures.CapturedTopLevelVars.Contains(capturedVar) &&
+                        !IsShadowedTopLevelBlockCapture(arrow, capturedVar))
                         continue;
 
                     // Skip function-level captured vars - they'll be accessed through $functionDC.
@@ -433,6 +440,27 @@ public partial class ILCompiler
             // args must pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_closures.ArrowMethods[arrow]);
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="arrow"/>'s capture of <paramref name="name"/> resolves to a
+    /// top-level BLOCK-scoped binding that was NOT lifted onto the entry-point display class
+    /// (#1201's declared-exactly-once rule declined it, so the name is also declared elsewhere
+    /// — typically the module-level binding the block one shadows). Such a capture must not
+    /// ride the $entryPointDC chain: the same-named DC field is a DIFFERENT binding (#1222).
+    /// The analyzer records the flag only for closures created directly in top-level code, so
+    /// nested closures keep the historical chain routing. The lifted-set lookup uses the
+    /// arrow's own module key — registration and collection both key scripts under
+    /// <see cref="ClosureCompilationState.SingleFileKey"/> via a null path.
+    /// </summary>
+    private bool IsShadowedTopLevelBlockCapture(Expr.ArrowFunction arrow, string name)
+    {
+        if (!_closures.Analyzer.IsDirectTopLevelBlockScopedCapture(arrow, name))
+            return false;
+        _arrowToModule.TryGetValue(arrow, out var modulePath);
+        string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+        return !(_closures.ModuleLiftedBlockScopedVars.TryGetValue(key, out var lifted) &&
+                 lifted.Contains(name));
     }
 
     private void CollectArrowsFromStmt(Stmt stmt)
