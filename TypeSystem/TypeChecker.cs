@@ -1142,6 +1142,16 @@ public partial class TypeChecker
 
         _moduleResolver = resolver;
 
+        // Base declared-type frame for the whole run, mirroring Check()/CheckWithRecovery (#743) —
+        // shared by all script files, which share global scope. With no frame on the stack,
+        // RecordDeclaredType silently drops every binding and GetDeclaredType falls back to the
+        // environment binding — which control-flow narrowing mutates — so an assignment inside a
+        // narrowed branch is checked against the narrowed literal type instead of the declared one
+        // (#1218: `let found = false; if (!found) { found = true; }` rejected in module mode).
+        // Clear first: the checker may retain frames from a prior check's early exit.
+        _declaredVariableTypesStack.Clear();
+        PushDeclaredVariableScope();
+
         // Pre-define built-ins in the global environment
         _environment.Define("console", new TypeInfo.Any());
         _environment.Define("Reflect", new TypeInfo.Any());
@@ -1150,24 +1160,35 @@ public partial class TypeChecker
         // Create a shared script environment for script files (they share global scope)
         var scriptEnv = new TypeEnvironment(_environment);
 
-        // First pass: collect all exports from each module
-        foreach (var module in modules)
+        // First pass: collect all exports from each module. This preparatory pass type-checks
+        // bodies too (suppressed), so it runs in its own declared-type frame: its records are
+        // discarded rather than leaking into the base frame the authoritative second pass — which
+        // re-checks and re-records everything — reads through (#1218).
+        PushDeclaredVariableScope();
+        try
         {
-            _currentModule = module;
-            // Attribute diagnostics to the module being checked — without
-            // this, errors raised inside module sources (including built-in
-            // module declarations like events.ts) render as bare
-            // "at line N" with no file context (#216).
-            _filePath = module.Path;
-            if (module.IsScript)
+            foreach (var module in modules)
             {
-                // Scripts use shared environment and don't export
-                CollectScriptDeclarations(module, scriptEnv);
+                _currentModule = module;
+                // Attribute diagnostics to the module being checked — without
+                // this, errors raised inside module sources (including built-in
+                // module declarations like events.ts) render as bare
+                // "at line N" with no file context (#216).
+                _filePath = module.Path;
+                if (module.IsScript)
+                {
+                    // Scripts use shared environment and don't export
+                    CollectScriptDeclarations(module, scriptEnv);
+                }
+                else
+                {
+                    CollectModuleExports(module);
+                }
             }
-            else
-            {
-                CollectModuleExports(module);
-            }
+        }
+        finally
+        {
+            PopDeclaredVariableScope();
         }
 
         // Second pass: type-check each module with imports resolved
@@ -1236,40 +1257,51 @@ public partial class TypeChecker
                 // Bind imports from dependencies
                 BindModuleImports(module, moduleEnv);
 
-                // Type-check module body with error recovery
-                using (new EnvironmentScope(this, moduleEnv))
+                // Per-module declared-type frame: the module's top-level bindings (and class-method
+                // locals, which record into the innermost frame) are tracked like function locals
+                // and don't leak into sibling modules (#1218).
+                PushDeclaredVariableScope();
+                try
                 {
-                    // First pass: pre-register type declarations
-                    PreRegisterTypeDeclarations(module.Statements);
-
-                    // Hoist class declarations (as Any for forward references)
-                    HoistClassDeclarations(module.Statements);
-
-                    // Second pass: hoist function declarations (now types are available)
-                    HoistFunctionDeclarations(module.Statements);
-
-                    // Hoist var declarations (pre-define as any for forward reference support)
-                    HoistVarDeclarations(module.Statements);
-
-                    // Hoist let/const declarations (pre-define as any for forward reference support — #533)
-                    HoistLexicalDeclarations(module.Statements);
-
-                    // Third pass: check all statements with error recovery
-                    foreach (var stmt in module.Statements)
+                    // Type-check module body with error recovery
+                    using (new EnvironmentScope(this, moduleEnv))
                     {
-                        // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
-                        // the script path (CheckWithRecovery). Without it, module-mode errors render
-                        // with no location (#468).
-                        _currentStatementLine = TryGetStmtLine(stmt);
-                        try
+                        // First pass: pre-register type declarations
+                        PreRegisterTypeDeclarations(module.Statements);
+
+                        // Hoist class declarations (as Any for forward references)
+                        HoistClassDeclarations(module.Statements);
+
+                        // Second pass: hoist function declarations (now types are available)
+                        HoistFunctionDeclarations(module.Statements);
+
+                        // Hoist var declarations (pre-define as any for forward reference support)
+                        HoistVarDeclarations(module.Statements);
+
+                        // Hoist let/const declarations (pre-define as any for forward reference support — #533)
+                        HoistLexicalDeclarations(module.Statements);
+
+                        // Third pass: check all statements with error recovery
+                        foreach (var stmt in module.Statements)
                         {
-                            CheckStmt(stmt);
-                        }
-                        catch (TypeCheckException ex)
-                        {
-                            RecordTypeError(ex);
+                            // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
+                            // the script path (CheckWithRecovery). Without it, module-mode errors render
+                            // with no location (#468).
+                            _currentStatementLine = TryGetStmtLine(stmt);
+                            try
+                            {
+                                CheckStmt(stmt);
+                            }
+                            catch (TypeCheckException ex)
+                            {
+                                RecordTypeError(ex);
+                            }
                         }
                     }
+                }
+                finally
+                {
+                    PopDeclaredVariableScope();
                 }
             }
 
