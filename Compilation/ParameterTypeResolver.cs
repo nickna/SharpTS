@@ -163,8 +163,27 @@ public static class ParameterTypeResolver
             return typeof(object);
         if (UnionAdmitsUndefined(source))
             return typeof(object);
+        if (IsPromiseTaskSlot(mapped))
+            return typeof(object);
         return mapped;
     }
+
+    /// <summary>
+    /// True when <paramref name="mapped"/> is a CLR <c>Task</c>/<c>Task&lt;T&gt;</c> produced by
+    /// strictly mapping a <c>Promise&lt;T&gt;</c> annotation. A parameter so typed receives the runtime
+    /// <c>$Promise</c> object at the call boundary, never a real CLR <c>Task</c> (the promise
+    /// primitives return <c>$Promise</c>, and no path constructs a bare <c>Task</c> guest value), so
+    /// the slot must widen to <c>object</c>. Mirrors the identical <c>Promise&lt;T&gt;</c> → object
+    /// widening already applied to non-async return slots in <see cref="ResolveReturnType"/> (#393);
+    /// its absence on parameters left the <c>fs</c> facade callback helpers emitting a <c>$Promise</c>
+    /// into a <c>Task&lt;object&gt;</c> slot, which the JIT tolerates but IL verification rejects
+    /// (#1246). The widening is unconditional — even an async function's <c>Promise&lt;T&gt;</c> param
+    /// receives a passed-in <c>$Promise</c>; only the enclosing function's <i>return</i> builds a real
+    /// Task.
+    /// </summary>
+    private static bool IsPromiseTaskSlot(Type mapped) =>
+        mapped == typeof(Task) ||
+        (mapped.IsGenericType && mapped.GetGenericTypeDefinition() == typeof(Task<>));
 
     /// <summary>
     /// True when <paramref name="type"/> is a union one of whose members is the <c>undefined</c>

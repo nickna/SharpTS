@@ -2361,9 +2361,25 @@ public abstract partial class ExpressionEmitterBase
         }
 
         // If target is a value type and we have an object, unbox
-        if (targetType.IsValueType && StackType != StackType.Double && StackType != StackType.Boolean)
+        if (targetType.IsValueType)
         {
-            IL.Emit(OpCodes.Unbox_Any, targetType);
+            if (StackType != StackType.Double && StackType != StackType.Boolean)
+                IL.Emit(OpCodes.Unbox_Any, targetType);
+            return;
+        }
+
+        // Target is a non-object reference type. EmitExpression can leave a broader `object` on the
+        // stack — an `any`-typed value, or a GetIndex/GetProperty result — that the callee's typed
+        // string slot would reject at IL verification even though the JIT tolerates it. Emit the
+        // downcast the verifier needs (#1246). Only `string` qualifies: it is the one non-object
+        // reference slot whose runtime value is genuinely a CLR instance of the slot. Other reference
+        // targets carry a boxed-differently runtime value ($TSFunction for a Delegate, $Array for a
+        // List, $Promise for a Task — the last widened to `object` at the parameter slot by
+        // ParameterTypeResolver), so a castclass would throw; they keep their prior object store.
+        if (Types.IsString(targetType) && StackType != StackType.String)
+        {
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, targetType);
         }
     }
 

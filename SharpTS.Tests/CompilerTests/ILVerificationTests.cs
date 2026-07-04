@@ -838,6 +838,70 @@ public class ILVerificationTests
     }
 
     [Fact]
+    public void FsFacadeImport_PassesILVerification()
+    {
+        // #1246: importing `fs` emitted 68 unverifiable methods across the facade. Two shapes,
+        // both a value stored into a narrower slot without the verifier-required bridge:
+        //   (1) `object` → `string` — a $M_fs helper stages an `any`-typed argument (e.g.
+        //       `__joinPath(src, names[i])` in cpSync) into a string parameter temp with no castclass;
+        //   (2) `$Promise` → `Task<object>` — the promise primitives return a wrapped $Promise which
+        //       the callback helpers (`__cbData`/`__cbVoid`) took in a `Promise<any>` → Task<object>
+        //       parameter slot. Fixed by (1) a castclass on string parameter coercion and (2) widening
+        //       non-async Promise<T> parameter slots to object (symmetric to #393's return-slot fix).
+        //       Verifies the whole facade — every $M_fs_* method is emitted regardless of what is used.
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                console.log(fs.statSync('.').isDirectory());
+                """
+        };
+
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void ObjectArgumentToStringParameter_PassesILVerification()
+    {
+        // #1246 class 1, minimal repro: an `any`-typed value (here a bracket read off an `any`
+        // array, which the emitter types as `object`) passed to a `string` parameter left the
+        // object on the stack where the callee's string slot was expected — no castclass. The
+        // JIT tolerated it; ILVerify reported StackUnexpected {Found object, Expected string}.
+        var source = """
+            function join(a: string, b: string): string { return a + "/" + b; }
+            const names: any = ["x", "y"];
+            console.log(join("d", names[0]));
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+
+        Assert.Empty(errors);
+        Assert.Equal("d/x\n", output);
+    }
+
+    [Fact]
+    public void PromiseValueToPromiseParameter_PassesILVerification()
+    {
+        // #1246 class 2, minimal repro: a runtime $Promise (from Promise.resolve / new Promise —
+        // not a real CLR Task, unlike an async function's result) passed to a `Promise<any>`
+        // parameter, whose slot mapped to Task<object>. Storing the $Promise into the Task<object>
+        // slot ran fine but failed ILVerify {Found $Promise, Expected Task<object>}. The parameter
+        // slot is now widened to object.
+        var source = """
+            function consume(p: Promise<any>, cb: any): void { p.then((v: any) => cb(v)); }
+            consume(Promise.resolve(5), (v: any) => console.log(v));
+            consume(new Promise<any>((res: any) => res(7)), (v: any) => console.log(v));
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+
+        Assert.Empty(errors);
+        Assert.Equal("5\n7\n", output);
+    }
+
+    [Fact]
     public void ClassGetPropertyWithTypedGetter_PassesILVerification()
     {
         // The compiler-generated GetProperty dispatch helper invokes a typed getter (e.g. the
