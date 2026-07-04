@@ -222,7 +222,14 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitPrint(p);
                 break;
 
-            case Stmt.Function:
+            case Stmt.Function fn:
+                // A `function` declaration nested in a block/loop/if is materialized in place at its
+                // textual position so a closure over a per-iteration binding captures that iteration's
+                // value (#1230). Top-level declarations are already hoisted (no-op here); classes and
+                // type-only declarations are handled at compile-time.
+                _ctx.EmitBlockScopedInnerFunction?.Invoke(IL, _ctx, fn);
+                break;
+
             case Stmt.Class:
             case Stmt.Interface:
             case Stmt.TypeAlias:
