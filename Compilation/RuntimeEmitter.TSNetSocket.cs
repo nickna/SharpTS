@@ -1407,17 +1407,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopTop);
 
         il.MarkLabel(exitPath);
-        // if (doShutdown) { _ShutdownWritable(); schedule _FireEndCallback }
+        // if (doShutdown) { schedule _FireEndCallback; _ShutdownWritable(); }
+        // Schedule BEFORE the FIN goes out: an in-process peer's 'end' is enqueued
+        // only after its read loop sees the FIN, so the end callback can never be
+        // overtaken by it — Node's ordering, which shutdown-then-schedule left to a
+        // thread-pool race (#1227; mirrors SharpTSSocket.End).
         var noShut = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, doShutdownLocal);
         il.Emit(OpCodes.Brfalse, noShut);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
         il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
         il.MarkLabel(noShut);
 
         // schedule _FlushTick — drain check + the worker's balancing Unref
@@ -1577,9 +1581,12 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits body for: private void _FireEndCallback()
-    /// Invokes the end() callback exactly once, after the deferred shutdown completes.
-    /// Then, when the readable side already saw FIN (or the read-end path requested
-    /// an auto-finish), completes the close via Destroy (#1070).
+    /// Invokes the end() callback exactly once. Enqueued on the loop BEFORE the
+    /// shutdown sends the FIN (#1227), so it may run before _ShutdownWritable
+    /// executes; the Destroy branch below closing the transport first is harmless —
+    /// _ShutdownWritable catch-alls, and the branch only fires when the readable
+    /// side already saw FIN (or the read-end path requested an auto-finish), where
+    /// full teardown is the goal. Completes that close via Destroy (#1070).
     /// </summary>
     private void EmitNetSocketFireEndCallbackBody(EmittedRuntime runtime)
     {
@@ -1799,17 +1806,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
             il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [_types.Object])!);
 
-            // if (shutdownNow) { _ShutdownWritable(); schedule _FireEndCallback }
+            // if (shutdownNow) { schedule _FireEndCallback; _ShutdownWritable(); }
+            // Schedule BEFORE the FIN goes out so an in-process peer's 'end' — enqueued
+            // only after its read loop sees the FIN — can never overtake the end
+            // callback (#1227; mirrors SharpTSSocket.End and the worker-exit path).
             var noShutdownNow = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, shutdownNowLocal);
             il.Emit(OpCodes.Brfalse, noShutdownNow);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
             il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldftn, _netSocketFireEndCallbackMethod);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
             il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _netSocketShutdownWritableMethod);
             il.MarkLabel(noShutdownNow);
         }
 

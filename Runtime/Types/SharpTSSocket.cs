@@ -508,7 +508,15 @@ public class SharpTSSocket : SharpTSEventEmitter
         {
             _writeChain = _writeChain.ContinueWith(_ =>
             {
-                ShutdownWritable();
+                // Enqueue BEFORE the FIN goes out: an in-process peer's 'end' is
+                // scheduled only after its read loop sees the FIN, and equal-deadline
+                // timers fire in insertion order, so the end callback can never be
+                // overtaken by the peer's 'end' — Node's deterministic ordering, which
+                // enqueueing after ShutdownWritable() left to a thread-pool race
+                // (#1227). If the loop runs this before ShutdownWritable() executes,
+                // the DestroyCore branch closing the transport first is harmless:
+                // ShutdownWritable catch-alls, and that branch only fires when the
+                // peer already FIN'd, where full teardown is the goal anyway.
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
                     callback?.Call(interpreter, []);
@@ -518,6 +526,7 @@ public class SharpTSSocket : SharpTSEventEmitter
                         DestroyCore(interpreter, null);
                     interpreter.Unref();
                 }, isInterval: false);
+                ShutdownWritable();
             }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
