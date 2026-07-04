@@ -343,9 +343,9 @@ public class TopLevelBlockScopeCaptureTests
     {
         // Module-init methods reach the entry-point DC through its static field;
         // the shadow decision must hold there too. (The module binding and its
-        // reader are deliberately NOT exported directly — an exported arrow
-        // capturing an exported let is a distinct pre-existing compiled-module
-        // bug, unrelated to shadowing.)
+        // reader are deliberately NOT exported directly to keep this test focused
+        // on shadowing — the distinct exported-arrow-capturing-exported-let case is
+        // #1229, covered by ExportedArrow_CapturingExportedLet_IsCallableCrossModule.)
         var files = new Dictionary<string, string>
         {
             ["lib.ts"] = """
@@ -365,6 +365,53 @@ public class TopLevelBlockScopeCaptureTests
         };
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("lib=inner\nmain=outer\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ExportedArrow_CapturingExportedLet_IsCallableCrossModule(ExecutionMode mode)
+    {
+        // #1229: an `export const` arrow capturing an `export let` from the same module.
+        // The non-escaping-arrow optimization (#858) flagged `getOuter` as a direct-call-only
+        // local and stored the bare display-class instance instead of a $TSFunction wrapper —
+        // but the exported binding escapes through the module's export field and is invoked
+        // cross-module via generic reflective dispatch, which then saw a plain object
+        // ("TypeError: object is not a function"). Exported names must be disqualified.
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                export let tag = 'outer';
+                export const getOuter = () => tag;
+                """,
+            ["main.ts"] = """
+                import { getOuter } from './lib';
+                console.log('main=' + getOuter());
+                """,
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("main=outer\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ExportedArrow_WithParam_CapturingExportedLet_IsCallableCrossModule(ExecutionMode mode)
+    {
+        // #1229 variant: a capturing exported arrow that also takes a parameter, exported via a
+        // separate `export { … }` statement (the specifier-list escape route, not the inline form).
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                export let base = 10;
+                const add = (x: number) => x + base;
+                export { add };
+                """,
+            ["main.ts"] = """
+                import { add } from './lib';
+                console.log('add=' + add(5));
+                """,
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("add=15\n", output);
     }
 
     [Theory]
