@@ -1474,10 +1474,19 @@ public partial class ILCompiler
         HashSet<string>? moduleVars = null;
         Dictionary<string, FieldBuilder>? moduleFields = null;
 
+        // #1201 pre-pass: every name declared anywhere in this statement tree (params, locals,
+        // loop vars, functions, classes, imports, …). Used to (a) revoke block-scoped lifts made
+        // by an earlier same-key registration (script-merged scopes) that this tree re-declares,
+        // and (b) enforce the declared-exactly-once safety rule for this tree's own candidates.
+        var declaredNameCounts = CountDeclaredNames(statements);
+        RevokeCollidingBlockScopedLifts(key, declaredNameCounts.Keys);
+
         foreach (var stmt in statements)
         {
             RegisterCapturedStmt(stmt, key, modulePath, ref moduleVars, ref moduleFields);
         }
+
+        RegisterLiftableBlockScopedVars(statements, key, modulePath, declaredNameCounts, ref moduleVars, ref moduleFields);
 
         static TValue GetOrCreate<TValue>(Dictionary<string, TValue> dict, string k)
             where TValue : new()
@@ -1536,8 +1545,10 @@ public partial class ILCompiler
             mv ??= GetOrCreate(_closures.ModuleCapturedTopLevelVars, captureKey);
             mf ??= GetOrCreate(_closures.ModuleEntryPointDisplayClassFields, captureKey);
 
-            if (mv.Add(varName))
+            if (mv.Add(varName) && !mf.ContainsKey(varName))
             {
+                // A revoked block-scope lift (#1201) may have left this name's field behind;
+                // reuse it rather than defining a same-named duplicate on the display class.
                 string fieldName = path == null
                     ? varName
                     : $"{SanitizeModuleForField(path)}__{varName}";
@@ -1547,6 +1558,216 @@ public partial class ILCompiler
 
             _closures.CapturedTopLevelVars.Add(varName);
         }
+    }
+
+    /// <summary>
+    /// #1201: gives captured top-level BLOCK-scoped <c>let</c>/<c>const</c> bindings the same
+    /// entry-point-display-class home that direct top-level declarations get. Without one, a
+    /// closure capturing such a binding snapshots the entry method's local by value — and a
+    /// closure created inside ANOTHER closure's body (whose creating context can't see that
+    /// local at all) captures <c>null</c> via the populate fallback, so mutations vanish and
+    /// object references are lost. Mirrors what function display classes already do for
+    /// block-scoped locals inside functions.
+    ///
+    /// <para><b>Safety rule:</b> a binding is lifted only when its name is declared exactly once
+    /// in the whole module tree (and never by any other registration sharing this key — the
+    /// script-merged global scope). Names failing the rule keep today's snapshot path, so any
+    /// shadowing/aliasing pattern that works now is untouched. Declarations inside LOOP bodies
+    /// are never lifted: those bindings are per-iteration, and a single shared field would fuse
+    /// iterations that the current snapshot semantics keeps distinct.</para>
+    /// </summary>
+    private void RegisterLiftableBlockScopedVars(
+        List<Stmt> statements,
+        string key,
+        string? modulePath,
+        Dictionary<string, int> declaredNameCounts,
+        ref HashSet<string>? mv,
+        ref Dictionary<string, FieldBuilder>? mf)
+    {
+        var candidates = new List<Stmt>();
+        foreach (var stmt in statements)
+            CollectLiftableBlockScopedDecls(stmt, nested: false, candidates);
+
+        if (!_closures.ModuleRegisteredDeclaredNames.TryGetValue(key, out var namesFromEarlierCalls))
+            _closures.ModuleRegisteredDeclaredNames[key] = namesFromEarlierCalls = [];
+
+        foreach (var decl in candidates)
+        {
+            string name = decl switch
+            {
+                Stmt.Var v => v.Name.Lexeme,
+                Stmt.Const c => c.Name.Lexeme,
+                _ => throw new InvalidOperationException("unreachable: candidates are Var/Const only")
+            };
+            if (!_closures.Analyzer.IsVariableCaptured(name)) continue;
+            if (declaredNameCounts[name] != 1) continue;          // declared-exactly-once rule
+            if (namesFromEarlierCalls.Contains(name)) continue;    // collides across script-merged scopes
+
+            var displayClass = EnsureEntryPointDisplayClass();
+            mv ??= GetOrCreateEntry(_closures.ModuleCapturedTopLevelVars, key);
+            mf ??= GetOrCreateEntry(_closures.ModuleEntryPointDisplayClassFields, key);
+
+            if (!mv.Add(name)) continue; // already stored on the DC by an earlier same-key registration
+
+            if (!mf.ContainsKey(name))
+            {
+                string fieldName = modulePath == null
+                    ? name
+                    : $"{SanitizeModuleForField(modulePath)}__{name}";
+                mf[name] = displayClass.DefineField(fieldName, _types.Object, FieldAttributes.Public);
+            }
+
+            if (!_closures.ModuleLiftedBlockScopedVars.TryGetValue(key, out var lifted))
+                _closures.ModuleLiftedBlockScopedVars[key] = lifted = [];
+            lifted.Add(name);
+            _closures.CapturedTopLevelVars.Add(name);
+        }
+
+        // Record this tree's declared names so later registrations sharing the key (scripts merged
+        // into the single-file scope) can detect collisions with the lifts made here.
+        namesFromEarlierCalls.UnionWith(declaredNameCounts.Keys);
+    }
+
+    /// <summary>
+    /// Revokes block-scope lifts (#1201) made by earlier registrations under the same key when a
+    /// later script re-declares the name: the lifted binding reverts to the plain-local snapshot
+    /// path, restoring pre-lift behavior for both. The orphaned display-class field is harmless
+    /// (direct registration reuses it if the colliding declaration is a captured top-level var).
+    /// </summary>
+    private void RevokeCollidingBlockScopedLifts(string key, IEnumerable<string> declaredNames)
+    {
+        if (!_closures.ModuleLiftedBlockScopedVars.TryGetValue(key, out var lifted) || lifted.Count == 0)
+            return;
+        _closures.ModuleCapturedTopLevelVars.TryGetValue(key, out var mv);
+
+        foreach (var name in declaredNames)
+        {
+            if (!lifted.Remove(name)) continue;
+            mv?.Remove(name);
+            // Drop from the flat union only if no module still stores this name on the DC.
+            if (!_closures.ModuleCapturedTopLevelVars.Values.Any(set => set.Contains(name)))
+                _closures.CapturedTopLevelVars.Remove(name);
+        }
+    }
+
+    private static TValue GetOrCreateEntry<TValue>(Dictionary<string, TValue> dict, string k)
+        where TValue : new()
+    {
+        if (!dict.TryGetValue(k, out var v))
+        {
+            v = new TValue();
+            dict[k] = v;
+        }
+        return v;
+    }
+
+    /// <summary>
+    /// Collects captured-liftable block-scoped declarations (#1201): <c>let</c>/<c>const</c>
+    /// statements nested in non-loop statement containers at module top level. Loops are a hard
+    /// stop (per-iteration bindings); function/class/namespace bodies are separate scopes with
+    /// their own display-class machinery. <c>var</c> declarations are excluded — they are
+    /// function-scoped (hoisted), a different storage story.
+    /// </summary>
+    private static void CollectLiftableBlockScopedDecls(Stmt stmt, bool nested, List<Stmt> result)
+    {
+        switch (stmt)
+        {
+            case Stmt.Var v when nested && !v.IsVar:
+                result.Add(v);
+                break;
+            case Stmt.Const when nested:
+                result.Add(stmt);
+                break;
+            case Stmt.Sequence seq: // no scope of its own — keep the current nesting level
+                foreach (var s in seq.Statements) CollectLiftableBlockScopedDecls(s, nested, result);
+                break;
+            case Stmt.Block block:
+                foreach (var s in block.Statements) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                break;
+            case Stmt.If ifStmt:
+                CollectLiftableBlockScopedDecls(ifStmt.ThenBranch, nested: true, result);
+                if (ifStmt.ElseBranch != null) CollectLiftableBlockScopedDecls(ifStmt.ElseBranch, nested: true, result);
+                break;
+            case Stmt.TryCatch tc:
+                foreach (var s in tc.TryBlock) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                if (tc.CatchBlock != null)
+                    foreach (var s in tc.CatchBlock) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                if (tc.FinallyBlock != null)
+                    foreach (var s in tc.FinallyBlock) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                break;
+            case Stmt.Switch sw:
+                foreach (var c in sw.Cases)
+                    foreach (var s in c.Body) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                if (sw.DefaultBody != null)
+                    foreach (var s in sw.DefaultBody) CollectLiftableBlockScopedDecls(s, nested: true, result);
+                break;
+            case Stmt.LabeledStatement labeled:
+                CollectLiftableBlockScopedDecls(labeled.Statement, nested, result);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Counts every declared identifier in the statement tree, descending into nested closures,
+    /// class bodies, and loop bodies. Deliberately over-broad (method names, params, catch params,
+    /// enum/namespace/import names all count): the #1201 lift only fires for names this reports as
+    /// declared exactly once, so any potential shadow — however exotic — blocks the lift.
+    /// </summary>
+    private static Dictionary<string, int> CountDeclaredNames(List<Stmt> statements)
+    {
+        var counter = new DeclaredNameCounter();
+        foreach (var stmt in statements)
+            counter.Visit(stmt);
+        return counter.Counts;
+    }
+
+    private sealed class DeclaredNameCounter : Parsing.Visitors.AstVisitorBase
+    {
+        public Dictionary<string, int> Counts { get; } = [];
+
+        private void Add(string name) =>
+            Counts[name] = Counts.TryGetValue(name, out var c) ? c + 1 : 1;
+
+        private void AddParams(List<Stmt.Parameter> parameters)
+        {
+            foreach (var p in parameters) Add(p.Name.Lexeme);
+        }
+
+        protected override void VisitVar(Stmt.Var stmt) { Add(stmt.Name.Lexeme); base.VisitVar(stmt); }
+        protected override void VisitConst(Stmt.Const stmt) { Add(stmt.Name.Lexeme); base.VisitConst(stmt); }
+        protected override void VisitFunction(Stmt.Function stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            AddParams(stmt.Parameters);
+            base.VisitFunction(stmt);
+        }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+        {
+            if (expr.Name != null) Add(expr.Name.Lexeme);
+            AddParams(expr.Parameters);
+            base.VisitArrowFunction(expr);
+        }
+        protected override void VisitClass(Stmt.Class stmt) { Add(stmt.Name.Lexeme); base.VisitClass(stmt); }
+        protected override void VisitEnum(Stmt.Enum stmt) { Add(stmt.Name.Lexeme); base.VisitEnum(stmt); }
+        protected override void VisitNamespace(Stmt.Namespace stmt) { Add(stmt.Name.Lexeme); base.VisitNamespace(stmt); }
+        protected override void VisitForOf(Stmt.ForOf stmt) { Add(stmt.Variable.Lexeme); base.VisitForOf(stmt); }
+        protected override void VisitForIn(Stmt.ForIn stmt) { Add(stmt.Variable.Lexeme); base.VisitForIn(stmt); }
+        protected override void VisitTryCatch(Stmt.TryCatch stmt)
+        {
+            if (stmt.CatchParam != null) Add(stmt.CatchParam.Lexeme);
+            base.VisitTryCatch(stmt);
+        }
+        protected override void VisitImport(Stmt.Import stmt)
+        {
+            if (stmt.DefaultImport != null) Add(stmt.DefaultImport.Lexeme);
+            if (stmt.NamespaceImport != null) Add(stmt.NamespaceImport.Lexeme);
+            if (stmt.NamedImports != null)
+                foreach (var spec in stmt.NamedImports)
+                    Add((spec.LocalName ?? spec.Imported).Lexeme);
+            base.VisitImport(stmt);
+        }
+        protected override void VisitImportAlias(Stmt.ImportAlias stmt) { Add(stmt.AliasName.Lexeme); base.VisitImportAlias(stmt); }
+        protected override void VisitImportRequire(Stmt.ImportRequire stmt) { Add(stmt.AliasName.Lexeme); base.VisitImportRequire(stmt); }
     }
 
     /// <summary>
@@ -1793,6 +2014,22 @@ public partial class ILCompiler
     {
         string key = modulePath ?? ClosureCompilationState.SingleFileKey;
         if (_closures.ModuleCapturedTopLevelVars.TryGetValue(key, out var vars) && vars.Count > 0)
+        {
+            return vars;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the lifted block-scoped top-level var names (#1201) visible to code emitted for
+    /// the given module, or <c>null</c> if none. Companion of
+    /// <see cref="BuildCapturedTopLevelVarsForModule"/>; consumed only by the module-top-level
+    /// declaration emitter.
+    /// </summary>
+    private HashSet<string>? BuildLiftedBlockScopedTopLevelVarsForModule(string? modulePath)
+    {
+        string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+        if (_closures.ModuleLiftedBlockScopedVars.TryGetValue(key, out var vars) && vars.Count > 0)
         {
             return vars;
         }

@@ -39,8 +39,14 @@ public partial class ILEmitter
         // declaration there is a function-local that must shadow — not overwrite — the module
         // binding; falling into this block wrote a function-local through to the module slot
         // and never created the real local, so captured reads saw null and the module var was
-        // clobbered (#562). A nested block at top level likewise shadows via a fresh local.
-        if (_ctx.IsModuleTopLevel && !_ctx.Locals.IsInNestedScope)
+        // clobbered (#562). A nested block at top level likewise shadows via a fresh local —
+        // EXCEPT a captured block-scoped binding lifted onto the entry-point display class
+        // (#1201): that one's home IS the DC field (a closure created inside another closure's
+        // body can only reach it there), and its name is declared exactly once in the module,
+        // so no shadowing declaration can collide with the name-keyed check.
+        if (_ctx.IsModuleTopLevel &&
+            (!_ctx.Locals.IsInNestedScope ||
+             _ctx.LiftedBlockScopedTopLevelVars?.Contains(v.Name.Lexeme) == true))
         {
             // Check if this is a captured top-level variable - use entry-point display class
             if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&

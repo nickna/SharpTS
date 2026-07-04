@@ -828,6 +828,7 @@ public partial class ILCompiler
             // Entry-point display class for captured top-level variables
             EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
             CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
+            LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
             ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
             EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
             // This context emits the module/script top-level statements, so var/let/const

@@ -169,6 +169,18 @@ public partial class ILCompiler
         // Chosen so it can't clash with any real module path.
         public const string SingleFileKey = "<single-file>";
 
+        // #1201: per-key names of top-level BLOCK-scoped let/const bindings lifted onto the
+        // entry-point display class (subset of ModuleCapturedTopLevelVars[key]). The var/const
+        // declaration emitter consults this so a lifted declaration in a nested block stores to
+        // its DC field instead of a fresh local. Live reference — a later same-key registration
+        // may revoke a lift before emission (RevokeCollidingBlockScopedLifts).
+        public Dictionary<string, HashSet<string>> ModuleLiftedBlockScopedVars { get; } = [];
+
+        // #1201: per-key union of every declared identifier seen by earlier registration calls
+        // sharing the key (scripts merged into the single-file scope). A block-scope lift is
+        // skipped/revoked when its name collides across those trees.
+        public Dictionary<string, HashSet<string>> ModuleRegisteredDeclaredNames { get; } = [];
+
         // Flat union used only for cross-module decisions — e.g., "is this name
         // captured by SOMETHING so non-captured-var emission should skip it?"
         // Not consumed by emitters; those see module-scoped dicts.
