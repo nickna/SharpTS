@@ -37,7 +37,7 @@ public class TlsCheckIdentityTests
                 const err = tls.checkServerIdentity('evil.com', cert);
                 console.log(err !== undefined);
                 console.log(err instanceof Error);
-                console.log(err.message.indexOf('evil.com') >= 0);
+                console.log(err !== undefined && err.message.indexOf('evil.com') >= 0);
                 """
         };
         var output = TestHarness.RunModules(files, "./main.ts", mode);

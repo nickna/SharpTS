@@ -1533,7 +1533,7 @@ public class UtilModuleTests
             var entryModule = resolver.LoadModule(mainPath);
             var allModules = resolver.GetModulesInOrder(entryModule);
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = TestHarness.CheckModulesOrThrow(checker, allModules, resolver);
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
             var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
 
@@ -1596,7 +1596,7 @@ public class UtilModuleTests
             var entryModule = resolver.LoadModule(mainPath);
             var allModules = resolver.GetModulesInOrder(entryModule);
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = TestHarness.CheckModulesOrThrow(checker, allModules, resolver);
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
             var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
 

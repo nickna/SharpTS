@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using SharpTS.Compilation;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -316,7 +317,7 @@ public class StandaloneDllTests
             var resolver = new ModuleResolver(entryPath);
             var entryModule = resolver.LoadModule(entryPath);
             var modules = resolver.GetModulesInOrder(entryModule);
-            var typeMap = new TypeChecker().CheckModules(modules, resolver);
+            var typeMap = TestHarness.CheckModulesOrThrow(new TypeChecker(), modules, resolver);
             var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
 
             var compiler = new ILCompiler("vm_dep_test");
@@ -383,7 +384,7 @@ public class StandaloneDllTests
             var resolver = new ModuleResolver(entryPath);
             var entryModule = resolver.LoadModule(entryPath);
             var modules = resolver.GetModulesInOrder(entryModule);
-            var typeMap = new TypeChecker().CheckModules(modules, resolver);
+            var typeMap = TestHarness.CheckModulesOrThrow(new TypeChecker(), modules, resolver);
             var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
 
             var compiler = new ILCompiler("cluster_dep_test");
@@ -1279,7 +1280,7 @@ public class StandaloneDllTests
         var modules = resolver.GetModulesInOrder(entryModule);
 
         var checker = new TypeChecker();
-        var typeMap = checker.CheckModules(modules, resolver);
+        var typeMap = TestHarness.CheckModulesOrThrow(checker, modules, resolver);
         var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
 
         var compiler = new ILCompiler("standalone_test");

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using SharpTS.Compilation;
+using SharpTS.Diagnostics;
 using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Parsing;
@@ -66,19 +67,44 @@ public static class TestHarness
     /// <summary>
     /// Runs TypeScript modules using the specified execution mode.
     /// This is the primary entry point for parameterized module tests.
+    /// Fails with <see cref="TypeCheckDiagnosticException"/> if the program doesn't
+    /// type-check (#1226); tests that intentionally run ill-typed programs pass
+    /// <paramref name="allowTypeErrors"/>.
     /// </summary>
     /// <param name="files">Dictionary of file paths to file contents</param>
     /// <param name="entryPoint">Path to the entry point module</param>
     /// <param name="mode">Execution mode (Interpreted or Compiled)</param>
+    /// <param name="allowTypeErrors">Skip the error-severity diagnostic check after CheckModules</param>
     /// <returns>Captured console output</returns>
-    public static string RunModules(Dictionary<string, string> files, string entryPoint, ExecutionMode mode, TimeSpan? timeout = null)
+    public static string RunModules(Dictionary<string, string> files, string entryPoint, ExecutionMode mode, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         return mode switch
         {
-            ExecutionMode.Interpreted => RunModulesInterpreted(files, entryPoint, timeout),
-            ExecutionMode.Compiled => RunModulesCompiled(files, entryPoint, timeout),
+            ExecutionMode.Interpreted => RunModulesInterpreted(files, entryPoint, timeout, allowTypeErrors),
+            ExecutionMode.Compiled => RunModulesCompiled(files, entryPoint, timeout, allowTypeErrors),
             _ => throw new ArgumentOutOfRangeException(nameof(mode))
         };
+    }
+
+    /// <summary>
+    /// Runs <see cref="TypeChecker.CheckModules"/> and throws on error-severity diagnostics,
+    /// mirroring the CLI (<c>Program.RunModuleFile</c>). CheckModules records type errors with
+    /// recovery instead of throwing, so without this check the module runners silently execute
+    /// ill-typed programs and type-check regressions in stdlib facades go unnoticed (#1226).
+    /// Warnings (e.g. from lenient CJS modules) don't block, same as the CLI.
+    /// </summary>
+    internal static TypeMap CheckModulesOrThrow(TypeChecker checker, List<ParsedModule> modules, ModuleResolver resolver, bool allowTypeErrors = false)
+    {
+        var typeMap = checker.CheckModules(modules, resolver);
+        if (!allowTypeErrors)
+        {
+            var errors = checker.GetDiagnostics()
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .ToList();
+            if (errors.Count > 0)
+                throw new TypeCheckDiagnosticException(errors);
+        }
+        return typeMap;
     }
 
     /// <summary>
@@ -680,7 +706,7 @@ public static class TestHarness
     /// <param name="files">Dictionary mapping file paths to source code</param>
     /// <param name="entryPoint">The entry point file path (e.g., "./main.ts")</param>
     /// <returns>Captured console output</returns>
-    public static string RunModulesInterpreted(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
+    public static string RunModulesInterpreted(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         var effectiveTimeout = timeout ?? DefaultTimeout;
 
@@ -688,7 +714,7 @@ public static class TestHarness
         // disk path that the runtime can stat / spawn workers against; route those through
         // the disk-based path. Everything else uses the in-memory virtual file system.
         if (RequiresRealDisk(files.Values))
-            return RunModulesInterpretedOnDisk(files, entryPoint, effectiveTimeout);
+            return RunModulesInterpretedOnDisk(files, entryPoint, effectiveTimeout, allowTypeErrors);
 
         // Build an in-memory virtual file system instead of writing to %TEMP%. Concurrent
         // disk operations on Windows serialize through the kernel/AV — measured 1.4× speedup
@@ -704,7 +730,7 @@ public static class TestHarness
             var allModules = resolver.GetModulesInOrder(entryModule);
 
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
             using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
             // Match the CLI: fire process lifecycle events at loop drain (#1080).
@@ -764,13 +790,13 @@ public static class TestHarness
     ///   - <c>process.cwd()</c> / <c>process.argv</c> read <see cref="Environment"/> directly
     ///     (see <c>RuntimeEmitter.ProcessHelpers</c>) and would return the testhost's view
     /// </summary>
-    public static string RunModulesCompiled(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
+    public static string RunModulesCompiled(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         if (RequiresSubprocess(files.Values))
-            return RunModulesCompiledViaSubprocess(files, entryPoint);
+            return RunModulesCompiledViaSubprocess(files, entryPoint, allowTypeErrors);
         if (RequiresRealDisk(files.Values))
-            return RunModulesCompiledInProcessOnDisk(files, entryPoint, timeout);
-        return RunModulesCompiledInProcess(files, entryPoint, timeout);
+            return RunModulesCompiledInProcessOnDisk(files, entryPoint, timeout, allowTypeErrors);
+        return RunModulesCompiledInProcess(files, entryPoint, timeout, allowTypeErrors);
     }
 
     private static bool RequiresSubprocess(IEnumerable<string> sources)
@@ -823,7 +849,7 @@ public static class TestHarness
     /// then runs the interpreter in-process. Used for tests that depend on real-disk paths
     /// (<c>__dirname</c>, <c>cluster.fork</c>) — see <see cref="RequiresRealDisk"/>.
     /// </summary>
-    private static string RunModulesInterpretedOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
+    private static string RunModulesInterpretedOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         var effectiveTimeout = timeout ?? DefaultTimeout;
 
@@ -851,7 +877,7 @@ public static class TestHarness
                 var allModules = resolver.GetModulesInOrder(entryModule);
 
                 var checker = new TypeChecker();
-                var typeMap = checker.CheckModules(allModules, resolver);
+                var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
                 using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
                 interpreter.InterpretModules(allModules, resolver, typeMap);
@@ -882,7 +908,7 @@ public static class TestHarness
     /// Disk-backed in-process compiled path for tests that need real-disk paths
     /// (<c>__dirname</c>, <c>cluster.fork</c>) — see <see cref="RequiresRealDisk"/>.
     /// </summary>
-    private static string RunModulesCompiledInProcessOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
+    private static string RunModulesCompiledInProcessOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         var effectiveTimeout = timeout ?? DefaultTimeout;
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_module_test_{Guid.NewGuid()}");
@@ -907,7 +933,7 @@ public static class TestHarness
             var allModules = resolver.GetModulesInOrder(entryModule);
 
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
             var allStatements = allModules.SelectMany(m => m.Statements).ToList();
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
@@ -955,7 +981,7 @@ public static class TestHarness
         }
     }
 
-    private static string RunModulesCompiledInProcess(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
+    private static string RunModulesCompiledInProcess(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null, bool allowTypeErrors = false)
     {
         var effectiveTimeout = timeout ?? DefaultTimeout;
         // In-memory virtual file system — see BuildVirtualModuleFs and the comment on
@@ -971,7 +997,7 @@ public static class TestHarness
             var allModules = resolver.GetModulesInOrder(entryModule);
 
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
             var allStatements = allModules.SelectMany(m => m.Statements).ToList();
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
@@ -1044,7 +1070,7 @@ public static class TestHarness
     /// Subprocess fallback for <see cref="RunModulesCompiled"/>. Used when a module's source
     /// touches <c>process.exit/chdir/cwd/argv</c> — the in-process path can't isolate those.
     /// </summary>
-    private static string RunModulesCompiledViaSubprocess(Dictionary<string, string> files, string entryPoint)
+    private static string RunModulesCompiledViaSubprocess(Dictionary<string, string> files, string entryPoint, bool allowTypeErrors = false)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_module_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
@@ -1073,7 +1099,7 @@ public static class TestHarness
 
             // Type check
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
             // Dead code analysis across all modules
             var allStatements = allModules.SelectMany(m => m.Statements).ToList();
@@ -1263,7 +1289,7 @@ public static class TestHarness
     /// <param name="files">Map of module path → source.</param>
     /// <param name="entryPoint">Entry module path (key into <paramref name="files"/>).</param>
     /// <returns>List of verification errors (empty when the IL is valid).</returns>
-    public static List<string> CompileModulesAndVerifyOnly(Dictionary<string, string> files, string entryPoint)
+    public static List<string> CompileModulesAndVerifyOnly(Dictionary<string, string> files, string entryPoint, bool allowTypeErrors = false)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_module_verify_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
@@ -1287,7 +1313,7 @@ public static class TestHarness
             var allModules = resolver.GetModulesInOrder(entryModule);
 
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
             var allStatements = allModules.SelectMany(m => m.Statements).ToList();
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);

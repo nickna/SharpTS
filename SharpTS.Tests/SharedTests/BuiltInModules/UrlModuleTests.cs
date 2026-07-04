@@ -255,7 +255,7 @@ public class UrlModuleTests
                 import { parse } from 'url';
                 const parsed = parse('file:///home/user/file.txt');
                 console.log(parsed.protocol);
-                console.log(parsed.pathname.includes('file.txt'));
+                console.log(parsed.pathname !== null && parsed.pathname.includes('file.txt'));
                 """
         };
 
