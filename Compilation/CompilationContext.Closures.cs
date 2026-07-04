@@ -356,4 +356,22 @@ public partial class CompilationContext
     /// Used together with InnerFunctionMethodsByName for proper call dispatch.
     /// </summary>
     public Dictionary<string, TypeBuilder>? InnerFunctionDisplayClassesByName { get; set; }
+
+    /// <summary>
+    /// Inner function declarations already materialized by the callable-body hoisting pre-pass
+    /// (<c>EmitInnerFunctionHoisting</c>), keyed by AST reference identity. A declaration nested in
+    /// a block/loop/if is NOT in this set — the pre-pass only scans the callable body's top-level
+    /// statements — so <see cref="EmitBlockScopedInnerFunction"/> materializes it in place instead.
+    /// Guards against emitting a top-level declaration twice (once hoisted, once in place).
+    /// </summary>
+    public HashSet<Stmt.Function>? HoistedInnerFunctions { get; set; }
+
+    /// <summary>
+    /// Materializes a block-scoped inner <c>function</c> declaration (create its TSFunction, snapshot
+    /// captures, bind a block-scoped local) at its textual position. Set by <c>EmitInnerFunctionHoisting</c>
+    /// so the statement emitter can create declarations nested in blocks/loops — which the top-level
+    /// hoisting pre-pass skips — with correct per-iteration capture. No-op for declarations already in
+    /// <see cref="HoistedInnerFunctions"/> or not collected as inner functions (#1230).
+    /// </summary>
+    public Action<ILGenerator, CompilationContext, Stmt.Function>? EmitBlockScopedInnerFunction { get; set; }
 }

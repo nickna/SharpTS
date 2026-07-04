@@ -666,12 +666,22 @@ public partial class ILCompiler
 
     /// <summary>
     /// Emits hoisting code at the start of a function body for inner function declarations.
-    /// Scans the body for Stmt.Function nodes and creates TSFunction locals for each.
-    /// Also populates name-based lookup maps on the context for direct call dispatch.
+    /// Scans the body's TOP-LEVEL statements for Stmt.Function nodes and creates TSFunction locals
+    /// for each. Also populates name-based lookup maps on the context for direct call dispatch.
     /// This implements JavaScript function declaration hoisting semantics.
+    ///
+    /// <para>Declarations nested inside a block/loop/if are NOT hoisted here — they are materialized
+    /// in place at their textual position by <see cref="EmitBlockScopedInnerFunctionDeclaration"/>
+    /// (wired onto the context below), so per-iteration captures snapshot the right values (#1230).</para>
     /// </summary>
     private void EmitInnerFunctionHoisting(ILGenerator il, CompilationContext ctx, List<Stmt> body)
     {
+        // Wire the in-place materializer so the statement emitter can create block-scoped inner
+        // function declarations this pre-pass deliberately skips. Also record which declarations we
+        // hoist here, so the in-place path recognizes them as already-materialized and does nothing.
+        ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        var hoisted = ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
+
         // Two-pass hoisting to match JS spec semantics. JavaScript hoists all
         // `function` declarations to the top of the containing scope before
         // any statement executes, so every hoisted function must see every
@@ -693,134 +703,8 @@ public partial class ILCompiler
         foreach (var stmt in body)
         {
             if (stmt is not Stmt.Function funcStmt) continue;
-            if (funcStmt.Body == null) continue; // Skip overload signatures
-            if (!_innerFunctionMethods.TryGetValue(funcStmt, out var method)) continue;
-
-            var funcName = funcStmt.Name.Lexeme;
-
-            // Check if this inner function's name is stored in the enclosing function's display class.
-            // This happens when the inner function references itself (self-reference is seen as a
-            // captured outer variable by ClosureAnalyzer because the function name is declared
-            // in the enclosing scope). We need to store the TSFunction in the DC field so that
-            // LocalVariableResolver (which checks DC fields before locals) finds it correctly.
-            FieldBuilder? funcDCStoreField = null;
-            bool storeInFunctionDC = ctx.CapturedFunctionLocals?.Contains(funcName) == true &&
-                ctx.FunctionDisplayClassFields?.TryGetValue(funcName, out funcDCStoreField) == true &&
-                ctx.FunctionDisplayClassLocal != null;
-
-            // Parallel check for the enclosing *arrow's* scope display class. Named function
-            // expressions compile as arrows, so when an inner `function X()` is declared inside
-            // one and X is captured by yet-another inner closure, X lives in the arrow's
-            // ArrowScopeDC. LocalVariableResolver reads via that DC field, so we must write to
-            // it here. Without this, reads return the zeroed field (null) and `typeof X` yields
-            // "object" — the lodash `var _ = runInContext()` failure mode.
-            FieldBuilder? arrowScopeDCStoreField = null;
-            bool storeInArrowScopeDC = !storeInFunctionDC &&
-                ctx.CapturedArrowLocals?.Contains(funcName) == true &&
-                ctx.ArrowScopeDisplayClassFields?.TryGetValue(funcName, out arrowScopeDCStoreField) == true &&
-                ctx.ArrowScopeDisplayClassLocal != null;
-
-            // Also declare a regular local (used when not stored in DC, or as fallback)
-            LocalBuilder? local = null;
-            if (!storeInFunctionDC && !storeInArrowScopeDC)
-                local = ctx.Locals.DeclareLocal(funcName, _types.Object);
-
-            if (_innerFunctionDisplayClasses.TryGetValue(funcStmt, out var displayClass))
-            {
-                // Capturing: create display class instance, populate context fields,
-                // stash the instance for Pass 2, then build TSFunction.
-                var ctor = _innerFunctionDCCtors[funcStmt];
-                il.Emit(OpCodes.Newobj, ctor);
-
-                // Populate $entryPointDC field (references the enclosing entry-point DC;
-                // safe to populate in Pass 1 — it isn't a peer hoisted function).
-                if (_innerFunctionEntryPointDCFields.TryGetValue(funcStmt, out var epDCField))
-                {
-                    if (ctx.EntryPointDisplayClassLocal != null)
-                    {
-                        il.Emit(OpCodes.Dup);
-                        il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
-                        il.Emit(OpCodes.Stfld, epDCField);
-                    }
-                    else if (ctx.EntryPointDisplayClassStaticField != null)
-                    {
-                        il.Emit(OpCodes.Dup);
-                        il.Emit(OpCodes.Ldsfld, ctx.EntryPointDisplayClassStaticField);
-                        il.Emit(OpCodes.Stfld, epDCField);
-                    }
-                }
-
-                // Populate $functionDC field (references the enclosing function DC; same logic).
-                if (_innerFunctionFunctionDCFields.TryGetValue(funcStmt, out var funcDCField))
-                {
-                    if (ctx.FunctionDisplayClassLocal != null)
-                    {
-                        il.Emit(OpCodes.Dup);
-                        il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
-                        il.Emit(OpCodes.Stfld, funcDCField);
-                    }
-                }
-
-                // Populate $arrowScopeDC (and any extra ancestor refs) with live
-                // REFERENCES to the source scope DCs (#307). The reference is valid
-                // at hoist time even though the DC's variable fields are assigned
-                // later by body statements — that's the point: reads go through the
-                // reference at call time.
-                if (_innerFunctionArrowScopeDCFields.TryGetValue(funcStmt, out var arrowScopeDCRefField))
-                    EmitScopeDCRefStoreOnTop(il, ctx, arrowScopeDCRefField);
-                if (_innerFunctionArrowScopeDCExtraFields.TryGetValue(funcStmt, out var extraRefFields))
-                    foreach (var refField in extraRefFields.Values)
-                        EmitScopeDCRefStoreOnTop(il, ctx, refField);
-
-                // Stash the DC instance in a temp local so Pass 2 can populate its captured
-                // variable fields after every peer hoist has stored its final TSFunction.
-                var dcTemp = il.DeclareLocal(displayClass);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Stloc, dcTemp);
-                dcTemps[funcStmt] = dcTemp;
-
-                // Create TSFunction: new TSFunction(displayInstance, invokeMethod)
-                // Stack has: displayInstance
-                il.Emit(OpCodes.Ldtoken, method);
-                il.Emit(OpCodes.Ldtoken, displayClass);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
-            }
-            else
-            {
-                // Non-capturing: new TSFunction(null, staticMethod)
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldtoken, method);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
-            }
-
-            // Store TSFunction in the appropriate location
-            if (storeInFunctionDC)
-            {
-                // Store in the enclosing function's display class field
-                var temp = il.DeclareLocal(_types.Object);
-                il.Emit(OpCodes.Stloc, temp);
-                il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal!);
-                il.Emit(OpCodes.Ldloc, temp);
-                il.Emit(OpCodes.Stfld, funcDCStoreField!);
-            }
-            else if (storeInArrowScopeDC)
-            {
-                // Store in the enclosing arrow's scope display class field
-                var temp = il.DeclareLocal(_types.Object);
-                il.Emit(OpCodes.Stloc, temp);
-                il.Emit(OpCodes.Ldloc, ctx.ArrowScopeDisplayClassLocal!);
-                il.Emit(OpCodes.Ldloc, temp);
-                il.Emit(OpCodes.Stfld, arrowScopeDCStoreField!);
-            }
-            else
-            {
-                // Store in local variable
-                il.Emit(OpCodes.Stloc, local!);
-            }
+            hoisted.Add(funcStmt);
+            EmitInnerFunctionMaterialize(il, ctx, funcStmt, dcTemps);
         }
 
         // ─── Pass 2: populate captured-variable fields on each DC instance ───
@@ -829,83 +713,265 @@ public partial class ILCompiler
         foreach (var stmt in body)
         {
             if (stmt is not Stmt.Function funcStmt) continue;
-            if (!dcTemps.TryGetValue(funcStmt, out var dcTemp)) continue;
-            if (!_innerFunctionDCFields.TryGetValue(funcStmt, out var fieldMap)) continue;
+            EmitInnerFunctionPopulateCaptures(il, ctx, funcStmt, dcTemps);
+        }
+    }
 
-            foreach (var (capturedVar, field) in fieldMap)
+    /// <summary>
+    /// Materializes a single inner <c>function</c> declaration nested inside a block/loop/if at its
+    /// textual position: creates its TSFunction and binds a block-scoped local, then snapshots its
+    /// captures. Unlike the callable-body pre-pass (<see cref="EmitInnerFunctionHoisting"/>), this
+    /// runs where the declaration actually appears — after the preceding block statements have
+    /// executed — so a closure over a per-iteration loop binding captures that iteration's value
+    /// rather than a hoist-time null/stale snapshot (#1230).
+    ///
+    /// <para>No-op when the declaration was already hoisted at the callable-body top level, or when
+    /// it was never collected as an inner function (e.g. an overload signature).</para>
+    /// </summary>
+    private void EmitBlockScopedInnerFunctionDeclaration(ILGenerator il, CompilationContext ctx, Stmt.Function funcStmt)
+    {
+        if (funcStmt.Body == null) return; // overload signature — nothing to emit
+        if (ctx.HoistedInnerFunctions?.Contains(funcStmt) == true) return; // already materialized by the pre-pass
+        if (!_innerFunctionMethods.ContainsKey(funcStmt)) return; // not collected as an inner function
+
+        // The type checker requires block-scoped function declarations to be declared before any
+        // reference (forward references inside a block are a "not defined" error), so a single
+        // create-then-populate pass at the declaration site is sufficient — no peer forward refs.
+        var dcTemps = new Dictionary<Stmt.Function, LocalBuilder>(ReferenceEqualityComparer.Instance);
+        EmitInnerFunctionMaterialize(il, ctx, funcStmt, dcTemps);
+        EmitInnerFunctionPopulateCaptures(il, ctx, funcStmt, dcTemps);
+    }
+
+    /// <summary>
+    /// Pass 1 for one inner function declaration: allocate its binding slot, instantiate its display
+    /// class (populating the $entryPointDC / $functionDC / $arrowScopeDC references), build the
+    /// TSFunction, and store it. When the declaration captures, stashes the display-class instance in
+    /// <paramref name="dcTemps"/> so its captured-variable fields can be populated afterwards.
+    /// </summary>
+    private void EmitInnerFunctionMaterialize(ILGenerator il, CompilationContext ctx, Stmt.Function funcStmt, Dictionary<Stmt.Function, LocalBuilder> dcTemps)
+    {
+        if (funcStmt.Body == null) return; // Skip overload signatures
+        if (!_innerFunctionMethods.TryGetValue(funcStmt, out var method)) return;
+
+        var funcName = funcStmt.Name.Lexeme;
+
+        // Check if this inner function's name is stored in the enclosing function's display class.
+        // This happens when the inner function references itself (self-reference is seen as a
+        // captured outer variable by ClosureAnalyzer because the function name is declared
+        // in the enclosing scope). We need to store the TSFunction in the DC field so that
+        // LocalVariableResolver (which checks DC fields before locals) finds it correctly.
+        FieldBuilder? funcDCStoreField = null;
+        bool storeInFunctionDC = ctx.CapturedFunctionLocals?.Contains(funcName) == true &&
+            ctx.FunctionDisplayClassFields?.TryGetValue(funcName, out funcDCStoreField) == true &&
+            ctx.FunctionDisplayClassLocal != null;
+
+        // Parallel check for the enclosing *arrow's* scope display class. Named function
+        // expressions compile as arrows, so when an inner `function X()` is declared inside
+        // one and X is captured by yet-another inner closure, X lives in the arrow's
+        // ArrowScopeDC. LocalVariableResolver reads via that DC field, so we must write to
+        // it here. Without this, reads return the zeroed field (null) and `typeof X` yields
+        // "object" — the lodash `var _ = runInContext()` failure mode.
+        FieldBuilder? arrowScopeDCStoreField = null;
+        bool storeInArrowScopeDC = !storeInFunctionDC &&
+            ctx.CapturedArrowLocals?.Contains(funcName) == true &&
+            ctx.ArrowScopeDisplayClassFields?.TryGetValue(funcName, out arrowScopeDCStoreField) == true &&
+            ctx.ArrowScopeDisplayClassLocal != null;
+
+        // Also declare a regular local (used when not stored in DC, or as fallback)
+        LocalBuilder? local = null;
+        if (!storeInFunctionDC && !storeInArrowScopeDC)
+            local = ctx.Locals.DeclareLocal(funcName, _types.Object);
+
+        if (_innerFunctionDisplayClasses.TryGetValue(funcStmt, out var displayClass))
+        {
+            // Capturing: create display class instance, populate context fields,
+            // stash the instance for capture population, then build TSFunction.
+            var ctor = _innerFunctionDCCtors[funcStmt];
+            il.Emit(OpCodes.Newobj, ctor);
+
+            // Populate $entryPointDC field (references the enclosing entry-point DC;
+            // safe to populate here — it isn't a peer hoisted function).
+            if (_innerFunctionEntryPointDCFields.TryGetValue(funcStmt, out var epDCField))
             {
-                il.Emit(OpCodes.Ldloc, dcTemp);
+                if (ctx.EntryPointDisplayClassLocal != null)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
+                    il.Emit(OpCodes.Stfld, epDCField);
+                }
+                else if (ctx.EntryPointDisplayClassStaticField != null)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldsfld, ctx.EntryPointDisplayClassStaticField);
+                    il.Emit(OpCodes.Stfld, epDCField);
+                }
+            }
 
-                if (ctx.TryGetParameter(capturedVar, out var argIndex))
+            // Populate $functionDC field (references the enclosing function DC; same logic).
+            if (_innerFunctionFunctionDCFields.TryGetValue(funcStmt, out var funcDCField))
+            {
+                if (ctx.FunctionDisplayClassLocal != null)
                 {
-                    il.Emit(OpCodes.Ldarg, argIndex);
-                    if (ctx.TryGetParameterType(capturedVar, out var paramType) && paramType != null && paramType.IsValueType)
-                        il.Emit(OpCodes.Box, paramType);
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+                    il.Emit(OpCodes.Stfld, funcDCField);
                 }
-                else if (ctx.CapturedFields != null && ctx.CapturedFields.TryGetValue(capturedVar, out var capturedField))
+            }
+
+            // Populate $arrowScopeDC (and any extra ancestor refs) with live
+            // REFERENCES to the source scope DCs (#307). The reference is valid
+            // at hoist time even though the DC's variable fields are assigned
+            // later by body statements — that's the point: reads go through the
+            // reference at call time.
+            if (_innerFunctionArrowScopeDCFields.TryGetValue(funcStmt, out var arrowScopeDCRefField))
+                EmitScopeDCRefStoreOnTop(il, ctx, arrowScopeDCRefField);
+            if (_innerFunctionArrowScopeDCExtraFields.TryGetValue(funcStmt, out var extraRefFields))
+                foreach (var refField in extraRefFields.Values)
+                    EmitScopeDCRefStoreOnTop(il, ctx, refField);
+
+            // Stash the DC instance in a temp local so its captured variable fields can be
+            // populated after every peer hoist has stored its final TSFunction.
+            var dcTemp = il.DeclareLocal(displayClass);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stloc, dcTemp);
+            dcTemps[funcStmt] = dcTemp;
+
+            // Create TSFunction: new TSFunction(displayInstance, invokeMethod)
+            // Stack has: displayInstance
+            il.Emit(OpCodes.Ldtoken, method);
+            il.Emit(OpCodes.Ldtoken, displayClass);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+        }
+        else
+        {
+            // Non-capturing: new TSFunction(null, staticMethod)
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldtoken, method);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+        }
+
+        // Store TSFunction in the appropriate location
+        if (storeInFunctionDC)
+        {
+            // Store in the enclosing function's display class field
+            var temp = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, temp);
+            il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal!);
+            il.Emit(OpCodes.Ldloc, temp);
+            il.Emit(OpCodes.Stfld, funcDCStoreField!);
+        }
+        else if (storeInArrowScopeDC)
+        {
+            // Store in the enclosing arrow's scope display class field
+            var temp = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, temp);
+            il.Emit(OpCodes.Ldloc, ctx.ArrowScopeDisplayClassLocal!);
+            il.Emit(OpCodes.Ldloc, temp);
+            il.Emit(OpCodes.Stfld, arrowScopeDCStoreField!);
+        }
+        else
+        {
+            // Store in local variable
+            il.Emit(OpCodes.Stloc, local!);
+        }
+    }
+
+    /// <summary>
+    /// Pass 2 for one inner function declaration: reload its stashed display-class instance and
+    /// populate each captured-variable field from wherever that variable currently lives (parameter,
+    /// enclosing DC, or local). No-op for a non-capturing declaration (no stashed instance).
+    /// </summary>
+    private void EmitInnerFunctionPopulateCaptures(ILGenerator il, CompilationContext ctx, Stmt.Function funcStmt, Dictionary<Stmt.Function, LocalBuilder> dcTemps)
+    {
+        if (!dcTemps.TryGetValue(funcStmt, out var dcTemp)) return;
+        if (!_innerFunctionDCFields.TryGetValue(funcStmt, out var fieldMap)) return;
+
+        foreach (var (capturedVar, field) in fieldMap)
+        {
+            il.Emit(OpCodes.Ldloc, dcTemp);
+
+            if (ctx.TryGetParameter(capturedVar, out var argIndex))
+            {
+                il.Emit(OpCodes.Ldarg, argIndex);
+                if (ctx.TryGetParameterType(capturedVar, out var paramType) && paramType != null && paramType.IsValueType)
+                    il.Emit(OpCodes.Box, paramType);
+            }
+            else if (ctx.CapturedFields != null && ctx.CapturedFields.TryGetValue(capturedVar, out var capturedField))
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, capturedField);
+            }
+            else if (ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
+                     ctx.EntryPointDisplayClassFields?.TryGetValue(capturedVar, out var epField) == true)
+            {
+                if (ctx.EntryPointDisplayClassLocal != null)
+                    il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
+                else if (ctx.EntryPointDisplayClassStaticField != null)
+                    il.Emit(OpCodes.Ldsfld, ctx.EntryPointDisplayClassStaticField);
+                else
+                    il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldfld, epField);
+            }
+            else if (ctx.CapturedFunctionLocals?.Contains(capturedVar) == true &&
+                     ctx.FunctionDisplayClassFields?.TryGetValue(capturedVar, out var funcField) == true)
+            {
+                if (ctx.FunctionDisplayClassLocal != null)
                 {
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, capturedField);
-                }
-                else if (ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
-                         ctx.EntryPointDisplayClassFields?.TryGetValue(capturedVar, out var epField) == true)
-                {
-                    if (ctx.EntryPointDisplayClassLocal != null)
-                        il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
-                    else if (ctx.EntryPointDisplayClassStaticField != null)
-                        il.Emit(OpCodes.Ldsfld, ctx.EntryPointDisplayClassStaticField);
-                    else
-                        il.Emit(OpCodes.Ldnull);
-                    il.Emit(OpCodes.Ldfld, epField);
-                }
-                else if (ctx.CapturedFunctionLocals?.Contains(capturedVar) == true &&
-                         ctx.FunctionDisplayClassFields?.TryGetValue(capturedVar, out var funcField) == true)
-                {
-                    if (ctx.FunctionDisplayClassLocal != null)
-                    {
-                        il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
-                        il.Emit(OpCodes.Ldfld, funcField);
-                    }
-                    else
-                    {
-                        il.Emit(OpCodes.Ldnull);
-                    }
-                }
-                else if (ctx.CapturedArrowLocals?.Contains(capturedVar) == true &&
-                         ctx.ArrowScopeDisplayClassFields?.TryGetValue(capturedVar, out var arrowField) == true &&
-                         ctx.ArrowScopeDisplayClassLocal != null)
-                {
-                    il.Emit(OpCodes.Ldloc, ctx.ArrowScopeDisplayClassLocal);
-                    il.Emit(OpCodes.Ldfld, arrowField);
-                }
-                else if (ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(capturedVar, out var parentArrowField) == true &&
-                         ctx.CurrentArrowScopeDCField != null)
-                {
-                    // Captured from an ancestor arrow's scope DC reachable through
-                    // the enclosing closure's $arrowDC/$arrowScopeDC reference.
-                    // Happens when the inner function's single $arrowScopeDC slot
-                    // is bound to a DIFFERENT (closer) source arrow, so this var
-                    // falls back to a copy-field — populate it from the chained
-                    // ancestor DC instead of emitting null (lodash reIsHostCtor).
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, ctx.CurrentArrowScopeDCField);
-                    il.Emit(OpCodes.Ldfld, parentArrowField);
-                }
-                else if (ctx.TopLevelStaticVars != null && ctx.TopLevelStaticVars.TryGetValue(capturedVar, out var topField))
-                {
-                    il.Emit(OpCodes.Ldsfld, topField);
+                    il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+                    il.Emit(OpCodes.Ldfld, funcField);
                 }
                 else
                 {
-                    var existingLocal = ctx.Locals.GetLocal(capturedVar);
-                    if (existingLocal != null)
-                        il.Emit(OpCodes.Ldloc, existingLocal);
-                    else
-                        il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldnull);
                 }
-
-                il.Emit(OpCodes.Stfld, field);
             }
+            else if (ctx.CapturedArrowLocals?.Contains(capturedVar) == true &&
+                     ctx.ArrowScopeDisplayClassFields?.TryGetValue(capturedVar, out var arrowField) == true &&
+                     ctx.ArrowScopeDisplayClassLocal != null)
+            {
+                il.Emit(OpCodes.Ldloc, ctx.ArrowScopeDisplayClassLocal);
+                il.Emit(OpCodes.Ldfld, arrowField);
+            }
+            else if (ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(capturedVar, out var parentArrowField) == true &&
+                     ctx.CurrentArrowScopeDCField != null)
+            {
+                // Captured from an ancestor arrow's scope DC reachable through
+                // the enclosing closure's $arrowDC/$arrowScopeDC reference.
+                // Happens when the inner function's single $arrowScopeDC slot
+                // is bound to a DIFFERENT (closer) source arrow, so this var
+                // falls back to a copy-field — populate it from the chained
+                // ancestor DC instead of emitting null (lodash reIsHostCtor).
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, ctx.CurrentArrowScopeDCField);
+                il.Emit(OpCodes.Ldfld, parentArrowField);
+            }
+            else if (ctx.TopLevelStaticVars != null && ctx.TopLevelStaticVars.TryGetValue(capturedVar, out var topField))
+            {
+                il.Emit(OpCodes.Ldsfld, topField);
+            }
+            else
+            {
+                var existingLocal = ctx.Locals.GetLocal(capturedVar);
+                if (existingLocal != null)
+                {
+                    il.Emit(OpCodes.Ldloc, existingLocal);
+                    // The capture field is object-typed, so a value-type local (e.g. a
+                    // per-iteration loop variable stored in an unboxed float64 slot) must
+                    // be boxed before Stfld — otherwise a raw float64 lands where a
+                    // reference is expected and corrupts the captured value (#1230). Matches
+                    // the arrow creation path (EmitDisplayInstanceFieldPopulation).
+                    if (existingLocal.LocalType.IsValueType)
+                        il.Emit(OpCodes.Box, existingLocal.LocalType);
+                }
+                else
+                    il.Emit(OpCodes.Ldnull);
+            }
+
+            il.Emit(OpCodes.Stfld, field);
         }
     }
 
