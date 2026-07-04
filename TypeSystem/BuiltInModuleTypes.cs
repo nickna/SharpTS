@@ -621,7 +621,9 @@ public static class BuiltInModuleTypes
         return new Dictionary<string, TypeInfo>
         {
             // Hash methods
-            ["createHash"] = new TypeInfo.Function([stringType], anyType), // Returns Hash object
+            // createHash(algorithm, options?) — options carries outputLength for XOFs
+            // like shake128/shake256 (#1059).
+            ["createHash"] = new TypeInfo.Function([stringType, anyType], anyType, RequiredParams: 1), // Returns Hash object
             ["createHmac"] = new TypeInfo.Function([stringType, anyType], anyType), // Returns Hmac object
 
             // Cipher methods
@@ -775,6 +777,7 @@ public static class BuiltInModuleTypes
             ["createDiffieHellmanGroup"] = new TypeInfo.Function([stringType], anyType),
             ["getFips"] = new TypeInfo.Function([], numberType),
             ["setFips"] = new TypeInfo.Function([BooleanType], voidType),
+            ["fips"] = BooleanType,
             ["ECDH"] = anyType,
             // Primes (#1062)
             ["generatePrime"] = new TypeInfo.Function([numberType, anyType, anyType], voidType, RequiredParams: 2),

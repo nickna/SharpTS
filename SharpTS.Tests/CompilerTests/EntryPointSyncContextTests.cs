@@ -3,6 +3,7 @@ using System.Threading;
 using SharpTS.Compilation;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -66,7 +67,7 @@ public class EntryPointSyncContextTests
         var modules = resolver.GetModulesInOrder(entryModule);
 
         var checker = new TypeChecker();
-        var typeMap = checker.CheckModules(modules, resolver);
+        var typeMap = TestHarness.CheckModulesOrThrow(checker, modules, resolver);
         var deadCodeInfo = new DeadCodeAnalyzer(typeMap)
             .Analyze(modules.SelectMany(m => m.Statements).ToList());
 

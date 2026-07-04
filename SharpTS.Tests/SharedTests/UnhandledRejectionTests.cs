@@ -1,6 +1,7 @@
 using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -69,7 +70,7 @@ public class UnhandledRejectionTests
             var allModules = resolver.GetModulesInOrder(entryModule);
 
             var checker = new TypeChecker();
-            var typeMap = checker.CheckModules(allModules, resolver);
+            var typeMap = TestHarness.CheckModulesOrThrow(checker, allModules, resolver);
 
             using var interpreter = new Interpreter(stdout: stdout, stderr: stderr);
             interpreter.InterpretModules(allModules, resolver, typeMap);
