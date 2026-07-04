@@ -68,6 +68,40 @@ public class ClosureAnalyzer : AstVisitorBase
     // shared function-DC slot, so it is excluded from the loop-binding set.
     private readonly Dictionary<object, HashSet<string>> _functionNonLoopDecls = [];
 
+    // Names declared by a block-scoped `let`/`const` inside a LOOP BODY of a
+    // function/arrow, plus `for-of`/`for-in` loop variables (#1223). Like the
+    // for-initializer bindings above, each iteration creates a fresh binding
+    // (ECMA-262 13.7.4 / 14.7.5.13), so a closure created in one iteration must
+    // not share a function-DC slot with other iterations. Only names that are
+    // never reassigned after initialization are excluded from the DC (see
+    // GetPerIterationLoopBindings) — for those, the closure's creation-time
+    // snapshot is indistinguishable from a live per-iteration binding.
+    private readonly Dictionary<object, HashSet<string>> _functionLoopBodyDecls = [];
+
+    // Names assigned (=, compound/logical assign, ++/--) anywhere in the program,
+    // including inside nested closures. Program-global and name-keyed on purpose:
+    // an assignment to `x` anywhere conservatively disqualifies every loop-body
+    // declaration named `x` from the per-iteration exclusion, keeping today's
+    // shared-DC mutation visibility for reassigned bindings.
+    private readonly HashSet<string> _assignedNames = [];
+
+    // Defining function → names captured INDIRECTLY from it: the capturing closure
+    // has at least one intermediate callable between itself and the defining scope
+    // (e.g. `() => () => x` where `x` belongs to the enclosing function). Sync-arrow
+    // capture sets stay innermost-only, so such captures are relayed through a
+    // shared scope display class — a name kept out of the DC would populate as null
+    // at the inner closure's creation site (the intermediate body cannot see the
+    // local). Loop-body declarations captured this way therefore decline the
+    // per-iteration exclusion and keep their DC slot (today's fused-iteration
+    // behavior, matching the pre-existing top-level snapshot limitation).
+    private readonly Dictionary<object, HashSet<string>> _functionRelayCaptures = [];
+
+    // Loop-BODY nesting depth within the CURRENT function/arrow. Zero outside
+    // loop bodies; saved/reset/restored across nested function boundaries (a
+    // nested callable's own declarations are not per-iteration relative to an
+    // enclosing loop of its parent).
+    private int _loopBodyDepth;
+
     // ============================================
     // Performance optimization: Inverse index
     // ============================================
@@ -131,21 +165,46 @@ public class ClosureAnalyzer : AstVisitorBase
 
     /// <summary>
     /// Returns the names that <paramref name="functionNode"/> declares EXCLUSIVELY as
-    /// <c>for (let/const …)</c> loop bindings (never also as an ordinary local/param).
+    /// per-iteration loop bindings (never also as an ordinary local/param):
+    /// <c>for (let/const …)</c> initializer bindings (#649), plus loop-BODY block-scoped
+    /// <c>let</c>/<c>const</c> declarations and <c>for-of</c>/<c>for-in</c> loop variables
+    /// that are never reassigned and never captured through an intermediate closure (#1223).
     /// These must be kept out of the shared function display class so closures created
-    /// in different iterations capture distinct per-iteration values (ECMA-262 13.7.4;
-    /// #649). Callers intersect this with the captured-locals set.
+    /// in different iterations capture distinct per-iteration values (ECMA-262 13.7.4).
+    /// Callers intersect this with the captured-locals set.
     /// </summary>
     public HashSet<string> GetPerIterationLoopBindings(object functionNode)
     {
-        if (!_functionLoopBindings.TryGetValue(functionNode, out var bindings) || bindings.Count == 0)
-            return [];
-        var result = new HashSet<string>(bindings);
+        var result = _functionLoopBindings.TryGetValue(functionNode, out var bindings)
+            ? new HashSet<string>(bindings)
+            : [];
         // Shadow-safety: a name that is ALSO an ordinary declaration in this function
         // keeps its shared slot (an ordinary captured-and-mutated local must stay in
         // the function DC). Only purely-loop bindings are eligible for exclusion.
-        if (_functionNonLoopDecls.TryGetValue(functionNode, out var nonLoop))
+        _functionNonLoopDecls.TryGetValue(functionNode, out var nonLoop);
+        if (nonLoop != null)
             result.ExceptWith(nonLoop);
+
+        // Loop-BODY block-scoped declarations (#1223): per-iteration bindings like the
+        // for-initializer names above, but excluded only when never reassigned — a
+        // reassigned binding keeps its shared DC slot so mutations made after a closure
+        // captures it stay visible within the iteration (today's behavior). Never-
+        // reassigned bindings have a constant value per iteration, so the closure's
+        // creation-time snapshot is exactly the per-iteration binding. Names captured
+        // through an intermediate closure also keep their DC slot — the snapshot
+        // populate cannot reach the local from the intermediate body (see
+        // _functionRelayCaptures).
+        if (_functionLoopBodyDecls.TryGetValue(functionNode, out var bodyDecls))
+        {
+            _functionRelayCaptures.TryGetValue(functionNode, out var relayed);
+            foreach (var name in bodyDecls)
+            {
+                if (nonLoop != null && nonLoop.Contains(name)) continue;
+                if (_assignedNames.Contains(name)) continue;
+                if (relayed != null && relayed.Contains(name)) continue;
+                result.Add(name);
+            }
+        }
         return result;
     }
 
@@ -209,9 +268,9 @@ public class ClosureAnalyzer : AstVisitorBase
             // Unlike var, no source-order initialization is implied — capture analysis only needs to
             // know which scope OWNS the name so the inner function shares the binding's slot.
             else if (stmt is Stmt.Var lt && !lt.IsVar)
-                DeclareVariable(lt.Name.Lexeme);
+                DeclareVariable(lt.Name.Lexeme, isPerIterationBinding: true);
             else if (stmt is Stmt.Const ct)
-                DeclareVariable(ct.Name.Lexeme);
+                DeclareVariable(ct.Name.Lexeme, isPerIterationBinding: true);
         }
     }
 
@@ -220,7 +279,12 @@ public class ClosureAnalyzer : AstVisitorBase
     private void EnterScope() => _scopeStack.Push([]);
     private void ExitScope() => _scopeStack.Pop();
 
-    private void DeclareVariable(string name)
+    /// <param name="name">The declared identifier.</param>
+    /// <param name="isPerIterationBinding">True when the declaration creates a fresh
+    /// binding per loop iteration: a block-scoped <c>let</c>/<c>const</c> (callers pass
+    /// this from the statement kind; the loop-body check happens here via
+    /// <see cref="_loopBodyDepth"/>) or a <c>for-of</c>/<c>for-in</c> loop variable.</param>
+    private void DeclareVariable(string name, bool isPerIterationBinding = false)
     {
         if (_scopeStack.Count > 0)
             _scopeStack.Peek().Add(name);
@@ -232,12 +296,23 @@ public class ClosureAnalyzer : AstVisitorBase
         // Record every NON-loop declaration so the per-iteration exclusion stays
         // shadow-safe (see _functionNonLoopDecls). A for-let/const loop binding is
         // declared with its name parked in _pendingLoopBindings, so it is skipped
-        // here and counts only as a loop binding.
+        // here and counts only as a loop binding. A block-scoped let/const inside a
+        // loop body is likewise a per-iteration binding (#1223) and counts in
+        // _functionLoopBodyDecls instead of the non-loop set.
         if (_currentFunction != null && !_pendingLoopBindings.Contains(name))
         {
-            if (!_functionNonLoopDecls.TryGetValue(_currentFunction, out var nonLoop))
-                _functionNonLoopDecls[_currentFunction] = nonLoop = [];
-            nonLoop.Add(name);
+            if (isPerIterationBinding && _loopBodyDepth > 0)
+            {
+                if (!_functionLoopBodyDecls.TryGetValue(_currentFunction, out var bodyDecls))
+                    _functionLoopBodyDecls[_currentFunction] = bodyDecls = [];
+                bodyDecls.Add(name);
+            }
+            else
+            {
+                if (!_functionNonLoopDecls.TryGetValue(_currentFunction, out var nonLoop))
+                    _functionNonLoopDecls[_currentFunction] = nonLoop = [];
+                nonLoop.Add(name);
+            }
         }
     }
 
@@ -296,6 +371,27 @@ public class ClosureAnalyzer : AstVisitorBase
                     _captureSources[_currentFunction] = sources;
                 }
                 sources[name] = definingFunc;
+
+                // Indirect capture (an intermediate callable sits between this closure
+                // and the defining scope): the value can only reach this closure via a
+                // shared DC relay, so the name must not take the per-iteration
+                // snapshot path (#1223 — see _functionRelayCaptures).
+                bool passedCurrent = false;
+                foreach (var frame in _functionStack)
+                {
+                    if (!passedCurrent)
+                    {
+                        if (ReferenceEquals(frame, _currentFunction)) passedCurrent = true;
+                        continue;
+                    }
+                    if (!ReferenceEquals(frame, definingFunc))
+                    {
+                        if (!_functionRelayCaptures.TryGetValue(definingFunc, out var relayed))
+                            _functionRelayCaptures[definingFunc] = relayed = [];
+                        relayed.Add(name);
+                    }
+                    break;
+                }
 
                 PropagateCaptureUpAsyncArrowChain(name, definingFunc);
             }
@@ -369,13 +465,13 @@ public class ClosureAnalyzer : AstVisitorBase
 
     protected override void VisitVar(Stmt.Var stmt)
     {
-        DeclareVariable(stmt.Name.Lexeme);
+        DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }
 
     protected override void VisitConst(Stmt.Const stmt)
     {
-        DeclareVariable(stmt.Name.Lexeme);
+        DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: true);
         base.VisitConst(stmt);
     }
 
@@ -446,8 +542,12 @@ public class ClosureAnalyzer : AstVisitorBase
         // Visit iterable BEFORE creating loop scope - matches interpreter/resolver behavior
         Visit(stmt.Iterable);
         EnterScope();
-        DeclareVariable(stmt.Variable.Lexeme);
+        // The loop variable and body declarations are per-iteration bindings (#1223):
+        // depth is bumped before the variable's declare so it lands in the loop-body set.
+        _loopBodyDepth++;
+        DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
         Visit(stmt.Body);
+        _loopBodyDepth--;
         ExitScope();
     }
 
@@ -456,9 +556,27 @@ public class ClosureAnalyzer : AstVisitorBase
         // Visit object BEFORE creating loop scope - matches interpreter/resolver behavior
         Visit(stmt.Object);
         EnterScope();
-        DeclareVariable(stmt.Variable.Lexeme);
+        _loopBodyDepth++;
+        DeclareVariable(stmt.Variable.Lexeme, isPerIterationBinding: true);
         Visit(stmt.Body);
+        _loopBodyDepth--;
         ExitScope();
+    }
+
+    protected override void VisitWhile(Stmt.While stmt)
+    {
+        Visit(stmt.Condition);
+        _loopBodyDepth++;
+        Visit(stmt.Body);
+        _loopBodyDepth--;
+    }
+
+    protected override void VisitDoWhile(Stmt.DoWhile stmt)
+    {
+        _loopBodyDepth++;
+        Visit(stmt.Body);
+        _loopBodyDepth--;
+        Visit(stmt.Condition);
     }
 
     protected override void VisitFor(Stmt.For stmt)
@@ -489,7 +607,9 @@ public class ClosureAnalyzer : AstVisitorBase
             Visit(stmt.Condition);
         if (stmt.Increment != null)
             Visit(stmt.Increment);
+        _loopBodyDepth++;
         Visit(stmt.Body);
+        _loopBodyDepth--;
         ExitScope();
     }
 
@@ -552,19 +672,36 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitAssign(Expr.Assign expr)
     {
         ReferenceVariable(expr.Name.Lexeme);
+        _assignedNames.Add(expr.Name.Lexeme);
         base.VisitAssign(expr);
     }
 
     protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
     {
         ReferenceVariable(expr.Name.Lexeme);
+        _assignedNames.Add(expr.Name.Lexeme);
         base.VisitCompoundAssign(expr);
     }
 
     protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
     {
         ReferenceVariable(expr.Name.Lexeme);
+        _assignedNames.Add(expr.Name.Lexeme);
         base.VisitLogicalAssign(expr);
+    }
+
+    protected override void VisitPrefixIncrement(Expr.PrefixIncrement expr)
+    {
+        if (expr.Operand is Expr.Variable v)
+            _assignedNames.Add(v.Name.Lexeme);
+        base.VisitPrefixIncrement(expr);
+    }
+
+    protected override void VisitPostfixIncrement(Expr.PostfixIncrement expr)
+    {
+        if (expr.Operand is Expr.Variable v)
+            _assignedNames.Add(v.Name.Lexeme);
+        base.VisitPostfixIncrement(expr);
     }
 
     protected override void VisitArrowFunction(Expr.ArrowFunction expr)
@@ -619,6 +756,10 @@ public class ClosureAnalyzer : AstVisitorBase
         // Save current context
         var previousFunction = _currentFunction;
         var previousOuter = new HashSet<string>(_outerVariables);
+        // A nested callable's own declarations are not per-iteration relative to an
+        // enclosing loop of its parent — reset the loop-body depth for its analysis.
+        var previousLoopBodyDepth = _loopBodyDepth;
+        _loopBodyDepth = 0;
 
         // Build set of outer variables for this function
         _outerVariables.Clear();
@@ -670,6 +811,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _loopBodyDepth = previousLoopBodyDepth;
         _outerVariables.Clear();
         foreach (var name in previousOuter)
             _outerVariables.Add(name);
@@ -681,6 +823,9 @@ public class ClosureAnalyzer : AstVisitorBase
         var previousFunction = _currentFunction;
         var previousOuter = new HashSet<string>(_outerVariables);
         var previousFunctionName = _currentFunctionName;
+        // See AnalyzeFunctionBody: per-iteration classification is per-callable.
+        var previousLoopBodyDepth = _loopBodyDepth;
+        _loopBodyDepth = 0;
 
         // Build set of outer variables for this function
         _outerVariables.Clear();
@@ -734,6 +879,7 @@ public class ClosureAnalyzer : AstVisitorBase
         // Restore context
         _currentFunction = previousFunction;
         _currentFunctionName = previousFunctionName;
+        _loopBodyDepth = previousLoopBodyDepth;
         _outerVariables.Clear();
         foreach (var name in previousOuter)
             _outerVariables.Add(name);
