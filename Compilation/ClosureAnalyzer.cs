@@ -96,16 +96,35 @@ public class ClosureAnalyzer : AstVisitorBase
     // shared-DC mutation visibility for reassigned bindings.
     private readonly HashSet<string> _assignedNames = [];
 
-    // Defining function → names captured INDIRECTLY from it: the capturing closure
-    // has at least one intermediate callable between itself and the defining scope
-    // (e.g. `() => () => x` where `x` belongs to the enclosing function). Sync-arrow
-    // capture sets stay innermost-only, so such captures are relayed through a
-    // shared scope display class — a name kept out of the DC would populate as null
-    // at the inner closure's creation site (the intermediate body cannot see the
-    // local). Loop-body declarations captured this way therefore decline the
-    // per-iteration exclusion and keep their DC slot (today's fused-iteration
-    // behavior, matching the pre-existing top-level snapshot limitation).
+    // Defining function → names captured INDIRECTLY from it through a chain that
+    // sync-arrow value-forwarding CANNOT traverse (a nested function-expression or
+    // async-arrow boundary sits between the capturing closure and the defining
+    // scope). Sync-arrow capture sets stay innermost-only, so such captures can only
+    // be relayed through a shared scope display class — a per-iteration name kept out
+    // of the DC would populate as null at the inner closure's creation site. Loop-body
+    // declarations captured this way therefore decline the per-iteration exclusion and
+    // keep their DC slot (fused-iteration behavior). Chains made ENTIRELY of
+    // intermediate sync arrows are handled instead by value-forwarding, so they are
+    // NOT recorded here (see _pendingSyncChainForwards / #1231).
     private readonly Dictionary<object, HashSet<string>> _functionRelayCaptures = [];
+
+    // Top-level (module-scope) names bound per loop iteration: loop-body let/const,
+    // for-of/for-in loop variables, and for-initializer let/const declared outside any
+    // function. #1201 never lifts loop declarations to the entry-point display class,
+    // so these take the value-snapshot path. Used by the sync-arrow chain forwarding
+    // post-pass to decide which top-level captures need value-forwarding (#1231).
+    private readonly HashSet<string> _topLevelPerIterationBindings = [];
+
+    // Candidate sync-arrow chain forwards recorded during traversal and resolved by
+    // ApplySyncArrowChainForwarding after the walk completes (once per-iteration
+    // classification is final). Each entry: an inner closure captures Name from
+    // DefiningFunc (null = top level) through Intermediates — one or more enclosing
+    // plain (non-async) arrows that do not themselves reference Name. When Name turns
+    // out to be a per-iteration snapshot-path binding, it is unioned onto every
+    // intermediate arrow's capture set so each snapshots/relays the per-iteration value
+    // BY VALUE, rather than the inner closure reading null (#1231). Mirrors what
+    // PropagateCaptureUpAsyncArrowChain does eagerly for async arrows (#716).
+    private readonly List<(string Name, object? DefiningFunc, List<object> Intermediates)> _pendingSyncChainForwards = [];
 
     // Loop-BODY nesting depth within the CURRENT function/arrow. Zero outside
     // loop bodies; saved/reset/restored across nested function boundaries (a
@@ -259,6 +278,10 @@ public class ClosureAnalyzer : AstVisitorBase
             Visit(stmt);
         _scopeStack.Pop();
 
+        // Resolve sync-arrow chain forwards now that every capture and per-iteration
+        // classification is final (#1231).
+        ApplySyncArrowChainForwarding();
+
         // Per-iteration cell analysis (#650) is independent of capture-source state,
         // so run it as its own pass over the same statements.
         _cells.Analyze(statements);
@@ -340,6 +363,13 @@ public class ClosureAnalyzer : AstVisitorBase
                 nonLoop.Add(name);
             }
         }
+        else if (_currentFunction == null && isPerIterationBinding && _loopBodyDepth > 0)
+        {
+            // Top-level loop-BODY block-scoped let/const, or a for-of/for-in loop
+            // variable declared at module scope (#1231). For-INITIALIZER bindings at
+            // module scope are recorded by VisitFor (they declare with _loopBodyDepth 0).
+            _topLevelPerIterationBindings.Add(name);
+        }
     }
 
     // Loop-binding names currently being declared by a for-initializer, so
@@ -399,40 +429,33 @@ public class ClosureAnalyzer : AstVisitorBase
                 sources[name] = definingFunc;
 
                 // Indirect capture (an intermediate callable sits between this closure
-                // and the defining scope): the value can only reach this closure via a
-                // shared DC relay, so the name must not take the per-iteration
-                // snapshot path (#1223 — see _functionRelayCaptures).
-                bool passedCurrent = false;
-                foreach (var frame in _functionStack)
-                {
-                    if (!passedCurrent)
-                    {
-                        if (ReferenceEquals(frame, _currentFunction)) passedCurrent = true;
-                        continue;
-                    }
-                    if (!ReferenceEquals(frame, definingFunc))
-                    {
-                        if (!_functionRelayCaptures.TryGetValue(definingFunc, out var relayed))
-                            _functionRelayCaptures[definingFunc] = relayed = [];
-                        relayed.Add(name);
-                    }
-                    break;
-                }
+                // and the defining scope). An all-sync-arrow chain is value-forwarded so
+                // per-iteration bindings reach the inner closure by value (#1231); a chain
+                // crossing a function/async-arrow boundary declines the per-iteration
+                // exclusion and relays through the shared DC instead (#1223).
+                RecordChainCapture(name, definingFunc);
 
                 PropagateCaptureUpAsyncArrowChain(name, definingFunc);
             }
-            else if (_functionStack.Count == 1 && IsNearestDeclaringScopeNested(name))
+            else
             {
-                // Top-level capture (no enclosing function defines the name) whose
-                // nearest declaring scope is a nested top-level block, referenced by
-                // a closure created directly in top-level code (#1222) — see
-                // _directTopLevelBlockCaptures.
-                if (!_directTopLevelBlockCaptures.TryGetValue(_currentFunction, out var blockCaps))
+                // Top-level capture (no enclosing function defines the name).
+                // A chained capture through intermediate sync arrows is value-forwarded
+                // like the function-local case (#1231).
+                RecordChainCapture(name, null);
+
+                if (_functionStack.Count == 1 && IsNearestDeclaringScopeNested(name))
                 {
-                    blockCaps = [];
-                    _directTopLevelBlockCaptures[_currentFunction] = blockCaps;
+                    // The nearest declaring scope is a nested top-level block, referenced
+                    // by a closure created directly in top-level code (#1222) — see
+                    // _directTopLevelBlockCaptures.
+                    if (!_directTopLevelBlockCaptures.TryGetValue(_currentFunction, out var blockCaps))
+                    {
+                        blockCaps = [];
+                        _directTopLevelBlockCaptures[_currentFunction] = blockCaps;
+                    }
+                    blockCaps.Add(name);
                 }
-                blockCaps.Add(name);
             }
         }
     }
@@ -491,6 +514,94 @@ public class ClosureAnalyzer : AstVisitorBase
             if (_captures.TryGetValue(intermediateArrow, out var caps) && caps.Add(name))
                 _allCapturedVariables.Add(name);
         }
+    }
+
+    /// <summary>
+    /// Records the current closure's capture of <paramref name="name"/> from its owner
+    /// (<paramref name="definingFunc"/>, null = top level) when the value must pass
+    /// through one or more INTERMEDIATE enclosing closures. When every intermediate is a
+    /// plain (non-async, non-generator) arrow that does not itself reference the name, the
+    /// capture becomes a value-forwarding candidate (<see cref="_pendingSyncChainForwards"/>):
+    /// a post-pass snapshots the name into each intermediate arrow's own display class so a
+    /// per-iteration binding kept off every shared display class still reaches the innermost
+    /// closure by value (#1231). Non-forwardable shapes (a nested function-expression or
+    /// async-arrow boundary in the chain) fall back to the shared-DC relay — for a function
+    /// owner the name is recorded in <see cref="_functionRelayCaptures"/> so
+    /// <see cref="GetPerIterationLoopBindings"/> keeps it on the function display class.
+    /// Direct (non-chained) captures record nothing here.
+    /// </summary>
+    private void RecordChainCapture(string name, object? definingFunc)
+    {
+        List<object>? intermediates = null;
+        bool forwardable = true;
+        bool passedCurrent = false;
+        foreach (var frame in _functionStack)
+        {
+            if (!passedCurrent)
+            {
+                if (ReferenceEquals(frame, _currentFunction)) passedCurrent = true;
+                continue;
+            }
+            if (definingFunc != null && ReferenceEquals(frame, definingFunc))
+                break; // reached the owning scope
+            // This frame sits between the capturing closure and the owner.
+            if (frame is Expr.ArrowFunction { IsAsync: false, IsGenerator: false } syncArrow)
+            {
+                (intermediates ??= []).Add(syncArrow);
+            }
+            else
+            {
+                // A function-expression or async-arrow boundary: sync-chain value
+                // forwarding cannot traverse it.
+                forwardable = false;
+                break;
+            }
+        }
+
+        if (intermediates == null)
+            return; // direct capture — no intermediate closure to forward through
+
+        if (forwardable)
+        {
+            _pendingSyncChainForwards.Add((name, definingFunc, intermediates));
+        }
+        else if (definingFunc != null)
+        {
+            if (!_functionRelayCaptures.TryGetValue(definingFunc, out var relayed))
+                _functionRelayCaptures[definingFunc] = relayed = [];
+            relayed.Add(name);
+        }
+    }
+
+    /// <summary>
+    /// Post-pass over the recorded sync-arrow chain forward candidates
+    /// (<see cref="_pendingSyncChainForwards"/>). A candidate is applied only when its
+    /// name is a per-iteration snapshot-path binding — a for-initializer / loop-body
+    /// <c>let</c>/<c>const</c> or <c>for-of</c>/<c>for-in</c> variable kept off every
+    /// shared display class. For those, the name is value-forwarded onto each intermediate
+    /// sync arrow's capture set so the per-iteration value reaches the innermost closure by
+    /// value instead of populating null (#1231). Non-per-iteration captures are left
+    /// untouched: they already relay correctly through the entry-point / function display
+    /// class. Runs after the full traversal, when the per-iteration classification (which
+    /// depends on program-wide reassignment and relay information) is final.
+    /// </summary>
+    private void ApplySyncArrowChainForwarding()
+    {
+        foreach (var (name, definingFunc, intermediates) in _pendingSyncChainForwards)
+        {
+            bool perIteration = definingFunc != null
+                ? GetPerIterationLoopBindings(definingFunc).Contains(name)
+                : _topLevelPerIterationBindings.Contains(name);
+            if (!perIteration)
+                continue;
+
+            foreach (var arrow in intermediates)
+            {
+                if (_captures.TryGetValue(arrow, out var caps) && caps.Add(name))
+                    _allCapturedVariables.Add(name);
+            }
+        }
+        _pendingSyncChainForwards.Clear();
     }
 
     /// <summary>
@@ -660,6 +771,13 @@ public class ClosureAnalyzer : AstVisitorBase
             }
             else
             {
+                if (loopNames != null && _currentFunction == null)
+                {
+                    // Module-scope `for (let/const …)` initializer bindings are per-iteration
+                    // snapshot-path names (never lifted to the entry-point DC), so a chained
+                    // capture must value-forward them (#1231 / #649 exclusion).
+                    foreach (var n in loopNames) _topLevelPerIterationBindings.Add(n);
+                }
                 Visit(stmt.Initializer);
             }
         }

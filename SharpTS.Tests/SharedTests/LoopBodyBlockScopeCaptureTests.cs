@@ -16,10 +16,18 @@ namespace SharpTS.Tests.SharedTests;
 /// capture: client0's 'data' handler destroyed client1, dropping its pending data and hanging
 /// the event loop (issue #1223's "intermittent no-output hang").</para>
 ///
-/// <para>The exclusion is deliberately conservative: names that are reassigned after
-/// initialization, or captured through an intermediate closure (<c>() =&gt; () =&gt; x</c>),
-/// keep their shared display-class slot — preserving within-iteration mutation visibility and
-/// the DC relay that a nested closure's populate path needs.</para>
+/// <para>The exclusion is deliberately conservative for reassigned names: a binding the closure
+/// itself mutates keeps its shared display-class slot, preserving within-iteration mutation
+/// visibility.</para>
+///
+/// <para>#1231: a per-iteration binding captured through a chain of intermediate <em>sync</em>
+/// arrows (<c>() =&gt; () =&gt; x</c>, where the intermediate arrow does not itself reference
+/// <c>x</c>) is value-forwarded — each intermediate arrow snapshots the binding into its own
+/// display class so the innermost closure reads the true per-iteration value. This holds at
+/// module scope and inside functions/arrows. Before the fix the compiled output was <c>null</c>
+/// (top-level / function-local for-initializer) or the fused last-iteration value (function-local
+/// loop-body). Chains that cross a nested function-expression or async-arrow boundary are not
+/// sync-forwardable and keep the shared-DC relay.</para>
 /// </summary>
 public class LoopBodyBlockScopeCaptureTests
 {
@@ -316,5 +324,154 @@ public class LoopBodyBlockScopeCaptureTests
             console.log(fns.map((f: any) => f()).join(","));
             """;
         Assert.Equal("a0,a1,b7\n", TestHarness.Run(source, mode));
+    }
+
+    // ---- #1231: per-iteration bindings captured through a nested sync-arrow chain ----
+    // The intermediate arrow does not reference the binding, so it can only relay the value
+    // by capturing-and-forwarding it (value-forwarding). Before the fix the compiled inner
+    // closure read null (top-level / for-initializer) or the fused last value (function body).
+
+    // Top-level loop-body const through a two-arrow chain (#1231 shape 1).
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TopLevel_LoopBodyConst_ChainedCapture_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            const a: any[] = [];
+            for (let i = 0; i < 3; i++) {
+                const x = { id: i };
+                a.push(() => () => x.id);
+            }
+            console.log(a.map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // Top-level for-initializer binding through a chain (#1231 shape 2 / #649 exclusion).
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TopLevel_ForInitializer_ChainedCapture_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            const a: any[] = [];
+            for (let j = 0; j < 3; j++) {
+                a.push(() => () => j);
+            }
+            console.log(a.map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // Function-local loop-body const through a chain (was fused to the last iteration).
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void FunctionBody_LoopBodyConst_ChainedCapture_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            function go() {
+                const a: any[] = [];
+                for (let i = 0; i < 3; i++) {
+                    const x = { id: i };
+                    a.push(() => () => x.id);
+                }
+                return a;
+            }
+            console.log(go().map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // Function-local for-initializer binding through a chain (was null compiled).
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void FunctionBody_ForInitializer_ChainedCapture_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            function go() {
+                const a: any[] = [];
+                for (let j = 0; j < 3; j++) {
+                    a.push(() => () => j);
+                }
+                return a;
+            }
+            console.log(go().map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // A binding captured BOTH directly and through a chain in the same loop: both closures
+    // must observe the same per-iteration value (previously the chained capture forced even
+    // the direct one onto the shared fused slot).
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void DirectAndChainedCapture_SameLoop_BothPerIteration(ExecutionMode mode)
+    {
+        var source = """
+            const direct: any[] = [];
+            const chained: any[] = [];
+            for (let i = 0; i < 3; i++) {
+                const x = i;
+                direct.push(() => x);
+                chained.push(() => () => x);
+            }
+            const d = direct.map((f: any) => f()).join(",");
+            const c = chained.map((f: any) => f()()).join(",");
+            console.log(d + " | " + c);
+            """;
+        Assert.Equal("0,1,2 | 0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // Deeper chain (four arrows) still forwards the per-iteration value all the way in.
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TopLevel_LoopBodyConst_DeepChain_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            const a: any[] = [];
+            for (let i = 0; i < 3; i++) {
+                const x = i;
+                a.push(() => () => () => () => x);
+            }
+            console.log(a.map((f: any) => f()()()()).join(","));
+            """;
+        Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
+    }
+
+    // Top-level for-of loop variable through a chain.
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TopLevel_ForOfVariable_ChainedCapture_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            const a: any[] = [];
+            for (const v of [10, 20, 30]) {
+                a.push(() => () => v);
+            }
+            console.log(a.map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("10,20,30\n", TestHarness.Run(source, mode));
+    }
+
+    // A chained capture that also references the enclosing class `this`: the per-iteration
+    // binding forwards by value while `this` still relays through the arrow chain.
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ChainedCapture_WithThis_PerIteration(ExecutionMode mode)
+    {
+        var source = """
+            class C {
+                tag = "t";
+                build() {
+                    const a: any[] = [];
+                    for (let i = 0; i < 2; i++) {
+                        const x = i;
+                        a.push(() => () => this.tag + x);
+                    }
+                    return a;
+                }
+            }
+            console.log(new C().build().map((f: any) => f()()).join(","));
+            """;
+        Assert.Equal("t0,t1\n", TestHarness.Run(source, mode));
     }
 }
