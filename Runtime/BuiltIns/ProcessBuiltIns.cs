@@ -59,7 +59,22 @@ public static partial class ProcessBuiltIns
     // Script start as a monotonic Stopwatch timestamp — reset each time a script
     // begins execution. When set, uptime() reports time since script start rather
     // than process start.
-    private static long? _scriptStartTimestamp;
+    //
+    // [ThreadStatic] because the in-process test runner shares this one CLR process
+    // across many concurrently-running scripts (xUnit parallelizes test collections):
+    // SetScriptArguments/ClearScriptArguments toggle this baseline (a recent timestamp
+    // ↔ null) on each run, and a *shared* field let one script's SetScriptArguments land
+    // between another script's two uptime() reads — the first read using the null →
+    // process-start baseline (large elapsed), the second the just-set recent baseline
+    // (near-zero elapsed) — so uptime() ran backwards and intermittently failed
+    // Process_Uptime_IncreasesOverTime (`up2 >= up1`). Per-thread isolation gives each
+    // script a stable baseline (same precedent as ThreadArgv/ThreadEnv above); the
+    // Stopwatch switch earlier fixed clock monotonicity but not this baseline race. In a
+    // real single-script process SetScriptArguments and the synchronous run share one
+    // thread, so script-relative uptime is preserved; an uptime() read on an async
+    // continuation thread falls back to the (process-start) baseline, differing only by
+    // the milliseconds between process and script start.
+    [ThreadStatic] private static long? _scriptStartTimestamp;
 
     /// <summary>
     /// Gets a member of the process object by name. Resolves process-specific
