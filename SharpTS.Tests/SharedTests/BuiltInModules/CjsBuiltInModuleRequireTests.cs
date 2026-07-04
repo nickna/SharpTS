@@ -128,20 +128,22 @@ public class CjsBuiltInModuleRequireTests
     }
 
     /// <summary>
-    /// Regression (#1210): require() of a stdlib facade with primitive:* imports from an ESM
-    /// entry, without any ESM import of that module anywhere in the program.
+    /// Regression (#1210 interpreter, #1217 compiled): require() of a stdlib facade with
+    /// primitive:* imports from an ESM entry, without any ESM import of that module anywhere
+    /// in the program.
     /// </summary>
     /// <remarks>
     /// A CJS entry pre-loads its require() graph via CollectCjsRequireDependencies, so the
     /// facade's primitive deps get executed by the static InterpretModules walk — which is why
-    /// the main.cjs tests above never hit this. An ESM entry's require() is fully lazy: the
-    /// facade loads, but its `import ... from 'primitive:fs'` used to fail with
-    /// "Module 'primitive:fs' not loaded" because BindModuleImports only lazy-initialized CJS
-    /// and dotnet: deps. Interpreter-only: compiled mode has a separate pre-existing gap
-    /// (facades reached only via require() from ESM files are never bundled into the assembly).
+    /// the main.cjs tests above never hit this. An ESM entry's require() used to be fully
+    /// lazy: interpreted, the facade loaded but its `import ... from 'primitive:fs'` failed
+    /// with "Module 'primitive:fs' not loaded" (#1210, fixed in BindModuleImports); compiled,
+    /// the facade was never bundled into the assembly at all, so the require() lowering threw
+    /// MODULE_NOT_FOUND at startup (#1217, fixed by running the require-literal walk over
+    /// ESM bodies scoped to stdlib specifiers).
     /// </remarks>
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Cjs_Require_PrimitiveSeamFacade_FromEsmEntry(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -159,6 +161,29 @@ public class CjsBuiltInModuleRequireTests
         };
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("function\nroundtrip\nfunction\nfunction\n", output);
+    }
+
+    /// <summary>
+    /// Regression (#1217): the require() call sits inside a function body in an ESM module —
+    /// the discovery walk must find nested require literals, not just top-level statements.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Cjs_Require_StdlibFacade_InsideFunction_FromEsmEntry(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                function lazyOs(): any {
+                    return require('os');
+                }
+                console.log(typeof lazyOs().platform);
+                console.log(typeof path.join);
+                """
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("function\nfunction\n", output);
     }
 
     /// <summary>
