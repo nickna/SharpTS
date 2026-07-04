@@ -81,6 +81,17 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
+        // #1222: a top-level BLOCK-scoped shadow is captured BY VALUE into this state
+        // machine — read the snapshot field; the entry-DC static field below holds the
+        // same-named OUTER (module-level) binding.
+        if (TryGetShadowedTopLevelCaptureField(name, out var shadowReadField))
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, shadowReadField);
+            SetStackUnknown();
+            return;
+        }
+
         // Fallback: Check if it's a captured top-level variable in entry-point display class
         if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
@@ -157,6 +168,20 @@ public partial class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, ownAssignField);
             SetStackUnknown();                 // remaining copy is the assignment's value
+            return;
+        }
+
+        // #1222: write the shadow's by-value snapshot field, never the same-named outer
+        // module binding's entry-DC home. (Lost on exit like every standalone-capture
+        // write — matching the by-value semantics of #641/#684.)
+        if (TryGetShadowedTopLevelCaptureField(name, out var shadowAssignField))
+        {
+            var shadowTemp = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, shadowTemp);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldloc, shadowTemp);
+            _il.Emit(OpCodes.Stfld, shadowAssignField);
+            SetStackUnknown();
             return;
         }
 
@@ -284,6 +309,18 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
+        // #1222: write the shadow's by-value snapshot field, never the same-named outer
+        // module binding's entry-DC home (mirror of the EmitAssign branch above).
+        if (TryGetShadowedTopLevelCaptureField(name, out var shadowStoreField))
+        {
+            var shadowTemp = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, shadowTemp);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldloc, shadowTemp);
+            _il.Emit(OpCodes.Stfld, shadowStoreField);
+            return;
+        }
+
         // Check if it's a captured top-level variable in entry-point display class
         if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
@@ -397,6 +434,22 @@ public partial class AsyncArrowMoveNextEmitter
         // Fallback: null
         _il.Emit(OpCodes.Ldnull);
         SetStackType(StackType.Null);
+    }
+
+    /// <summary>
+    /// True when <paramref name="name"/> is a top-level BLOCK-scoped shadow of a same-named
+    /// module-level binding, captured by value into this standalone arrow's state machine
+    /// (#1222). Reads/writes must use the snapshot field: the entry-DC static field holds
+    /// the OUTER binding. #1201-lifted bindings are excluded — their home IS the entry-DC
+    /// field and must stay live for mutation visibility.
+    /// </summary>
+    private bool TryGetShadowedTopLevelCaptureField(string name, out FieldBuilder field)
+    {
+        field = null!;
+        return _builder.IsStandalone
+            && _builder.StandaloneCaptureFields.TryGetValue(name, out field!)
+            && _ctx?.ClosureAnalyzer?.IsDirectTopLevelBlockScopedCapture(_builder.Arrow, name) == true
+            && _ctx.LiftedBlockScopedTopLevelVars?.Contains(name) != true;
     }
 
     /// <summary>

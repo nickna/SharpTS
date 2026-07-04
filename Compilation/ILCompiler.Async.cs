@@ -1408,6 +1408,10 @@ public partial class ILCompiler
                 ClassRegistry = GetClassRegistry(),
                 EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
                 CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
+                // #1222: lets the shadow-capture check distinguish a #1201-lifted binding
+                // (home = entry-DC field, must stay live) from a block-scoped shadow
+                // (by-value standalone capture) — see TryGetShadowedTopLevelCaptureField.
+                LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
                 ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
                 EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
                 // Follow-up to #838: lets this standalone async arrow's MoveNext populate a nested sync

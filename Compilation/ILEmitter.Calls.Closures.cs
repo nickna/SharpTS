@@ -427,6 +427,23 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldfld, parentScopeField);
             }
             else if (_ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
+                     _ctx.EntryPointDisplayClassFields?.ContainsKey(capturedVar) == true &&
+                     _ctx.ClosureAnalyzer?.IsDirectTopLevelBlockScopedCapture(af, capturedVar) == true &&
+                     _ctx.Locals.GetNestedScopeLocal(capturedVar) is { } shadowLocal)
+            {
+                // #1222: the creating scope's block-scoped local lexically shadows the
+                // same-named module-level binding whose home is the entry-DC field
+                // handled below. Snapshot the shadow like any local capture — the DC
+                // branch would misroute the capture to the OUTER binding. (#1201-lifted
+                // bindings never take this path: their declarations write the DC field
+                // directly and declare no local, so GetNestedScopeLocal returns null.)
+                IL.Emit(OpCodes.Ldloc, shadowLocal);
+                if (shadowLocal.LocalType.IsValueType)
+                {
+                    IL.Emit(OpCodes.Box, shadowLocal.LocalType);
+                }
+            }
+            else if (_ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
                      _ctx.EntryPointDisplayClassFields?.TryGetValue(capturedVar, out var entryPointField) == true)
             {
                 // Variable is a captured top-level var in entry-point display class

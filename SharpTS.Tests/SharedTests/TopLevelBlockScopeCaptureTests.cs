@@ -227,6 +227,146 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("main ran\nlib set=1 n=1\nlib set=2 n=2\n", output);
     }
 
+    // ── #1222: block-scoped shadow of a captured module-level binding ────────────
+    // When a top-level block declares a let/const that SHADOWS a same-named captured
+    // module-level binding, the name fails #1201's declared-exactly-once rule, so the
+    // block binding stays a plain local. Closures created in the block must capture
+    // that local — before the fix, name-keyed routing sent the capture to the module
+    // binding's entry-point-DC field, so compiled closures read the OUTER value.
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_ClosureCapturesBlockLocal(ExecutionMode mode)
+    {
+        // The issue's exact reproducer: compiled printed "outer\nouter".
+        var source = """
+            let sh = 'outer';
+            const getOuter = () => sh;
+            if (true) {
+                let sh = 'inner';
+                const getInner = () => sh;
+                console.log(getInner());
+            }
+            console.log(getOuter());
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("inner\nouter\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_AsyncArrowReadsShadow(ExecutionMode mode)
+    {
+        // Standalone async arrows deliberately read captured top-level names LIVE from
+        // the entry-DC static field; for a shadow that live read hit the OUTER binding.
+        // The shadow must come from the arrow's by-value snapshot field instead.
+        var source = """
+            let sh = 'outer';
+            const getOuter = () => sh;
+            if (true) {
+                let sh = 'inner';
+                const getInner = async () => sh;
+                getInner().then(v => console.log('async=' + v));
+            }
+            setTimeout(() => console.log('module=' + getOuter()), 10);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("async=inner\nmodule=outer\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_AsyncArrowWriteDoesNotClobberModule(ExecutionMode mode)
+    {
+        // A write to the shadow inside the async arrow must land on the arrow's
+        // snapshot field — before the fix it overwrote the module binding's DC field.
+        var source = """
+            let sh = 'outer';
+            const getOuter = () => sh;
+            if (true) {
+                let sh = 'inner';
+                const clobber = async () => { sh = 'clobbered'; return sh; };
+                clobber().then(v => console.log('ret=' + v));
+            }
+            setTimeout(() => console.log('module=' + getOuter()), 10);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ret=clobbered\nmodule=outer\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_IncrementAndCompoundTargetShadow(ExecutionMode mode)
+    {
+        // ++ and += store-backs resolved the entry-DC field before locals, so they
+        // wrote the module binding while plain reads saw the block local.
+        var source = """
+            let n = 100;
+            const getN = () => n;
+            if (true) {
+                let n = 1;
+                n++;
+                n += 2;
+                const g = () => n;
+                console.log('block=' + g() + ',' + n);
+            }
+            console.log('module=' + getN());
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("block=4,4\nmodule=100\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_FunctionDeclarationInBlock(ExecutionMode mode)
+    {
+        // Function DECLARATIONS in top-level blocks are lambda-lifted with by-value
+        // capture forwarding (#605/#622); the forwarded argument is resolved at the
+        // call site, locals first, so it picks up the shadow.
+        var source = """
+            let f = 'outer';
+            const getOuter = () => f;
+            if (true) {
+                let f = 'inner';
+                function getInner(): string { return f; }
+                console.log(getInner());
+            }
+            console.log(getOuter());
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("inner\nouter\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ShadowedModuleBinding_InImportedModule(ExecutionMode mode)
+    {
+        // Module-init methods reach the entry-point DC through its static field;
+        // the shadow decision must hold there too. (The module binding and its
+        // reader are deliberately NOT exported directly — an exported arrow
+        // capturing an exported let is a distinct pre-existing compiled-module
+        // bug, unrelated to shadowing.)
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                let tag = 'outer';
+                const getOuter = () => tag;
+                export function readOuter(): string { return getOuter(); }
+                if (true) {
+                    let tag = 'inner';
+                    const getInner = () => tag;
+                    console.log('lib=' + getInner());
+                }
+                """,
+            ["main.ts"] = """
+                import { readOuter } from './lib';
+                console.log('main=' + readOuter());
+                """,
+        };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("lib=inner\nmain=outer\n", output);
+    }
+
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void BlockScopedCapture_FunctionExpression_SharesEnvironment(ExecutionMode mode)

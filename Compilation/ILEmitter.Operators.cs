@@ -1142,9 +1142,13 @@ public partial class ILEmitter
             return;
         }
 
-        // Check entry-point display class (captured top-level vars).
+        // Check entry-point display class (captured top-level vars). #1222: an in-scope
+        // local declared in a NESTED scope is a block-scoped shadow of the module-level
+        // binding (module bindings never declare locals) — let it fall through to the
+        // local store below instead of clobbering the outer binding's DC field.
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
-            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
+            _ctx.Locals.GetNestedScopeLocal(name) == null)
         {
             if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
             var temp = IL.DeclareLocal(_ctx.Types.Object);

@@ -51,6 +51,17 @@ public class ClosureAnalyzer : AstVisitorBase
     // name-matching across unrelated scopes (which aliases shadowed names).
     private readonly Dictionary<object, Dictionary<string, object>> _captureSources = [];
 
+    // Maps closure node → captured names whose binding is a top-level BLOCK-scoped
+    // declaration (the nearest declaring scope outside every function is a nested
+    // scope, not the module root), captured by a closure created DIRECTLY in
+    // top-level code (function stack depth 1). Such a capture must snapshot the
+    // block's local like any ordinary local capture: a same-named entry-point
+    // display class field belongs to a DIFFERENT (module-level) binding that the
+    // block one shadows (#1222). Recorded only at depth 1 because a nested
+    // closure's creation site can't see the entry method's locals — those shapes
+    // keep the historical $entryPointDC chain routing.
+    private readonly Dictionary<object, HashSet<string>> _directTopLevelBlockCaptures = [];
+
     // Maps function/arrow node → names it declares as `for (let/const …)` loop
     // bindings. Each iteration of such a loop gets its OWN binding (ECMA-262
     // 13.7.4 CreatePerIterationEnvironment), so a closure created in one iteration
@@ -160,6 +171,21 @@ public class ClosureAnalyzer : AstVisitorBase
                sources.TryGetValue(name, out var src)
             ? src
             : null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="functionNode"/> — a closure created directly in
+    /// top-level code — captures <paramref name="name"/> from a top-level BLOCK
+    /// scope rather than the module root scope (#1222). The capture then denotes
+    /// the block's binding, which may lexically shadow a same-named module-level
+    /// binding; name-keyed routing to the entry-point display class would read
+    /// the outer binding instead. Callers must still exclude #1201-lifted
+    /// bindings (whose home IS the display-class field) before rerouting.
+    /// </summary>
+    public bool IsDirectTopLevelBlockScopedCapture(object functionNode, string name)
+    {
+        return _directTopLevelBlockCaptures.TryGetValue(functionNode, out var names) &&
+               names.Contains(name);
     }
 
 
@@ -299,7 +325,41 @@ public class ClosureAnalyzer : AstVisitorBase
 
                 PropagateCaptureUpAsyncArrowChain(name, definingFunc);
             }
+            else if (_functionStack.Count == 1 && IsNearestDeclaringScopeNested(name))
+            {
+                // Top-level capture (no enclosing function defines the name) whose
+                // nearest declaring scope is a nested top-level block, referenced by
+                // a closure created directly in top-level code (#1222) — see
+                // _directTopLevelBlockCaptures.
+                if (!_directTopLevelBlockCaptures.TryGetValue(_currentFunction, out var blockCaps))
+                {
+                    blockCaps = [];
+                    _directTopLevelBlockCaptures[_currentFunction] = blockCaps;
+                }
+                blockCaps.Add(name);
+            }
         }
+    }
+
+    /// <summary>
+    /// True when the innermost scope on the stack declaring <paramref name="name"/>
+    /// is NOT the root (module) scope. Only meaningful for names with no defining
+    /// function (see <see cref="FindDefiningFunction"/>): for those, every scope
+    /// declaring the name lies in the top-level region, so a non-root hit means a
+    /// top-level block binding. <c>Stack&lt;T&gt;</c> enumerates LIFO, so the last
+    /// scope enumerated is the root pushed by <see cref="Analyze"/>.
+    /// </summary>
+    private bool IsNearestDeclaringScopeNested(string name)
+    {
+        int index = 0;
+        int count = _scopeStack.Count;
+        foreach (var scope in _scopeStack)
+        {
+            index++;
+            if (scope.Contains(name))
+                return index < count;
+        }
+        return false;
     }
 
     /// <summary>
