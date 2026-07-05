@@ -195,7 +195,7 @@ public partial class TypeChecker
             TypeCategory.Namespace when objType is TypeInfo.Namespace nsType =>
                 CheckGetOnNamespace(nsType, get.Name),
             TypeCategory.Union when objType is TypeInfo.Union union =>
-                CheckGetOnUnion(union, get.Name, get.Optional),
+                CheckGetOnUnion(union, get.Name, get.Optional, get.Object),
             TypeCategory.Intersection when objType is TypeInfo.Intersection intersection =>
                 CheckGetOnIntersection(intersection, get.Name),
             _ => new TypeInfo.Any()
@@ -209,7 +209,7 @@ public partial class TypeChecker
     /// If a property doesn't exist on some non-null/undefined members, the result
     /// includes undefined for those members (mimicking TypeScript's permissive behavior).
     /// </summary>
-    private TypeInfo CheckGetOnUnion(TypeInfo.Union union, Token memberName, bool isOptional = false)
+    private TypeInfo CheckGetOnUnion(TypeInfo.Union union, Token memberName, bool isOptional = false, Expr? receiver = null)
     {
         List<TypeInfo> memberTypes = [];
         bool hasNullOrUndefined = false;
@@ -226,7 +226,7 @@ public partial class TypeChecker
                     hasNullOrUndefined = true;
                     continue;
                 }
-                throw new TypeCheckException($"Property '{memberName.Lexeme}' cannot be accessed on '{member}'. Object is possibly null or undefined.", memberName.Line, tsCode: "TS2533");
+                throw NullableMemberAccessError(union, memberName, receiver);
             }
 
             try
@@ -263,6 +263,39 @@ public partial class TypeChecker
         // Return union of all member types
         var unique = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
         return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+    }
+
+    /// <summary>
+    /// Builds the "possibly null/undefined" error for non-optional member access on
+    /// a nullable union, picking the same diagnostic tsc would. The code depends on
+    /// which of null/undefined the union carries and on whether the receiver is a bare
+    /// identifier: identifiers use TS18047/18048/18049 ("'x' is possibly ..."), other
+    /// expressions use TS2531/2532/2533 ("Object is possibly ..."). Collapsing all six
+    /// into TS2533 (the old behaviour) mismatched most strict-null conformance baselines.
+    /// </summary>
+    private static TypeCheckException NullableMemberAccessError(TypeInfo.Union union, Token memberName, Expr? receiver)
+    {
+        bool hasNull = union.ContainsNull;
+        bool hasUndefined = union.ContainsUndefined;
+        string? ident = receiver is Expr.Variable v ? v.Name.Lexeme : null;
+
+        // The subject clause matches tsc's wording; the code is picked to match too.
+        // (SharpTS keeps the member name in the message — more actionable than tsc's
+        // bare form — since conformance matching is on the code, not the text.)
+        (string code, string subject) = (hasNull, hasUndefined, ident) switch
+        {
+            (true, false, null) => ("TS2531", "Object is possibly 'null'."),
+            (false, true, null) => ("TS2532", "Object is possibly 'undefined'."),
+            (true, true, null)  => ("TS2533", "Object is possibly 'null' or 'undefined'."),
+            (true, false, { } n) => ("TS18047", $"'{n}' is possibly 'null'."),
+            (false, true, { } n) => ("TS18048", $"'{n}' is possibly 'undefined'."),
+            (true, true, { } n)  => ("TS18049", $"'{n}' is possibly 'null' or 'undefined'."),
+            // Reached only if the forcing member was null/undefined but the flags say
+            // otherwise (shouldn't happen); keep the broadest code as a safe default.
+            _ => ("TS2533", "Object is possibly 'null' or 'undefined'."),
+        };
+        return new TypeCheckException(
+            $"Property '{memberName.Lexeme}' cannot be accessed. {subject}", memberName.Line, tsCode: code);
     }
 
     /// <summary>
