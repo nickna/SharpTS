@@ -1359,8 +1359,11 @@ public partial class TypeChecker
 
     private bool TypeMatchesTypeof(TypeInfo type, string typeofResult) => typeofResult switch
     {
-        "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
-        "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
+        // A numeric/string enum's members ARE plain numbers/strings at runtime — matches like any
+        // other number/string-typed union member (a heterogeneous enum can't be split this way, so
+        // it matches neither and stays whichever side the surrounding logic puts it on).
+        "string" => type is TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.Enum { Kind: EnumKind.String },
+        "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric },
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance or TypeInfo.Object,

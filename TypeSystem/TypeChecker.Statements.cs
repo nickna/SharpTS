@@ -141,7 +141,15 @@ public partial class TypeChecker
             ? _environment.Get(stmt.Name.Lexeme) : null;
 
         // Node-first annotation resolution (type-AST migration), string fallback.
-        TypeInfo? declaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode);
+        // Ambient `declare const x: unique symbol;` has no Symbol()-call initializer to validate —
+        // it parses to Stmt.Var (declare const/let/var all do), so VisitConst's Symbol()-initializer
+        // special-case never sees it. Trust the annotation directly rather than resolving through
+        // the generic path, which always rejects a standalone `unique symbol` (TS1331). Gated on
+        // IsDeclare (not just a missing initializer) — a non-ambient `let x: unique symbol;` has no
+        // initializer either and must still be rejected.
+        TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
+            ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
+            : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode);
 
         // TS2304: a bare annotation name that resolves to nothing (e.g. `var a: A;` where the
         // only `A` lives in a nested module, invisible here). See ReportUnknownTypeName.
@@ -663,8 +671,11 @@ public partial class TypeChecker
 
             if (guard.VarName != null)
             {
+                // A guard can legitimately narrow to "nothing matches" (e.g. no union member's
+                // typeof matches the checked string) — that's `never`, not an absent type. Defining
+                // the binding as literal null here would make later lookups see it as undefined.
                 var thenEnv = new TypeEnvironment(_environment);
-                thenEnv.Define(guard.VarName, guard.NarrowedType!);
+                thenEnv.Define(guard.VarName, guard.NarrowedType ?? new TypeInfo.Never());
                 using (new EnvironmentScope(this, thenEnv))
                 {
                     CheckStmt(stmt.ThenBranch);

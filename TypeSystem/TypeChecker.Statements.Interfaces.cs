@@ -330,6 +330,9 @@ public partial class TypeChecker
             {
                 foreach (var (name, type) in members)
                 {
+                    // Computed well-known-symbol members (canonical "@@name") are exempt — a symbol
+                    // key can never collide with a string index signature at runtime.
+                    if (name.StartsWith("@@", StringComparison.Ordinal)) continue;
                     if (!IsCompatible(stringIndexType, type))
                     {
                         memberLines.TryGetValue(name, out var line);
