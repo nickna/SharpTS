@@ -104,6 +104,16 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
             ?? throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: no _onEnqueue field (emitted shape changed?)");
 
+        var markTransferred = type.GetMethod("MarkTransferredAcrossThreads", Type.EmptyTypes)
+            ?? throw new StructuredClone.DataCloneError(
+                "Cannot transfer $MessagePort: no MarkTransferredAcrossThreads method (emitted shape changed?)");
+        // Flags this port AND its (compiled, still parent-side) partner cross-thread, so a
+        // parent-side Start() on the partner Refs the parent loop while it awaits a reply
+        // through this now-bridged port (#406) — a plain, never-transferred in-process port
+        // must NOT Ref (#1254). This bridge manages its own worker-loop keep-alive separately
+        // in Start() below, independent of the compiled port's _refed state.
+        markTransferred.Invoke(compiledPort, null);
+
         return new CompiledMessagePortBridge(compiledPort, postMessage, incoming, onEnqueueField);
     }
 

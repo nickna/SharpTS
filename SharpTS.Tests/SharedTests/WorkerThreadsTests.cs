@@ -338,6 +338,26 @@ public class WorkerThreadsTests
         Assert.Contains("got: first\ngot: second", output);
     }
 
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void MessageChannel_UnclosedPort_DoesNotHangProcess(ExecutionMode mode)
+    {
+        // #1254: a plain in-process MessageChannel (neither port ever transferred to a
+        // worker) must not keep the event loop alive once its queue drains — matching
+        // SharpTSMessagePort, which only Refs a started CROSS-THREAD port (#406). Before
+        // the fix, the compiled $MessagePort.Start() unconditionally Ref'd the loop, so
+        // this program hung forever in compiled mode despite the port never closing.
+        var source = @"
+            let channel: any = new MessageChannel();
+            channel.port2.on('message', (value: any) => {
+                console.log('got: ' + value);
+            });
+            channel.port1.postMessage('hi');
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("got: hi\n", output);
+    }
+
     #endregion
 
     #region StructuredClone Tests
