@@ -92,16 +92,30 @@ public partial class RuntimeEmitter
 
         // Check for $PromiseRejectedException - return the Reason property
         il.MarkLabel(fallbackLabel);
+        var checkDataCloneErrorLabel = il.DefineLabel();
         var checkNodeErrorLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
-        il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
+        il.Emit(OpCodes.Brfalse, checkDataCloneErrorLabel);
 
         // It's a $PromiseRejectedException - return its Reason property
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
         il.Emit(OpCodes.Call, runtime.TSPromiseRejectedExceptionReasonGetter);
+        il.Emit(OpCodes.Ret);
+
+        // Check for $DataCloneError (thrown by StructuredCloneCore, #1255) — return its
+        // Message directly (a raw string, not wrapped in $Error), matching the
+        // interpreter's catch binding for a non-guest-throw exception (Interpreter.
+        // Statements.cs: `ex is ThrowException tex ? tex.Value : ex.Message`).
+        il.MarkLabel(checkDataCloneErrorLabel);
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSDataCloneErrorType);
+        il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
+
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         // Check for __nodeError marker in Data (Node.js-style fs errors)

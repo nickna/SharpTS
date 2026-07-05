@@ -1482,12 +1482,30 @@ public partial class RuntimeEmitter
         var setEnumLocal = coreIl.DeclareLocal(_types.IEnumerator);
         var currentLocal = coreIl.DeclareLocal(_types.Object);
 
+        // $Object (plain object literal, possibly with getters/setters) — clone via its
+        // Fields dictionary (#1255).
+        var objLiteralSourceLocal = coreIl.DeclareLocal(runtime.TSObjectType);
+        var objLiteralClonedFieldsLocal = coreIl.DeclareLocal(_types.DictionaryStringObject);
+
+        // $Error hierarchy — clone via name-based reconstruction + Stack preservation (#1255).
+        var errSourceLocal = coreIl.DeclareLocal(runtime.TSErrorType);
+        var errNameLocal = coreIl.DeclareLocal(_types.String);
+        var errMsgLocal = coreIl.DeclareLocal(_types.String);
+        var clonedErrLocal = coreIl.DeclareLocal(runtime.TSErrorType);
+
         var nextCheckNull = coreIl.DefineLabel();
         var checkSharedArrayBuffer = coreIl.DefineLabel();
+        var checkArrayBuffer = coreIl.DefineLabel();
+        var checkTypedArray = coreIl.DefineLabel();
         var checkList = coreIl.DefineLabel();
         var checkStringDict = coreIl.DefineLabel();
+        var checkObjectLiteral = coreIl.DefineLabel();
         var checkObjectDict = coreIl.DefineLabel();
         var checkSet = coreIl.DefineLabel();
+        var checkDate = coreIl.DefineLabel();
+        var checkRegExp = coreIl.DefineLabel();
+        var checkBuffer = coreIl.DefineLabel();
+        var checkError = coreIl.DefineLabel();
         var fallbackReturn = coreIl.DefineLabel();
         var returnClonedList = coreIl.DefineLabel();
         var returnClonedStringDict = coreIl.DefineLabel();
@@ -1509,6 +1527,50 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ret);
         coreIl.MarkLabel(nextCheckNull);
 
+        // Primitives (number/string/boolean/bigint) and the `undefined` singleton are
+        // immutable/shared — return as-is, no cloning needed. Matches the interpreter's
+        // early `value is double or string or bool or BigInteger` return in CloneInternal
+        // (#1255) — without this, throwing-on-fallback below would wrongly reject every
+        // clone of a container holding a boxed number/string/bool/bigint/undefined value.
+        var checkPrimitiveString = coreIl.DefineLabel();
+        var checkPrimitiveBool = coreIl.DefineLabel();
+        var checkPrimitiveBigInt = coreIl.DefineLabel();
+        var checkPrimitiveUndefined = coreIl.DefineLabel();
+
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, _types.Double);
+        coreIl.Emit(OpCodes.Brfalse, checkPrimitiveString);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Ret);
+
+        coreIl.MarkLabel(checkPrimitiveString);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, _types.String);
+        coreIl.Emit(OpCodes.Brfalse, checkPrimitiveBool);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Ret);
+
+        coreIl.MarkLabel(checkPrimitiveBool);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, _types.Boolean);
+        coreIl.Emit(OpCodes.Brfalse, checkPrimitiveBigInt);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Ret);
+
+        coreIl.MarkLabel(checkPrimitiveBigInt);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, _types.BigInteger);
+        coreIl.Emit(OpCodes.Brfalse, checkPrimitiveUndefined);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Ret);
+
+        coreIl.MarkLabel(checkPrimitiveUndefined);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        coreIl.Emit(OpCodes.Brfalse, checkSharedArrayBuffer);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Ret);
+
         // SharedArrayBuffer is transferred by reference. Skip when typed
         // arrays aren't emitted — no SharedArrayBuffer values can exist.
         coreIl.MarkLabel(checkSharedArrayBuffer);
@@ -1516,13 +1578,71 @@ public partial class RuntimeEmitter
         {
             coreIl.Emit(OpCodes.Ldarg_0);
             coreIl.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
-            coreIl.Emit(OpCodes.Brfalse, checkList);
+            coreIl.Emit(OpCodes.Brfalse, checkArrayBuffer);
             coreIl.Emit(OpCodes.Ldarg_0);
             coreIl.Emit(OpCodes.Ret);
         }
         else
         {
             // Always fall through to the next check.
+            coreIl.Emit(OpCodes.Br, checkArrayBuffer);
+        }
+
+        // $ArrayBuffer / $TypedArray — deep clone (#1255). A non-shared buffer is copied
+        // independently; a TypedArray view backed by a SharedArrayBuffer clones to a NEW
+        // VIEW over the SAME buffer (sharing is the entire point of SharedArrayBuffer,
+        // matching the interpreter's CreateTypedArrayView for the shared case).
+        coreIl.MarkLabel(checkArrayBuffer);
+        if (_features.HasAnyTypedArray)
+        {
+            var abLocal = coreIl.DeclareLocal(runtime.ArrayBufferType);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            coreIl.Emit(OpCodes.Stloc, abLocal);
+            coreIl.Emit(OpCodes.Ldloc, abLocal);
+            coreIl.Emit(OpCodes.Brfalse, checkTypedArray);
+
+            // return source.Slice(0, source.ByteLength)
+            coreIl.Emit(OpCodes.Ldloc, abLocal);
+            coreIl.Emit(OpCodes.Ldc_I4_0);
+            coreIl.Emit(OpCodes.Ldloc, abLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.ArrayBufferByteLengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.ArrayBufferSlice);
+            coreIl.Emit(OpCodes.Ret);
+
+            coreIl.MarkLabel(checkTypedArray);
+            var taLocal = coreIl.DeclareLocal(runtime.TypedArrayBaseType);
+            var taSharedLabel = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, runtime.TypedArrayBaseType);
+            coreIl.Emit(OpCodes.Stloc, taLocal);
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Brfalse, checkList);
+
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayBufferGetter);
+            coreIl.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+            coreIl.Emit(OpCodes.Brtrue, taSharedLabel);
+
+            // return source.Slice(0, source.Length) — independent copy
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Ldc_I4_0);
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArraySlice);
+            coreIl.Emit(OpCodes.Ret);
+
+            // return source.Subarray(0, source.Length) — shares the SharedArrayBuffer
+            coreIl.MarkLabel(taSharedLabel);
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Ldc_I4_0);
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArrayLengthGetter);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TypedArraySubarray);
+            coreIl.Emit(OpCodes.Ret);
+        }
+        else
+        {
             coreIl.Emit(OpCodes.Br, checkList);
         }
 
@@ -1569,7 +1689,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         coreIl.Emit(OpCodes.Stloc, sourceDictStringLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
-        coreIl.Emit(OpCodes.Brfalse, checkObjectDict);
+        coreIl.Emit(OpCodes.Brfalse, checkObjectLiteral);
 
         coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
@@ -1599,6 +1719,27 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
         coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
         coreIl.Emit(OpCodes.Br, returnClonedStringDict);
+
+        // $Object (object literal, possibly with getters/setters not present on a plain
+        // Dictionary<string,object?>) — clone its Fields dict via a recursive cloneCore
+        // call (reuses the Dictionary<string,object?> branch above), then rebuild (#1255).
+        // Getters/setters are not preserved — matches the interpreter's CloneObject, which
+        // only copies data fields.
+        coreIl.MarkLabel(checkObjectLiteral);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        coreIl.Emit(OpCodes.Stloc, objLiteralSourceLocal);
+        coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
+        coreIl.Emit(OpCodes.Brfalse, checkObjectDict);
+
+        coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
+        coreIl.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        coreIl.Emit(OpCodes.Call, cloneCore);
+        coreIl.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        coreIl.Emit(OpCodes.Stloc, objLiteralClonedFieldsLocal);
+        coreIl.Emit(OpCodes.Ldloc, objLiteralClonedFieldsLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        coreIl.Emit(OpCodes.Ret);
 
         // Dictionary<object, object> deep clone (Map backing store).
         coreIl.MarkLabel(checkObjectDict);
@@ -1643,7 +1784,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Isinst, _types.HashSetOfObject);
         coreIl.Emit(OpCodes.Stloc, sourceSetLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceSetLocal);
-        coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+        coreIl.Emit(OpCodes.Brfalse, checkDate);
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.HashSetOfObject));
         coreIl.Emit(OpCodes.Stloc, clonedSetLocal);
@@ -1669,9 +1810,217 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Brtrue, setLoopBody);
         coreIl.Emit(OpCodes.Br, returnClonedSet);
 
+        // $TSDate — deep clone via epoch milliseconds (#1255).
+        coreIl.MarkLabel(checkDate);
+        if (_features.UsesDate)
+        {
+            var dateLocal = coreIl.DeclareLocal(runtime.TSDateType);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, runtime.TSDateType);
+            coreIl.Emit(OpCodes.Stloc, dateLocal);
+            coreIl.Emit(OpCodes.Ldloc, dateLocal);
+            coreIl.Emit(OpCodes.Brfalse, checkRegExp);
+
+            coreIl.Emit(OpCodes.Ldloc, dateLocal);
+            coreIl.Emit(OpCodes.Call, _tsDateGetTimeMethod);
+            coreIl.Emit(OpCodes.Newobj, runtime.TSDateCtorMilliseconds);
+            coreIl.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            coreIl.Emit(OpCodes.Br, checkRegExp);
+        }
+
+        // $RegExp — clone pattern + flags (#1255). Matches the interpreter's CloneInternal,
+        // which likewise rebuilds from Source/Flags only (lastIndex is not preserved).
+        coreIl.MarkLabel(checkRegExp);
+        if (_features.UsesRegExp)
+        {
+            var regexpLocal = coreIl.DeclareLocal(runtime.TSRegExpType);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            coreIl.Emit(OpCodes.Stloc, regexpLocal);
+            coreIl.Emit(OpCodes.Ldloc, regexpLocal);
+            coreIl.Emit(OpCodes.Brfalse, checkBuffer);
+
+            coreIl.Emit(OpCodes.Ldloc, regexpLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+            coreIl.Emit(OpCodes.Ldloc, regexpLocal);
+            coreIl.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+            coreIl.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPatternFlags);
+            coreIl.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            coreIl.Emit(OpCodes.Br, checkBuffer);
+        }
+
+        // $Buffer — deep-copy bytes via the existing Buffer.from(buffer) factory (#1255).
+        coreIl.MarkLabel(checkBuffer);
+        if (_features.UsesBuffer)
+        {
+            var bufferLocal = coreIl.DeclareLocal(runtime.TSBufferType);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            coreIl.Emit(OpCodes.Stloc, bufferLocal);
+            coreIl.Emit(OpCodes.Ldloc, bufferLocal);
+            coreIl.Emit(OpCodes.Brfalse, checkError);
+
+            coreIl.Emit(OpCodes.Ldloc, bufferLocal);
+            coreIl.Emit(OpCodes.Call, runtime.TSBufferFromBuffer);
+            coreIl.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            coreIl.Emit(OpCodes.Br, checkError);
+        }
+
+        // $Error hierarchy — clone via name-based reconstruction + Stack preservation
+        // (#1255), mirroring the interpreter's CloneError. A user-defined class extending
+        // Error (`class Foo extends Error`) compiles with $Error as its real CLR base
+        // (ILCompiler.Classes.cs) but — like every user class — ALSO implements
+        // $IHasFields, which built-in $Error/$TypeError/etc. instances never do. Excluding
+        // that case here routes it to the generic uncloneable fallback below, matching the
+        // interpreter's narrower CloneError (only the fixed Error/TypeError/RangeError/...
+        // hierarchy — a SharpTSInstance user subclass takes a different, field-copying path
+        // the compiled side does not replicate).
+        coreIl.MarkLabel(checkError);
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        coreIl.Emit(OpCodes.Stloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+
+        coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        coreIl.Emit(OpCodes.Brtrue, fallbackReturn);
+
+        coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Callvirt, runtime.TSErrorNameGetter);
+        coreIl.Emit(OpCodes.Stloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Callvirt, runtime.TSErrorMessageGetter);
+        coreIl.Emit(OpCodes.Stloc, errMsgLocal);
+
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
+        var isTypeErrorLabel = coreIl.DefineLabel();
+        var isRangeErrorLabel = coreIl.DefineLabel();
+        var isReferenceErrorLabel = coreIl.DefineLabel();
+        var isSyntaxErrorLabel = coreIl.DefineLabel();
+        var isURIErrorLabel = coreIl.DefineLabel();
+        var isEvalErrorLabel = coreIl.DefineLabel();
+        var defaultErrorLabel = coreIl.DefineLabel();
+        var haveClonedErrLabel = coreIl.DefineLabel();
+
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "TypeError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isTypeErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "RangeError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isRangeErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "ReferenceError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isReferenceErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "SyntaxError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isSyntaxErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "URIError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isURIErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errNameLocal);
+        coreIl.Emit(OpCodes.Ldstr, "EvalError");
+        coreIl.Emit(OpCodes.Call, strEquals);
+        coreIl.Emit(OpCodes.Brtrue, isEvalErrorLabel);
+        coreIl.Emit(OpCodes.Br, defaultErrorLabel);
+
+        coreIl.MarkLabel(isTypeErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(isRangeErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(isReferenceErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSReferenceErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(isSyntaxErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(isURIErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSURIErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(isEvalErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSEvalErrorCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Br, haveClonedErrLabel);
+
+        coreIl.MarkLabel(defaultErrorLabel);
+        coreIl.Emit(OpCodes.Ldloc, errMsgLocal);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        coreIl.Emit(OpCodes.Stloc, clonedErrLocal);
+
+        coreIl.MarkLabel(haveClonedErrLabel);
+        coreIl.Emit(OpCodes.Ldloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
+        coreIl.Emit(OpCodes.Callvirt, runtime.TSErrorStackGetter);
+        coreIl.Emit(OpCodes.Callvirt, runtime.TSErrorStackSetter);
+        coreIl.Emit(OpCodes.Ldloc, clonedErrLocal);
+        coreIl.Emit(OpCodes.Ret);
+
+        // Everything else — functions/closures, Symbols, class instances, Promises,
+        // WeakMap/WeakSet, iterators/generators, EventEmitters, etc. — cannot be
+        // structured-cloned (#1255). Throw rather than alias by reference, matching the
+        // interpreter's exhaustive switch (default arm: "Cannot clone value of type X").
         coreIl.MarkLabel(fallbackReturn);
+
+        // A value whose CLR type is NOT defined in this dynamically-emitted assembly is
+        // foreign — most commonly a SharpTS.dll interpreter runtime value (SharpTSObject/
+        // SharpTSArray/etc.) crossing in via CompiledMessagePortBridge, which already
+        // structured-clones on the interpreter side before handing off to this (compiled)
+        // port's PostMessage (see CompiledMessagePortBridge.PostMessage's "pass-through
+        // no-op for interpreter-shaped values" comment). Pass it through unchanged rather
+        // than throwing — only OUR OWN uncloneable constructs ($TSFunction, $TSSymbol,
+        // class instances, $Promise, etc., all defined in this assembly) should throw.
+        var sameAssemblyLabel = coreIl.DefineLabel();
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        coreIl.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Assembly").GetGetMethod()!);
+        coreIl.Emit(OpCodes.Ldtoken, runtimeType);
+        coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        coreIl.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Assembly").GetGetMethod()!);
+        coreIl.Emit(OpCodes.Ceq);
+        coreIl.Emit(OpCodes.Brtrue, sameAssemblyLabel);
         coreIl.Emit(OpCodes.Ldarg_0);
         coreIl.Emit(OpCodes.Ret);
+
+        coreIl.MarkLabel(sameAssemblyLabel);
+        coreIl.Emit(OpCodes.Ldstr, "Cannot clone value of type ");
+        coreIl.Emit(OpCodes.Ldarg_0);
+        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        coreIl.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        coreIl.Emit(OpCodes.Call, _types.StringConcat2);
+        coreIl.Emit(OpCodes.Newobj, runtime.TSDataCloneErrorCtor);
+        coreIl.Emit(OpCodes.Throw);
 
         coreIl.MarkLabel(returnClonedList);
         coreIl.Emit(OpCodes.Ldloc, clonedListLocal);

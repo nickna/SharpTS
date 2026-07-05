@@ -369,7 +369,6 @@ public partial class RuntimeEmitter
         var exitLabel = il.DefineLabel();
         var partnerLocal = il.DeclareLocal(typeBuilder);
         var clonedLocal = il.DeclareLocal(_types.Object);
-        var typeofLocal = il.DeclareLocal(_types.String);
 
         // if (_closed) return
         il.Emit(OpCodes.Ldarg_0);
@@ -388,45 +387,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, exitLabel);
 
         // Node model: an uncloneable value is NOT thrown back on the sender — the receiver
-        // fires 'messageerror' (#1077). The emitted $Runtime.StructuredClone returns
-        // uncloneable values by reference (it has no throw path), so detect the uncloneable
-        // categories up front — functions/classes/callable wrappers (typeof "function") and
-        // symbols (typeof "symbol") — and enqueue the shared _cloneError sentinel instead of
-        // a clone. Drain converts it to 'messageerror'. This mirrors the try/catch around
-        // StructuredClone.Clone in SharpTSMessagePort.PostMessage. (Deeply nested uncloneables
-        // remain aliased, matching the emitted clone's existing shallow fallback.)
-        var markerLabel = il.DefineLabel();
+        // fires 'messageerror' instead (#1077). $Runtime.StructuredClone throws
+        // $DataCloneError for any uncloneable value at ANY nesting depth (#1255); catch it
+        // here and enqueue the shared _cloneError sentinel instead of a clone. Drain
+        // converts it to 'messageerror'. Mirrors the try/catch around StructuredClone.Clone
+        // in SharpTSMessagePort.PostMessage.
         var haveValueLabel = il.DefineLabel();
-        var strEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        // t = TypeOf(msg)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.TypeOf);
-        il.Emit(OpCodes.Stloc, typeofLocal);
-
-        // if (t == "function") goto markerLabel
-        il.Emit(OpCodes.Ldloc, typeofLocal);
-        il.Emit(OpCodes.Ldstr, "function");
-        il.Emit(OpCodes.Call, strEquals);
-        il.Emit(OpCodes.Brtrue, markerLabel);
-
-        // if (t == "symbol") goto markerLabel
-        il.Emit(OpCodes.Ldloc, typeofLocal);
-        il.Emit(OpCodes.Ldstr, "symbol");
-        il.Emit(OpCodes.Call, strEquals);
-        il.Emit(OpCodes.Brtrue, markerLabel);
-
-        // cloned = $Runtime.StructuredClone(msg, null); goto haveValue
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.StructuredCloneClone);
         il.Emit(OpCodes.Stloc, clonedLocal);
-        il.Emit(OpCodes.Br, haveValueLabel);
+        il.Emit(OpCodes.Leave, haveValueLabel);
 
-        // cloned = _cloneError sentinel
-        il.MarkLabel(markerLabel);
+        il.BeginCatchBlock(runtime.TSDataCloneErrorType);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
         il.Emit(OpCodes.Stloc, clonedLocal);
+        il.EndExceptionBlock();
 
         il.MarkLabel(haveValueLabel);
 
