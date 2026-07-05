@@ -365,6 +365,34 @@ public partial class TypeChecker
             { result = new TypeInfo.Symbol(); return true; }
         }
 
+        // Handle Symbol.for(key) - returns a shared symbol from the global registry. `Symbol` bare
+        // resolves to Any (LookupVariable), so without this the call fell through and stayed Any too
+        // — silently bypassing every arithmetic/comparison operand check a real `symbol` would trip.
+        if (call.Callee is Expr.Get { Object: Expr.Variable { Name.Lexeme: "Symbol" }, Name.Lexeme: "for" })
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("Symbol.for() requires exactly one argument.", tsCode: "TS2554");
+            }
+            var argType = CheckExpr(call.Arguments[0]);
+            if (!IsString(argType) && argType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($"Symbol.for() argument must be a string, got '{argType}'.", tsCode: "TS2345");
+            }
+            { result = new TypeInfo.Symbol(); return true; }
+        }
+
+        // Handle Symbol.keyFor(sym) - returns the key registered for a symbol, or undefined if none.
+        if (call.Callee is Expr.Get { Object: Expr.Variable { Name.Lexeme: "Symbol" }, Name.Lexeme: "keyFor" })
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("Symbol.keyFor() requires exactly one argument.", tsCode: "TS2554");
+            }
+            CheckExpr(call.Arguments[0]);
+            { result = new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]); return true; }
+        }
+
         // Handle BigInt() constructor - converts number or string to bigint
         if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
         {

@@ -36,6 +36,21 @@ public partial class TypeChecker
         IsTypeOfKind(t, type => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral);
 
     /// <summary>
+    /// True if <paramref name="t"/> is symbol, or a union with AT LEAST ONE symbol constituent.
+    /// Deliberately NOT built on the Any-permissive <see cref="IsTypeOfKind"/> (which would make
+    /// `any` satisfy this too) — operator operand checks use this to decide whether tsc's
+    /// symbol-specific rejection applies, e.g. `(sym || "") + ""` still gets "The '+' operator
+    /// cannot be applied to type 'symbol'" even though the left side isn't purely symbol, while
+    /// `sym + any` must NOT be treated as "both sides are symbol".
+    /// </summary>
+    private static bool ContainsSymbolType(TypeInfo t) => t switch
+    {
+        TypeInfo.Symbol or TypeInfo.UniqueSymbol => true,
+        TypeInfo.Union u => u.FlattenedTypes.Any(ContainsSymbolType),
+        _ => false,
+    };
+
+    /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
     /// </summary>
     private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral or TypeInfo.Symbol or TypeInfo.UniqueSymbol;
