@@ -107,8 +107,10 @@ public static partial class ProcessBuiltIns
             "argv" => GetArgv(),
             "exitCode" => (double)Environment.ExitCode,
 
-            // Stream objects
-            "stdin" => SharpTSStdin.Instance,
+            // Stream objects. Inside a worker thread, process.stdin resolves to that worker's
+            // isolated per-worker Readable (#1076) rather than the Console-reading singleton, so a
+            // worker never consumes the host terminal; the override is null on the main thread.
+            "stdin" => (object?)WorkerThreads.WorkerStdin ?? SharpTSStdin.Instance,
             "stdout" => SharpTSStdout.Instance,
             "stderr" => SharpTSStderr.Instance,
 
