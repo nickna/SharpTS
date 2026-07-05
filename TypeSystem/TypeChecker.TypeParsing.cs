@@ -522,6 +522,13 @@ public partial class TypeChecker
             return new TypeInfo.Undefined();
         TypeInfo? currentType = _environment.Get(firstName);
 
+        // `typeof globalThis` — the global object has no environment binding.
+        // SharpTS models globals as `any`, so it (and any member access off it)
+        // resolves to `any`. Other bare globals in typeof-type position remain a
+        // gap until lib.d.ts globals are loaded (#99).
+        if (currentType == null && firstName == "globalThis")
+            currentType = new TypeInfo.Any();
+
         if (currentType == null)
             throw new TypeCheckException($"Cannot find name '{firstName}' for typeof.", tsCode: "TS2304");
 
@@ -669,6 +676,8 @@ public partial class TypeChecker
         TypeInfo.GenericClass gc => gc.StaticMethods.GetValueOrDefault(propName)
                                  ?? gc.StaticProperties.GetValueOrDefault(propName),
         TypeInfo.Namespace ns => ns.GetMember(propName),
+        // Property access on `any` stays `any` (e.g. `(typeof globalThis)["x"]`).
+        TypeInfo.Any => new TypeInfo.Any(),
         _ => null
     };
 

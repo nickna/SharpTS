@@ -2,7 +2,18 @@
   "folders": [
     "tests/cases/conformance/types/typeRelationships/assignmentCompatibility",
     "tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes",
-    "tests/cases/conformance/types/conditional"
+    "tests/cases/conformance/types/conditional",
+    "tests/cases/conformance/Symbols",
+    "tests/cases/conformance/es6/Symbols",
+    "tests/cases/conformance/es2016",
+    "tests/cases/conformance/es2017",
+    "tests/cases/conformance/es2018",
+    "tests/cases/conformance/es2019",
+    "tests/cases/conformance/es2020",
+    "tests/cases/conformance/es2021",
+    "tests/cases/conformance/es2022",
+    "tests/cases/conformance/es2023",
+    "tests/cases/conformance/esnext"
   ],
   "timeoutSeconds": 5,
   "skipDirectivesFile": "skip-directives.txt",

@@ -503,15 +503,20 @@ Two external corpora pin SharpTS against canonical references. Both run as stand
 
 `SharpTS.TypeScriptConformance/` runs a subset of [microsoft/TypeScript's conformance corpus](https://github.com/microsoft/TypeScript/tree/main/tests/cases/conformance) and diffs our type-checker diagnostics against `tsc`'s `*.errors.txt` baselines. Pinned to TS v5.5.4. Pass classification is on `(line, tsCode)` tuples — see [#80](https://github.com/nickna/SharpTS/issues/80) for the tracking epic.
 
-| Subset | Tests | Pass | Fail | ParseError | Skipped |
-|---|---:|---:|---:|---:|---:|
-| `types/typeRelationships/assignmentCompatibility/` | 70 | 16 (22.9%) | 50 | 4 | 0 |
-| `types/conditional/` | 9 | 0 | 5 | 3 | 1 |
-| **Total** | **79** | **16 (20.3%)** | **55** | **7** | **1** |
+The committed subset spans `types/typeRelationships/{assignmentCompatibility,subtypesAndSuperTypes}`, `types/conditional`, and the ES-version library folders (`Symbols`, `es6/Symbols`, `es2016`–`es2023`, `esnext`):
 
-The parser is no longer the bottleneck. An extended parser sweep took the subset's `ParseError` count from 57 → 7 (≈86%): ambient `declare` of non-class declarations, `declare function`, generic/this/conditional/mapped/indexed-access/constructor/leading-operator types, `module Foo {}` namespaces, call/construct/index signatures, keyword & string/numeric property names, function-type and arrow optional/rest parameters, and more. Negative-test matching itself was unlocked by propagating canonical `TSnnnn` codes through the type-checker's error-recovery path ([#125](https://github.com/nickna/SharpTS/issues/125)), which also added a `strictNullChecks` option (default on; the runner follows each test's `@strict`/`@strictNullChecks` directive).
+| Bucket | Count | Share |
+|---|---:|---:|
+| `Pass` | 182 | 61.5% |
+| `Fail` | 75 | 25.3% |
+| `ParseError` | 24 | 8.1% |
+| `Skipped` (multi-file 8 / lib-drift 3 / directive 3) | 14 | 4.7% |
+| `TypeCheckError` | 1 | 0.3% |
+| **Total** | **296** | |
 
-The dominant bucket is now `Fail` — tests that parse and reach the type checker but whose diagnostic set doesn't yet match `tsc`'s. These are mostly the `assignmentCompatibility` cases, which require deeper callable / constructable / structural assignability. The largest remaining levers are structural class-to-class assignability ([#129](https://github.com/nickna/SharpTS/issues/129) — SharpTS is nominal by design) and loading `tsc`'s `lib.*.d.ts` ([#99](https://github.com/nickna/SharpTS/issues/99)).
+The parser is no longer the dominant bottleneck (an earlier sweep took the original subset's `ParseError` count from 57 → 7): ambient `declare` of non-class declarations, `declare function`, generic/this/conditional/mapped/indexed-access/constructor/leading-operator types, `module Foo {}` namespaces, call/construct/index signatures, keyword & string/numeric property names, function-type and arrow optional/rest parameters, and more. Negative-test matching itself was unlocked by propagating canonical `TSnnnn` codes through the type-checker's error-recovery path ([#125](https://github.com/nickna/SharpTS/issues/125)), which also added a `strictNullChecks` option (default on; the runner follows each test's `@strict`/`@strictNullChecks` directive). The residual `ParseError` bucket is now concentrated in the `symbolProperty*`/`symbolType*` tests — computed well-known-symbol names in *value/class* position (the [#99](https://github.com/nickna/SharpTS/issues/99) Phase-A parser work only hardened *type* position).
+
+The dominant bucket is `Fail` — tests that parse and reach the type checker but whose diagnostic set doesn't yet match `tsc`'s. A [#99](https://github.com/nickna/SharpTS/issues/99) measurement spike over the lib-sensitive folders decomposed these: of 66 lib-folder Fails, ~17 are **spurious** (SharpTS emits an error `tsc` doesn't), a long tail are individual checker gaps (assignability, symbol arithmetic, computed-name constraints), and only ~6 are explicit lib-version drift (`TS2550`/`TS2583`/`TS2585`). **The finding: loading `tsc`'s `lib.*.d.ts` is _not_ the current pass-rate lever — checker breadth and parser gaps dominate the divergence.** Loading `lib.*.d.ts` ([#99](https://github.com/nickna/SharpTS/issues/99)) remains valuable as an *enabler* (it removes the "`Pass` = coincidence" asterisk since globals resolve to `any` today, unblocks DOM/JSX wholesale, and is a prerequisite for per-node types/symbols in [#88](https://github.com/nickna/SharpTS/issues/88)), but the near-term levers are checker correctness (kill the spurious-error cases; structural class-to-class assignability [#129](https://github.com/nickna/SharpTS/issues/129)) and finishing symbol-name parsing.
 
 `Skipped` includes:
 - **Multi-file tests** (`Skipped:multi-file-deferred`) — cross-file resolution into the runner is follow-up work.

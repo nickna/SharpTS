@@ -203,14 +203,63 @@ public sealed class TypeScriptConformanceRunner
     /// <c>tests/baselines/reference/&lt;testname&gt;.errors.txt</c> (flat directory,
     /// no folder mirroring). Returns the expected path even if the file
     /// doesn't exist — caller treats absence as "no expected diagnostics."
+    ///
+    /// Multi-target tests (<c>// @target: es2015, es2020, ...</c>) emit one
+    /// baseline per target — <c>name(target=X).errors.txt</c> — and no plain
+    /// file. SharpTS has a single always-latest world model (globals are always
+    /// available, no per-target lib), so we compare against the newest available
+    /// target variant. Without this, those tests are scored against an empty
+    /// baseline and every real diagnostic is mis-counted as spurious.
     /// </summary>
     private string ResolveBaselinePath(string testFilePath)
     {
         var basename = Path.GetFileNameWithoutExtension(testFilePath);
-        return Path.Combine(
-            TypeScriptConformancePaths.BaselinesDir(_typescriptRoot),
-            $"{basename}.errors.txt");
+        var dir = TypeScriptConformancePaths.BaselinesDir(_typescriptRoot);
+        var plain = Path.Combine(dir, $"{basename}.errors.txt");
+        if (File.Exists(plain)) return plain;
+        return ResolveNewestTargetBaseline(dir, basename) ?? plain;
     }
+
+    /// <summary>
+    /// Newest-target <c>name(target=X).errors.txt</c> baseline for a multi-target
+    /// test, or null if none exist. "Newest" follows ES ordering
+    /// (<c>es3 &lt; es5 &lt; es2015 &lt; ... &lt; esnext</c>) so the chosen baseline
+    /// matches SharpTS's always-latest lib surface.
+    /// </summary>
+    private static string? ResolveNewestTargetBaseline(string baselinesDir, string basename)
+    {
+        string? best = null;
+        var bestRank = int.MinValue;
+        foreach (var path in Directory.EnumerateFiles(baselinesDir, $"{basename}(target=*).errors.txt"))
+        {
+            var file = Path.GetFileName(path);
+            const string marker = "(target=";
+            var open = file.IndexOf(marker, StringComparison.Ordinal);
+            var close = file.IndexOf(").errors.txt", StringComparison.Ordinal);
+            if (open < 0 || close <= open + marker.Length) continue;
+            var target = file.Substring(open + marker.Length, close - (open + marker.Length));
+            var rank = TargetRank(target);
+            if (rank > bestRank) { bestRank = rank; best = path; }
+        }
+        return best;
+    }
+
+    private static int TargetRank(string target) => target.Trim().ToLowerInvariant() switch
+    {
+        "es3" => 3,
+        "es5" => 5,
+        "es6" or "es2015" => 2015,
+        "es2016" => 2016,
+        "es2017" => 2017,
+        "es2018" => 2018,
+        "es2019" => 2019,
+        "es2020" => 2020,
+        "es2021" => 2021,
+        "es2022" => 2022,
+        "es2023" => 2023,
+        "esnext" => int.MaxValue,
+        _ => 0,
+    };
 
     /// <summary>
     /// Converts SharpTS diagnostics into the (line, tsCode) match-key form.
