@@ -431,10 +431,72 @@ public partial class TypeChecker
         var assignedPath = new Narrowing.NarrowingPath.Variable(logical.Name.Lexeme);
         InvalidateNarrowingsFor(assignedPath);
 
-        // Logical assignment can return either the current value or the new value
-        // For simplicity, return union of both types or the variable type
-        return varType;
+        // The value of `a OP= b` is the value of the binary `a OP b`:
+        //   a ||= b  ->  Truthy(a) | b       (a used when falsy -> replaced by b)
+        //   a ??= b  ->  NonNullish(a) | b    (a used when null/undefined -> b)
+        //   a &&= b  ->  Falsy(a) | b         (a kept when falsy, else b)
+        // Narrowing the left operand here is what makes `(results ||= []).push()`
+        // type-check (undefined dropped) while keeping `(results &&= []).push()`
+        // flagged (undefined kept). Without it every form kept the full declared
+        // type and `||=`/`??=` produced spurious possibly-undefined errors.
+        TypeInfo narrowedVar = logical.Operator.Type switch
+        {
+            TokenType.OR_OR_EQUAL => NarrowLogicalTruthy(varType),
+            TokenType.QUESTION_QUESTION_EQUAL => ExpandNonNullable(varType),
+            TokenType.AND_AND_EQUAL => NarrowLogicalFalsy(varType),
+            _ => varType,
+        };
+
+        if (narrowedVar is TypeInfo.Never) return valueType;
+        if (narrowedVar is TypeInfo.Any || valueType is TypeInfo.Any) return new TypeInfo.Any();
+        if (IsCompatible(narrowedVar, valueType)) return valueType;
+        if (IsCompatible(valueType, narrowedVar)) return narrowedVar;
+        return new TypeInfo.Union([narrowedVar, valueType]);
     }
+
+    /// <summary>Truthy narrowing of a type: drops the definitely-falsy constituents
+    /// (null, undefined, and the literals <c>false</c>/<c>0</c>/<c>""</c>). Applied to
+    /// the left operand of <c>||</c> / <c>||=</c>.</summary>
+    private static TypeInfo NarrowLogicalTruthy(TypeInfo type)
+        => FilterUnionConstituents(type, t => !IsDefinitelyFalsy(t));
+
+    /// <summary>Falsy narrowing of a type: keeps only the possibly-falsy constituents.
+    /// A type with none (e.g. a bare array or function) narrows to <c>never</c>.
+    /// Applied to the left operand of <c>&amp;&amp;</c> / <c>&amp;&amp;=</c>.</summary>
+    private static TypeInfo NarrowLogicalFalsy(TypeInfo type)
+        => FilterUnionConstituents(type, t => !IsDefinitelyTruthy(t));
+
+    private static TypeInfo FilterUnionConstituents(TypeInfo type, Func<TypeInfo, bool> keep)
+    {
+        if (type is TypeInfo.Union u)
+        {
+            var kept = u.FlattenedTypes.Where(keep).ToList();
+            return kept.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => kept[0],
+                _ => new TypeInfo.Union(kept),
+            };
+        }
+        return keep(type) ? type : new TypeInfo.Never();
+    }
+
+    /// <summary>A constituent that is always falsy: null, undefined, or a falsy literal.</summary>
+    private static bool IsDefinitelyFalsy(TypeInfo t) => t switch
+    {
+        TypeInfo.Null or TypeInfo.Undefined => true,
+        TypeInfo.BooleanLiteral bl => !bl.Value,
+        TypeInfo.NumberLiteral nl => nl.Value == 0,
+        TypeInfo.StringLiteral sl => sl.Value.Length == 0,
+        _ => false,
+    };
+
+    /// <summary>A constituent that is always truthy: object-like types (array, tuple,
+    /// class instance, record, interface, function, class, the non-primitive
+    /// <c>object</c>). Primitives and literals may be falsy and so are excluded.</summary>
+    private static bool IsDefinitelyTruthy(TypeInfo t) => t is
+        TypeInfo.Array or TypeInfo.Tuple or TypeInfo.Instance or TypeInfo.Record
+        or TypeInfo.Interface or TypeInfo.Function or TypeInfo.Class or TypeInfo.Object;
 
     private TypeInfo CheckLogicalSet(Expr.LogicalSet logical)
     {
