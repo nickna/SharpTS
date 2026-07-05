@@ -438,6 +438,11 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
         EmitMessageChannelTypes(moduleBuilder, runtime);
 
+        // receiveMessageOnPort's body reads $MessagePort's _pending/_closed/_cloneError, so it
+        // must be filled now that EmitMessageChannelTypes has created the type (#1077). Still
+        // before EmitRuntimeClassFinalize, which closes the $Runtime type this method lives on.
+        EmitWorkerThreadsReceiveMessageOnPortBody(runtime);
+
         // Web Streams — gated on UsesWebStreams. The only external references are
         // user-code `new ReadableStream(...)`/`new WritableStream(...)`/`new TransformStream(...)`
         // in ExpressionEmitterBase.Constructors.cs, which only fire when the

@@ -1704,6 +1704,10 @@ public partial class RuntimeEmitter
         runtime.StructuredCloneClone = method;
     }
 
+    // WorkerThreadsReceiveMessageOnPort: defined during EmitWorkerThreadsModuleHelpers, body
+    // emitted later by EmitWorkerThreadsReceiveMessageOnPortBody once $MessagePort exists (#1077).
+    private MethodBuilder _receiveMessageOnPortMethod = null!;
+
     /// <summary>
     /// Emits worker_threads module helper methods.
     /// Uses direct calls.
@@ -1736,29 +1740,91 @@ public partial class RuntimeEmitter
         il2.Emit(OpCodes.Ret);
         runtime.WorkerThreadsThreadId = threadIdMethod;
 
-        // receiveMessageOnPort — main-thread compiled stub. The $MessagePort type is emitted
-        // AFTER this method (EmitMessageChannelTypes runs after EmitRuntimeClass), so this
-        // helper cannot read the port's queue. It returns `undefined` (Node's empty-port
-        // result) rather than null (#1000). Synchronously draining a $MessagePort on the main
-        // thread in compiled mode remains unimplemented (a worker drives receiveMessageOnPort
-        // through the interpreter, which is fully functional).
-        var receiveMethod = runtimeType.DefineMethod(
+        // receiveMessageOnPort — synchronous main-thread drain (#1077). The method is DEFINED
+        // here (so callers can bind runtime.WorkerThreadsReceiveMessageOnPort) but its body is
+        // emitted later by EmitWorkerThreadsReceiveMessageOnPortBody, after EmitMessageChannelTypes
+        // has created the $MessagePort type — this helper reads that type's _pending queue and
+        // _closed/_cloneError fields, which don't exist at this point in emission. The $Runtime
+        // type isn't finalized until EmitRuntimeClassFinalize, so filling the body afterward is safe.
+        _receiveMessageOnPortMethod = runtimeType.DefineMethod(
             "WorkerThreadsReceiveMessageOnPort",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]
         );
-
-        var il3 = receiveMethod.GetILGenerator();
-        il3.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il3.Emit(OpCodes.Ret);
-        runtime.WorkerThreadsReceiveMessageOnPort = receiveMethod;
+        runtime.WorkerThreadsReceiveMessageOnPort = _receiveMessageOnPortMethod;
 
         // getEnvironmentData / setEnvironmentData — route to the C# per-process
         // WorkerEnvironmentData store via reflection (worker programs co-locate SharpTS.dll;
         // RequireSharpTSRuntime is recorded at the call sites in WorkerThreadsModuleEmitter so
         // a program that never calls these stays standalone). #1000.
         EmitWorkerThreadsEnvironmentData(runtimeType, runtime);
+    }
+
+    /// <summary>
+    /// Emits the body of <c>WorkerThreadsReceiveMessageOnPort</c> (#1077). Must be called AFTER
+    /// <see cref="EmitMessageChannelTypes"/> (so the <c>$MessagePort</c> type and its
+    /// <c>_pending</c>/<c>_closed</c>/<c>_cloneError</c> fields exist) and BEFORE
+    /// <see cref="EmitRuntimeClassFinalize"/> (which creates the <c>$Runtime</c> type).
+    ///
+    /// Synchronously drains one message from the port's own queue, matching
+    /// <c>SharpTSMessagePort.ReceiveMessageSync</c>: returns <c>{ message }</c> when a value is
+    /// queued, or <c>undefined</c> when the argument is not a port, the port is closed, or the
+    /// queue is empty. A clone-failure sentinel dequeues as <c>{ message: undefined }</c>.
+    /// </summary>
+    private void EmitWorkerThreadsReceiveMessageOnPortBody(EmittedRuntime runtime)
+    {
+        var il = _receiveMessageOnPortMethod.GetILGenerator();
+        var portLocal = il.DeclareLocal(_messagePortType);
+        var msgLocal = il.DeclareLocal(_types.Object);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var undefinedLabel = il.DefineLabel();
+        var afterMarkerLabel = il.DefineLabel();
+
+        // port = arg0 as $MessagePort; if (port == null) return undefined
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _messagePortType);
+        il.Emit(OpCodes.Stloc, portLocal);
+        il.Emit(OpCodes.Ldloc, portLocal);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+
+        // if (port._closed) return undefined
+        il.Emit(OpCodes.Ldloc, portLocal);
+        il.Emit(OpCodes.Ldfld, _messagePortClosedField);
+        il.Emit(OpCodes.Brtrue, undefinedLabel);
+
+        // if (!port._pending.TryDequeue(out msg)) return undefined
+        il.Emit(OpCodes.Ldloc, portLocal);
+        il.Emit(OpCodes.Ldfld, _messagePortPendingField);
+        il.Emit(OpCodes.Ldloca, msgLocal);
+        il.Emit(OpCodes.Callvirt, _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, undefinedLabel);
+
+        // value = msg; if (msg == _cloneError) value = undefined  (a queued clone-failure
+        // sentinel has no cloneable payload — surface it as { message: undefined }).
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Bne_Un, afterMarkerLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.MarkLabel(afterMarkerLabel);
+
+        // return new Dictionary<string, object>() { ["message"] = value }
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "message");
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(undefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
