@@ -116,6 +116,10 @@ public partial class Parser
     {
         switch (target)
         {
+            // Parens don't change whether an expression is a valid reference — `(a.b) = v`,
+            // `(a.b) &&= v`, etc. are all valid; unwrap (recursively, for `((a.b))`) before dispatch.
+            case Expr.Grouping grouping:
+                return DispatchAssignmentTarget(grouping.Expression, value, errorMessage, onVariable, onGet, onGetIndex, onGetPrivate);
             case Expr.Variable variable:
                 if (_isStrictMode && (variable.Name.Lexeme == "eval" || variable.Name.Lexeme == "arguments"))
                     throw new Exception("SyntaxError: Unexpected eval or arguments in strict mode");
@@ -1015,8 +1019,14 @@ public partial class Parser
 
         // async function expression: async function [name]() {} or async function*() {}
         // async arrow function:       async () => {} or async (x) => x
-        if (Match(TokenType.ASYNC))
+        // `async` is also a valid plain identifier (e.g. a destructured binding named `async`,
+        // `if (async)`) when it isn't immediately followed by one of the tokens above — only
+        // commit to the async-function forms when one of those follows.
+        if (Check(TokenType.ASYNC) &&
+            (PeekNext().Type == TokenType.FUNCTION || PeekNext().Type == TokenType.LESS || PeekNext().Type == TokenType.LEFT_PAREN))
         {
+            Advance(); // consume 'async'
+
             // `async function ...` is an async function expression — defer to the shared
             // FunctionExpression parser (which also handles the `*` for async generators),
             // mirroring the statement-level `async function` declaration path.
@@ -1036,6 +1046,12 @@ public partial class Parser
             if (arrowFunc != null) return arrowFunc;
             throw new Exception("Parse Error: Expected arrow function after 'async ('.");
         }
+        if (Check(TokenType.ASYNC))
+        {
+            // Not followed by a function-introducing token — a bare reference to an identifier
+            // named `async`.
+            return new Expr.Variable(Advance());
+        }
 
         if (Match(TokenType.LEFT_PAREN))
         {
@@ -1053,10 +1069,12 @@ public partial class Parser
         if (Match(TokenType.TEMPLATE_FULL))
         {
             var value = (TemplateStringValue)Previous().Literal!;
-            // For untagged templates, cooked must not be null (invalid escapes are errors)
+            // For untagged templates, an invalid escape (`\xtraordinary`, `\u{hello}`, ...) is a real
+            // syntax error (TS1125) — but recoverable, not a reason to abort the whole file. Substitute
+            // an empty string and let the checker report it against this line.
             if (value.Cooked == null)
             {
-                throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+                return new Expr.TemplateLiteral([""], [], [Previous().Line]);
             }
             return new Expr.TemplateLiteral([value.Cooked], []);
         }
@@ -1203,12 +1221,21 @@ public partial class Parser
     private Expr ParseTemplateLiteral()
     {
         var headValue = (TemplateStringValue)Previous().Literal!;
-        // For untagged templates, cooked must not be null
-        if (headValue.Cooked == null)
+        List<string> strings = [];
+        List<int>? invalidEscapeLines = null;
+        void AddPart(TemplateStringValue value, int line)
         {
-            throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+            if (value.Cooked == null)
+            {
+                strings.Add("");
+                (invalidEscapeLines ??= []).Add(line);
+            }
+            else
+            {
+                strings.Add(value.Cooked);
+            }
         }
-        List<string> strings = [headValue.Cooked];
+        AddPart(headValue, Previous().Line);
         List<Expr> expressions = [];
 
         // Parse first expression
@@ -1217,25 +1244,15 @@ public partial class Parser
         // Parse middle parts
         while (Match(TokenType.TEMPLATE_MIDDLE))
         {
-            var midValue = (TemplateStringValue)Previous().Literal!;
-            if (midValue.Cooked == null)
-            {
-                throw new Exception("Parse Error: Invalid escape sequence in template literal.");
-            }
-            strings.Add(midValue.Cooked);
+            AddPart((TemplateStringValue)Previous().Literal!, Previous().Line);
             expressions.Add(Expression());
         }
 
         // Expect tail
         Consume(TokenType.TEMPLATE_TAIL, "Expect end of template literal.");
-        var tailValue = (TemplateStringValue)Previous().Literal!;
-        if (tailValue.Cooked == null)
-        {
-            throw new Exception("Parse Error: Invalid escape sequence in template literal.");
-        }
-        strings.Add(tailValue.Cooked);
+        AddPart((TemplateStringValue)Previous().Literal!, Previous().Line);
 
-        return new Expr.TemplateLiteral(strings, expressions);
+        return new Expr.TemplateLiteral(strings, expressions, invalidEscapeLines);
     }
 
     private Expr ParseTaggedTemplateLiteral(Expr tag)

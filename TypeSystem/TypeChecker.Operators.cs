@@ -425,7 +425,25 @@ public partial class TypeChecker
     private TypeInfo CheckLogicalAssign(Expr.LogicalAssign logical)
     {
         TypeInfo varType = LookupVariable(logical.Name);
-        TypeInfo valueType = CheckExpr(logical.Value);
+
+        // `&&=` only evaluates (and assigns) its RHS when the LHS is truthy — narrow the LHS to
+        // its truthy constituents while checking the RHS, mirroring plain `&&`'s CheckLogical.
+        // Without this, `thing &&= thing.original` spuriously flags `thing` as possibly
+        // undefined/null on the very read that `&&=`'s short-circuit already guarantees is safe.
+        TypeInfo valueType;
+        if (logical.Operator.Type == TokenType.AND_AND_EQUAL)
+        {
+            var narrowedEnv = new TypeEnvironment(_environment);
+            narrowedEnv.Define(logical.Name.Lexeme, NarrowLogicalTruthy(varType));
+            using (new EnvironmentScope(this, narrowedEnv))
+            {
+                valueType = CheckExpr(logical.Value);
+            }
+        }
+        else
+        {
+            valueType = CheckExpr(logical.Value);
+        }
 
         // Invalidate any narrowings affected by this assignment
         var assignedPath = new Narrowing.NarrowingPath.Variable(logical.Name.Lexeme);
@@ -447,11 +465,32 @@ public partial class TypeChecker
             _ => varType,
         };
 
-        if (narrowedVar is TypeInfo.Never) return valueType;
-        if (narrowedVar is TypeInfo.Any || valueType is TypeInfo.Any) return new TypeInfo.Any();
-        if (IsCompatible(narrowedVar, valueType)) return valueType;
-        if (IsCompatible(valueType, narrowedVar)) return narrowedVar;
-        return new TypeInfo.Union([narrowedVar, valueType]);
+        // Picks the WIDER of the two candidate types when one subsumes the other (so a value that
+        // could only ever be the narrower candidate doesn't lose the other candidate's possibilities);
+        // IsCompatible(expected, actual) is true when actual fits inside expected, so the branch that
+        // fires names the wider (subsuming) type directly — not its own first argument's counterpart.
+        TypeInfo resultType;
+        if (narrowedVar is TypeInfo.Never) resultType = valueType;
+        else if (narrowedVar is TypeInfo.Any || valueType is TypeInfo.Any) resultType = new TypeInfo.Any();
+        else if (IsCompatible(narrowedVar, valueType)) resultType = narrowedVar;
+        else if (IsCompatible(valueType, narrowedVar)) resultType = valueType;
+        else resultType = new TypeInfo.Union([narrowedVar, valueType]);
+
+        // Post-assignment narrowing: the variable's new value is exactly `resultType`, so
+        // subsequent reads in the same scope see it narrowed — mirrors CheckAssign's
+        // environment update for a plain `x = v` (fixes `results ||= []; results.push(...)`,
+        // which needs the narrowing to persist past the statement, not just within the
+        // expression itself).
+        if (IsDeclaredTypeTracked(logical.Name.Lexeme))
+        {
+            var declaredType = GetDeclaredType(logical.Name.Lexeme) ?? varType;
+            if (NarrowToDeclaredSlot(declaredType, resultType) is { } narrowedSlot)
+            {
+                _environment.Define(logical.Name.Lexeme, narrowedSlot);
+            }
+        }
+
+        return resultType;
     }
 
     /// <summary>Truthy narrowing of a type: drops the definitely-falsy constituents

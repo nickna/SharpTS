@@ -5,8 +5,9 @@ public partial class Parser
     private Stmt Declaration()
     {
         // Module declarations - must be at top level
-        // Note: import followed by ( is dynamic import (expression), not static import (statement)
-        if (Check(TokenType.IMPORT) && PeekNext().Type != TokenType.LEFT_PAREN)
+        // Note: import followed by ( is dynamic import, and import followed by . is import.meta —
+        // both expressions, not a static import declaration.
+        if (Check(TokenType.IMPORT) && PeekNext().Type != TokenType.LEFT_PAREN && PeekNext().Type != TokenType.DOT)
         {
             Advance(); // consume IMPORT
             // Detect import alias: import X = Namespace.Member
@@ -891,6 +892,19 @@ public partial class Parser
         if (Match(TokenType.EXPORT))
         {
             Token exportKeyword = Previous();
+
+            // export { x, y as z } [from './module'] — e.g. `declare global { export { globalThis as global } }`
+            if (Match(TokenType.LEFT_BRACE))
+            {
+                var namedExports = ParseExportSpecifiers();
+                string? fromPath = null;
+                if (Match(TokenType.FROM))
+                {
+                    fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
+                }
+                ConsumeSemicolon("Expect ';' after export.");
+                return new Stmt.Export(exportKeyword, null, namedExports, null, fromPath, IsDefaultExport: false);
+            }
 
             // export interface Foo { }
             if (Match(TokenType.INTERFACE))

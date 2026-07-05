@@ -195,8 +195,11 @@ public abstract record Expr
         // through the function display class so the hoisted arrow reads them live, not a stale snapshot.
         public bool IsLiftedForwarder { get; init; }
     }
-    // Template literal
-    public record TemplateLiteral(List<string> Strings, List<Expr> Expressions) : Expr;
+    // Template literal. InvalidEscapeLines carries the source line of each part whose cooked value
+    // had an invalid escape sequence (`\xtraordinary`, `\u{hello}`, ...) — a real syntax error for an
+    // untagged template (TS1125), but recoverable: the parser substitutes an empty string for that
+    // part rather than aborting the whole file, and the checker reports it as a normal diagnostic.
+    public record TemplateLiteral(List<string> Strings, List<Expr> Expressions, List<int>? InvalidEscapeLines = null) : Expr;
     // Tagged template literal: tag`template ${expr}`
     public record TaggedTemplateLiteral(
         Expr Tag,                     // The tag function expression
@@ -534,6 +537,7 @@ public abstract record Stmt
     /// <param name="FromModulePath">Re-export source: export { x } from './file'</param>
     /// <param name="IsDefaultExport">True for 'export default'</param>
     /// <param name="ExportAssignment">CommonJS export assignment: export = expr</param>
+    /// <param name="NamespaceExportName">Namespace re-export alias: export * as ns from './file'</param>
     public record Export(
         Token Keyword,
         Stmt? Declaration,
@@ -541,7 +545,8 @@ public abstract record Stmt
         Expr? DefaultExpr,
         string? FromModulePath,
         bool IsDefaultExport,
-        Expr? ExportAssignment = null
+        Expr? ExportAssignment = null,
+        Token? NamespaceExportName = null
     ) : Stmt;
 
     /// <summary>

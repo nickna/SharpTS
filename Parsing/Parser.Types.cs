@@ -1065,14 +1065,10 @@ public partial class Parser
                 members.Add(member);
             }
 
-            // Handle separator - can be semicolon or comma, or nothing before closing brace
-            if (!Check(TokenType.RIGHT_BRACE))
-            {
-                if (!Match(TokenType.SEMICOLON) && !Match(TokenType.COMMA))
-                {
-                    throw new Exception("Expect ';' or ',' between object type members.");
-                }
-            }
+            // Separator: ';', ',', or ASI (ok on a newline, before '}', or at EOF) — same rule as
+            // interface members (`bar(): { baz: T }` followed by `baz: T` on the next line needs no
+            // explicit separator between them).
+            ConsumeInterfaceMemberSeparator();
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after object type.");

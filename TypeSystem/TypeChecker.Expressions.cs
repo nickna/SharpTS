@@ -569,6 +569,17 @@ public partial class TypeChecker
         {
             CheckExpr(expr);
         }
+        // An untagged template with an invalid escape sequence (`\xtraordinary`, `\u{hello}`, ...) is
+        // a real syntax error — the parser recovers instead of aborting the whole file (a tagged
+        // template's raw form tolerates it fine), so it surfaces here as a normal diagnostic.
+        if (template.InvalidEscapeLines != null)
+        {
+            foreach (var line in template.InvalidEscapeLines)
+            {
+                RecordTypeError(new TypeCheckException(
+                    "Hexadecimal digit expected.", line: line, tsCode: "TS1125"));
+            }
+        }
         // Template literals always result in string
         return new TypeInfo.String();
     }
