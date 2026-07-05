@@ -536,8 +536,13 @@ public partial class Parser
             throw new Exception($"Parse Error at line {syntheticName.Line}: Generator marker '*' can only be used with methods, not fields.");
         }
 
-        Consume(TokenType.COLON, "Expect ':' after computed property name.");
-        string typeAnnotation = ParseTypeAnnotation();
+        // Type annotation is optional (ES class fields), matching the identifier-keyed field path:
+        // `[Symbol.iterator] = 0;` / `[Symbol.iterator];` are both valid without a `: type`.
+        string? typeAnnotation = null;
+        if (Match(TokenType.COLON))
+        {
+            typeAnnotation = ParseTypeAnnotation();
+        }
         Expr? initializer = null;
         if (Match(TokenType.EQUAL))
         {

@@ -351,10 +351,15 @@ public partial class Parser
                 {
                     computedType = ParseMethodSignature();
                 }
+                else if (Match(TokenType.COLON))
+                {
+                    computedType = ParseTypeAnnotation();
+                }
                 else
                 {
-                    Consume(TokenType.COLON, "Expect ':' after computed member name.");
-                    computedType = ParseTypeAnnotation();
+                    // No type annotation — implicit `any`.
+                    computedType = "any";
+                    _lastTypeNode = new NamedTypeNode("any", null, computedLine);
                 }
                 TypeNode? computedTypeNode = TakeTypeNode();
                 ConsumeInterfaceMemberSeparator();
@@ -376,11 +381,15 @@ public partial class Parser
                 // Method signature: methodName(params): returnType or methodName<T>(params): returnType
                 type = ParseMethodSignature();
             }
+            else if (Match(TokenType.COLON))
+            {
+                type = ParseTypeAnnotation();
+            }
             else
             {
-                // Property: name: type
-                Consume(TokenType.COLON, "Expect ':' after member name.");
-                type = ParseTypeAnnotation();
+                // No type annotation — implicit `any` (e.g. `interface Foo { prop }`).
+                type = "any";
+                _lastTypeNode = new NamedTypeNode("any", null, memberName.Line);
             }
             TypeNode? memberTypeNode = TakeTypeNode();
 
@@ -678,9 +687,19 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
-        Consume(TokenType.COLON, "Expect ':' before return type.");
-        string returnType = ParseTypeAnnotation();
-        TypeNode? returnTypeNode = TakeTypeNode();
+        string returnType;
+        TypeNode? returnTypeNode;
+        if (Match(TokenType.COLON))
+        {
+            returnType = ParseTypeAnnotation();
+            returnTypeNode = TakeTypeNode();
+        }
+        else
+        {
+            // No return type annotation — implicit `any` (e.g. `foo();` in an interface/type literal).
+            returnType = "any";
+            returnTypeNode = new NamedTypeNode("any", null, Previous().Line);
+        }
 
         // Publish the structured form (or explicitly clear, so no nested node leaks out). A generic
         // method signature wraps the function in a GenericFunctionTypeNode; a `this` parameter has
@@ -986,9 +1005,9 @@ public partial class Parser
         if (isConst)
         {
             // For ambient const, we use Var with no initializer (special case)
-            return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode);
+            return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
         }
-        return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode);
+        return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
     }
 
     /// <summary>

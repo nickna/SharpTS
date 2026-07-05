@@ -316,7 +316,7 @@ public abstract record Stmt
     /// inferred type is still kept). Set by the destructuring desugarer to carry the binding pattern's
     /// shape so a mixed array literal source infers as a tuple instead of an array (#783). Erased at
     /// runtime (interpreter and IL compiler ignore it).</param>
-    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null) : Stmt;
+    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false) : Stmt;
     /// <summary>
     /// Const variable declaration. Separate from Var for cleaner const-specific handling (e.g., unique symbol).
     /// Initializer is non-nullable since const always requires initialization.
