@@ -16,8 +16,8 @@ tests/cases/conformance/es2017/useObjectValuesAndEntries4.ts Pass
 tests/cases/conformance/es2017/useSharedArrayBuffer1.ts Pass
 tests/cases/conformance/es2017/useSharedArrayBuffer2.ts Fail
 tests/cases/conformance/es2017/useSharedArrayBuffer3.ts Fail
-tests/cases/conformance/es2017/useSharedArrayBuffer4.ts Fail
-tests/cases/conformance/es2017/useSharedArrayBuffer5.ts Fail
+tests/cases/conformance/es2017/useSharedArrayBuffer4.ts Pass
+tests/cases/conformance/es2017/useSharedArrayBuffer5.ts Pass
 tests/cases/conformance/es2017/useSharedArrayBuffer6.ts Skipped:lib-drift
 tests/cases/conformance/es2018/es2018IntlAPIs.ts Pass
 tests/cases/conformance/es2018/invalidTaggedTemplateEscapeSequences.ts ParseError

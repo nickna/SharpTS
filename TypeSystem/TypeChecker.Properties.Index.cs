@@ -317,18 +317,32 @@ public partial class TypeChecker
             if (GetClassIndexType(objType, TokenType.TYPE_SYMBOL) is { } clsSym)
                 return clsSym;
 
-            // Allow symbol bracket access on any object (returns any)
-            if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
-                return new TypeInfo.Any();
-
-            // ECMA-262 §22.2.5: RegExp.prototype[@@match/@@matchAll/@@replace/@@search/@@split].
-            // Treat as `any` to permit `r[Symbol.match](str)` etc. Runtime does the actual dispatch.
-            if (objType is TypeInfo.RegExp)
+            // Well-known symbols (Symbol.iterator/species/toStringTag/match/...) are
+            // present on essentially every object type. SharpTS models them loosely,
+            // so a symbol index on any object-like value resolves to `any` — this
+            // already covered Record/Interface/Instance; extend it to the built-in
+            // reference types (SharedArrayBuffer[Symbol.species], typed arrays, Map,
+            // Promise, ...) which otherwise fell through to a spurious TS7053.
+            if (IsSymbolIndexableObject(objType))
                 return new TypeInfo.Any();
         }
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
     }
+
+    /// <summary>
+    /// Object-like types on which a well-known-symbol index (<c>x[Symbol.iterator]</c>,
+    /// <c>x[Symbol.species]</c>, ...) is permitted and resolves to <c>any</c>. Covers the
+    /// structural object types plus the built-in reference types; excludes primitives,
+    /// <c>null</c>/<c>undefined</c>, and unmodeled types (which keep their TS7053).
+    /// </summary>
+    private static bool IsSymbolIndexableObject(TypeInfo t) => t is
+        TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance or TypeInfo.Object or
+        TypeInfo.Array or TypeInfo.Tuple or TypeInfo.Function or TypeInfo.RegExp or
+        TypeInfo.Map or TypeInfo.Set or TypeInfo.WeakMap or TypeInfo.WeakSet or
+        TypeInfo.Promise or TypeInfo.Date or TypeInfo.Error or TypeInfo.Buffer or
+        TypeInfo.SharedArrayBuffer or TypeInfo.ArrayBuffer or TypeInfo.DataView or
+        TypeInfo.TypedArray;
 
     /// <summary>
     /// Returns the value type of a class's index signature for the given key type, or null if the
