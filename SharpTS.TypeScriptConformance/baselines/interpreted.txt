@@ -58,7 +58,7 @@ tests/cases/conformance/es2021/logicalAssignment/logicalAssignment10.ts Pass
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment2.ts ParseError
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment3.ts ParseError
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment4.ts Fail
-tests/cases/conformance/es2021/logicalAssignment/logicalAssignment5.ts Pass
+tests/cases/conformance/es2021/logicalAssignment/logicalAssignment5.ts Fail
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment6.ts Fail
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment7.ts Fail
 tests/cases/conformance/es2021/logicalAssignment/logicalAssignment8.ts Fail
