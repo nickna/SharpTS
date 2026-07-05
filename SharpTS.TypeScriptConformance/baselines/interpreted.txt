@@ -36,9 +36,9 @@ tests/cases/conformance/es2019/globalThisUnknownNoImplicitAny.ts Fail
 tests/cases/conformance/es2019/globalThisVarDeclaration.ts Skipped:directive:allowjs
 tests/cases/conformance/es2019/importMeta/importMeta.ts Skipped:multi-file-deferred
 tests/cases/conformance/es2019/importMeta/importMetaNarrowing.ts ParseError
-tests/cases/conformance/es2020/bigintMissingES2019.ts Fail
-tests/cases/conformance/es2020/bigintMissingES2020.ts Fail
-tests/cases/conformance/es2020/bigintMissingESNext.ts Fail
+tests/cases/conformance/es2020/bigintMissingES2019.ts Pass
+tests/cases/conformance/es2020/bigintMissingES2020.ts Pass
+tests/cases/conformance/es2020/bigintMissingESNext.ts Pass
 tests/cases/conformance/es2020/constructBigint.ts Fail
 tests/cases/conformance/es2020/es2020IntlAPIs.ts Fail
 tests/cases/conformance/es2020/intlNumberFormatES2020.ts Pass

@@ -136,14 +136,33 @@ public partial class TypeChecker
             return true;
         }
 
-        // object as actual: can only assign to object, any, unknown
+        // object as actual: assignable to object/any/unknown, and to any object
+        // type that demands nothing of it — `{}` or an all-optional shape like
+        // `{ t?: string }`. The bare non-primitive `object` satisfies such a
+        // target because it has no required members to be missing (matches tsc).
         if (actual is TypeInfo.Object)
         {
-            result = expected is TypeInfo.Object or TypeInfo.Any or TypeInfo.Unknown;
+            result = expected is TypeInfo.Object or TypeInfo.Any or TypeInfo.Unknown
+                     || (expected is TypeInfo.Record rec && HasNoRequiredMembers(rec));
             return true;
         }
         result = false;
         return false;
+    }
+
+    /// <summary>
+    /// True when an object type requires nothing of its source: every declared
+    /// field is optional and there are no call / construct / index signatures.
+    /// The bare non-primitive <c>object</c> type is assignable to such a target
+    /// (<c>{}</c>, <c>{ t?: string }</c>), matching tsc.
+    /// </summary>
+    private static bool HasNoRequiredMembers(TypeInfo.Record rec)
+    {
+        if (rec.HasCallSignature || rec.HasConstructorSignature || rec.HasIndexSignature)
+            return false;
+        foreach (var name in rec.Fields.Keys)
+            if (!rec.IsFieldOptional(name)) return false;
+        return true;
     }
 
     /// <summary>
