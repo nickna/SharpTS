@@ -108,7 +108,7 @@ public static class StringAccumulatorPromotionAnalyzer
                 Visit(initializer);
         }
 
-        protected override void VisitExpressionStmt(Stmt.Expression stmt)
+        protected override void VisitExpression(Stmt.Expression stmt)
         {
             // Permitted append in statement position (result discarded): `s = s + E` / `s += E`
             // with E statically string. Consume by visiting ONLY E — not the target, not the inner
@@ -124,7 +124,7 @@ public static class StringAccumulatorPromotionAnalyzer
                     Visit(ca.Value);
                     return;
             }
-            base.VisitExpressionStmt(stmt);
+            base.VisitExpression(stmt);
         }
 
         protected override void VisitGet(Expr.Get expr)
