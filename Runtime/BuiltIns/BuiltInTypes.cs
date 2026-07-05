@@ -56,6 +56,10 @@ public static class BuiltInTypes
             "indexOf" => new TypeInfo.Function([StringType, NumberType], NumberType, RequiredParams: 1),
             "toUpperCase" => new TypeInfo.Function([], StringType),
             "toLowerCase" => new TypeInfo.Function([], StringType),
+            // toLocale{Lower,Upper}Case(locales?) — optional locale arg (string | string[] | Intl.Locale;
+            // Any covers every overload the runtime accepts). ECMA-402 §String.prototype.
+            "toLocaleLowerCase" => new TypeInfo.Function([AnyType], StringType, RequiredParams: 0),
+            "toLocaleUpperCase" => new TypeInfo.Function([AnyType], StringType, RequiredParams: 0),
             "trim" => new TypeInfo.Function([], StringType),
             // replace(searchValue, replaceValue) accepts string | RegExp for the
             // pattern and string | (match, ...groups) => string for the value.
@@ -87,7 +91,9 @@ public static class BuiltInTypes
             "replaceAll" => new TypeInfo.Function([AnyType, AnyType], StringType),
             "at" => new TypeInfo.Function([NumberType], StringType), // returns string | undefined in TS
             "normalize" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0),
-            "localeCompare" => new TypeInfo.Function([StringType], NumberType, RequiredParams: 0),
+            // localeCompare(that, locales?, options?) — ECMA-402 adds the optional
+            // locales/options args on top of ECMA-262's single `that` param.
+            "localeCompare" => new TypeInfo.Function([StringType, AnyType, AnyType], NumberType, RequiredParams: 0),
             "toString" => new TypeInfo.Function([], StringType), // primitive wrapper method
             "match" => new TypeInfo.Function([AnyType], AnyType),
             "matchAll" => new TypeInfo.Function([AnyType], new TypeInfo.Array(AnyType)),
@@ -1308,7 +1314,8 @@ public static class BuiltInTypes
         "length", "charAt", "substring", "indexOf", "toUpperCase", "toLowerCase", "trim", "replace",
         "split", "includes", "startsWith", "endsWith", "slice", "substr", "repeat", "padStart",
         "padEnd", "charCodeAt", "codePointAt", "concat", "lastIndexOf", "trimStart", "trimEnd",
-        "replaceAll", "at", "normalize", "localeCompare", "toString", "match", "matchAll", "search",
+        "replaceAll", "at", "normalize", "localeCompare", "toLocaleLowerCase", "toLocaleUpperCase",
+        "toString", "match", "matchAll", "search",
     ];
 
     private static readonly string[] ArrayMemberNames =
