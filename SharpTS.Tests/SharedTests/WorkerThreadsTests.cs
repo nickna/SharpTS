@@ -921,6 +921,105 @@ public class WorkerThreadsTests
 
     #endregion
 
+    #region worker.stdin (#1076)
+
+    /// <summary>
+    /// #1076: with <c>stdin: true</c>, <c>worker.stdin</c> is a Writable on the parent whose
+    /// writes are bridged into the worker's <c>process.stdin</c> Readable (parent→worker, the
+    /// reverse of the #1003 stdout path). The worker reads the chunk via a 'data' listener and
+    /// <c>worker.stdin.end()</c> surfaces as 'end'. The parent writes only after the worker signals
+    /// it has attached its listeners, so the assertion doesn't race the listener setup. Dual-mode:
+    /// the worker always interprets; a compiled parent reaches <c>worker.stdin</c> via runtime
+    /// dispatch on the C# SharpTSWorker (like worker.stdout).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Worker_StdinTrue_ParentWriteReadableInWorker(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_in.ts"] = """
+                (process as any).stdin.on("data", (chunk: any) => { postMessage("GOT[" + ("" + chunk).trim() + "]"); });
+                (process as any).stdin.on("end", () => { postMessage("END"); });
+                postMessage("ready");
+                setTimeout(() => {}, 2000); // stay alive to receive stdin
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const w: any = new Worker(__dirname + "/worker_in.ts", { stdin: true });
+                w.on("message", (e: any) => {
+                    if (e.data === "ready") { w.stdin.write("ping"); w.stdin.end(); }
+                    else { console.log(e.data); }
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("GOT[ping]", output);
+        Assert.Contains("END", output);
+    }
+
+    /// <summary>
+    /// #1076: multiple parent writes arrive at the worker's <c>process.stdin</c> in order. The
+    /// worker accumulates each chunk and, on 'end', posts the concatenation — verifying both
+    /// ordering and that end() flushes after the last chunk. Dual-mode.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Worker_StdinTrue_MultipleWritesPreserveOrder(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_acc.ts"] = """
+                let acc = "";
+                (process as any).stdin.on("data", (chunk: any) => { acc += ("" + chunk); });
+                (process as any).stdin.on("end", () => { postMessage("ACC[" + acc + "]"); });
+                postMessage("ready");
+                setTimeout(() => {}, 2000);
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const w: any = new Worker(__dirname + "/worker_acc.ts", { stdin: true });
+                w.on("message", (e: any) => {
+                    if (e.data === "ready") { w.stdin.write("a"); w.stdin.write("b"); w.stdin.write("c"); w.stdin.end(); }
+                    else { console.log(e.data); }
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("ACC[abc]", output);
+    }
+
+    /// <summary>
+    /// #1076: without <c>stdin: true</c>, <c>worker.stdin</c> is not a pipe — the parent must opt
+    /// in, exactly like stdout/stderr. SharpTS surfaces the absent stream as <c>undefined</c>
+    /// (its GetMember convention for stdout/stderr too), which is falsy like Node's <c>null</c>,
+    /// so <c>!w.stdin</c> holds. Dual-mode.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Worker_StdinWithoutOption_IsAbsent(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_noop.ts"] = """
+                postMessage("hi");
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const w: any = new Worker(__dirname + "/worker_noop.ts");
+                console.log("stdin-absent:" + (!w.stdin));
+                w.on("message", () => {});
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("stdin-absent:true", output);
+    }
+
+    #endregion
+
     #region markAsUntransferable (#1002)
 
     /// <summary>
