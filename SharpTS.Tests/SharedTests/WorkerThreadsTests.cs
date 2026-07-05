@@ -458,6 +458,159 @@ public class WorkerThreadsTests
         Assert.Equal("3\n4\n", output);
     }
 
+    /// <summary>
+    /// #1255: <c>structuredClone</c> must deep-clone Date/RegExp/TypedArray/Buffer/Error —
+    /// mutating (or, for RegExp, just reading the identity of) the source afterward must not
+    /// affect the clone. Before the fix, compiled mode's <c>$Runtime.StructuredClone</c>
+    /// aliased all of these by reference (only List/Dictionary/Set were deep-cloned).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesDateIndependently(ExecutionMode mode)
+    {
+        var source = @"
+            let d = new Date(1000);
+            let cloned: any = structuredClone(d);
+            d.setTime(2000);
+            console.log(cloned.getTime());
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1000\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesRegExpSourceAndFlags(ExecutionMode mode)
+    {
+        var source = @"
+            let r = /abc/gi;
+            let cloned: any = structuredClone(r);
+            console.log(cloned.source);
+            console.log(cloned.flags);
+            console.log(cloned !== r);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("abc\ngi\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesTypedArrayIndependently(ExecutionMode mode)
+    {
+        var source = @"
+            let a = new Int32Array([5, 6, 7]);
+            let cloned: any = structuredClone(a);
+            a[0] = 99;
+            console.log(cloned[0]);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("5\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesBufferIndependently(ExecutionMode mode)
+    {
+        var source = @"
+            let b = Buffer.from([1, 2, 3]);
+            let cloned: any = structuredClone(b);
+            b[0] = 99;
+            console.log(cloned[0]);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesErrorPreservingNameAndMessage(ExecutionMode mode)
+    {
+        var source = @"
+            let e = new TypeError('bad');
+            let cloned: any = structuredClone(e);
+            console.log(cloned.name);
+            console.log(cloned.message);
+            console.log(cloned !== e);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("TypeError\nbad\ntrue\n", output);
+    }
+
+    /// <summary>
+    /// #1255: uncloneable values — functions, symbols, and class instances — must throw
+    /// (spec: DataCloneError), both at the top level and nested inside a plain object.
+    /// Before the fix, compiled mode's shallow fallback aliased these by reference instead
+    /// of throwing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ThrowsForFunction(ExecutionMode mode)
+    {
+        // Dual-mode parity check: a non-guest-throw exception's catch value is the raw
+        // message string in both modes (interpreter: `ex.Message` for a non-ThrowException;
+        // compiled: WrapException's $DataCloneError branch), not an Error instance.
+        var source = @"
+            try {
+                structuredClone(() => {});
+                console.log('no-throw');
+            } catch (e) {
+                console.log('threw:' + typeof e);
+                console.log((e as string).includes('DataCloneError'));
+            }
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("threw:string\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ThrowsForNestedFunction(ExecutionMode mode)
+    {
+        var source = @"
+            try {
+                structuredClone({ fn: () => {} });
+                console.log('no-throw');
+            } catch {
+                console.log('threw');
+            }
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("threw\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ThrowsForSymbol(ExecutionMode mode)
+    {
+        var source = @"
+            try {
+                structuredClone(Symbol('x'));
+                console.log('no-throw');
+            } catch {
+                console.log('threw');
+            }
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("threw\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ThrowsForClassInstance(ExecutionMode mode)
+    {
+        var source = @"
+            class Foo { x = 1; }
+            try {
+                structuredClone(new Foo());
+                console.log('no-throw');
+            } catch {
+                console.log('threw');
+            }
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("threw\n", output);
+    }
+
     #endregion
 
     #region Worker.terminate() event-loop liveness (#324)
@@ -1175,11 +1328,11 @@ public class WorkerThreadsTests
     /// <summary>
     /// #1001/#1077: a <c>MessageChannel</c> port whose peer posts an uncloneable value (a
     /// function) fires <c>'messageerror'</c> — not <c>'message'</c> — on the receiver. Now
-    /// dual-mode: the compiled <c>$MessagePort.postMessage</c> detects the uncloneable value
-    /// (<c>typeof</c> "function"/"symbol") up front and enqueues a clone-failure sentinel that
-    /// <c>Drain</c> converts to <c>'messageerror'</c>, matching the interpreter's
-    /// receiver-side model (previously compiled returned the function by reference and fired
-    /// <c>'message'</c>).
+    /// dual-mode: the compiled <c>$Runtime.StructuredClone</c> throws <c>$DataCloneError</c>
+    /// for the uncloneable value (#1255), which the compiled <c>$MessagePort.PostMessage</c>
+    /// catches and converts to the shared clone-failure sentinel that <c>Drain</c> turns into
+    /// <c>'messageerror'</c>, matching the interpreter's receiver-side model (previously
+    /// compiled returned the function by reference and fired <c>'message'</c>).
     /// </summary>
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
@@ -1196,6 +1349,33 @@ public class WorkerThreadsTests
                 port2.on("messageerror", () => { console.log("port-err"); port1.close(); port2.close(); });
                 port2.on("message", () => { console.log("port-msg"); port1.close(); port2.close(); });
                 port1.postMessage(() => {});
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("port-err", output);
+        Assert.DoesNotContain("port-msg", output);
+    }
+
+    /// <summary>
+    /// #1255: an uncloneable value NESTED inside an object (not just at the top level)
+    /// must also fire <c>'messageerror'</c>. Before the fix, the emitted <c>$Runtime.
+    /// StructuredClone</c> only detected the top-level typeof and otherwise aliased
+    /// unknown values by reference, so a nested function silently passed through as
+    /// <c>'message'</c> in compiled mode.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void MessageChannelPort_PostNestedUncloneable_FiresMessageError(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { MessageChannel } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                port2.on("messageerror", () => { console.log("port-err"); port1.close(); port2.close(); });
+                port2.on("message", () => { console.log("port-msg"); port1.close(); port2.close(); });
+                port1.postMessage({ fn: () => {} });
                 """
         };
 

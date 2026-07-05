@@ -2588,6 +2588,14 @@ public class EmittedRuntime
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.StructuredClone
     public MethodBuilder StructuredCloneClone { get; set; } = null!;
 
+    // $DataCloneError : Exception — thrown by StructuredCloneCore for uncloneable values
+    // (functions, symbols, class instances, Promises, etc.) and on nested occurrences
+    // inside objects/arrays/maps/sets. Dedicated type (not a generic Exception) so
+    // $MessagePort/$BroadcastChannel PostMessage can catch specifically a clone failure
+    // and convert it to a receiver-side 'messageerror' event without swallowing other bugs.
+    public TypeBuilder TSDataCloneErrorType { get; set; } = null!;
+    public ConstructorBuilder TSDataCloneErrorCtor { get; set; } = null!;
+
     // worker_threads module methods
     public MethodBuilder WorkerThreadsIsMainThread { get; set; } = null!;
     public MethodBuilder WorkerThreadsThreadId { get; set; } = null!;

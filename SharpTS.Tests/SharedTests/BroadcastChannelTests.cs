@@ -194,6 +194,36 @@ public class BroadcastChannelTests
         Assert.Equal("1\n2\n", output);
     }
 
+    /// <summary>
+    /// #1255: posting an uncloneable value (a function) fires <c>'messageerror'</c> on the
+    /// receiver — both via <c>on('messageerror', ...)</c> and the property-style
+    /// <c>onmessageerror</c> setter — instead of throwing on the sender (WHATWG receiver-side
+    /// model, matching <c>SharpTSBroadcastChannel.PostMessage</c>'s catch). Compiled mode had
+    /// no clone-failure handling at all before this fix (cloneCore aliased uncloneable values
+    /// by reference, so the function passed straight through as 'message'); the interpreter's
+    /// <c>onmessageerror</c> property handler was itself never invoked (only the EventEmitter
+    /// 'messageerror' event fired) — both are fixed together here.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void BroadcastChannel_PostUncloneable_FiresMessageError(ExecutionMode mode)
+    {
+        var source = @"
+            const a = new BroadcastChannel('msgerr');
+            const b = new BroadcastChannel('msgerr');
+            b.on('messageerror', () => console.log('on-err'));
+            b.onmessageerror = () => console.log('prop-err');
+            b.on('message', () => console.log('should-not-fire'));
+            a.postMessage(() => {});
+            a.close();
+            b.close();
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Contains("on-err\n", output);
+        Assert.Contains("prop-err\n", output);
+        Assert.DoesNotContain("should-not-fire", output);
+    }
+
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void BroadcastChannel_WorksInsideAsyncFunction(ExecutionMode mode)

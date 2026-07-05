@@ -29,6 +29,10 @@ public partial class RuntimeEmitter
     private TypeBuilder _broadcastChannelType = null!;
     private FieldBuilder _broadcastChannelRegistryField = null!;
     private FieldBuilder _broadcastChannelNextIdField = null!;
+    // Shared clone-failure sentinel (#1255), mirroring $MessagePort's _cloneError: enqueued
+    // in place of a per-subscriber clone when the posted value cannot be structured-cloned.
+    // Drain compares by reference and fires 'messageerror' instead of 'message'.
+    private FieldBuilder _broadcastChannelCloneErrorField = null!;
     private FieldBuilder _broadcastChannelNameField = null!;
     private FieldBuilder _broadcastChannelIdField = null!;
     private FieldBuilder _broadcastChannelClosedField = null!;
@@ -77,7 +81,11 @@ public partial class RuntimeEmitter
             "_nextId", _types.Int64,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        // Static constructor: initialize _registry
+        _broadcastChannelCloneErrorField = typeBuilder.DefineField(
+            "_cloneError", _types.Object,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+
+        // Static constructor: initialize _registry + _cloneError
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig
                 | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -92,6 +100,9 @@ public partial class RuntimeEmitter
             var bcRegistryCtor = _bcRegistryDictType.GetConstructor([typeof(IEqualityComparer<string>)])!;
             il.Emit(OpCodes.Newobj, bcRegistryCtor);
             il.Emit(OpCodes.Stsfld, _broadcastChannelRegistryField);
+            // _cloneError = new object()
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
+            il.Emit(OpCodes.Stsfld, _broadcastChannelCloneErrorField);
             il.Emit(OpCodes.Ret);
         }
 
@@ -232,6 +243,41 @@ public partial class RuntimeEmitter
         var tryDequeue = _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, tryDequeue);
         il.Emit(OpCodes.Brfalse, exitLabel);
+
+        // A clone-failure sentinel (from postMessage of an uncloneable value, #1255) fires
+        // 'messageerror' instead of 'message' — WHATWG receiver-side model, mirroring
+        // $MessagePort. ReferenceEquals(msg, _cloneError).
+        var notCloneErrorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Ldsfld, _broadcastChannelCloneErrorField);
+        il.Emit(OpCodes.Bne_Un, notCloneErrorLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "messageerror");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+
+        // Also invoke the property-style onmessageerror handler if set.
+        var skipOnMessageErrorLabel = il.DefineLabel();
+        var onMsgErrLocal = il.DeclareLocal(runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _broadcastChannelOnMessageErrorField);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Stloc, onMsgErrLocal);
+        il.Emit(OpCodes.Ldloc, onMsgErrLocal);
+        il.Emit(OpCodes.Brfalse, skipOnMessageErrorLabel);
+        il.Emit(OpCodes.Ldloc, onMsgErrLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(skipOnMessageErrorLabel);
+
+        il.Emit(OpCodes.Br, loopTop);
+        il.MarkLabel(notCloneErrorLabel);
 
         // eventData = new Dictionary<string, object>()
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
@@ -382,13 +428,28 @@ public partial class RuntimeEmitter
 
         // Deep-clone the message for this subscriber via $Runtime.StructuredClone(msg, null).
         // Per-subscriber clone matches the WHATWG spec and prevents mutation aliasing across
-        // receivers. StructuredClone handles primitives, lists, string/object-keyed dicts,
-        // and hashsets; unknown types pass through by reference (same as the interpreter).
+        // receivers. An uncloneable value (#1255) is NOT thrown back on the sender — the
+        // WHATWG model fires 'messageerror' on the receiver instead (matches the
+        // interpreter's catch around StructuredClone.Clone in SharpTSBroadcastChannel.
+        // PostMessage) — so catch $DataCloneError here and enqueue the shared _cloneError
+        // sentinel for THIS subscriber instead of a clone, then continue to the next one.
+        var clonedLocal = il.DeclareLocal(_types.Object);
+        var haveClonedLabel = il.DefineLabel();
+
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);  // transferList
         il.Emit(OpCodes.Call, runtime.StructuredCloneClone);
-        var clonedLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, clonedLocal);
+        il.Emit(OpCodes.Leave, haveClonedLabel);
+
+        il.BeginCatchBlock(runtime.TSDataCloneErrorType);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldsfld, _broadcastChannelCloneErrorField);
+        il.Emit(OpCodes.Stloc, clonedLocal);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(haveClonedLabel);
 
         // sub._pending.Enqueue(cloned)
         il.Emit(OpCodes.Ldloc, subLocal);

@@ -102,6 +102,11 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
         EmitTSErrorClasses(moduleBuilder, runtime);
 
+        // Emit $DataCloneError exception type — thrown by StructuredCloneCore (#1255).
+        // Unconditional: StructuredCloneCore itself is always emitted (EmitWorkerHelpers
+        // runs unconditionally inside EmitRuntimeClass below).
+        EmitTSDataCloneErrorType(moduleBuilder, runtime);
+
         // Emit $Promise class for standalone Promise support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
         EmitTSPromiseClass(moduleBuilder, runtime);

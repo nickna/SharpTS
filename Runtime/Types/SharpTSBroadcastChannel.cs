@@ -212,6 +212,12 @@ public class SharpTSBroadcastChannel : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Enqueues a messageerror notification and schedules a drain on the owning loop.
     /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="DrainPendingMessages"/>: the scheduled closure does NOT re-check
+    /// <c>_closed</c> — an already-enqueued notification still fires even if the receiver
+    /// closes before the timer runs, matching Node's "in-flight deliveries complete after
+    /// Close()" semantics (#1255). Only the initial (enqueue-time) guard checks <c>_closed</c>.
+    /// </remarks>
     private void EnqueueMessageError()
     {
         if (_closed || OwnerInterpreter == null)
@@ -219,9 +225,17 @@ public class SharpTSBroadcastChannel : SharpTSEventEmitter, IDisposable
 
         OwnerInterpreter.ScheduleTimer(0, 0, () =>
         {
-            if (_closed || OwnerInterpreter == null)
+            if (OwnerInterpreter == null)
                 return;
             EmitEvent(OwnerInterpreter, "messageerror", []);
+
+            // Also invoke the property-style onmessageerror handler if set (WHATWG spec),
+            // mirroring DrainPendingMessages' handling of onmessage (#1255).
+            if (_onMessageErrorHandler is ISharpTSCallable callable)
+            {
+                try { callable.Call(OwnerInterpreter, []); }
+                catch { /* listeners may not throw out of delivery */ }
+            }
         }, false);
     }
 
