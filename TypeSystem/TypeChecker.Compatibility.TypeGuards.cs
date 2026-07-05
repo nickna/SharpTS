@@ -934,6 +934,16 @@ public partial class TypeChecker
                 return;
             }
 
+            // `if (x OP= y)` — a compound logical assignment used as a condition. CheckExpr already
+            // ran (VisitIf checks the condition before narrowing analysis), so LookupVariable(x)
+            // reflects the post-assignment type CheckLogicalAssign installed; split THAT for the
+            // guard, same as a bare `if (x)`.
+            if (expr is Expr.LogicalAssign logicalAssign)
+            {
+                narrowings.AddRange(AnalyzeLogicalAssignGuard(logicalAssign));
+                return;
+            }
+
             // Try to get a single type guard from this expression
             var guard = AnalyzePathTypeGuard(expr);
             if (guard.Path != null && guard.NarrowedType != null && guard.ExcludedType != null)
@@ -954,6 +964,35 @@ public partial class TypeChecker
 
         CollectNarrowings(condition);
         return narrowings;
+    }
+
+    /// <summary>
+    /// Type-guard analysis for `if (x OP= y)`. The LHS narrows the same way a bare `if (x)` would,
+    /// using its post-assignment type (already installed in the environment by CheckLogicalAssign
+    /// by the time this runs). For `&&=` specifically, a truthy overall result additionally
+    /// guarantees the RHS was evaluated (the LHS was truthy) AND the RHS's own value was truthy —
+    /// `&&=` only assigns/returns the RHS when the LHS is truthy, so a truthy overall result can't
+    /// come from a falsy RHS. If the RHS is a bare identifier, narrow it too (`||=`/`??=` don't get
+    /// this: their truthy branch is also reachable via an already-truthy/non-nullish LHS that never
+    /// touched the RHS at all, so nothing can be said about the RHS's truthiness there).
+    /// </summary>
+    private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> AnalyzeLogicalAssignGuard(
+        Expr.LogicalAssign logical)
+    {
+        var result = new List<(Narrowing.NarrowingPath, TypeInfo, TypeInfo)>();
+
+        var lhsType = LookupVariable(logical.Name);
+        var lhsPath = new Narrowing.NarrowingPath.Variable(logical.Name.Lexeme);
+        result.Add((lhsPath, NarrowLogicalTruthy(lhsType), NarrowLogicalFalsy(lhsType)));
+
+        if (logical.Operator.Type == TokenType.AND_AND_EQUAL && logical.Value is Expr.Variable rhsVar)
+        {
+            var rhsType = LookupVariable(rhsVar.Name);
+            result.Add((new Narrowing.NarrowingPath.Variable(rhsVar.Name.Lexeme),
+                NarrowLogicalTruthy(rhsType), NarrowLogicalFalsy(rhsType)));
+        }
+
+        return result;
     }
 
     /// <summary>
