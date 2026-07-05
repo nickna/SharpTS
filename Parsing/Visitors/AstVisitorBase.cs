@@ -92,7 +92,7 @@ public abstract class AstVisitorBase
 
         switch (stmt)
         {
-            case Stmt.Expression s: VisitExpressionStmt(s); break;
+            case Stmt.Expression s: VisitExpression(s); break;
             case Stmt.Var s: VisitVar(s); break;
             case Stmt.Const s: VisitConst(s); break;
             case Stmt.Function s: VisitFunction(s); break;
@@ -433,7 +433,7 @@ public abstract class AstVisitorBase
 
     #region Statement Visitors - Default implementations traverse children
 
-    protected virtual void VisitExpressionStmt(Stmt.Expression stmt)
+    protected virtual void VisitExpression(Stmt.Expression stmt)
     {
         Visit(stmt.Expr);
     }
