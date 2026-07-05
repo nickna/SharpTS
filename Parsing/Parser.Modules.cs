@@ -293,16 +293,23 @@ public partial class Parser
             return new Stmt.Export(keyword, null, namedExports, null, fromPath, IsDefaultExport: false);
         }
 
-        // export * from './module' (re-export all)
+        // export * from './module' (re-export all) or
+        // export * as ns from './module' (re-export the whole module as a named namespace)
         if (Match(TokenType.STAR))
         {
             RejectDecorators();
+            Token? namespaceExportName = null;
+            if (Match(TokenType.AS))
+            {
+                namespaceExportName = ConsumeIdentifierName("Expect namespace name after 'as'.");
+            }
             Consume(TokenType.FROM, "Expect 'from' after '*'.");
             string fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
             ConsumeSemicolon("Expect ';' after export.");
 
             // Represent as export with null named exports and a fromPath (meaning all)
-            return new Stmt.Export(keyword, null, null, null, fromPath, IsDefaultExport: false);
+            return new Stmt.Export(keyword, null, null, null, fromPath, IsDefaultExport: false,
+                NamespaceExportName: namespaceExportName);
         }
 
         // export import X = Namespace.Member (re-export alias)
