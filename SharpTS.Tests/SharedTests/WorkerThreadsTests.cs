@@ -769,6 +769,37 @@ public class WorkerThreadsTests
         Assert.Contains("empty:true", output);
     }
 
+    /// <summary>
+    /// #1077: <c>receiveMessageOnPort</c> synchronously drains a queued message from a
+    /// main-thread <c>MessageChannel</c> port, returning <c>{ message }</c>; a second call on
+    /// the now-empty port returns <c>undefined</c>. Dual-mode — the compiled helper reads the
+    /// emitted <c>$MessagePort</c> queue directly (it was previously a stub that always returned
+    /// <c>undefined</c>).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReceiveMessageOnPort_QueuedMessage_ReturnsMessageThenUndefined(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { MessageChannel, receiveMessageOnPort } from "worker_threads";
+                const { port1, port2 } = new MessageChannel();
+                // port2 has no 'message' listener, so it stays unstarted and the posted
+                // value waits in its queue for a synchronous receiveMessageOnPort drain.
+                port1.postMessage("hello");
+                const r: any = receiveMessageOnPort(port2);
+                console.log("first:" + (r === undefined ? "undef" : r.message));
+                const r2: any = receiveMessageOnPort(port2);
+                console.log("second-empty:" + (r2 === undefined));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("first:hello", output);
+        Assert.Contains("second-empty:true", output);
+    }
+
     #endregion
 
     #region introspection (#1004)
@@ -1122,27 +1153,33 @@ public class WorkerThreadsTests
     }
 
     /// <summary>
-    /// #1001: a <c>MessageChannel</c> port whose peer posts an uncloneable value fires
-    /// <c>'messageerror'</c> on the receiver. Interpreter only — the compiled emitted
-    /// structured clone returns uncloneable values by reference (it does not throw), so a
-    /// compiled <c>$MessagePort</c> has no clone-failure point. The Worker paths above cover
-    /// the dual-mode behavior.
+    /// #1001/#1077: a <c>MessageChannel</c> port whose peer posts an uncloneable value (a
+    /// function) fires <c>'messageerror'</c> — not <c>'message'</c> — on the receiver. Now
+    /// dual-mode: the compiled <c>$MessagePort.postMessage</c> detects the uncloneable value
+    /// (<c>typeof</c> "function"/"symbol") up front and enqueues a clone-failure sentinel that
+    /// <c>Drain</c> converts to <c>'messageerror'</c>, matching the interpreter's
+    /// receiver-side model (previously compiled returned the function by reference and fired
+    /// <c>'message'</c>).
     /// </summary>
-    [Fact]
-    public void MessageChannelPort_PostUncloneable_FiresMessageError_Interpreted()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void MessageChannelPort_PostUncloneable_FiresMessageError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import { MessageChannel } from "worker_threads";
                 const { port1, port2 } = new MessageChannel();
-                port2.on("messageerror", () => { console.log("port-err"); });
-                port2.on("message", () => { console.log("port-msg"); });
+                // Close both ports after delivery so the compiled $MessagePort (which Refs the
+                // event loop on start) lets the process quiesce — same convention as the other
+                // compiled MessageChannel tests.
+                port2.on("messageerror", () => { console.log("port-err"); port1.close(); port2.close(); });
+                port2.on("message", () => { console.log("port-msg"); port1.close(); port2.close(); });
                 port1.postMessage(() => {});
                 """
         };
 
-        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Interpreted);
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Contains("port-err", output);
         Assert.DoesNotContain("port-msg", output);
     }

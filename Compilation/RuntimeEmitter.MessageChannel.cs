@@ -32,6 +32,11 @@ public partial class RuntimeEmitter
     private FieldBuilder _messagePortClosedField = null!;
     private FieldBuilder _messagePortRefedField = null!;
     private FieldBuilder _messagePortOnEnqueueField = null!;
+    // Shared sentinel enqueued (in place of a clone) when postMessage receives an
+    // uncloneable value. Drain turns it into a 'messageerror' event, mirroring the
+    // interpreter's ClonedMessage(IsError: true) path (#1077). One instance per
+    // emitted assembly, created by $MessagePort's static ctor.
+    private FieldBuilder _messagePortCloneErrorField = null!;
     private ConstructorBuilder _messagePortCtor = null!;
     private MethodBuilder _messagePortDrain = null!;
     private MethodBuilder _messagePortStart = null!;
@@ -65,6 +70,18 @@ public partial class RuntimeEmitter
         // transferred to an interpreter worker, so a parent post wakes the worker loop
         // to drain _pending event-driven instead of the worker polling (#465).
         _messagePortOnEnqueueField = typeBuilder.DefineField("_onEnqueue", typeof(Action), FieldAttributes.Assembly);
+
+        // Static clone-failure sentinel (#1077). A single shared instance is enqueued in
+        // place of a message whose value cannot be structured-cloned; Drain compares by
+        // reference and emits 'messageerror' instead of 'message'.
+        _messagePortCloneErrorField = typeBuilder.DefineField(
+            "_cloneError",
+            _types.Object,
+            FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly);
+        var cctorIl = typeBuilder.DefineTypeInitializer().GetILGenerator();
+        cctorIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
+        cctorIl.Emit(OpCodes.Stsfld, _messagePortCloneErrorField);
+        cctorIl.Emit(OpCodes.Ret);
 
         EmitMessagePortConstructorIl(typeBuilder, runtime);
         EmitMessagePortDrain(typeBuilder, runtime);
@@ -142,6 +159,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, msgLocal);
         il.Emit(OpCodes.Callvirt, _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, exitLabel);
+
+        // A clone-failure sentinel (from postMessage of an uncloneable value) is
+        // delivered as 'messageerror' (no args), not 'message' — Node's receiver-side
+        // model (#1077). ReferenceEquals(msg, _cloneError).
+        var notCloneErrorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, msgLocal);
+        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Bne_Un, notCloneErrorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "messageerror");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, loopTop);
+        il.MarkLabel(notCloneErrorLabel);
 
         // this.Emit("message", new object[1] { msg })
         il.Emit(OpCodes.Ldc_I4_1);
@@ -263,6 +296,7 @@ public partial class RuntimeEmitter
         var exitLabel = il.DefineLabel();
         var partnerLocal = il.DeclareLocal(typeBuilder);
         var clonedLocal = il.DeclareLocal(_types.Object);
+        var typeofLocal = il.DeclareLocal(_types.String);
 
         // if (_closed) return
         il.Emit(OpCodes.Ldarg_0);
@@ -280,11 +314,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _messagePortClosedField);
         il.Emit(OpCodes.Brtrue, exitLabel);
 
-        // cloned = $Runtime.StructuredClone(msg, null)
+        // Node model: an uncloneable value is NOT thrown back on the sender — the receiver
+        // fires 'messageerror' (#1077). The emitted $Runtime.StructuredClone returns
+        // uncloneable values by reference (it has no throw path), so detect the uncloneable
+        // categories up front — functions/classes/callable wrappers (typeof "function") and
+        // symbols (typeof "symbol") — and enqueue the shared _cloneError sentinel instead of
+        // a clone. Drain converts it to 'messageerror'. This mirrors the try/catch around
+        // StructuredClone.Clone in SharpTSMessagePort.PostMessage. (Deeply nested uncloneables
+        // remain aliased, matching the emitted clone's existing shallow fallback.)
+        var markerLabel = il.DefineLabel();
+        var haveValueLabel = il.DefineLabel();
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
+
+        // t = TypeOf(msg)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Stloc, typeofLocal);
+
+        // if (t == "function") goto markerLabel
+        il.Emit(OpCodes.Ldloc, typeofLocal);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, strEquals);
+        il.Emit(OpCodes.Brtrue, markerLabel);
+
+        // if (t == "symbol") goto markerLabel
+        il.Emit(OpCodes.Ldloc, typeofLocal);
+        il.Emit(OpCodes.Ldstr, "symbol");
+        il.Emit(OpCodes.Call, strEquals);
+        il.Emit(OpCodes.Brtrue, markerLabel);
+
+        // cloned = $Runtime.StructuredClone(msg, null); goto haveValue
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.StructuredCloneClone);
         il.Emit(OpCodes.Stloc, clonedLocal);
+        il.Emit(OpCodes.Br, haveValueLabel);
+
+        // cloned = _cloneError sentinel
+        il.MarkLabel(markerLabel);
+        il.Emit(OpCodes.Ldsfld, _messagePortCloneErrorField);
+        il.Emit(OpCodes.Stloc, clonedLocal);
+
+        il.MarkLabel(haveValueLabel);
 
         // partner._pending.Enqueue(cloned)
         il.Emit(OpCodes.Ldloc, partnerLocal);
