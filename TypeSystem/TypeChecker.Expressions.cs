@@ -511,7 +511,7 @@ public partial class TypeChecker
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter || prop.Kind == Expr.ObjectPropertyKind.Setter)
             {
                 // For getters/setters, extract the property type from the function
-                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                string name = GetAccessorMemberName(prop.Key!);
                 TypeInfo fnType = CheckExpr(prop.Value);
                 if (prop.Kind == Expr.ObjectPropertyKind.Getter && fnType is TypeInfo.Function fn)
                 {
@@ -680,7 +680,7 @@ public partial class TypeChecker
                 accessorProps.Add(prop);
 
                 // Getter - extract return type from annotation only (don't check body yet)
-                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                string name = GetAccessorMemberName(prop.Key!);
                 getterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.ReturnType != null)
                 {
@@ -698,7 +698,7 @@ public partial class TypeChecker
                 accessorProps.Add(prop);
 
                 // Setter - extract parameter type from annotation only
-                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                string name = GetAccessorMemberName(prop.Key!);
                 setterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.Parameters.Count > 0 && arrow.Parameters[0].Type != null)
                 {
@@ -747,7 +747,13 @@ public partial class TypeChecker
                     case Expr.ComputedKey ck:
                         TypeInfo keyType = CheckExpr(ck.Expression);
                         // Infer index signature based on key type
-                        if (keyType is TypeInfo.String)
+                        if (keyType is (TypeInfo.Symbol or TypeInfo.UniqueSymbol) &&
+                            TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownSymbolName)
+                            // Symbol.iterator/toStringTag/toPrimitive/... — a named member (canonical
+                            // "@@name", matching interfaces/classes), not merged into the symbol index
+                            // signature. Merging would lose the per-symbol type (#99 Cluster B).
+                            fields[wellKnownSymbolName] = valueType;
+                        else if (keyType is TypeInfo.String)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)
                             numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
@@ -797,7 +803,7 @@ public partial class TypeChecker
                 {
                     if (prop.Kind == Expr.ObjectPropertyKind.Getter)
                     {
-                        string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                        string name = GetAccessorMemberName(prop.Key!);
                         TypeInfo getterType = CheckExpr(prop.Value);
 
                         // Update the field type with the actual inferred type
@@ -812,7 +818,7 @@ public partial class TypeChecker
                     }
                     else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
                     {
-                        string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                        string name = GetAccessorMemberName(prop.Key!);
                         TypeInfo setterType = CheckExpr(prop.Value);
 
                         // Setter - extract the parameter type (or merge with existing getter type)
@@ -853,6 +859,18 @@ public partial class TypeChecker
             _ => throw new TypeCheckException("Invalid property key for accessor.", tsCode: "TS1170")
         };
     }
+
+    /// <summary>
+    /// Accessor-name resolution used when inferring an object literal's type: a well-known-symbol
+    /// computed key (<c>get [Symbol.toPrimitive]()</c>) uses the canonical <c>@@name</c> form —
+    /// matching how interfaces/classes model the same members (<see cref="TryGetWellKnownSymbolMemberName"/>)
+    /// — so it lands as a distinct named field instead of collapsing multiple accessors onto the
+    /// literal string <c>"[computed]"</c>. Anything else falls back to <see cref="GetPropertyKeyNameForTypeCheck"/>.
+    /// </summary>
+    private static string GetAccessorMemberName(Expr.PropertyKey key) =>
+        key is Expr.ComputedKey ck && TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownName
+            ? wellKnownName
+            : GetPropertyKeyNameForTypeCheck(key);
 
     /// <summary>
     /// Unifies index signature types - creates a union if types differ.

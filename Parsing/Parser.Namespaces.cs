@@ -11,14 +11,15 @@ public partial class Parser
     /// <param name="isExported">Whether this is an exported namespace</param>
     private Stmt NamespaceDeclaration(bool isExported = false)
     {
-        // Parse namespace name (may be dotted: A.B.C)
-        Token firstName = Consume(TokenType.IDENTIFIER, "Expect namespace name.");
+        // Parse namespace name (may be dotted: A.B.C). Contextual keywords (e.g. `Symbol`) are
+        // valid identifiers here too — `module Symbol { }` shadows the global.
+        Token firstName = ConsumeIdentifierName("Expect namespace name.");
         List<Token> nameParts = [firstName];
 
         // Collect dotted parts: A.B.C
         while (Match(TokenType.DOT))
         {
-            Token part = Consume(TokenType.IDENTIFIER, "Expect identifier after '.' in namespace name.");
+            Token part = ConsumeIdentifierName("Expect identifier after '.' in namespace name.");
             nameParts.Add(part);
         }
 

@@ -310,6 +310,15 @@ public partial class TypeChecker
         // Handle symbol index (Symbol and UniqueSymbol both qualify)
         if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
         {
+            // A well-known symbol (`Symbol.iterator`, ...) that the object type models as a distinct
+            // named member (canonical "@@name" — see CheckObject/TryGetWellKnownSymbolMemberName)
+            // resolves to THAT member's own type, not the merged symbol index signature — which
+            // would lose per-symbol precision when an object defines several distinct well-known
+            // symbol members (#99 Cluster B).
+            if (TryGetWellKnownSymbolMemberName(getIndex.Index) is { } wellKnownName &&
+                GetMemberType(objType, wellKnownName) is { } wellKnownType)
+                return wellKnownType;
+
             if (objType is TypeInfo.Interface itf4 && itf4.SymbolIndexType != null)
                 return itf4.SymbolIndexType;
             if (objType is TypeInfo.Record rec4 && rec4.SymbolIndexType != null)
@@ -610,9 +619,20 @@ public partial class TypeChecker
             return valueType;
         }
 
-        // Handle symbol index
-        if (indexType is TypeInfo.Symbol)
+        // Handle symbol index (Symbol and UniqueSymbol both qualify)
+        if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
         {
+            // A well-known symbol (`Symbol.iterator`, ...) that the object type models as a distinct
+            // named member (canonical "@@name") is validated against THAT member's own type, not the
+            // merged symbol index signature — mirrors the read path in CheckGetIndex (#99 Cluster B).
+            if (TryGetWellKnownSymbolMemberName(setIndex.Index) is { } wellKnownName &&
+                GetMemberType(objType, wellKnownName) is { } wellKnownType)
+            {
+                if (!IsCompatible(wellKnownType, valueType))
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to symbol index signature type '{wellKnownType}'.", tsCode: "TS2322");
+                return valueType;
+            }
+
             if (objType is TypeInfo.Interface itf3 && itf3.SymbolIndexType != null)
             {
                 if (!IsCompatible(itf3.SymbolIndexType, valueType))

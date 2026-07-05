@@ -503,9 +503,10 @@ public partial class Parser
             sb.Append("typeof ");
 
             // `typeof undefined` / `typeof this` are valid queries alongside identifiers.
+            // Contextual keywords (e.g. `Symbol`) are valid identifiers here too — `typeof Symbol.obs`.
             Token first = Check(TokenType.UNDEFINED) || Check(TokenType.THIS)
                 ? Advance()
-                : Consume(TokenType.IDENTIFIER, "Expect identifier after 'typeof' in type position.");
+                : ConsumeIdentifierName("Expect identifier after 'typeof' in type position.");
             sb.Append(first.Lexeme);
 
             // Handle property paths and index access: typeof obj.prop, typeof arr[0], typeof obj["key"]
@@ -513,7 +514,7 @@ public partial class Parser
             {
                 if (Match(TokenType.DOT))
                 {
-                    Token next = Consume(TokenType.IDENTIFIER, "Expect property name after '.'");
+                    Token next = ConsumeIdentifierName("Expect property name after '.'");
                     sb.Append('.');
                     sb.Append(next.Lexeme);
                 }
@@ -937,10 +938,15 @@ public partial class Parser
                 {
                     computedType = ParseMethodSignature();
                 }
+                else if (Match(TokenType.COLON))
+                {
+                    computedType = ParseUnionType();
+                }
                 else
                 {
-                    Consume(TokenType.COLON, "Expect ':' after computed member name.");
-                    computedType = ParseUnionType();
+                    // No type annotation — implicit `any`, matching a bare identifier member.
+                    computedType = "any";
+                    _lastTypeNode = new NamedTypeNode("any", null, computedLine);
                 }
                 // The string path renders computed members as plain fields (no method marker).
                 if (TakeTypeNode() is { } computedNode)
@@ -1035,12 +1041,16 @@ public partial class Parser
                     // Method signature: methodName(params): returnType
                     propertyType = ParseMethodSignature();
                 }
-                else
+                else if (Match(TokenType.COLON))
                 {
-                    // Property: name: type
-                    Consume(TokenType.COLON, "Expect ':' after property name in object type.");
                     // Member values may be conditional types: { x: T extends number ? T : string }
                     propertyType = ParseConditionalType();
+                }
+                else
+                {
+                    // No type annotation — implicit `any` (e.g. `interface Foo { prop }`).
+                    propertyType = "any";
+                    _lastTypeNode = new NamedTypeNode("any", null, propertyName.Line);
                 }
 
                 if (TakeTypeNode() is { } propertyNode)
