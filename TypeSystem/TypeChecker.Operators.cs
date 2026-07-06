@@ -285,10 +285,16 @@ public partial class TypeChecker
             return rightType;  // null/undefined ?? right = right
         }
 
-        // If left (non-nullish) and right are compatible, return non-nullish left
-        if (IsCompatible(nonNullishLeft, rightType) || IsCompatible(rightType, nonNullishLeft))
+        // Return whichever of the two is the wider type (the other is assignable to it) — same
+        // "pick wider of two" pattern as CheckTernary/CheckLogicalAssign; this one previously
+        // returned nonNullishLeft unconditionally even when rightType was the wider of the two.
+        if (IsCompatible(nonNullishLeft, rightType))
         {
             return nonNullishLeft;
+        }
+        if (IsCompatible(rightType, nonNullishLeft))
+        {
+            return rightType;
         }
 
         // Otherwise return union of non-nullish left and right
