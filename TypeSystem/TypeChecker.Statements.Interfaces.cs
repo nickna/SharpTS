@@ -343,6 +343,26 @@ public partial class TypeChecker
                     }
                 }
             }
+
+            // Mirror image of the string-index check above: a symbol index signature only
+            // constrains computed well-known-symbol members (canonical "@@name"), never
+            // plain string/number-keyed ones.
+            if (symbolIndexType != null)
+            {
+                foreach (var (name, type) in members)
+                {
+                    if (!name.StartsWith("@@", StringComparison.Ordinal)) continue;
+                    if (!IsCompatible(symbolIndexType, type))
+                    {
+                        memberLines.TryGetValue(name, out var line);
+                        string displayName = $"[Symbol.{name["@@".Length..]}]";
+                        RecordTypeError(new TypeCheckException(
+                            $" Property '{displayName}' of type '{type}' is not assignable to 'symbol' index type '{symbolIndexType}'.",
+                            line: line == 0 ? interfaceStmt.Name.Line : line,
+                            tsCode: "TS2411"));
+                    }
+                }
+            }
         }
         }
 
