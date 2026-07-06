@@ -1461,10 +1461,14 @@ public partial class TypeChecker
             arrowEnv.MarkAsConst(arrow.Name.Lexeme);  // Function name is read-only in strict mode
         }
 
-        // Define parameters (may shadow function name if same identifier)
+        // Define parameters (may shadow function name if same identifier). Body-scope binding widens
+        // a bare `?`-optional parameter with `| undefined` (the caller may omit it) — see
+        // WidenOptionalParamsForBody; paramTypes itself stays the declared type for the callable
+        // signature (funcType above).
+        var bodyParamTypes = WidenOptionalParamsForBody(paramTypes, arrow.Parameters);
         for (int i = 0; i < arrow.Parameters.Count; i++)
         {
-            arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, paramTypes[i]);
+            arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
         }
 
         // Save and set context - function bodies are isolated from outer loop/switch/label context
@@ -2189,8 +2193,9 @@ public partial class TypeChecker
                     _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
                 };
 
+                var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
-                    methodEnv.Define(method.Parameters[i].Name.Lexeme, methodType.ParamTypes[i]);
+                    methodEnv.Define(method.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
 
                 TypeEnvironment previousEnvFunc = _environment;
                 TypeInfo? previousReturnFunc = _currentFunctionReturnType;

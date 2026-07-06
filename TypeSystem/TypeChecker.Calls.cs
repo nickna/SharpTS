@@ -48,6 +48,16 @@ public partial class TypeChecker
             calleeType = nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
         }
 
+        // Non-optional call on a genuinely nullable callee: tsc rejects this outright (TS2721/2722/
+        // 2723) rather than silently allowing it — unlike the union-of-function-members branch further
+        // below (which permits reading a possibly-missing PROPERTY that happens to be a function),
+        // actually INVOKING a possibly-null/undefined value is always an error.
+        if (!call.Optional && calleeType is TypeInfo.Union nullableCallee
+            && (nullableCallee.ContainsNull || nullableCallee.ContainsUndefined))
+        {
+            throw CannotInvokeNullishError(nullableCallee, call.Paren.Line);
+        }
+
         if (calleeType is TypeInfo.Class classType)
         {
              return new TypeInfo.Instance(classType);
@@ -299,24 +309,30 @@ public partial class TypeChecker
                     }
                 }
 
-                // Also include undefined if the union has non-function members
-                // (e.g., the property might be missing on some types)
-                var nonFunctionMembers = unionCallee.FlattenedTypes
-                    .Where(t => t is not TypeInfo.Function and not TypeInfo.OverloadedFunction and not TypeInfo.GenericFunction)
-                    .ToList();
-                if (nonFunctionMembers.Any(t => t is TypeInfo.Undefined))
-                {
-                    // Calling undefined would fail at runtime, but for type checking,
-                    // we allow it to match TypeScript's behavior and add undefined to result
-                    returnTypes.Add(new TypeInfo.Undefined());
-                }
-
+                // No undefined/null member can survive to here: a non-optional call on a nullable
+                // union already threw above, and an optional call already stripped them.
                 var unique = returnTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
                 return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
             }
         }
 
         throw new TypeCheckException($"Can only call functions.", tsCode: "TS2349");
+    }
+
+    /// <summary>
+    /// Builds the "cannot invoke" error for a non-optional call on a nullable union callee,
+    /// picking the same code tsc would (TS2721 null-only, TS2722 undefined-only, TS2723 both) —
+    /// unlike member access, calls have no separate bare-identifier code family.
+    /// </summary>
+    private static TypeCheckException CannotInvokeNullishError(TypeInfo.Union union, int line)
+    {
+        (string code, string subject) = (union.ContainsNull, union.ContainsUndefined) switch
+        {
+            (true, false) => ("TS2721", "'null'"),
+            (false, true) => ("TS2722", "'undefined'"),
+            _ => ("TS2723", "'null' or 'undefined'"),
+        };
+        return new TypeCheckException($"Cannot invoke an object which is possibly {subject}.", line, tsCode: code);
     }
 
     /// <summary>
@@ -363,6 +379,34 @@ public partial class TypeChecker
                 }
             }
             { result = new TypeInfo.Symbol(); return true; }
+        }
+
+        // Handle Symbol.for(key) - returns a shared symbol from the global registry. `Symbol` bare
+        // resolves to Any (LookupVariable), so without this the call fell through and stayed Any too
+        // — silently bypassing every arithmetic/comparison operand check a real `symbol` would trip.
+        if (call.Callee is Expr.Get { Object: Expr.Variable { Name.Lexeme: "Symbol" }, Name.Lexeme: "for" })
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("Symbol.for() requires exactly one argument.", tsCode: "TS2554");
+            }
+            var argType = CheckExpr(call.Arguments[0]);
+            if (!IsString(argType) && argType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($"Symbol.for() argument must be a string, got '{argType}'.", tsCode: "TS2345");
+            }
+            { result = new TypeInfo.Symbol(); return true; }
+        }
+
+        // Handle Symbol.keyFor(sym) - returns the key registered for a symbol, or undefined if none.
+        if (call.Callee is Expr.Get { Object: Expr.Variable { Name.Lexeme: "Symbol" }, Name.Lexeme: "keyFor" })
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new TypeCheckException("Symbol.keyFor() requires exactly one argument.", tsCode: "TS2554");
+            }
+            CheckExpr(call.Arguments[0]);
+            { result = new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]); return true; }
         }
 
         // Handle BigInt() constructor - converts number or string to bigint

@@ -45,13 +45,14 @@ public partial class TypeChecker
             return AnalyzeInstanceofGuard(v3.Name.Lexeme, classVar.Name);
         }
 
-        // Pattern 4: x === null or x == null
+        // Pattern 4: x === null or x == null. A LOOSE `==` against EITHER null or undefined narrows
+        // away BOTH (JS: `null == undefined`); only STRICT `===` narrows away just the one compared.
         if (condition is Expr.Binary bin4 &&
             bin4.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin4.Left is Expr.Variable v4 &&
             bin4.Right is Expr.Literal { Value: null })
         {
-            return AnalyzeNullCheck(v4.Name.Lexeme, checkingForNull: true, negated: false);
+            return AnalyzeNullCheck(v4.Name.Lexeme, checkingForNull: true, negated: false, checkBoth: bin4.Operator.Type == TokenType.EQUAL_EQUAL);
         }
 
         // Pattern 4b: null === x (reversed)
@@ -60,7 +61,7 @@ public partial class TypeChecker
             bin4b.Right is Expr.Variable v4b &&
             bin4b.Left is Expr.Literal { Value: null })
         {
-            return AnalyzeNullCheck(v4b.Name.Lexeme, checkingForNull: true, negated: false);
+            return AnalyzeNullCheck(v4b.Name.Lexeme, checkingForNull: true, negated: false, checkBoth: bin4b.Operator.Type == TokenType.EQUAL_EQUAL);
         }
 
         // Pattern 5: x !== null or x != null
@@ -69,7 +70,7 @@ public partial class TypeChecker
             bin5.Left is Expr.Variable v5 &&
             bin5.Right is Expr.Literal { Value: null })
         {
-            return AnalyzeNullCheck(v5.Name.Lexeme, checkingForNull: true, negated: true);
+            return AnalyzeNullCheck(v5.Name.Lexeme, checkingForNull: true, negated: true, checkBoth: bin5.Operator.Type == TokenType.BANG_EQUAL);
         }
 
         // Note: Property null checks (x.prop !== null) are handled by AnalyzePropertyTypeGuard
@@ -81,7 +82,7 @@ public partial class TypeChecker
             bin6.Left is Expr.Variable v6 &&
             bin6.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            return AnalyzeNullCheck(v6.Name.Lexeme, checkingForNull: false, negated: false);
+            return AnalyzeNullCheck(v6.Name.Lexeme, checkingForNull: false, negated: false, checkBoth: bin6.Operator.Type == TokenType.EQUAL_EQUAL);
         }
 
         // Pattern 6b: undefined === x (reversed)
@@ -90,7 +91,7 @@ public partial class TypeChecker
             bin6b.Right is Expr.Variable v6b &&
             bin6b.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            return AnalyzeNullCheck(v6b.Name.Lexeme, checkingForNull: false, negated: false);
+            return AnalyzeNullCheck(v6b.Name.Lexeme, checkingForNull: false, negated: false, checkBoth: bin6b.Operator.Type == TokenType.EQUAL_EQUAL);
         }
 
         // Pattern 7: x !== undefined
@@ -99,7 +100,7 @@ public partial class TypeChecker
             bin7.Left is Expr.Variable v7 &&
             bin7.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
         {
-            return AnalyzeNullCheck(v7.Name.Lexeme, checkingForNull: false, negated: true);
+            return AnalyzeNullCheck(v7.Name.Lexeme, checkingForNull: false, negated: true, checkBoth: bin7.Operator.Type == TokenType.BANG_EQUAL);
         }
 
         // Pattern 7b: x === <literal> / x !== <literal> (string/number/boolean literal equality).
@@ -479,20 +480,28 @@ public partial class TypeChecker
     /// Analyzes null/undefined equality checks like `x === null` or `x !== undefined`.
     /// </summary>
     private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeNullCheck(
-        string varName, bool checkingForNull, bool negated)
+        string varName, bool checkingForNull, bool negated, bool checkBoth = false)
     {
         var currentType = _environment.Get(varName);
         if (currentType == null) return (null, null, null);
 
-        TypeInfo nullishType = checkingForNull ? new TypeInfo.Null() : new TypeInfo.Undefined();
+        // checkBoth: a LOOSE comparison (`== null`/`!= null`/`== undefined`/`!= undefined`) against
+        // EITHER literal narrows away BOTH null and undefined — JS's abstract equality treats them
+        // as mutually `==`-equal (`null == undefined` is true) — unlike a STRICT `===`/`!==`
+        // comparison, which narrows away only the specific one compared.
+        bool IsNullish(TypeInfo t) => checkBoth
+            ? t is TypeInfo.Null or TypeInfo.Undefined
+            : checkingForNull ? t is TypeInfo.Null : t is TypeInfo.Undefined;
+
+        TypeInfo nullishType = checkBoth
+            ? new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()])
+            : checkingForNull ? new TypeInfo.Null() : new TypeInfo.Undefined();
 
         if (currentType is TypeInfo.Union union)
         {
             var flattenedTypes = union.FlattenedTypes;
-            var nonNullish = flattenedTypes.Where(t =>
-                checkingForNull ? t is not TypeInfo.Null : t is not TypeInfo.Undefined).ToList();
-            var nullish = flattenedTypes.Where(t =>
-                checkingForNull ? t is TypeInfo.Null : t is TypeInfo.Undefined).ToList();
+            var nonNullish = flattenedTypes.Where(t => !IsNullish(t)).ToList();
+            var nullish = flattenedTypes.Where(IsNullish).ToList();
 
             TypeInfo? nonNullishType = nonNullish.Count == 0 ? new TypeInfo.Never() :
                 nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
@@ -507,13 +516,13 @@ public partial class TypeChecker
         }
 
         // Non-union type: if it's nullable, we can still narrow
-        if (currentType is TypeInfo.Null && checkingForNull)
+        if (currentType is TypeInfo.Null && (checkingForNull || checkBoth))
         {
             if (negated)
                 return (varName, new TypeInfo.Never(), currentType);
             return (varName, currentType, new TypeInfo.Never());
         }
-        if (currentType is TypeInfo.Undefined && !checkingForNull)
+        if (currentType is TypeInfo.Undefined && (!checkingForNull || checkBoth))
         {
             if (negated)
                 return (varName, new TypeInfo.Never(), currentType);
@@ -720,7 +729,8 @@ public partial class TypeChecker
     /// </remarks>
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathTypeGuard(Expr condition)
     {
-        // Pattern: path !== null or path != null
+        // Pattern: path !== null or path != null. A LOOSE `!=` against EITHER null or undefined
+        // narrows away BOTH (JS: `null == undefined`); STRICT `!==` narrows away just the one compared.
         if (condition is Expr.Binary bin &&
             bin.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin.Right is Expr.Literal { Value: null })
@@ -728,7 +738,7 @@ public partial class TypeChecker
             var path = Narrowing.NarrowingPathExtractor.TryExtract(bin.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
-                return AnalyzePathNullCheck(path, bin.Left, negated: true);
+                return AnalyzePathNullCheck(path, bin.Left, negated: true, checkingForNull: true, checkBoth: bin.Operator.Type == TokenType.BANG_EQUAL);
             }
         }
 
@@ -740,7 +750,7 @@ public partial class TypeChecker
             var path = Narrowing.NarrowingPathExtractor.TryExtract(bin2.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
-                return AnalyzePathNullCheck(path, bin2.Right, negated: true);
+                return AnalyzePathNullCheck(path, bin2.Right, negated: true, checkingForNull: true, checkBoth: bin2.Operator.Type == TokenType.BANG_EQUAL);
             }
         }
 
@@ -752,7 +762,7 @@ public partial class TypeChecker
             var path = Narrowing.NarrowingPathExtractor.TryExtract(bin3.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
-                return AnalyzePathNullCheck(path, bin3.Left, negated: false);
+                return AnalyzePathNullCheck(path, bin3.Left, negated: false, checkingForNull: true, checkBoth: bin3.Operator.Type == TokenType.EQUAL_EQUAL);
             }
         }
 
@@ -764,7 +774,55 @@ public partial class TypeChecker
             var path = Narrowing.NarrowingPathExtractor.TryExtract(bin4.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
             {
-                return AnalyzePathNullCheck(path, bin4.Right, negated: false);
+                return AnalyzePathNullCheck(path, bin4.Right, negated: false, checkingForNull: true, checkBoth: bin4.Operator.Type == TokenType.EQUAL_EQUAL);
+            }
+        }
+
+        // Pattern: path !== undefined or path != undefined
+        if (condition is Expr.Binary bin5 &&
+            bin5.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin5.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin5.Left);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin5.Left, negated: true, checkingForNull: false, checkBoth: bin5.Operator.Type == TokenType.BANG_EQUAL);
+            }
+        }
+
+        // Pattern: undefined !== path (reversed)
+        if (condition is Expr.Binary bin6 &&
+            bin6.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin6.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin6.Right);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin6.Right, negated: true, checkingForNull: false, checkBoth: bin6.Operator.Type == TokenType.BANG_EQUAL);
+            }
+        }
+
+        // Pattern: path === undefined
+        if (condition is Expr.Binary bin7 &&
+            bin7.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin7.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin7.Left);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin7.Left, negated: false, checkingForNull: false, checkBoth: bin7.Operator.Type == TokenType.EQUAL_EQUAL);
+            }
+        }
+
+        // Pattern: undefined === path (reversed)
+        if (condition is Expr.Binary bin8 &&
+            bin8.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin8.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin8.Right);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin8.Right, negated: false, checkingForNull: false, checkBoth: bin8.Operator.Type == TokenType.EQUAL_EQUAL);
             }
         }
 
@@ -1098,34 +1156,57 @@ public partial class TypeChecker
     /// Analyzes a null check for a narrowable path.
     /// </summary>
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathNullCheck(
-        Narrowing.NarrowingPath path, Expr expr, bool negated)
+        Narrowing.NarrowingPath path, Expr expr, bool negated, bool checkingForNull = true, bool checkBoth = false)
     {
         // Get the current type of the expression
         TypeInfo currentType = CheckExpr(expr);
 
-        // If it's a union containing null, we can narrow
+        // checkBoth: a LOOSE comparison (`== null`/`!= null`/`== undefined`/`!= undefined`) against
+        // EITHER literal narrows away BOTH null and undefined (JS: `null == undefined`) — unlike a
+        // STRICT `===`/`!==` comparison, which narrows away only the specific one compared.
+        bool IsNullish(TypeInfo t) => checkBoth
+            ? t is TypeInfo.Null or TypeInfo.Undefined
+            : checkingForNull ? t is TypeInfo.Null : t is TypeInfo.Undefined;
+
+        // If it's a union containing the checked nullish type(s), we can narrow
         if (currentType is TypeInfo.Union union)
         {
             var flattenedTypes = union.FlattenedTypes;
-            var nonNull = flattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
-            var nullTypes = flattenedTypes.Where(t => t is TypeInfo.Null).ToList();
+            var nonNullish = flattenedTypes.Where(t => !IsNullish(t)).ToList();
+            var nullishTypes = flattenedTypes.Where(IsNullish).ToList();
 
-            if (nonNull.Count == 0 && nullTypes.Count == 0)
+            if (nonNullish.Count == 0 && nullishTypes.Count == 0)
                 return (null, null, null);
 
-            TypeInfo nonNullType = nonNull.Count == 0 ? new TypeInfo.Never() :
-                nonNull.Count == 1 ? nonNull[0] : new TypeInfo.Union(nonNull);
-            TypeInfo nullType = nullTypes.Count == 0 ? new TypeInfo.Null() :
-                nullTypes.Count == 1 ? nullTypes[0] : new TypeInfo.Union(nullTypes);
+            TypeInfo nonNullishType = nonNullish.Count == 0 ? new TypeInfo.Never() :
+                nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
+            TypeInfo nullishType = nullishTypes.Count == 0
+                ? (checkBoth ? new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()])
+                    : checkingForNull ? new TypeInfo.Null() : new TypeInfo.Undefined())
+                : nullishTypes.Count == 1 ? nullishTypes[0] : new TypeInfo.Union(nullishTypes);
 
             // if (path !== null) -> then: non-null, else: null
             // if (path === null) -> then: null, else: non-null
             if (negated)
-                return (path, nonNullType, nullType);
-            return (path, nullType, nonNullType);
+                return (path, nonNullishType, nullishType);
+            return (path, nullishType, nonNullishType);
         }
 
-        // Not a union with null - no narrowing effect
+        // Non-union type: if it's nullable, we can still narrow
+        if (currentType is TypeInfo.Null && (checkingForNull || checkBoth))
+        {
+            if (negated)
+                return (path, new TypeInfo.Never(), currentType);
+            return (path, currentType, new TypeInfo.Never());
+        }
+        if (currentType is TypeInfo.Undefined && (!checkingForNull || checkBoth))
+        {
+            if (negated)
+                return (path, new TypeInfo.Never(), currentType);
+            return (path, currentType, new TypeInfo.Never());
+        }
+
+        // Not nullable in the checked sense - no narrowing effect
         return (null, null, null);
     }
 

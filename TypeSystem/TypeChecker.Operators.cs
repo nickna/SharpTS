@@ -25,7 +25,7 @@ public partial class TypeChecker
         {
             OperatorDescriptor.Plus => CheckPlusOperator(left, right, line),
             OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right, line),
-            OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, line),
+            OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, binary.Operator.Lexeme, line),
             OperatorDescriptor.Equality => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
@@ -45,6 +45,25 @@ public partial class TypeChecker
 
     private TypeInfo CheckPlusOperator(TypeInfo left, TypeInfo right, int line = 0)
     {
+        // symbol poisons '+' even against `any` (unlike every other operator category here, which
+        // bypasses on `any`) — checked first, before the any-bypass below. tsc picks between two
+        // diagnostics depending on the OTHER operand: a bare number opposite symbol (or symbol on
+        // both sides) gets the generic "cannot be applied to types 'A' and 'B'"; anything else
+        // (string, any, or a union merely containing symbol like `sym || ""`) gets the
+        // symbol-specific "The '+' operator cannot be applied to type 'symbol'".
+        bool leftHasSymbol = ContainsSymbolType(left);
+        bool rightHasSymbol = ContainsSymbolType(right);
+        if (leftHasSymbol || rightHasSymbol)
+        {
+            // A plain pattern match, not a helper built on the Any-permissive IsTypeOfKind (which
+            // would treat `any` as satisfying "is symbol" and wrongly make `s + a` look pure-symbol).
+            bool bothPureSymbol = left is TypeInfo.Symbol or TypeInfo.UniqueSymbol
+                && right is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
+            bool otherIsBareNumber = (leftHasSymbol && IsBareNumberType(right)) || (rightHasSymbol && IsBareNumberType(left));
+            if (bothPureSymbol || otherIsBareNumber)
+                throw new TypeCheckException($"Operator '+' cannot be applied to types '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
+            throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
+        }
         // Any/Inferred (incl. in unions) bypasses type checking - return any
         if (IsAnyPermissive(left) || IsAnyPermissive(right)) return new TypeInfo.Any();
         if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
@@ -54,6 +73,12 @@ public partial class TypeChecker
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         throw new TypeCheckException("Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.", line > 0 ? line : null, tsCode: "TS2365");
     }
+
+    /// <summary>Exactly a number primitive or number-literal type — deliberately NOT the
+    /// Any-permissive <see cref="IsNumber"/> (which treats `any` as "is a number" for ordinary
+    /// operand compatibility checks); this is used to pick between two symbol-vs-other-operand
+    /// diagnostic messages where `any` must NOT be treated as "the other side was a number".</summary>
+    private static bool IsBareNumberType(TypeInfo t) => t is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral;
 
     private TypeInfo CheckArithmeticBinary(TypeInfo left, TypeInfo right, int line = 0)
     {
@@ -67,10 +92,31 @@ public partial class TypeChecker
             return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
-        throw new TypeCheckException($"Operands must be numbers or bigints of the same type. Got '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2362");
+        RecordInvalidArithmeticOperand(left, right, line);
+        return new TypeInfo.Any();
     }
 
-    private TypeInfo CheckComparisonBinary(TypeInfo left, TypeInfo right, int line = 0)
+    /// <summary>
+    /// tsc reports each invalid arithmetic/bitwise operand independently — TS2362 for the left side,
+    /// TS2363 for the right — so both can fire on the same expression (`s * s` where `s: symbol`
+    /// gets two diagnostics, `s * 0` gets only the one for `s`). Always throws, like every other
+    /// operator check in this file, so single-shot (non-recovery) callers still see an exception;
+    /// when BOTH sides are invalid, the one NOT thrown is recorded directly first, so recovery
+    /// mode's per-statement catch (which records whichever one propagates) still ends up with both.
+    /// </summary>
+    private void RecordInvalidArithmeticOperand(TypeInfo left, TypeInfo right, int line)
+    {
+        const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
+        bool leftInvalid = !IsNumber(left) && !IsBigInt(left);
+        bool rightInvalid = !IsNumber(right) && !IsBigInt(right);
+        if (leftInvalid && rightInvalid)
+            RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
+        if (leftInvalid)
+            throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2362");
+        throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
+    }
+
+    private TypeInfo CheckComparisonBinary(TypeInfo left, TypeInfo right, string op, int line = 0)
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
@@ -83,6 +129,10 @@ public partial class TypeChecker
             return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot compare bigint and number directly. Use explicit conversion.", line > 0 ? line : null, tsCode: "TS2365");
+        // tsc has a symbol-specific message for relational comparisons (one diagnostic for the whole
+        // expression, unlike the arithmetic per-side TS2362/2363 split above).
+        if (ContainsSymbolType(left) || ContainsSymbolType(right))
+            throw new TypeCheckException($"The '{op}' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
         throw new TypeCheckException($"Comparison operands must be numbers, bigints, or strings of the same type. Got '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
     }
 
@@ -98,7 +148,9 @@ public partial class TypeChecker
             return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in bitwise operations.", line > 0 ? line : null, tsCode: "TS2365");
-        throw new TypeCheckException($"Bitwise operators require numeric operands. Got '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
+        // Same per-side TS2362/TS2363 split as arithmetic — tsc uses the identical codes for bitwise.
+        RecordInvalidArithmeticOperand(left, right, line);
+        return new TypeInfo.Any();
     }
 
     private TypeInfo CheckUnsignedShiftBinary(TypeInfo left, TypeInfo right, int line = 0)
@@ -110,7 +162,18 @@ public partial class TypeChecker
         if (IsBigInt(left) || IsBigInt(right))
             throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2791");
         if (!IsNumber(left) || !IsNumber(right))
-            throw new TypeCheckException("Bitwise operators require numeric operands.", line > 0 ? line : null, tsCode: "TS2365");
+        {
+            // Same per-side TS2362/TS2363 split as the other arithmetic/bitwise operators (see
+            // RecordInvalidArithmeticOperand) — bigint is excluded above (not a valid >>> operand
+            // at all), so only number qualifies here. Always throws; when both sides are invalid,
+            // the one not thrown is recorded directly so recovery mode still gets both.
+            const string message = "An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.";
+            if (!IsNumber(left) && !IsNumber(right))
+                RecordTypeError(new TypeCheckException(message, line: line > 0 ? line : null, tsCode: "TS2363"));
+            if (!IsNumber(left))
+                throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2362");
+            throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
+        }
         return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
     }
 
@@ -349,19 +412,37 @@ public partial class TypeChecker
         var assignedPath = new Narrowing.NarrowingPath.Variable(compound.Name.Lexeme);
         InvalidateNarrowingsFor(assignedPath);
 
+        int line = compound.Operator.Line;
+
         // For += with strings, allow string concatenation
         if (compound.Operator.Type == TokenType.PLUS_EQUAL)
         {
+            // Same symbol-vs-other-operand branching as binary '+' (CheckPlusOperator) — checked
+            // FIRST, ahead of the string-concatenation shortcut below: symbol poisons '+=' even
+            // against `any` or a string LHS (`str += sym` still errors).
+            bool leftHasSymbol = ContainsSymbolType(varType);
+            bool rightHasSymbol = ContainsSymbolType(valueType);
+            if (leftHasSymbol || rightHasSymbol)
+            {
+                bool bothPureSymbol = varType is TypeInfo.Symbol or TypeInfo.UniqueSymbol
+                    && valueType is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
+                bool otherIsBareNumber = (leftHasSymbol && IsBareNumberType(valueType)) || (rightHasSymbol && IsBareNumberType(varType));
+                if (bothPureSymbol || otherIsBareNumber)
+                    throw new TypeCheckException($"Operator '+=' cannot be applied to types '{varType}' and '{valueType}'.", line: line > 0 ? line : null, tsCode: "TS2365");
+                throw new TypeCheckException("The '+=' operator cannot be applied to type 'symbol'.", line: line > 0 ? line : null, tsCode: "TS2469");
+            }
+
             if (IsString(varType)) return varType;
             if (!IsNumber(varType) || !IsNumber(valueType))
                 throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
             return varType;
         }
 
-        // All other compound operators require numbers
+        // All other compound operators require numbers — same per-side TS2362/TS2363 split as the
+        // binary arithmetic/bitwise operators.
         if (!IsNumber(varType) || !IsNumber(valueType))
         {
-            throw new TypeCheckException("Compound assignment requires numeric operands.", tsCode: "TS2365");
+            RecordInvalidArithmeticOperand(varType, valueType, line);
         }
 
         return varType;
@@ -590,9 +671,9 @@ public partial class TypeChecker
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
         TypeInfo operandType = CheckExpr(prefix.Operand);
-        if (!IsNumber(operandType))
+        if (!IsNumber(operandType) && !IsBigInt(operandType))
         {
-            throw new TypeCheckException("Increment/decrement operand must be a number.", tsCode: "TS2356");
+            throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: prefix.Operator.Line, tsCode: "TS2356");
         }
         return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
     }
@@ -600,9 +681,9 @@ public partial class TypeChecker
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
         TypeInfo operandType = CheckExpr(postfix.Operand);
-        if (!IsNumber(operandType))
+        if (!IsNumber(operandType) && !IsBigInt(operandType))
         {
-            throw new TypeCheckException("Increment/decrement operand must be a number.", tsCode: "TS2356");
+            throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: postfix.Operator.Line, tsCode: "TS2356");
         }
         return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
     }
@@ -665,6 +746,9 @@ public partial class TypeChecker
             if (right is TypeInfo.Any) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
             if (IsBigInt(right)) return new TypeInfo.BigInt();
             if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            // tsc has a symbol-specific message for unary '-'/'~'/'+', distinct from the generic one.
+            if (ContainsSymbolType(right))
+                throw new TypeCheckException("The '-' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Unary '-' expects a number or bigint.", tsCode: "TS2362");
         }
         if (unary.Operator.Type == TokenType.BANG)
@@ -675,7 +759,19 @@ public partial class TypeChecker
             if (right is TypeInfo.Any) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
             if (IsBigInt(right)) return new TypeInfo.BigInt();
             if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            if (ContainsSymbolType(right))
+                throw new TypeCheckException("The '~' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Bitwise NOT requires a numeric operand.", tsCode: "TS2362");
+        }
+        if (unary.Operator.Type == TokenType.PLUS)
+        {
+            // Unary '+' had no check at all — any operand (including symbol) silently passed
+            // through unchanged. Add only the symbol-specific rejection tsc requires here;
+            // leave the (separately incorrect, pre-existing) passthrough for every other operand
+            // type alone rather than widen this fix into "unary + always coerces to number".
+            if (ContainsSymbolType(right))
+                throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
+            return right;
         }
 
         return right;
