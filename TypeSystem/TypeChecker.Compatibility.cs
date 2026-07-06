@@ -422,6 +422,23 @@ public partial class TypeChecker
         if (!_strictNullChecks && actual is TypeInfo.Null or TypeInfo.Undefined)
             return expected is not TypeInfo.Never;
 
+        // Namespace/module types (typeof someNamespace / typeof import(...)) have no dedicated
+        // relation anywhere below, so two structurally-identical namespaces — even the exact same
+        // one referenced twice, e.g. `true ? af : null` vs `true ? null : af` — fell through to the
+        // generic `return false` at the bottom, making a namespace type spuriously incompatible with
+        // ITSELF. Relate them structurally, like an object/record: every member `expected` exposes
+        // must exist on `actual` with a compatible type.
+        if (expected is TypeInfo.Namespace expNs && actual is TypeInfo.Namespace actNs)
+        {
+            return expNs.Types.All(kv => actNs.Types.TryGetValue(kv.Key, out var t) && IsCompatible(kv.Value, t))
+                && expNs.Values.All(kv => actNs.Values.TryGetValue(kv.Key, out var v) && IsCompatible(kv.Value, v));
+        }
+        if (expected is TypeInfo.Module expMod && actual is TypeInfo.Module actMod)
+        {
+            return expMod.Exports.All(kv => actMod.Exports.TryGetValue(kv.Key, out var v) && IsCompatible(kv.Value, v))
+                && (expMod.DefaultExport is null || (actMod.DefaultExport is not null && IsCompatible(expMod.DefaultExport, actMod.DefaultExport)));
+        }
+
         // Expand recursive type aliases lazily
         if (expected is TypeInfo.RecursiveTypeAlias expectedRTA)
         {
