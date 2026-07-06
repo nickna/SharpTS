@@ -120,27 +120,78 @@ public partial class TypeChecker
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
         // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
         // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
-        // pulled out of the name-keyed overload grouping below. Arbitrary computed keys (e.g. `[v]()`)
-        // aren't statically named members and are skipped (still parsed/checked, just untyped — like
-        // computed accessors).
-        foreach (var method in classStmt.Methods.Where(m => m.ComputedKey != null && m.Body != null))
+        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
+        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
+        // validation string-named methods get, rather than silently "last one wins" registration.
+        // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
+        // (still parsed/checked, just untyped — like computed accessors).
+        var computedMethodGroups = classStmt.Methods
+            .Where(m => m.ComputedKey != null)
+            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
+            .Where(x => x.Name != null)
+            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
+            // below needs static AND instance declarations of the same name in one group to
+            // compare them against each other — grouping by (IsStatic, Name) would silently
+            // split a static/instance mismatch into two single-member groups that never meet.
+            .GroupBy(x => x.Name!)
+            .ToList();
+
+        foreach (var group in computedMethodGroups)
         {
-            if (TryGetWellKnownSymbolMemberName(method.ComputedKey) is not { } memberName)
-                continue;
-            // Build the factory signature WITHOUT the generator-return wrapping BuildMethodFuncType
-            // applies: a [Symbol.iterator]()/[Symbol.asyncIterator]() factory must return the iterator
-            // type itself (e.g. `Iterator<number>` — what for...of consumes and reads its element from),
-            // not Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
+            string memberName = group.Key;
+            var members = group.Select(x => x.Method).ToList();
+
+            // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
+            // static-ness. It compares consecutive pairs in source order and reports the mismatch
+            // at the LATER member, choosing the message from the EARLIER member's own static-ness
+            // ("must be static" when the earlier one was static, "must not be static" otherwise) —
+            // verified against symbolProperty42's exact (line, code) pairs.
+            for (int i = 1; i < members.Count; i++)
+            {
+                if (members[i - 1].IsStatic != members[i].IsStatic)
+                {
+                    var (msg, code) = members[i - 1].IsStatic
+                        ? (" Function overload must be static.", "TS2387")
+                        : (" Function overload must not be static.", "TS2388");
+                    RecordTypeError(new TypeCheckException(msg, line: members[i].Name.Line, tsCode: code));
+                }
+            }
+
+            var signatures = members.Where(m => m.Body == null && !m.IsAbstract).ToList();
+            var implementations = members.Where(m => m.Body != null).ToList();
+
+            if (implementations.Count > 1)
+            {
+                // tsc flags EVERY declaration in the group once a second implementation appears —
+                // signatures included, not just the implementations.
+                foreach (var m in members)
+                    RecordTypeError(new TypeCheckException(" Duplicate function implementation.", line: m.Name.Line, tsCode: "TS2393"));
+            }
+            else if (implementations.Count == 0 && signatures.Count > 0)
+            {
+                RecordTypeError(new TypeCheckException(
+                    " Function implementation is missing or not immediately following the declaration.",
+                    line: members[^1].Name.Line, tsCode: "TS2391"));
+            }
+
+            // Register the group's type from the single implementation when there is exactly one
+            // (the common, error-free case), else the last declaration as a best-effort fallback so
+            // an error'd group still gets SOME type. Build the factory signature WITHOUT the
+            // generator-return wrapping BuildMethodFuncType applies: a [Symbol.iterator]()/
+            // [Symbol.asyncIterator]() factory must return the iterator type itself (e.g.
+            // `Iterator<number>` — what for...of consumes and reads its element from), not
+            // Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
+            var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
-                method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
+                representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
+            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? new TypeInfo.Inferred();
             var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
-            if (method.IsStatic)
+            if (representative.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
             else
                 mutableClass.Methods[memberName] = funcType;
-            (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = method.Access;
+            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
         }
 
         // First pass: collect signatures, grouping overloads
