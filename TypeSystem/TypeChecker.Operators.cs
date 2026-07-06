@@ -393,10 +393,15 @@ public partial class TypeChecker
             elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
         }
 
-        // Return the more specific type, or thenType if both are compatible
-        if (IsCompatible(thenType, elseType) || IsCompatible(elseType, thenType))
+        // Return whichever branch type is the wider of the two (the other is assignable to it),
+        // or thenType if they're mutually compatible (e.g. identical types).
+        if (IsCompatible(thenType, elseType))
         {
             return thenType;
+        }
+        if (IsCompatible(elseType, thenType))
+        {
+            return elseType;
         }
 
         // Return union of both branch types
