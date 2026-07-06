@@ -71,7 +71,7 @@ tests/cases/conformance/es2023/intlNumberFormatES5UseGrouping.ts Fail
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit1.ts Pass
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit10.ts Pass
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit11.ts Pass
-tests/cases/conformance/es6/Symbols/symbolDeclarationEmit12.ts Fail
+tests/cases/conformance/es6/Symbols/symbolDeclarationEmit12.ts Pass
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit13.ts Pass
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit14.ts Pass
 tests/cases/conformance/es6/Symbols/symbolDeclarationEmit2.ts Pass
