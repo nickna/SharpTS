@@ -762,10 +762,21 @@ public partial class TypeChecker
                         // Infer index signature based on key type
                         if (keyType is (TypeInfo.Symbol or TypeInfo.UniqueSymbol) &&
                             TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownSymbolName)
+                        {
                             // Symbol.iterator/toStringTag/toPrimitive/... — a named member (canonical
                             // "@@name", matching interfaces/classes), not merged into the symbol index
                             // signature. Merging would lose the per-symbol type (#99 Cluster B).
+                            // TS1117: tsc rejects a second plain (non-accessor) property with the same
+                            // canonical name — an object literal, unlike a class/interface, can't
+                            // overload. Getter/setter pairs are exempt (handled in their own branches,
+                            // which never touch `fields` at this point) but a second PLAIN duplicate is not.
+                            if (!getterNames.Contains(wellKnownSymbolName) && !setterNames.Contains(wellKnownSymbolName)
+                                && fields.ContainsKey(wellKnownSymbolName))
+                                RecordTypeError(new TypeCheckException(
+                                    " An object literal cannot have multiple properties with the same name.",
+                                    line: TryGetExprLine(ck.Expression), tsCode: "TS1117"));
                             fields[wellKnownSymbolName] = valueType;
+                        }
                         else if (keyType is TypeInfo.String)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)

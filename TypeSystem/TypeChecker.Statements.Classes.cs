@@ -285,6 +285,13 @@ public partial class TypeChecker
         // Collect accessor types
         if (classStmt.Accessors != null)
         {
+            // TS2300: two getters (or two setters) with the same name/static-ness are a duplicate
+            // identifier — a class, unlike an object literal, can't have two same-kind accessors for
+            // one member at all (a get+set PAIR is fine; that's tracked separately below). Covers both
+            // plain and well-known-symbol computed names (`get [Symbol.hasInstance]()` declared twice),
+            // neither of which had any duplicate-accessor detection before.
+            var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
+            var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
             foreach (var accessor in classStmt.Accessors)
             {
                 // Check accessor decorators
@@ -292,6 +299,22 @@ public partial class TypeChecker
                     ? DecoratorTarget.Getter
                     : DecoratorTarget.Setter;
                 CheckDecorators(accessor.Decorators, accessorTarget);
+
+                string? canonicalName = accessor.ComputedKey != null
+                    ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
+                    : accessor.Name.Lexeme;
+                if (canonicalName != null)
+                {
+                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
+                    var key = (accessor.IsStatic, canonicalName);
+                    int line = TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+                    if (!seen.TryAdd(key, line))
+                    {
+                        string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
+                        RecordTypeError(new TypeCheckException(
+                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
+                    }
+                }
 
                 // Computed accessor names (get [Symbol.x]()) have no static member
                 // name to register; their bodies are still checked later.
