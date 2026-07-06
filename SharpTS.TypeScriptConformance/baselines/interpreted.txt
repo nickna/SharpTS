@@ -104,7 +104,7 @@ tests/cases/conformance/es6/Symbols/symbolProperty26.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty27.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty28.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty29.ts Pass
-tests/cases/conformance/es6/Symbols/symbolProperty3.ts Fail
+tests/cases/conformance/es6/Symbols/symbolProperty3.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty30.ts Fail
 tests/cases/conformance/es6/Symbols/symbolProperty31.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty32.ts Fail
@@ -129,9 +129,9 @@ tests/cases/conformance/es6/Symbols/symbolProperty49.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty5.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty50.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty51.ts Pass
-tests/cases/conformance/es6/Symbols/symbolProperty52.ts Skipped:lib-drift
+tests/cases/conformance/es6/Symbols/symbolProperty52.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty53.ts Fail
-tests/cases/conformance/es6/Symbols/symbolProperty54.ts Fail
+tests/cases/conformance/es6/Symbols/symbolProperty54.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty55.ts Fail
 tests/cases/conformance/es6/Symbols/symbolProperty56.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty57.ts Pass
