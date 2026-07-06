@@ -356,12 +356,16 @@ public partial class TypeChecker
                     : accessor.Name.Lexeme;
                 if (canonicalName != null)
                 {
+                    int line = TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
+                    // A method already registered under this name (methods are processed above)
+                    // makes ANY accessor of the same name a duplicate too — a class member can't be
+                    // both a method and an accessor. tsc flags the accessor, not the method.
+                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
                     var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
                     var key = (accessor.IsStatic, canonicalName);
-                    int line = TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
-                    if (!seen.TryAdd(key, line))
+                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
                     {
-                        string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
                         RecordTypeError(new TypeCheckException(
                             $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
                     }
