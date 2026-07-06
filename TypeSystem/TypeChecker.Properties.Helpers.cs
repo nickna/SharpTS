@@ -233,7 +233,7 @@ public partial class TypeChecker
         {
             return protoMember;
         }
-        throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", tsCode: "TS2339");
+        throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", line: memberName.Line, tsCode: "TS2339");
     }
 
     /// <summary>

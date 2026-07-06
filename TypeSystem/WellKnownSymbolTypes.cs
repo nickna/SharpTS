@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace SharpTS.TypeSystem;
 
 /// <summary>
@@ -61,4 +63,39 @@ public static class WellKnownSymbolTypes
         "split" => Split,
         _ => null
     };
+
+    /// <summary>
+    /// The type of the bare `Symbol` value itself (tsc's `SymbolConstructor`). Used wherever
+    /// `Symbol` is referenced WITHOUT being called — e.g. `var s = Symbol; obj[s]`. Deliberately
+    /// NOT `any`: a bare-Symbol-derived value must fail non-permissive checks like a computed
+    /// property name's "must be string/number/symbol/any" validation (TS2464), the way tsc's real
+    /// SymbolConstructor object type does. `Symbol(...)` calls and `Symbol.iterator`-style
+    /// well-known-symbol access are matched by earlier special cases (TryCheckBuiltinCall /
+    /// CheckGet) before generic member lookup ever consults this type, so adding it here doesn't
+    /// change those paths — only genuine "use Symbol as a plain value" sites.
+    /// </summary>
+    public static readonly TypeInfo.Interface SymbolConstructor = new(
+        "SymbolConstructor",
+        new Dictionary<string, TypeInfo>
+        {
+            ["iterator"] = Iterator,
+            ["asyncIterator"] = AsyncIterator,
+            ["toStringTag"] = ToStringTag,
+            ["hasInstance"] = HasInstance,
+            ["isConcatSpreadable"] = IsConcatSpreadable,
+            ["toPrimitive"] = ToPrimitive,
+            ["species"] = Species,
+            ["unscopables"] = Unscopables,
+            ["dispose"] = Dispose,
+            ["asyncDispose"] = AsyncDispose,
+            ["match"] = Match,
+            ["matchAll"] = MatchAll,
+            ["replace"] = Replace,
+            ["search"] = Search,
+            ["split"] = Split,
+            ["for"] = new TypeInfo.Function([new TypeInfo.String()], new TypeInfo.Symbol(), 1, false, null, ["key"]),
+            ["keyFor"] = new TypeInfo.Function([new TypeInfo.Symbol()], new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]), 1, false, null, ["sym"]),
+            ["prototype"] = new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty),
+        }.ToFrozenDictionary(),
+        FrozenSet<string>.Empty);
 }
