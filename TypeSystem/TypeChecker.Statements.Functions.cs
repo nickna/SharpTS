@@ -339,9 +339,16 @@ public partial class TypeChecker
             }
             else
             {
-                // No return type specified - use Any for hoisting
-                // The actual type will be checked during normal processing
-                returnType = new TypeInfo.Any();
+                // Neither the binding nor the arrow annotates a return type. A precise
+                // `(params) => any` placeholder here looks like a REAL prior declaration to
+                // VisitVar's TS2403 redeclaration check once the real (usually non-`any`)
+                // inferred return type is established for this var's OWN first-and-only
+                // declaration — falsely tripping "subsequent variable declarations must have
+                // the same type". Register a bare `any` instead, matching how
+                // HoistVarDeclarations/HoistClassDeclarations placeholder forward references —
+                // `any` is already exempt from that check.
+                _environment.Define(name.Lexeme, new TypeInfo.Any());
+                return;
             }
 
             // Handle 'this' type
