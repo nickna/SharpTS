@@ -753,9 +753,13 @@ public partial class TypeChecker
                     _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
                 };
 
+                // Body-scope binding widens a bare `?`-optional parameter with `| undefined` (the
+                // caller may omit it) — the method's own callable signature (methodType) keeps the
+                // declared type.
+                var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
                 {
-                    methodEnv.Define(method.Parameters[i].Name.Lexeme, methodType.ParamTypes[i]);
+                    methodEnv.Define(method.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
                 }
 
                 // Save and set context - method bodies are isolated from outer loop/switch/label context

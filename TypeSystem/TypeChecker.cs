@@ -683,6 +683,10 @@ public partial class TypeChecker
 
     /// <summary>
     /// Builds a function signature by parsing parameters and validating optional/required ordering.
+    /// Returns the DECLARED annotation types (`paramTypes`) — used for the function's own callable
+    /// signature (`f?: T`, not `f: T | undefined`; matters for arity/display). Body-scope binding
+    /// uses a WIDENED type instead — see <see cref="WidenOptionalParamsForBody"/> — since a caller
+    /// may genuinely omit a `?`-optional parameter with no default.
     /// </summary>
     /// <param name="parameters">Function/method parameters to parse</param>
     /// <param name="validateDefaults">Whether to type-check default parameter values</param>
@@ -701,7 +705,8 @@ public partial class TypeChecker
         // A default value may reference any PRECEDING parameter (`(x: T, y: U = x)`), so defaults
         // are checked in a scope where the earlier parameters are progressively defined. Each
         // parameter is defined AFTER its own default is checked, so self-reference still resolves
-        // to an outer binding or errors.
+        // to an outer binding or errors. A preceding bare-optional parameter is visible here with
+        // its WIDENED (possibly-undefined) type, matching what the function body itself would see.
         var paramScope = new TypeEnvironment(_environment);
 
         foreach (var param in parameters)
@@ -747,11 +752,33 @@ public partial class TypeChecker
                 requiredParams++;
             }
 
-            paramScope.Define(param.Name.Lexeme, paramType);
+            paramScope.Define(param.Name.Lexeme,
+                param.IsOptional && param.DefaultValue == null ? CreateUnion(paramType, new TypeInfo.Undefined()) : paramType);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
         return (paramTypes, requiredParams, hasRest, paramNames);
+    }
+
+    /// <summary>
+    /// Widens a function/method/arrow's declared parameter types for BODY-SCOPE binding: a bare
+    /// `?`-optional parameter with no default may genuinely be omitted by the caller, so the body
+    /// sees `T | undefined` even though the callable signature itself (<c>paramTypes</c> as returned
+    /// by <see cref="BuildFunctionSignature"/>) keeps exactly `T`. A defaulted parameter is NOT
+    /// widened: the default substitutes a same-typed value before the body ever observes it, so
+    /// it's never actually undefined there. Rest parameters and required parameters pass through.
+    /// </summary>
+    private List<TypeInfo> WidenOptionalParamsForBody(List<TypeInfo> paramTypes, List<Stmt.Parameter> parameters)
+    {
+        var result = new List<TypeInfo>(paramTypes.Count);
+        for (int i = 0; i < paramTypes.Count; i++)
+        {
+            var param = i < parameters.Count ? parameters[i] : null;
+            result.Add(param is { IsOptional: true, DefaultValue: null }
+                ? CreateUnion(paramTypes[i], new TypeInfo.Undefined())
+                : paramTypes[i]);
+        }
+        return result;
     }
 
     /// <summary>

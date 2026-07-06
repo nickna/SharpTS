@@ -651,10 +651,13 @@ public partial class TypeChecker
         // The enclosing environment, where the (possibly refined) function type is registered.
         TypeEnvironment previousEnv = _environment;
 
-        // Add parameters to function environment and check body
+        // Add parameters to function environment and check body. Body-scope binding widens a bare
+        // `?`-optional parameter with `| undefined` (the caller may omit it) — the function's own
+        // callable signature (paramTypes, used for thisFuncType et al.) keeps the declared type.
+        var bodyParamTypes = WidenOptionalParamsForBody(paramTypes, funcStmt.Parameters);
         for (int i = 0; i < funcStmt.Parameters.Count; i++)
         {
-            funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
+            funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
         }
 
         // Save and set context - function bodies are isolated from outer loop/switch/label context
@@ -696,11 +699,13 @@ public partial class TypeChecker
             _suppressDiagnostics++;
         }
 
-        // Push a new scope for declared variable types and record parameter types
+        // Push a new scope for declared variable types and record parameter types (widened, matching
+        // the environment binding above — so a later reassignment narrows/widens against the TRUE
+        // declared type, which for a bare-optional parameter includes undefined).
         PushDeclaredVariableScope();
         for (int i = 0; i < funcStmt.Parameters.Count; i++)
         {
-            RecordDeclaredType(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
+            RecordDeclaredType(funcStmt.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
         }
 
         // Enter escape analysis scope and register parameters as local variables
