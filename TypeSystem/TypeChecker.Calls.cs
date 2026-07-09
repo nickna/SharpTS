@@ -417,9 +417,11 @@ public partial class TypeChecker
                 throw new TypeCheckException("BigInt() requires exactly one argument.", tsCode: "TS2554");
             }
             var argType = CheckExpr(call.Arguments[0]);
-            if (!IsNumber(argType) && !IsString(argType) && !IsBigInt(argType) && argType is not TypeInfo.Any)
+            // BigInt's parameter type is `string | number | bigint | boolean` (a boolean coerces to 0n/1n).
+            bool isBoolean = argType is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral;
+            if (!IsNumber(argType) && !IsString(argType) && !IsBigInt(argType) && !isBoolean && argType is not TypeInfo.Any)
             {
-                throw new TypeCheckException($"BigInt() argument must be a number, string, or bigint, got '{argType}'.", tsCode: "TS2345");
+                throw new TypeCheckException($"BigInt() argument must be a number, string, bigint, or boolean, got '{argType}'.", tsCode: "TS2345");
             }
             { result = new TypeInfo.BigInt(); return true; }
         }
