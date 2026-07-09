@@ -39,7 +39,7 @@ tests/cases/conformance/es2019/importMeta/importMetaNarrowing.ts Fail
 tests/cases/conformance/es2020/bigintMissingES2019.ts Pass
 tests/cases/conformance/es2020/bigintMissingES2020.ts Pass
 tests/cases/conformance/es2020/bigintMissingESNext.ts Pass
-tests/cases/conformance/es2020/constructBigint.ts Fail
+tests/cases/conformance/es2020/constructBigint.ts Pass
 tests/cases/conformance/es2020/es2020IntlAPIs.ts Fail
 tests/cases/conformance/es2020/intlNumberFormatES2020.ts Pass
 tests/cases/conformance/es2020/localesObjectArgument.ts Pass
@@ -288,7 +288,7 @@ tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingW
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithObjectMembersOptionality2.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithObjectMembersOptionality3.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithObjectMembersOptionality4.ts Pass
-tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithOptionalProperties.ts Fail
+tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithOptionalProperties.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithStringIndexer.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithStringIndexer2.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypingWithStringIndexer3.ts Pass
