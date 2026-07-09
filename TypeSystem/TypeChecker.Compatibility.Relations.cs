@@ -93,7 +93,22 @@ public partial class TypeChecker
                 return true;
             }
             var apparent = ApparentTypeOf(actualTpOnly);
-            result = apparent != null && IsCompatible(expected, apparent);
+            if (apparent == null)
+            {
+                // An unconstrained type parameter has no apparent (constraint) type. tsc still relates
+                // it to a target that requires NO members — an all-optional / empty object type — its
+                // "subtyping assumes transitivity for optional properties (99% case)" allowance. It is
+                // NOT assignable to a primitive, `object`, or any target with a required member.
+                result = expected switch
+                {
+                    TypeInfo.Record rec => HasNoRequiredMembers(rec),
+                    TypeInfo.Interface itf => !itf.HasIndexSignature && !itf.IsCallable && !itf.IsConstructable
+                        && itf.GetAllMembers().All(m => itf.GetAllOptionalMembers().Contains(m.Key)),
+                    _ => false
+                };
+                return true;
+            }
+            result = IsCompatible(expected, apparent);
             return true;
         }
         result = false;
