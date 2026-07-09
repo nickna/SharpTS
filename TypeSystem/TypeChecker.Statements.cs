@@ -966,9 +966,27 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(stmt.Object);
 
+        // The right-hand side must be an object type / `any` / a type parameter; a symbol fails (TS2407).
+        if (ContainsSymbolType(objType))
+        {
+            throw new TypeCheckException(
+                $"The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter, but here has type '{objType}'.",
+                line: stmt.Variable.Line, tsCode: "TS2407");
+        }
+
         if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
         {
             throw new TypeCheckException($"'for...in' requires an object, got {objType}", tsCode: "TS2549");
+        }
+
+        // When the loop variable is an existing lvalue (not a fresh `var`/`let` binding), the loop
+        // writes string keys into it — a symbol-typed target fails (TS2405, "must be string or any").
+        if (!stmt.IsDeclaration && _environment.Get(stmt.Variable.Lexeme) is TypeInfo existingTarget
+            && existingTarget is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+        {
+            throw new TypeCheckException(
+                "The left-hand side of a 'for...in' statement must be of type 'string' or 'any'.",
+                line: stmt.Variable.Line, tsCode: "TS2405");
         }
 
         TypeEnvironment forInEnv = new(_environment);

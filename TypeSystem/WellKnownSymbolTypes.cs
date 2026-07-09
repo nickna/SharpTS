@@ -97,5 +97,13 @@ public static class WellKnownSymbolTypes
             ["keyFor"] = new TypeInfo.Function([new TypeInfo.Symbol()], new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]), 1, false, null, ["sym"]),
             ["prototype"] = new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty),
         }.ToFrozenDictionary(),
-        FrozenSet<string>.Empty);
+        FrozenSet<string>.Empty,
+        // The well-known symbol members are `readonly` in lib.d.ts — `delete Symbol.iterator`
+        // is TS2704, and reassigning them is an error too.
+        ReadonlyMembers: new[]
+        {
+            "iterator", "asyncIterator", "toStringTag", "hasInstance", "isConcatSpreadable",
+            "toPrimitive", "species", "unscopables", "dispose", "asyncDispose",
+            "match", "matchAll", "replace", "search", "split",
+        }.ToFrozenSet());
 }

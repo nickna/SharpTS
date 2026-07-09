@@ -168,7 +168,7 @@ public partial class Parser
             Stmt body = Statement();
             if (isOfLoop)
                 return new Stmt.ForOf(varName, null, rhs, body, isAsync);
-            return new Stmt.ForIn(varName, null, rhs, body);
+            return new Stmt.ForIn(varName, null, rhs, body, IsDeclaration: false);
         }
 
         // Traditional for loop without let/const

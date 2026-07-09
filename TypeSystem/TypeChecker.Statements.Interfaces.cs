@@ -186,6 +186,13 @@ public partial class TypeChecker
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
     {
+        // An interface may not be named after a primitive type keyword (TS2427). `symbol` is a
+        // contextual keyword the parser accepts as an identifier, so it reaches here.
+        if (interfaceStmt.Name.Lexeme == "symbol")
+        {
+            throw new TypeCheckException("Interface name cannot be 'symbol'.", line: interfaceStmt.Name.Line, tsCode: "TS2427");
+        }
+
         // Handle generic type parameters with two-pass approach to support recursive constraints (e.g., T extends TreeNode<T>)
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
