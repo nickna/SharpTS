@@ -396,6 +396,10 @@ public partial class TypeChecker
                 var extendType = ResolveAnnotation(
                     extendTypeName,
                     interfaceStmt.ExtendsNodes != null && i < interfaceStmt.ExtendsNodes.Count ? interfaceStmt.ExtendsNodes[i] : null)!;
+                // #99: `interface I extends String` — the wrapper name resolves to the primitive; use
+                // the loaded lib interface so it's a valid extends target (not a spurious TS2312).
+                if (extendType is not TypeInfo.Interface && LibTypeLoader.TryGet(extendTypeName, out var libExtends))
+                    extendType = libExtends;
                 if (extendType is TypeInfo.Interface extendInterface)
                 {
                     extendsList.Add(extendInterface);

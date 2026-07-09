@@ -554,6 +554,13 @@ public partial class TypeChecker
                 var interfaceToken = classStmt.Interfaces[i];
                 TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
 
+                // #99: a lib wrapper type (`implements String`) resolves to the primitive in type
+                // position, not an interface — consult the loaded lib for a real interface so it's a
+                // valid implements target rather than a spurious "not an interface" (TS2304).
+                if (itfTypeInfo is not TypeInfo.Interface and not TypeInfo.GenericInterface
+                    && LibTypeLoader.TryGet(interfaceToken.Lexeme, out var libImplements))
+                    itfTypeInfo = libImplements;
+
                 // Get type arguments for this interface if provided
                 List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
                     ? classStmt.InterfaceTypeArgs[i]
