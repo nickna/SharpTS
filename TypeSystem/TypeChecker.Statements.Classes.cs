@@ -327,6 +327,16 @@ public partial class TypeChecker
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? new TypeInfo.Any();
 
+            // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
+            // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
+            // is not allowed; a well-known symbol (`[Symbol.iterator]`) is a unique symbol, so it's fine.
+            if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol)
+            {
+                RecordTypeError(new TypeCheckException(
+                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                    line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
+            }
+
             // Handle ES2022 private fields (#field)
             if (field.IsPrivate)
             {
