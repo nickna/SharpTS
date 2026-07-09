@@ -26,7 +26,7 @@ public partial class TypeChecker
             OperatorDescriptor.Plus => CheckPlusOperator(left, right, line),
             OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right, line),
             OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, binary.Operator.Lexeme, line),
-            OperatorDescriptor.Equality => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            OperatorDescriptor.Equality => CheckEqualityBinary(left, right, line),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
             OperatorDescriptor.In => CheckInOperator(right, line),
@@ -48,6 +48,31 @@ public partial class TypeChecker
     {
         if (right is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
             throw new TypeCheckException($"Type '{right}' is not assignable to type 'object'.", line > 0 ? line : null, tsCode: "TS2322");
+        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    }
+
+    /// <summary>
+    /// Equality (<c>==</c>/<c>!=</c>/<c>===</c>/<c>!==</c>). tsc's "no overlap" check (TS2367) is broad,
+    /// but only the symbol-vs-non-symbol-primitive slice is implemented here (scoped to keep other
+    /// comparisons untouched): a <c>symbol</c> can never equal a <c>boolean</c>/<c>number</c>/
+    /// <c>string</c>/<c>bigint</c>, so comparing them is flagged unintentional. A symbol vs symbol / vs
+    /// <c>any</c> / vs a union that could hold a symbol is fine.
+    /// </summary>
+    private TypeInfo CheckEqualityBinary(TypeInfo left, TypeInfo right, int line)
+    {
+        bool leftSym = left is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
+        bool rightSym = right is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
+        if (leftSym != rightSym)
+        {
+            TypeInfo other = leftSym ? right : left;
+            if (other is TypeInfo.Primitive or TypeInfo.String or TypeInfo.NumberLiteral
+                or TypeInfo.StringLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral)
+            {
+                throw new TypeCheckException(
+                    $"This comparison appears to be unintentional because the types '{left}' and '{right}' have no overlap.",
+                    line > 0 ? line : null, tsCode: "TS2367");
+            }
+        }
         return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
     }
 
