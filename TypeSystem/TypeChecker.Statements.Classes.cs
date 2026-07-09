@@ -60,6 +60,18 @@ public partial class TypeChecker
         using (new EnvironmentScope(this, classTypeEnv))
             superclass = ResolveDeclaredSuperclass(classStmt);
 
+        // `class C1 extends C2 {} class C2 {}` — a class value referenced in its own or an earlier
+        // class's extends clause, before that class is textually declared, is TS2449 (class values
+        // aren't hoisted for this position). Recorded (not thrown) so the body is still checked.
+        if (classStmt.SuperclassExpr is Expr.Variable baseVar
+            && _classDeclarationLines.TryGetValue(baseVar.Name.Lexeme, out int baseLine)
+            && baseLine > classStmt.Name.Line)
+        {
+            RecordTypeError(new TypeCheckException(
+                $"Class '{baseVar.Name.Lexeme}' used before its declaration.",
+                line: classStmt.Name.Line, tsCode: "TS2449"));
+        }
+
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "next(): Node" to correctly resolve the return type.
         // The mutable class is populated during signature collection and frozen at the end.

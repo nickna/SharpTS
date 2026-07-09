@@ -227,6 +227,13 @@ public partial class TypeChecker
     /// reference classes defined later in the same file. The real class type is defined when
     /// CheckClassDeclaration runs during the sequential pass, overwriting the Any placeholder.
     /// </summary>
+    /// <summary>
+    /// Source line of each class's textual declaration, keyed by name. Populated during hoisting so
+    /// a later <c>extends</c> clause can detect a forward reference (TS2449 — using a class before
+    /// its declaration; class values, unlike types, are not hoisted for that position).
+    /// </summary>
+    private readonly Dictionary<string, int> _classDeclarationLines = [];
+
     private void HoistClassDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var stmt in statements)
@@ -234,10 +241,12 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Class cls:
+                    _classDeclarationLines[cls.Name.Lexeme] = cls.Name.Line;
                     if (!_environment.IsDefinedLocally(cls.Name.Lexeme))
                         _environment.Define(cls.Name.Lexeme, new TypeInfo.Any());
                     break;
                 case Stmt.Export { Declaration: Stmt.Class exportCls }:
+                    _classDeclarationLines[exportCls.Name.Lexeme] = exportCls.Name.Line;
                     if (!_environment.IsDefinedLocally(exportCls.Name.Lexeme))
                         _environment.Define(exportCls.Name.Lexeme, new TypeInfo.Any());
                     break;
