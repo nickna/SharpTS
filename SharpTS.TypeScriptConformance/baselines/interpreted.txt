@@ -132,7 +132,7 @@ tests/cases/conformance/es6/Symbols/symbolProperty51.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty52.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty53.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty54.ts Pass
-tests/cases/conformance/es6/Symbols/symbolProperty55.ts Fail
+tests/cases/conformance/es6/Symbols/symbolProperty55.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty56.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty57.ts Pass
 tests/cases/conformance/es6/Symbols/symbolProperty58.ts Pass
@@ -149,7 +149,7 @@ tests/cases/conformance/es6/Symbols/symbolType11.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType12.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType13.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType14.ts Pass
-tests/cases/conformance/es6/Symbols/symbolType15.ts Fail
+tests/cases/conformance/es6/Symbols/symbolType15.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType16.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType17.ts Pass
 tests/cases/conformance/es6/Symbols/symbolType18.ts Pass
