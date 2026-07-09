@@ -25,6 +25,18 @@ public partial class TypeChecker
         _ => null
     };
 
+    /// <summary>
+    /// The member-dictionary key for a class field: a well-known-symbol computed key
+    /// (<c>[Symbol.iterator]</c>) canonicalizes to its <c>@@name</c> so it matches the same member on
+    /// an interface/base class in structural comparison; everything else keeps its lexeme. Without this
+    /// a symbol-keyed field is stored under the synthetic <c>&lt;computed&gt;</c> lexeme and never lines
+    /// up with the interface's <c>@@iterator</c>, producing spurious missing-property errors.
+    /// </summary>
+    private static string GetFieldMemberName(Stmt.Field field) =>
+        field.ComputedKey != null
+            ? (TryGetWellKnownSymbolMemberName(field.ComputedKey) ?? field.Name.Lexeme)
+            : field.Name.Lexeme;
+
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         // Check class decorators
@@ -311,7 +323,7 @@ public partial class TypeChecker
             DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
             CheckDecorators(field.Decorators, fieldTarget);
 
-            string fieldName = field.Name.Lexeme;
+            string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? new TypeInfo.Any();
 
@@ -668,8 +680,8 @@ public partial class TypeChecker
                 TypeInfo initType = CheckExpr(field.Initializer);
                 // For ES2022 private static fields, look in StaticPrivateFieldTypes
                 TypeInfo staticFieldDeclaredType = field.IsPrivate
-                    ? classTypeForBody.StaticPrivateFieldTypes[field.Name.Lexeme]
-                    : classTypeForBody.StaticProperties[field.Name.Lexeme];
+                    ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
+                    : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
@@ -766,7 +778,7 @@ public partial class TypeChecker
                 if (field.IsStatic || field.Initializer == null) continue;
                 TypeInfo initType = CheckExpr(field.Initializer);
                 var declaredTypes = field.IsPrivate ? classTypeForBody.PrivateFieldTypes : classTypeForBody.FieldTypes;
-                if (declaredTypes.TryGetValue(field.Name.Lexeme, out var fieldDeclaredType)
+                if (declaredTypes.TryGetValue(GetFieldMemberName(field), out var fieldDeclaredType)
                     && fieldDeclaredType is not (TypeInfo.Inferred or TypeInfo.Any)
                     && !IsCompatible(fieldDeclaredType, initType))
                 {
@@ -1327,22 +1339,23 @@ public partial class TypeChecker
         // Collect field types
         foreach (var field in classStmt.Fields)
         {
+            string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? new TypeInfo.Any();
 
             if (field.IsStatic)
             {
-                mutableClass.StaticProperties[field.Name.Lexeme] = fieldType;
+                mutableClass.StaticProperties[fieldName] = fieldType;
             }
             else
             {
-                mutableClass.FieldTypes[field.Name.Lexeme] = fieldType;
+                mutableClass.FieldTypes[fieldName] = fieldType;
             }
 
-            (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[field.Name.Lexeme] = field.Access;
+            (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[fieldName] = field.Access;
             if (field.IsReadonly)
             {
-                mutableClass.ReadonlyFields.Add(field.Name.Lexeme);
+                mutableClass.ReadonlyFields.Add(fieldName);
             }
         }
 

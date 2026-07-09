@@ -987,7 +987,7 @@ public partial class TypeChecker
         // interface/record) are handled by the structural paths below.
         if (expected is TypeInfo.Instance targetInst &&
             actual is TypeInfo.Interface or TypeInfo.Record &&
-            StructurallyAssignableToClassTarget(targetInst.ResolvedClassType, actual))
+            StructurallyAssignableToClassTarget(targetInst.ResolvedClassType, actual, emptyTargetAcceptsObjectSource: true))
         {
             return true;
         }
