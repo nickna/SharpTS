@@ -100,6 +100,15 @@ public partial class TypeChecker
             hasStringIndex = cls.StringIndexType != null;
             hasNumberIndex = cls.NumberIndexType != null;
         }
+        else if (expected is TypeInfo.InstantiatedGeneric ig && FlattenInstantiatedInterface(ig) is { } flatIface)
+        {
+            // A generic interface argument (`I<number>`) flattens to its concrete members so a fresh
+            // object literal passed to a generic function is excess-checked too.
+            foreach (var member in flatIface.GetAllMembers())
+                expectedKeys.Add(member.Key);
+            hasStringIndex = flatIface.StringIndexType != null;
+            hasNumberIndex = flatIface.NumberIndexType != null;
+        }
         else
         {
             // For other types (primitives, unions, etc.), skip excess property check
@@ -136,9 +145,30 @@ public partial class TypeChecker
             throw new TypeCheckException(
                 $"Object literal may only specify known properties. " +
                 $"Excess {(excessKeys.Count == 1 ? "property" : "properties")}: {excessList}",
+                line: ExcessPropertyLine(sourceExpr, excessKeys[0]),
                 tsCode: "TS2353"
             );
         }
+    }
+
+    /// <summary>The source line of an excess property (for TS2353 attribution) — the offending
+    /// property's own line rather than the enclosing statement's, which matters when the object
+    /// literal spans multiple lines (e.g. a multi-line call argument). Null if it can't be located.</summary>
+    private static int? ExcessPropertyLine(Expr sourceExpr, string excessKey)
+    {
+        if (sourceExpr is not Expr.ObjectLiteral obj) return null;
+        foreach (var prop in obj.Properties)
+        {
+            if (prop.Key is { } key && GetAccessorMemberName(key) == excessKey)
+                return key switch
+                {
+                    Expr.IdentifierKey id => id.Name.Line,
+                    Expr.LiteralKey lit => lit.Literal.Line,
+                    Expr.ComputedKey ck => TryGetExprLine(ck.Expression),
+                    _ => null
+                };
+        }
+        return null;
     }
 
     private TypeInfo? GetMemberType(TypeInfo type, string name)

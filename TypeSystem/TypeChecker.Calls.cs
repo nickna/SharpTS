@@ -97,6 +97,13 @@ public partial class TypeChecker
             var instantiatedFunc = InstantiateGenericFunction(genericFunc, typeArgs);
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
+                // Excess-property check for fresh object-literal args against the instantiated
+                // parameter types (the generic path otherwise skips argument validation).
+                for (int ai = 0; ai < call.Arguments.Count && ai < instFunc.ParamTypes.Count; ai++)
+                {
+                    if (call.Arguments[ai] is Expr.ObjectLiteral && argTypes[ai] is TypeInfo.Record argRec)
+                        CheckExcessProperties(argRec, instFunc.ParamTypes[ai], call.Arguments[ai]);
+                }
                 return instFunc.ReturnType;
             }
             return new TypeInfo.Any();
@@ -210,6 +217,13 @@ public partial class TypeChecker
                         else
                         {
                             argType = CheckExpr(arg);
+                        }
+                        // Excess-property check for a FRESH object-literal argument (tsc's fresh-literal
+                        // rule) against its parameter type — mirrors the assignment path.
+                        if (arg is Expr.ObjectLiteral && argType is TypeInfo.Record argExcessRecord
+                            && paramIndex < regularParamCount)
+                        {
+                            CheckExcessProperties(argExcessRecord, funcType.ParamTypes[paramIndex], arg);
                         }
                         if (paramIndex < regularParamCount)
                         {
