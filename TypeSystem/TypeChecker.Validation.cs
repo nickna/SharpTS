@@ -104,6 +104,38 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Re-checks that an un-annotated method implementing an interface member has a compatible
+    /// INFERRED return type (TS2416), reported at the method's own line. The normal implements
+    /// validation runs before the body pass, when an un-annotated return is still a <c>&lt;inferred&gt;</c>
+    /// placeholder (≈ any) that hides the mismatch; this runs after inference. Only un-annotated
+    /// implementations are considered, so annotated methods (already checked) aren't double-reported.
+    /// </summary>
+    private void RecheckImplementsInferredReturns(Stmt.Class classStmt, TypeInfo.Class classType, List<TypeInfo.Interface> interfaces)
+    {
+        foreach (var method in classStmt.Methods)
+        {
+            if (method.ReturnType != null || method.Body == null) continue;
+            string name = method.ComputedKey != null
+                ? (TryGetWellKnownSymbolMemberName(method.ComputedKey) ?? method.Name.Lexeme)
+                : method.Name.Lexeme;
+            if (FindMemberInClass(classType, name) is not TypeInfo.Function actualFunc) continue;
+            int line = method.ComputedKey != null ? (TryGetExprLine(method.ComputedKey) ?? method.Name.Line) : method.Name.Line;
+            foreach (var itf in interfaces)
+            {
+                if (itf.GetAllMembers().FirstOrDefault(m => m.Key == name).Value is TypeInfo.Function expectedFunc
+                    && !IsCompatible(expectedFunc.ReturnType, actualFunc.ReturnType))
+                {
+                    string display = name.StartsWith("@@") ? $"[Symbol.{name[2..]}]" : name;
+                    RecordTypeError(new TypeCheckException(
+                        $" Property '{display}' in type '{classStmt.Name.Lexeme}' is not assignable to the same property in base type '{itf.Name}'.",
+                        line: line, tsCode: "TS2416"));
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// The built-in iterable-protocol interfaces a class may legally list in its <c>implements</c>
     /// clause. These are NOT user-declared <c>interface</c>s (so they are absent from the type
     /// environment) but lib types resolved generically — a class satisfies them structurally via a

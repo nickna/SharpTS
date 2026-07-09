@@ -547,6 +547,9 @@ public partial class TypeChecker
         }
 
         // Validate implemented interfaces (skip for generic classes - validated at instantiation)
+        // Resolved interfaces are captured so an un-annotated method's INFERRED return type can be
+        // re-checked against them after the body pass (this validation runs before inference).
+        List<TypeInfo.Interface> implementsForRecheck = [];
         if (classStmt.Interfaces != null && classTypeParams == null)
         {
             for (int i = 0; i < classStmt.Interfaces.Count; i++)
@@ -620,6 +623,7 @@ public partial class TypeChecker
                 }
 
                 ValidateInterfaceImplementation(classTypeForBody, interfaceType, classStmt.Name.Lexeme, classStmt.Name.Line);
+                implementsForRecheck.Add(interfaceType);
             }
         }
 
@@ -1113,7 +1117,12 @@ public partial class TypeChecker
         // `[Symbol.x]()` method carries its inferred return type rather than the <inferred> placeholder
         // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
         mutableClass.ResetFrozenCache();
-        ValidateClassMembersAgainstSymbolIndex(classStmt, mutableClass.Freeze());
+        var finalizedClass = mutableClass.Freeze();
+        ValidateClassMembersAgainstSymbolIndex(classStmt, finalizedClass);
+        // Re-check implemented-interface method compatibility now that un-annotated method return
+        // types are inferred (the pre-inference pass above saw a <inferred> placeholder — TS2416).
+        if (implementsForRecheck.Count > 0)
+            RecheckImplementsInferredReturns(classStmt, finalizedClass, implementsForRecheck);
     }
 
     /// <summary>
