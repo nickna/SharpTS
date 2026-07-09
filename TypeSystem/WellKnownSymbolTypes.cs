@@ -74,6 +74,19 @@ public static class WellKnownSymbolTypes
     /// CheckGet) before generic member lookup ever consults this type, so adding it here doesn't
     /// change those paths — only genuine "use Symbol as a plain value" sites.
     /// </summary>
+    /// <summary>
+    /// The global `Symbol` WRAPPER object type (lib's `interface Symbol`), as it appears in TYPE
+    /// position (`var s: Symbol`). Distinct from the `symbol` primitive: a `symbol` value IS
+    /// assignable to this wrapper (an object-like target — the wrapper is modeled member-less so a
+    /// symbol satisfies it without SharpTS having to model symbol's apparent toString/valueOf), but
+    /// the wrapper is NOT assignable back to the `symbol` primitive (TS2322 "'symbol' is a primitive,
+    /// but 'Symbol' is a wrapper object").
+    /// </summary>
+    public static readonly TypeInfo.Interface SymbolWrapper = new(
+        "Symbol",
+        FrozenDictionary<string, TypeInfo>.Empty,
+        FrozenSet<string>.Empty);
+
     public static readonly TypeInfo.Interface SymbolConstructor = new(
         "SymbolConstructor",
         new Dictionary<string, TypeInfo>

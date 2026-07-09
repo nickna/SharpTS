@@ -232,8 +232,30 @@ public partial class TypeChecker
             return enumType;
         }
 
+        // #99 lib-type seam: ambient lib.d.ts TYPE-position names SharpTS doesn't load from the
+        // .d.ts files yet (checked AFTER user declarations above, so a user interface of the same
+        // name wins). A later increment backs this with a real lib.d.ts loader.
+        if (TryResolveLibType(typeName) is { } libType)
+        {
+            return libType;
+        }
+
         return new TypeInfo.Any();
     }
+
+    /// <summary>
+    /// The #99 lib-type seam: resolves the ambient TYPE-position names that lib.d.ts declares but
+    /// SharpTS doesn't yet parse from the vendored .d.ts files, to their modeled <see cref="TypeInfo"/>.
+    /// Consulted by both <see cref="ResolveTypeNameCore"/> (for the type) and
+    /// <c>ReportUnknownTypeName</c> (so these names aren't flagged TS2304). Increment 1 covers the
+    /// Symbol family; a later increment replaces this switch with content loaded from lib.d.ts.
+    /// </summary>
+    private static TypeInfo? TryResolveLibType(string name) => name switch
+    {
+        "SymbolConstructor" => WellKnownSymbolTypes.SymbolConstructor,
+        "Symbol" => WellKnownSymbolTypes.SymbolWrapper,
+        _ => null
+    };
 
     /// <summary>
     /// Simplifies an intersection type according to TypeScript semantics:

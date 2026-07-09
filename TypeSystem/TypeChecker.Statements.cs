@@ -297,6 +297,8 @@ public partial class TypeChecker
         if (_environment.GetTypeAlias(name) is not null) return;
         if (_environment.GetGenericTypeAlias(name) is not null) return;
         if (_openTypeVariablesInScope?.Contains(name) == true) return;
+        // #99 lib-type seam: an ambient lib.d.ts type name (e.g. Symbol/SymbolConstructor) is known.
+        if (TryResolveLibType(name) is not null) return;
 
         throw new TypeCheckException($" Cannot find name '{name}'.", line, tsCode: "TS2304");
     }
