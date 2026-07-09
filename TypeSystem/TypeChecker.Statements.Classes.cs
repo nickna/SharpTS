@@ -1091,6 +1091,12 @@ public partial class TypeChecker
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
         }
+
+        // Symbol-index conformance (TS2411) runs HERE — after method bodies — so an un-annotated
+        // `[Symbol.x]()` method carries its inferred return type rather than the <inferred> placeholder
+        // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
+        mutableClass.ResetFrozenCache();
+        ValidateClassMembersAgainstSymbolIndex(classStmt, mutableClass.Freeze());
     }
 
     /// <summary>
