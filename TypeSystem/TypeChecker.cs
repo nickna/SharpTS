@@ -1035,6 +1035,30 @@ public partial class TypeChecker
     /// Full validation happens later during CheckStmt.
     /// Note: Classes are NOT pre-registered to avoid breaking inheritance checking with MutableClass.
     /// </summary>
+    /// <summary>
+    /// #99: register a set of ambient lib declarations into this (throwaway) checker's environment and
+    /// return the resolved interfaces/type-aliases keyed by name. Diagnostics are suppressed — lib
+    /// sources are trusted. Used by <see cref="LibTypeLoader"/> to turn parsed <c>libdefs/*.d.ts</c>
+    /// into modeled <see cref="TypeInfo"/>. Interfaces reference each other through the environment
+    /// (pre-registered above), so no recursion back into the loader.
+    /// </summary>
+    internal System.Collections.Frozen.FrozenDictionary<string, TypeInfo> ExtractLibTypes(List<Stmt> statements)
+    {
+        _suppressDiagnostics++;
+        try
+        {
+            PreRegisterTypeDeclarations(statements);
+            var result = new Dictionary<string, TypeInfo>();
+            foreach (var stmt in statements)
+            {
+                if (stmt is Stmt.Interface itf && _environment.Get(itf.Name.Lexeme) is { } t)
+                    result[itf.Name.Lexeme] = t;
+            }
+            return result.ToFrozenDictionary();
+        }
+        finally { _suppressDiagnostics--; }
+    }
+
     private void PreRegisterTypeDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var stmt in statements)

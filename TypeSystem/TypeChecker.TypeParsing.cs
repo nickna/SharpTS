@@ -250,12 +250,18 @@ public partial class TypeChecker
     /// <c>ReportUnknownTypeName</c> (so these names aren't flagged TS2304). Increment 1 covers the
     /// Symbol family; a later increment replaces this switch with content loaded from lib.d.ts.
     /// </summary>
-    private static TypeInfo? TryResolveLibType(string name) => name switch
+    private static TypeInfo? TryResolveLibType(string name)
     {
-        "SymbolConstructor" => WellKnownSymbolTypes.SymbolConstructor,
-        "Symbol" => WellKnownSymbolTypes.SymbolWrapper,
-        _ => null
-    };
+        // Names loaded from the embedded lib.d.ts (e.g. SymbolConstructor) — the real declarations.
+        if (LibTypeLoader.TryGet(name, out var libType)) return libType;
+        // Names still hand-modeled (the wrapper types need behavior the loaded shape can't yet give —
+        // a symbol must satisfy `Symbol` without SharpTS modeling the primitive's apparent members).
+        return name switch
+        {
+            "Symbol" => WellKnownSymbolTypes.SymbolWrapper,
+            _ => null
+        };
+    }
 
     /// <summary>
     /// Simplifies an intersection type according to TypeScript semantics:

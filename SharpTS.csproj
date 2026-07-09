@@ -44,6 +44,12 @@
     <None Remove="stdlib\**\*.ts" />
   </ItemGroup>
 
+  <!-- Ambient lib type declarations parsed by LibTypeLoader into the type checker (#99). -->
+  <ItemGroup>
+    <EmbeddedResource Include="libdefs\**\*.d.ts" />
+    <None Remove="libdefs\**\*.d.ts" />
+  </ItemGroup>
+
   <!-- Exclude test, example, benchmark, and SDK projects from this compilation.
        This list is hand-maintained and load-bearing: because this project sits at
        the repo root, the SDK's default **/*.cs glob would otherwise pull in every
