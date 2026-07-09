@@ -433,6 +433,32 @@ public partial class TypeChecker
             }
             finally { _extendsClauseConstraintLine = savedExtendsLine; }
             extends = extendsList.ToFrozenSet();
+
+            // TS2320: an interface may not simultaneously extend two bases that declare the same
+            // member with non-identical types. Two types are treated as "not identical" when they
+            // aren't mutually assignable — conservative, so a genuinely-shared (diamond) member,
+            // being mutually assignable, never trips it.
+            var seenBaseMembers = new Dictionary<string, (string BaseName, TypeInfo Type)>();
+            bool reportedExtendConflict = false;
+            foreach (var baseItf in extendsList)
+            {
+                if (reportedExtendConflict) break;
+                foreach (var (mName, mType) in baseItf.GetAllMembers())
+                {
+                    if (seenBaseMembers.TryGetValue(mName, out var prev)
+                        && prev.BaseName != baseItf.Name
+                        && !(IsCompatible(prev.Type, mType) && IsCompatible(mType, prev.Type)))
+                    {
+                        string display = mName.StartsWith("@@") ? $"[Symbol.{mName[2..]}]" : mName;
+                        RecordTypeError(new TypeCheckException(
+                            $" Interface '{interfaceStmt.Name.Lexeme}' cannot simultaneously extend types '{prev.BaseName}' and '{baseItf.Name}'. Named property '{display}' of types '{prev.BaseName}' and '{baseItf.Name}' are not identical.",
+                            line: interfaceStmt.Name.Line, tsCode: "TS2320"));
+                        reportedExtendConflict = true;
+                        break;
+                    }
+                    seenBaseMembers.TryAdd(mName, (baseItf.Name, mType));
+                }
+            }
         }
 
         // Process call signatures
