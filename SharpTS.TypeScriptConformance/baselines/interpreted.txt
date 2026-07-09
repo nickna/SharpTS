@@ -245,7 +245,7 @@ tests/cases/conformance/types/typeRelationships/assignmentCompatibility/undefine
 tests/cases/conformance/types/typeRelationships/assignmentCompatibility/unionTypesAssignability.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/enumIsNotASubtypeOfAnythingButNumber.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/nullIsSubtypeOfEverythingButUndefined.ts Pass
-tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/stringLiteralTypeIsSubtypeOfString.ts Fail
+tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/stringLiteralTypeIsSubtypeOfString.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypesOfAny.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameter.ts Pass
 tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints.ts Pass
