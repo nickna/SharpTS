@@ -51,9 +51,11 @@ public sealed class FakeDnsServer : IDisposable
 
         Port = ((IPEndPoint)_udp.Client.LocalEndPoint!).Port;
         Address = $"127.0.0.1:{Port}";
-        Task.Run(ServeUdp);
+        // Fire-and-forget serve loops: they run until Dispose closes the sockets,
+        // and terminal exceptions are handled inside the loops themselves.
+        _ = Task.Run(ServeUdpAsync);
         if (_tcp is not null)
-            Task.Run(ServeTcp);
+            _ = Task.Run(ServeTcpAsync);
     }
 
     /// <summary>Server address in "127.0.0.1:port" form.</summary>
@@ -90,7 +92,7 @@ public sealed class FakeDnsServer : IDisposable
         }
     }
 
-    private async Task ServeUdp()
+    private async Task ServeUdpAsync()
     {
         try
         {
@@ -109,7 +111,7 @@ public sealed class FakeDnsServer : IDisposable
         catch (SocketException) { }
     }
 
-    private async Task ServeTcp()
+    private async Task ServeTcpAsync()
     {
         try
         {

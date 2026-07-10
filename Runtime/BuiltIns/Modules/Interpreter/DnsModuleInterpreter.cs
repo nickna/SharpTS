@@ -568,7 +568,7 @@ public static class DnsModuleInterpreter
     /// List&lt;object?&gt; of strings → SharpTSArray,
     /// Dictionary → SharpTSObject.
     /// </summary>
-    private static object WrapDnsResult(object raw)
+    private static object? WrapDnsResult(object? raw)
     {
         if (raw is Dictionary<string, object?> dict)
             return new SharpTSObject(dict);

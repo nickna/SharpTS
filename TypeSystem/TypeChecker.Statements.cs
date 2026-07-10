@@ -1272,7 +1272,7 @@ public partial class TypeChecker
             if (binding.TypeAnnotation != null)
             {
                 declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode);
-                if (!IsCompatible(declaredType, initType))
+                if (declaredType != null && !IsCompatible(declaredType, initType))
                 {
                     throw new TypeMismatchException(declaredType, initType, binding.Name!.Line, tsCode: "TS2322");
                 }
