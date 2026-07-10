@@ -232,19 +232,6 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Helper: emits IL to emit an event on this (EventEmitter).
-    /// </summary>
-    private void EmitDgramEmitEvent(ILGenerator il, EmittedRuntime runtime, string eventName)
-    {
-        il.Emit(OpCodes.Ldarg_0); // this
-        il.Emit(OpCodes.Ldstr, eventName);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
-        il.Emit(OpCodes.Pop); // discard bool return
-    }
-
-    /// <summary>
     /// Helper: defines a private instance method that calls this.Emit(eventName, []).
     /// Used as the target of an Action delegate scheduled on the event loop, so that
     /// 'listening'/'close'/'connect' fire on a future tick instead of synchronously

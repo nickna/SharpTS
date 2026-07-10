@@ -44,11 +44,6 @@ public class SharpTSProcess : SharpTSEventEmitter
     protected override void OnListenerAdded(string eventName)
         => ProcessBuiltIns.OnProcessListenerAdded(eventName);
 
-    /// <summary>
-    /// True if a user property with this name was assigned via expando storage.
-    /// </summary>
-    internal bool HasExpando(string name) => _expando?.ContainsKey(name) == true;
-
     /// <summary>Clears expando state (test isolation).</summary>
     internal void ClearExpando() => _expando = null;
 

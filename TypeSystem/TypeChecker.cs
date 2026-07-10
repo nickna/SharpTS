@@ -176,18 +176,6 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Gets the narrowed type for a property access, if one exists.
-    /// Legacy method for backwards compatibility during migration.
-    /// </summary>
-    private TypeInfo? GetPropertyNarrowing(string objectVarName, string propertyName)
-    {
-        var path = new Narrowing.NarrowingPath.PropertyAccess(
-            new Narrowing.NarrowingPath.Variable(objectVarName),
-            propertyName);
-        return GetNarrowing(path);
-    }
-
-    /// <summary>
     /// Enters a new narrowing scope with the given context.
     /// </summary>
     private void PushNarrowingContext(Narrowing.NarrowingContext context) => _narrowingContextStack.Push(context);
@@ -1115,45 +1103,6 @@ public partial class TypeChecker
             EnumKind.Numeric,
             enumStmt.IsConst
         ));
-    }
-
-    /// <summary>
-    /// Pre-registers a class before function hoisting.
-    /// Creates a basic class type structure so the class name is available for type references.
-    /// Full validation happens in CheckClassDeclaration.
-    /// </summary>
-    private void PreRegisterClass(Stmt.Class classStmt)
-    {
-        // Skip if already registered
-        if (_environment.IsDefinedLocally(classStmt.Name.Lexeme))
-            return;
-
-        // Create a mutable class placeholder for forward references
-        // MutableClass supports forward references and will be replaced during full check
-        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme);
-
-        // Try to resolve superclass if present (may fail if superclass not yet defined)
-        if (classStmt.SuperclassExpr != null)
-        {
-            try
-            {
-                var superType = _environment.Get(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
-                if (superType is TypeInfo.Class c)
-                {
-                    mutableClass.Superclass = c;
-                }
-                else if (superType is TypeInfo.MutableClass mc && mc.Frozen != null)
-                {
-                    mutableClass.Superclass = mc.Frozen;
-                }
-            }
-            catch
-            {
-                // Ignore superclass resolution errors during pre-registration
-            }
-        }
-
-        _environment.Define(classStmt.Name.Lexeme, mutableClass);
     }
 
     /// <summary>

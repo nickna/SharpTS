@@ -67,25 +67,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Attempts to get a property value from an object-like runtime value using a string key.
-    /// Uses <see cref="ISharpTSPropertyAccessor"/> interface for unified dispatch.
-    /// </summary>
-    /// <param name="obj">The object to get the property from.</param>
-    /// <param name="name">The property name as a string.</param>
-    /// <param name="value">The retrieved value if successful.</param>
-    /// <returns><c>true</c> if the property was found; otherwise <c>false</c>.</returns>
-    private static bool TryGetPropertyByName(object? obj, string name, out object? value)
-    {
-        if (obj is ISharpTSPropertyAccessor accessor)
-        {
-            value = accessor.GetProperty(name);
-            return true;
-        }
-        value = null;
-        return false;
-    }
-
-    /// <summary>
     /// Attempts to set a property value on an object-like runtime value.
     /// Handles <see cref="SharpTSInstance"/>, <see cref="SharpTSObject"/>, and <see cref="SharpTSClass"/> (static properties).
     /// </summary>
@@ -113,24 +94,6 @@ public partial class Interpreter
             default:
                 return false;
         }
-    }
-
-    /// <summary>
-    /// Attempts to set a property value on an object-like runtime value using a string key.
-    /// Uses <see cref="ISharpTSPropertyAccessor"/> interface for unified dispatch.
-    /// </summary>
-    /// <param name="obj">The object to set the property on.</param>
-    /// <param name="name">The property name as a string.</param>
-    /// <param name="value">The value to set.</param>
-    /// <returns><c>true</c> if the property was set; otherwise <c>false</c>.</returns>
-    private static bool TrySetPropertyByName(object? obj, string name, object? value)
-    {
-        if (obj is ISharpTSPropertyAccessor accessor)
-        {
-            accessor.SetProperty(name, value);
-            return true;
-        }
-        return false;
     }
 
     /// <summary>

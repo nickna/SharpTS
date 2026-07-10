@@ -753,31 +753,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Core unary operation logic, shared between sync and async evaluation.
-    /// </summary>
-    private object? EvaluateUnaryOperation(Token op, object? right)
-    {
-        return op.Type switch
-        {
-            TokenType.BANG => !IsTruthy(right),
-            TokenType.PLUS when right is SharpTSBigInt =>
-                throw new InterpreterException("TypeError: Cannot convert a BigInt value to a number"),
-            TokenType.PLUS when right is System.Numerics.BigInteger =>
-                throw new InterpreterException("TypeError: Cannot convert a BigInt value to a number"),
-            TokenType.PLUS => CoerceToNumber(RuntimeValue.FromBoxed(right)),
-            TokenType.MINUS when right is SharpTSBigInt bi => new SharpTSBigInt(-bi.Value),
-            TokenType.MINUS when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(-biVal),
-            TokenType.MINUS => -(double)right!,
-            TokenType.TYPEOF => GetTypeofString(right),
-            TokenType.VOID => SharpTSUndefined.Instance,
-            TokenType.TILDE when right is SharpTSBigInt bi => new SharpTSBigInt(~bi.Value),
-            TokenType.TILDE when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(~biVal),
-            TokenType.TILDE => (double)(~ToInt32(right)),
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// Returns the typeof string for a runtime value.
     /// </summary>
     /// <param name="value">The value to get the type of.</param>

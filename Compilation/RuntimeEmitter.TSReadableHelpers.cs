@@ -68,7 +68,6 @@ public partial class RuntimeEmitter
     // Helpers shared across the methods below.
     private MethodInfo ListCountGetter => _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
     private MethodInfo ListItemGetter => _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32);
-    private MethodInfo TSFunctionInvoke1Arg(EmittedRuntime runtime) => runtime.TSFunctionInvoke;
 
     /// <summary>Emits a $TSFunction.Invoke(new object[]{ ...args }) call; the function ref and args
     /// are produced by the supplied delegates. Leaves the (object) result on the stack.</summary>

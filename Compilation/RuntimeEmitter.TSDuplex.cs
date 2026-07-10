@@ -77,13 +77,6 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    // Keep the old method for backward compatibility
-    private void EmitTSDuplexClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
-    {
-        EmitTSDuplexTypeDefinition(moduleBuilder, runtime);
-        // Note: CreateType will be called separately by EmitTSDuplexFinalize
-    }
-
     private void EmitTSDuplexCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(

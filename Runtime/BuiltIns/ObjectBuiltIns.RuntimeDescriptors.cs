@@ -290,39 +290,6 @@ public static partial class ObjectBuiltIns
         return names;
     }
     /// <summary>
-    /// Gets a property descriptor from a Dictionary<string, object?>.
-    /// </summary>
-    private static SharpTSPropertyDescriptor? GetDescriptorFromDictionary(Dictionary<string, object?> dict, string propKey)
-    {
-        // Check PropertyDescriptorStore for explicitly defined descriptor
-        var storedDesc = PropertyDescriptorStore.GetPropertyDescriptor(dict, propKey);
-        if (storedDesc != null)
-        {
-            return new SharpTSPropertyDescriptor
-            {
-                Value = storedDesc.Value,
-                Get = storedDesc.Getter as ISharpTSCallable,
-                Set = storedDesc.Setter as ISharpTSCallable,
-                Writable = storedDesc.Writable,
-                Enumerable = storedDesc.Enumerable,
-                Configurable = storedDesc.Configurable
-            };
-        }
-
-        // Fall back to checking the dictionary directly
-        if (!dict.TryGetValue(propKey, out var value))
-        {
-            return null;
-        }
-        return new SharpTSPropertyDescriptor
-        {
-            Value = value,
-            Writable = true,
-            Enumerable = true,
-            Configurable = true
-        };
-    }
-    /// <summary>
     /// Gets a property descriptor from an IList (compiled arrays).
     /// </summary>
     private static SharpTSPropertyDescriptor? GetDescriptorFromList(System.Collections.IList list, string propKey)

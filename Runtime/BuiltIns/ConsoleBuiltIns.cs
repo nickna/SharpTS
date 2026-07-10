@@ -719,15 +719,4 @@ public static class ConsoleBuiltIns
         return RuntimeValue.Undefined;
     }
 
-    // ===================== Testing Helpers =====================
-
-    /// <summary>
-    /// Resets all console state (timers, counts, group level). Used for testing.
-    /// </summary>
-    internal static void ResetState()
-    {
-        _timers.Clear();
-        _counts.Clear();
-        _groupIndentLevel = 0;
-    }
 }

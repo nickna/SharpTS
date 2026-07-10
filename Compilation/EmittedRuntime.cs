@@ -1498,7 +1498,6 @@ public class EmittedRuntime
     public MethodBuilder FsFlagsParse { get; set; } = null!;
     public MethodBuilder FsFlagsParsePure { get; set; } = null!;
     public MethodBuilder CreateSharpTSDir { get; set; } = null!;
-    public MethodBuilder LibCCreateHardLink { get; set; } = null!;
     public MethodBuilder CreateHardLinkPure { get; set; } = null!;
 
     // $FileDescriptorTable type (pure-IL for standalone DLLs)

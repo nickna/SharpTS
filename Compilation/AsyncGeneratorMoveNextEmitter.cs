@@ -272,24 +272,4 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         _il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits code to return ValueTask&lt;bool&gt; wrapping a Task&lt;bool&gt;.
-    /// </summary>
-    private void EmitReturnValueTaskFromTask()
-    {
-        // Stack has Task<bool>
-        // Create ValueTask<bool> from Task<bool>
-        var vtCtor = _types.ValueTaskOfBool.GetConstructor([_types.MakeGenericType(_types.TaskOpen, _types.Boolean)])!;
-        _il.Emit(OpCodes.Newobj, vtCtor);
-        _il.Emit(OpCodes.Ret);
-    }
-
-    #region Helper Method Wrappers - Unique to AsyncGeneratorMoveNextEmitter
-
-    private void SetStackNumber() => _helpers.SetStackType(StackType.Double);
-    private void SetStackString() => _helpers.SetStackType(StackType.String);
-    private void SetStackBoolean() => _helpers.SetStackType(StackType.Boolean);
-    private void SetStackObject() => _helpers.SetStackUnknown();
-
-    #endregion
 }
