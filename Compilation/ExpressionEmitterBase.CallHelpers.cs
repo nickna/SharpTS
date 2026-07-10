@@ -1907,7 +1907,7 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitGlobalParseInt(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldc_I4, 10); IL.Emit(OpCodes.Box, Types.Int32); }
         IL.Emit(OpCodes.Call, Ctx.Runtime!.NumberParseInt);
         IL.Emit(OpCodes.Box, Types.Double);
@@ -1915,35 +1915,35 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitGlobalParseFloat(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.NumberParseFloat);
         IL.Emit(OpCodes.Box, Types.Double);
     }
 
     protected void EmitGlobalIsNaN(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalIsNaN);
         IL.Emit(OpCodes.Box, Types.Boolean);
     }
 
     protected void EmitGlobalIsFinite(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalIsFinite);
         IL.Emit(OpCodes.Box, Types.Boolean);
     }
 
     protected void EmitStructuredClone(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
-        if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
+        EmitBoxedArgOrNull(arguments, 1);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.StructuredCloneClone);
     }
 
     protected void EmitSetTimeout(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         if (arguments.Count > 1) { EmitExpressionAsDouble(arguments[1]); } else { IL.Emit(OpCodes.Ldc_R8, 0.0); }
         EmitTimerArgsArray(arguments, 2);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.SetTimeout);
@@ -1952,14 +1952,14 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitClearTimeout(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ClearTimeout);
         IL.Emit(OpCodes.Ldnull);
     }
 
     protected void EmitSetInterval(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         if (arguments.Count > 1) { EmitExpressionAsDouble(arguments[1]); } else { IL.Emit(OpCodes.Ldc_R8, 0.0); }
         EmitTimerArgsArray(arguments, 2);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.SetInterval);
@@ -1968,14 +1968,14 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitClearInterval(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ClearInterval);
         IL.Emit(OpCodes.Ldnull);
     }
 
     protected void EmitQueueMicrotask(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.QueueMicrotask);
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
     }
@@ -2039,8 +2039,8 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitFetchCall(List<Expr> arguments)
     {
-        if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
-        if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+        EmitBoxedArgOrNull(arguments, 0);
+        EmitBoxedArgOrNull(arguments, 1);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Fetch);
         SetStackUnknown();
     }
@@ -2112,16 +2112,16 @@ public abstract partial class ExpressionEmitterBase
         switch (methodName)
         {
             case "then":
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
-                if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+                EmitBoxedArgOrNull(arguments, 0);
+                EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
                 break;
             case "catch":
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+                EmitBoxedArgOrNull(arguments, 0);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseCatch);
                 break;
             case "finally":
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+                EmitBoxedArgOrNull(arguments, 0);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFinally);
                 break;
         }
@@ -2211,15 +2211,15 @@ public abstract partial class ExpressionEmitterBase
         switch (methodName)
         {
             case "includes":
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+                EmitBoxedArgOrNull(arguments, 0);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayIncludes);
                 break;
             case "indexOf":
             case "lastIndexOf":
-                if (arguments.Count > 0) { EmitExpression(arguments[0]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
-                if (arguments.Count > 1) { EmitExpression(arguments[1]); EnsureBoxed(); } else { IL.Emit(OpCodes.Ldnull); }
+                EmitBoxedArgOrNull(arguments, 0);
+                EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayIndexOf : Ctx.Runtime!.ArrayLastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;
