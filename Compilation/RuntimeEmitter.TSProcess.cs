@@ -2154,14 +2154,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, signalLocal);
 
             bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-            (PosixSignal Signal, string Name)[] map =
-            [
+            var map = new List<(PosixSignal Signal, string Name)>
+            {
                 (PosixSignal.SIGINT, "SIGINT"),
                 (PosixSignal.SIGTERM, "SIGTERM"),
                 (PosixSignal.SIGHUP, "SIGHUP"),
                 (PosixSignal.SIGQUIT, isWindows ? "SIGBREAK" : "SIGQUIT"),
-                (PosixSignal.SIGWINCH, "SIGWINCH"),
-            ];
+            };
+            // SIGWINCH is [UnsupportedOSPlatform("windows")] and can never fire there,
+            // so it is baked out of the emitted dispatch map on Windows (same
+            // compile-time platform bake as SIGBREAK above).
+            if (!OperatingSystem.IsWindows())
+                map.Add((PosixSignal.SIGWINCH, "SIGWINCH"));
             var end = il.DefineLabel();
             foreach (var (signal, name) in map)
             {
@@ -2215,18 +2219,21 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notRegistered);
 
-            // map name → PosixSignal (compile-time platform bake for SIGBREAK)
-            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+            // map name → PosixSignal (SIGBREAK rides the CTRL_BREAK-backed SIGQUIT)
             var signalLocal = il.DeclareLocal(_types.Int32);
-            (string Name, PosixSignal Signal)[] map =
-            [
+            var map = new List<(string Name, PosixSignal Signal)>
+            {
                 ("SIGINT", PosixSignal.SIGINT),
                 ("SIGTERM", PosixSignal.SIGTERM),
                 ("SIGHUP", PosixSignal.SIGHUP),
                 ("SIGQUIT", PosixSignal.SIGQUIT),
-                ("SIGBREAK", isWindows ? PosixSignal.SIGQUIT : PosixSignal.SIGQUIT),
-                ("SIGWINCH", PosixSignal.SIGWINCH),
-            ];
+                ("SIGBREAK", PosixSignal.SIGQUIT),
+            };
+            // SIGWINCH is [UnsupportedOSPlatform("windows")]: registering it there
+            // would just throw (swallowed below), so bake it out of the emitted map
+            // on Windows — process.on('SIGWINCH') stays the same silent no-op.
+            if (!OperatingSystem.IsWindows())
+                map.Add(("SIGWINCH", PosixSignal.SIGWINCH));
             var haveSignal = il.DefineLabel();
             foreach (var (name, signal) in map)
             {

@@ -10,6 +10,13 @@
          scales much better. -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- VSTHRD002 (don't sync-block on tasks) flows in transitively from the
+         LanguageServer's OmniSharp dependency (vs-threading analyzers). The test
+         harness deliberately runs interpreter/compiler work on a threadpool task
+         and blocks with a hard timeout so hung guest code fails the test instead
+         of hanging the run; xUnit workers have no blocking SynchronizationContext,
+         so the deadlock this rule guards against cannot occur here. -->
+    <NoWarn>$(NoWarn);VSTHRD002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

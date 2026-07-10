@@ -269,7 +269,11 @@ public class TlsModuleTests
         var files = new Dictionary<string, string> { ["./main.ts"] = source };
         string? output = null;
         var task = Task.Run(() => output = TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
-        if (!await task.WaitAsync(TimeSpan.FromSeconds(15)).ContinueWith(t => t.IsCompletedSuccessfully))
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        catch (TimeoutException)
         {
             Assert.Fail("TLS handshake test timed out");
         }
@@ -320,8 +324,14 @@ public class TlsModuleTests
         var files = new Dictionary<string, string> { ["./main.ts"] = source };
         string? output = null;
         var task = Task.Run(() => output = TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
-        var completed = await task.WaitAsync(TimeSpan.FromSeconds(15)).ContinueWith(t => t.IsCompletedSuccessfully);
-        Assert.True(completed, $"TLS reject test timed out. Partial output: [{output ?? "null"}]");
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"TLS reject test timed out. Partial output: [{output ?? "null"}]");
+        }
         Assert.Contains("error caught", output!);
     }
 

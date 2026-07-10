@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
         EmitWebCryptoType(moduleBuilder, runtime);
 
         // crypto.getRandomValues(x) / named import — uniform module wrapper on $Runtime.
-        var wrapper = _runtimeTypeBuilder.DefineMethod(
+        var wrapper = _runtimeTypeBuilder!.DefineMethod(
             "CryptoWrapper_getRandomValues",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,

@@ -185,9 +185,10 @@ public partial class Interpreter : IDisposable
 
     // Active handles counter - keeps the event loop alive while there are active operations.
     // Uses Interlocked operations for thread-safe lock-free access, consistent with _hasScheduledTimers.
-    // Synchronization strategy: all counters/flags use lock-free atomic operations for reads/writes,
+    // Synchronization strategy: all counters/flags use lock-free atomic operations for reads/writes
+    // (Interlocked/Volatile, so the field itself is deliberately not `volatile`),
     // while the timer queue itself uses _virtualTimersLock for compound operations.
-    private volatile int _activeHandles;
+    private int _activeHandles;
 
     // Event loop infrastructure - BlockingCollection for efficient waiting (no polling)
     // SynchronizationContext routes async/await continuations back to the main thread
@@ -571,9 +572,9 @@ public partial class Interpreter : IDisposable
 
     /// <summary>
     /// Gets whether there are active handles keeping the event loop alive.
-    /// Thread-safe - reads volatile int which is atomic on all .NET platforms.
+    /// Thread-safe - volatile read of an int, which is atomic on all .NET platforms.
     /// </summary>
-    internal bool HasActiveHandles => _activeHandles > 0;
+    internal bool HasActiveHandles => Volatile.Read(ref _activeHandles) > 0;
 
     /// <summary>
     /// Non-blocking event loop tick: drains pending microtasks, due timers, and queued callbacks.

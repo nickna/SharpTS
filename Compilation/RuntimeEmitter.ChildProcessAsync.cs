@@ -63,7 +63,6 @@ public partial class RuntimeEmitter
     private MethodBuilder _childAsyncUnref = null!;
     private MethodBuilder _childConfigureSpawn = null!;
     private MethodBuilder _childStdioMode = null!;
-    private MethodBuilder _childReadCapped = null!;
     private MethodBuilder _childSpawnError = null!;
     private MethodBuilder _childCtxRunSpawnError = null!;
 
