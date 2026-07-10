@@ -88,6 +88,13 @@ public partial class TypeChecker
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
+        // `new Symbol()` — the Symbol function's call signature returns a (non-void) symbol and it
+        // has no construct signature, so calling it with `new` is TS2350.
+        if (isSimpleName && simpleClassName == "Symbol")
+        {
+            throw new TypeCheckException("Only a void function can be called with the 'new' keyword.", tsCode: "TS2350");
+        }
+
         // Handle new Date() constructor
         if (isSimpleName && simpleClassName == "Date")
         {

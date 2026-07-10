@@ -227,6 +227,13 @@ public partial class TypeChecker
     /// reference classes defined later in the same file. The real class type is defined when
     /// CheckClassDeclaration runs during the sequential pass, overwriting the Any placeholder.
     /// </summary>
+    /// <summary>
+    /// Source line of each class's textual declaration, keyed by name. Populated during hoisting so
+    /// a later <c>extends</c> clause can detect a forward reference (TS2449 — using a class before
+    /// its declaration; class values, unlike types, are not hoisted for that position).
+    /// </summary>
+    private readonly Dictionary<string, int> _classDeclarationLines = [];
+
     private void HoistClassDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var stmt in statements)
@@ -234,10 +241,12 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Class cls:
+                    _classDeclarationLines[cls.Name.Lexeme] = cls.Name.Line;
                     if (!_environment.IsDefinedLocally(cls.Name.Lexeme))
                         _environment.Define(cls.Name.Lexeme, new TypeInfo.Any());
                     break;
                 case Stmt.Export { Declaration: Stmt.Class exportCls }:
+                    _classDeclarationLines[exportCls.Name.Lexeme] = exportCls.Name.Line;
                     if (!_environment.IsDefinedLocally(exportCls.Name.Lexeme))
                         _environment.Define(exportCls.Name.Lexeme, new TypeInfo.Any());
                     break;
@@ -339,9 +348,16 @@ public partial class TypeChecker
             }
             else
             {
-                // No return type specified - use Any for hoisting
-                // The actual type will be checked during normal processing
-                returnType = new TypeInfo.Any();
+                // Neither the binding nor the arrow annotates a return type. A precise
+                // `(params) => any` placeholder here looks like a REAL prior declaration to
+                // VisitVar's TS2403 redeclaration check once the real (usually non-`any`)
+                // inferred return type is established for this var's OWN first-and-only
+                // declaration — falsely tripping "subsequent variable declarations must have
+                // the same type". Register a bare `any` instead, matching how
+                // HoistVarDeclarations/HoistClassDeclarations placeholder forward references —
+                // `any` is already exempt from that check.
+                _environment.Define(name.Lexeme, new TypeInfo.Any());
+                return;
             }
 
             // Handle 'this' type

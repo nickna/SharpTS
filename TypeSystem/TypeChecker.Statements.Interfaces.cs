@@ -186,6 +186,13 @@ public partial class TypeChecker
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
     {
+        // An interface may not be named after a primitive type keyword (TS2427). `symbol` is a
+        // contextual keyword the parser accepts as an identifier, so it reaches here.
+        if (interfaceStmt.Name.Lexeme == "symbol")
+        {
+            throw new TypeCheckException("Interface name cannot be 'symbol'.", line: interfaceStmt.Name.Line, tsCode: "TS2427");
+        }
+
         // Handle generic type parameters with two-pass approach to support recursive constraints (e.g., T extends TreeNode<T>)
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
@@ -343,6 +350,26 @@ public partial class TypeChecker
                     }
                 }
             }
+
+            // Mirror image of the string-index check above: a symbol index signature only
+            // constrains computed well-known-symbol members (canonical "@@name"), never
+            // plain string/number-keyed ones.
+            if (symbolIndexType != null)
+            {
+                foreach (var (name, type) in members)
+                {
+                    if (!name.StartsWith("@@", StringComparison.Ordinal)) continue;
+                    if (!IsCompatible(symbolIndexType, type))
+                    {
+                        memberLines.TryGetValue(name, out var line);
+                        string displayName = $"[Symbol.{name["@@".Length..]}]";
+                        RecordTypeError(new TypeCheckException(
+                            $" Property '{displayName}' of type '{type}' is not assignable to 'symbol' index type '{symbolIndexType}'.",
+                            line: line == 0 ? interfaceStmt.Name.Line : line,
+                            tsCode: "TS2411"));
+                    }
+                }
+            }
         }
         }
 
@@ -406,6 +433,32 @@ public partial class TypeChecker
             }
             finally { _extendsClauseConstraintLine = savedExtendsLine; }
             extends = extendsList.ToFrozenSet();
+
+            // TS2320: an interface may not simultaneously extend two bases that declare the same
+            // member with non-identical types. Two types are treated as "not identical" when they
+            // aren't mutually assignable — conservative, so a genuinely-shared (diamond) member,
+            // being mutually assignable, never trips it.
+            var seenBaseMembers = new Dictionary<string, (string BaseName, TypeInfo Type)>();
+            bool reportedExtendConflict = false;
+            foreach (var baseItf in extendsList)
+            {
+                if (reportedExtendConflict) break;
+                foreach (var (mName, mType) in baseItf.GetAllMembers())
+                {
+                    if (seenBaseMembers.TryGetValue(mName, out var prev)
+                        && prev.BaseName != baseItf.Name
+                        && !(IsCompatible(prev.Type, mType) && IsCompatible(mType, prev.Type)))
+                    {
+                        string display = mName.StartsWith("@@") ? $"[Symbol.{mName[2..]}]" : mName;
+                        RecordTypeError(new TypeCheckException(
+                            $" Interface '{interfaceStmt.Name.Lexeme}' cannot simultaneously extend types '{prev.BaseName}' and '{baseItf.Name}'. Named property '{display}' of types '{prev.BaseName}' and '{baseItf.Name}' are not identical.",
+                            line: interfaceStmt.Name.Line, tsCode: "TS2320"));
+                        reportedExtendConflict = true;
+                        break;
+                    }
+                    seenBaseMembers.TryAdd(mName, (baseItf.Name, mType));
+                }
+            }
         }
 
         // Process call signatures

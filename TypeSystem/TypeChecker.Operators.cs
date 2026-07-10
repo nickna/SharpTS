@@ -29,9 +29,26 @@ public partial class TypeChecker
             OperatorDescriptor.Equality => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
-            OperatorDescriptor.In or OperatorDescriptor.InstanceOf => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            OperatorDescriptor.In => CheckInOperator(right, line),
+            // instanceof operand validation (TS2358/TS2359) is intentionally NOT done here: the
+            // symbolType1 case needs `Symbol() || {}` to stay a `symbol | {}` union, but CheckLogical
+            // currently collapses it to a bare `symbol`, which would make a bare-symbol LHS check
+            // fire spuriously on `(Symbol() || {}) instanceof Object`. Deferred with that inference gap.
+            OperatorDescriptor.InstanceOf => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
             _ => new TypeInfo.Any()
         };
+    }
+
+    /// <summary>
+    /// The `in` operator: the right operand must be an object / `any` / type parameter. tsc rejects
+    /// a symbol right operand (`"" in Symbol.toPrimitive`) with TS2322. Scoped to symbol so we don't
+    /// newly reject other non-object right operands the checker currently tolerates.
+    /// </summary>
+    private TypeInfo CheckInOperator(TypeInfo right, int line)
+    {
+        if (right is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+            throw new TypeCheckException($"Type '{right}' is not assignable to type 'object'.", line > 0 ? line : null, tsCode: "TS2322");
+        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
     }
 
     /// <summary>
@@ -285,10 +302,16 @@ public partial class TypeChecker
             return rightType;  // null/undefined ?? right = right
         }
 
-        // If left (non-nullish) and right are compatible, return non-nullish left
-        if (IsCompatible(nonNullishLeft, rightType) || IsCompatible(rightType, nonNullishLeft))
+        // Return whichever of the two is the wider type (the other is assignable to it) — same
+        // "pick wider of two" pattern as CheckTernary/CheckLogicalAssign; this one previously
+        // returned nonNullishLeft unconditionally even when rightType was the wider of the two.
+        if (IsCompatible(nonNullishLeft, rightType))
         {
             return nonNullishLeft;
+        }
+        if (IsCompatible(rightType, nonNullishLeft))
+        {
+            return rightType;
         }
 
         // Otherwise return union of non-nullish left and right
@@ -393,10 +416,15 @@ public partial class TypeChecker
             elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
         }
 
-        // Return the more specific type, or thenType if both are compatible
-        if (IsCompatible(thenType, elseType) || IsCompatible(elseType, thenType))
+        // Return whichever branch type is the wider of the two (the other is assignable to it),
+        // or thenType if they're mutually compatible (e.g. identical types).
+        if (IsCompatible(thenType, elseType))
         {
             return thenType;
+        }
+        if (IsCompatible(elseType, thenType))
+        {
+            return elseType;
         }
 
         // Return union of both branch types
@@ -713,6 +741,15 @@ public partial class TypeChecker
 
     private TypeInfo CheckDelete(Expr.Delete delete)
     {
+        // `delete x.p` where p is a read-only property is TS2704. Detect it on the receiver's
+        // type before the generic operand check (e.g. `delete Symbol.iterator` — the well-known
+        // symbol members of SymbolConstructor are readonly).
+        if (delete.Operand is Expr.Get get)
+        {
+            TypeInfo recvType = CheckExpr(get.Object);
+            if (recvType is TypeInfo.Interface itf && itf.IsMemberReadonly(get.Name.Lexeme))
+                throw new TypeCheckException("The operand of a 'delete' operator cannot be a read-only property.", line: get.Name.Line, tsCode: "TS2704");
+        }
         // Type check the operand (for any side effects or errors)
         CheckExpr(delete.Operand);
         // delete always returns boolean

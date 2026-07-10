@@ -691,6 +691,7 @@ public partial class TypeChecker
                 accessorProps.Add(prop);
 
                 // Getter - extract return type from annotation only (don't check body yet)
+                ValidateComputedPropertyNameType(prop.Key!);
                 string name = GetAccessorMemberName(prop.Key!);
                 getterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.ReturnType != null)
@@ -709,6 +710,7 @@ public partial class TypeChecker
                 accessorProps.Add(prop);
 
                 // Setter - extract parameter type from annotation only
+                ValidateComputedPropertyNameType(prop.Key!);
                 string name = GetAccessorMemberName(prop.Key!);
                 setterNames.Add(name);
                 if (prop.Value is Expr.ArrowFunction arrow && arrow.Parameters.Count > 0 && arrow.Parameters[0].Type != null)
@@ -760,10 +762,21 @@ public partial class TypeChecker
                         // Infer index signature based on key type
                         if (keyType is (TypeInfo.Symbol or TypeInfo.UniqueSymbol) &&
                             TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownSymbolName)
+                        {
                             // Symbol.iterator/toStringTag/toPrimitive/... — a named member (canonical
                             // "@@name", matching interfaces/classes), not merged into the symbol index
                             // signature. Merging would lose the per-symbol type (#99 Cluster B).
+                            // TS1117: tsc rejects a second plain (non-accessor) property with the same
+                            // canonical name — an object literal, unlike a class/interface, can't
+                            // overload. Getter/setter pairs are exempt (handled in their own branches,
+                            // which never touch `fields` at this point) but a second PLAIN duplicate is not.
+                            if (!getterNames.Contains(wellKnownSymbolName) && !setterNames.Contains(wellKnownSymbolName)
+                                && fields.ContainsKey(wellKnownSymbolName))
+                                RecordTypeError(new TypeCheckException(
+                                    " An object literal cannot have multiple properties with the same name.",
+                                    line: TryGetExprLine(ck.Expression), tsCode: "TS1117"));
                             fields[wellKnownSymbolName] = valueType;
+                        }
                         else if (keyType is TypeInfo.String)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)
@@ -780,7 +793,10 @@ public partial class TypeChecker
                             // Union of string/number types - use string index signature
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else
-                            throw new TypeCheckException($" Computed property key must be string, number, or symbol, got '{keyType}'.", tsCode: "TS1170");
+                            // Record (don't throw) so every offending computed key in this object
+                            // literal is reported, not just the first — mirrors the interface
+                            // string-index-collision loop (TS2411) elsewhere in this file.
+                            RecordTypeError(new TypeCheckException(" A computed property name must be of type 'string', 'number', 'symbol', or 'any'.", line: TryGetExprLine(ck.Expression), tsCode: "TS2464"));
                         break;
                 }
             }
@@ -882,6 +898,36 @@ public partial class TypeChecker
         key is Expr.ComputedKey ck && TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownName
             ? wellKnownName
             : GetPropertyKeyNameForTypeCheck(key);
+
+    /// <summary>
+    /// TS2464: an object-literal accessor's computed key (<c>get [expr]() {}</c>/<c>set [expr](v) {}</c>)
+    /// must be of type string/number/symbol/any, mirroring tsc. The plain-property computed-key switch
+    /// in <see cref="CheckObject"/> validates this inline (it also needs the key's type to route index
+    /// signatures); accessors only extract a NAME via <see cref="GetAccessorMemberName"/> and never
+    /// evaluated/validated the key's type at all, so a non-conforming accessor key silently passed.
+    /// Records (doesn't throw) so multiple offending members in one literal are all reported.
+    /// </summary>
+    private void ValidateComputedPropertyNameType(Expr.PropertyKey key)
+    {
+        if (key is not Expr.ComputedKey ck) return;
+        TypeInfo keyType = CheckExpr(ck.Expression);
+        if (IsValidComputedPropertyNameType(keyType)) return;
+        RecordTypeError(new TypeCheckException(
+            " A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+            line: TryGetExprLine(ck.Expression), tsCode: "TS2464"));
+    }
+
+    private static bool IsValidComputedPropertyNameType(TypeInfo keyType) => keyType switch
+    {
+        TypeInfo.Any => true,
+        TypeInfo.String => true,
+        TypeInfo.StringLiteral => true,
+        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => true,
+        TypeInfo.NumberLiteral => true,
+        TypeInfo.Symbol or TypeInfo.UniqueSymbol => true,
+        TypeInfo.Union u => u.FlattenedTypes.All(IsValidComputedPropertyNameType),
+        _ => false,
+    };
 
     /// <summary>
     /// Unifies index signature types - creates a union if types differ.
@@ -1744,7 +1790,18 @@ public partial class TypeChecker
         if (name.Lexeme == "Number") return new TypeInfo.Any(); // Number is a special global object
         if (name.Lexeme == "String") return new TypeInfo.Any(); // String is a special global object
         if (name.Lexeme == "Boolean") return new TypeInfo.Any(); // Boolean is a special global object
-        if (name.Lexeme == "Symbol") return new TypeInfo.Any(); // Symbol is a special global object
+        if (name.Lexeme == "Symbol")
+        {
+            // tsc lets user code augment the global `SymbolConstructor` interface via declaration
+            // merging (`interface SymbolConstructor { foo: string }` adds a real `Symbol.foo`).
+            // Prefer a user-declared SymbolConstructor when present so those members resolve;
+            // otherwise fall back to the built-in shape. Not a full merge (a file combining both a
+            // custom member AND a built-in one like Symbol.for would only see the custom interface),
+            // but covers the real declaration-merging tests, which never mix the two.
+            if (_environment.Get("SymbolConstructor") is TypeInfo.Interface userSymbolCtor)
+                return userSymbolCtor;
+            return WellKnownSymbolTypes.SymbolConstructor; // tsc's SymbolConstructor shape
+        }
         if (name.Lexeme == "Function") return new TypeInfo.Any(); // Function is the Function constructor
         if (name.Lexeme == "Proxy") return new TypeInfo.Any(); // Proxy is a special global object
         if (name.Lexeme == "Buffer") return new TypeInfo.Any(); // Buffer is a global constructor for binary data

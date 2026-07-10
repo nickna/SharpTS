@@ -440,7 +440,9 @@ public abstract record Stmt
     public record For(Stmt? Initializer, Expr? Condition, Expr? Increment, Stmt Body) : Stmt;
     public record DoWhile(Stmt Body, Expr Condition) : Stmt;
     public record ForOf(Token Variable, string? TypeAnnotation, Expr Iterable, Stmt Body, bool IsAsync = false) : Stmt;
-    public record ForIn(Token Variable, string? TypeAnnotation, Expr Object, Stmt Body) : Stmt;
+    // IsDeclaration distinguishes `for (var x in o)` (a fresh binding) from `for (x in o)`
+    // (assignment to an existing lvalue) — the latter's target type is validated (TS2405).
+    public record ForIn(Token Variable, string? TypeAnnotation, Expr Object, Stmt Body, bool IsDeclaration = true) : Stmt;
     public record If(Expr Condition, Stmt ThenBranch, Stmt? ElseBranch) : Stmt;
     public record Print(Expr Expr) : Stmt; // Temporary for console.log
     public record Break(Token Keyword, Token? Label = null) : Stmt;

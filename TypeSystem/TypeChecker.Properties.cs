@@ -107,6 +107,21 @@ public partial class TypeChecker
             var wellKnownType = WellKnownSymbolTypes.TryGet(get.Name.Lexeme);
             if (wellKnownType != null)
                 return wellKnownType;
+
+            // Symbol.for/keyFor/prototype referenced as plain values (not called) — mirrors the
+            // typed signatures TryCheckBuiltinCall already gives the CALL form of Symbol.for/keyFor.
+            // Without this, bare `Symbol.for` fell through to CheckExpr(Symbol)=Any then `.for` on
+            // Any=Any, silently accepting it wherever a real, non-`any` type is required (e.g. a
+            // computed property name, TS2464) even though tsc types it as a real function/object.
+            switch (get.Name.Lexeme)
+            {
+                case "for":
+                    return new TypeInfo.Function([new TypeInfo.String()], new TypeInfo.Symbol(), 1, false, null, ["key"]);
+                case "keyFor":
+                    return new TypeInfo.Function([new TypeInfo.Symbol()], new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]), 1, false, null, ["sym"]);
+                case "prototype":
+                    return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+            }
         }
 
         // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
@@ -700,7 +715,7 @@ public partial class TypeChecker
                     return valueType;
                 }
             }
-            throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on interface '{itf.Name}'.", tsCode: "TS2339");
+            throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on interface '{itf.Name}'.", line: set.Name.Line, tsCode: "TS2339");
         }
         // Handle Error property assignment (name, message, stack are mutable strings; cause is any)
         if (objType is TypeInfo.Error)
@@ -818,7 +833,7 @@ public partial class TypeChecker
                     return member.Value;
                 }
             }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", tsCode: "TS2339");
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", line: memberName.Line, tsCode: "TS2339");
         }
 
         // Handle Record type - check fields and index signatures

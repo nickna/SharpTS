@@ -554,6 +554,99 @@ public partial class TypeChecker
         }
     }
     /// <summary>
+    /// Validates that a class's symbol-keyed members (own and inherited) are assignable to its
+    /// effective <c>[s: symbol]</c> index type (own or inherited) — TS2411, the symbol-index analogue
+    /// of <see cref="ValidateClassPropertiesAgainstIndex"/>. Runs after method bodies so inferred
+    /// return types are resolved. tsc attributes the diagnostic to whichever of {member, index
+    /// signature} is declared ON this class: an OWN member reports at the member, an INHERITED member
+    /// (necessarily paired with an OWN index signature) reports at the index signature. A member+index
+    /// pair both inherited from the same base was already reported on that base and is skipped.
+    /// </summary>
+    private void ValidateClassMembersAgainstSymbolIndex(Stmt.Class classStmt, TypeInfo.Class classType)
+    {
+        TypeInfo? ownSymIndex = classType.SymbolIndexType;
+        TypeInfo? effectiveIndex = ownSymIndex ?? FindSymbolIndexInBaseChain(classType.Superclass);
+        if (effectiveIndex is null) return;
+
+        void CheckOwnMember(string atName, TypeInfo memberType, int line)
+        {
+            if (!IsCompatible(effectiveIndex, memberType))
+                RecordTypeError(new TypeCheckException(
+                    $" Property '[Symbol.{atName[2..]}]' of type '{memberType}' is not assignable to 'symbol' index type '{effectiveIndex}'.",
+                    line: line, tsCode: "TS2411"));
+        }
+
+        // Own symbol-keyed members: methods and fields whose computed key is a well-known symbol.
+        var ownNames = new HashSet<string>();
+        foreach (var method in classStmt.Methods)
+        {
+            if (method.ComputedKey is null) continue;
+            string? name = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+            if (name is null || !classType.Methods.TryGetValue(name, out var mType)) continue;
+            ownNames.Add(name);
+            CheckOwnMember(name, mType, TryGetExprLine(method.ComputedKey) ?? method.Name.Line);
+        }
+        foreach (var field in classStmt.Fields)
+        {
+            if (field.IsStatic || field.ComputedKey is null) continue;
+            string? name = TryGetWellKnownSymbolMemberName(field.ComputedKey);
+            if (name is null || !classType.FieldTypes.TryGetValue(name, out var fType)) continue;
+            ownNames.Add(name);
+            CheckOwnMember(name, fType, TryGetExprLine(field.ComputedKey) ?? field.Name.Line);
+        }
+
+        // Inherited symbol-keyed members are checked only when the index signature is OWN to this
+        // class (otherwise the member+index pair is fully inherited and the base already reported).
+        // They are attributed to this class's index-signature line.
+        if (ownSymIndex is not null)
+        {
+            int? indexLine = classStmt.IndexSignatures?
+                .FirstOrDefault(s => s.KeyType == TokenType.TYPE_SYMBOL)?.KeyName.Line;
+            foreach (var (name, mType) in CollectInheritedSymbolMembers(classType.Superclass))
+            {
+                if (ownNames.Contains(name)) continue; // overridden here → own-member path handled it
+                if (!IsCompatible(ownSymIndex, mType))
+                    RecordTypeError(new TypeCheckException(
+                        $" Property '[Symbol.{name[2..]}]' of type '{mType}' is not assignable to 'symbol' index type '{ownSymIndex}'.",
+                        line: indexLine, tsCode: "TS2411"));
+            }
+        }
+    }
+
+    private static TypeInfo? GetSymbolIndexType(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.SymbolIndexType,
+        TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass gc } => gc.SymbolIndexType,
+        TypeInfo.GenericClass g => g.SymbolIndexType,
+        _ => null
+    };
+
+    private TypeInfo? FindSymbolIndexInBaseChain(TypeInfo? baseType)
+    {
+        for (TypeInfo? current = baseType; current != null; current = GetSuperclass(current))
+            if (GetSymbolIndexType(current) is { } idx) return idx;
+        return null;
+    }
+
+    /// <summary>Symbol-keyed (<c>@@name</c>) methods and fields inherited from the base-class chain,
+    /// each yielded once (nearest override wins).</summary>
+    private IEnumerable<(string Name, TypeInfo Type)> CollectInheritedSymbolMembers(TypeInfo? baseType)
+    {
+        var seen = new HashSet<string>();
+        for (TypeInfo? current = baseType; current != null; current = GetSuperclass(current))
+        {
+            if (GetMethods(current) is { } methods)
+                foreach (var kv in methods)
+                    if (kv.Key.StartsWith("@@") && seen.Add(kv.Key))
+                        yield return (kv.Key, kv.Value);
+            if (GetFieldTypes(current) is { } fields)
+                foreach (var kv in fields)
+                    if (kv.Key.StartsWith("@@") && seen.Add(kv.Key))
+                        yield return (kv.Key, kv.Value);
+        }
+    }
+
+    /// <summary>
     /// Walks the base-class chain looking for the accessibility of a field, getter or method named
     /// <paramref name="name"/>. Returns its <see cref="AccessModifier"/>, or null if absent.
     /// </summary>

@@ -25,6 +25,18 @@ public partial class TypeChecker
         _ => null
     };
 
+    /// <summary>
+    /// The member-dictionary key for a class field: a well-known-symbol computed key
+    /// (<c>[Symbol.iterator]</c>) canonicalizes to its <c>@@name</c> so it matches the same member on
+    /// an interface/base class in structural comparison; everything else keeps its lexeme. Without this
+    /// a symbol-keyed field is stored under the synthetic <c>&lt;computed&gt;</c> lexeme and never lines
+    /// up with the interface's <c>@@iterator</c>, producing spurious missing-property errors.
+    /// </summary>
+    private static string GetFieldMemberName(Stmt.Field field) =>
+        field.ComputedKey != null
+            ? (TryGetWellKnownSymbolMemberName(field.ComputedKey) ?? field.Name.Lexeme)
+            : field.Name.Lexeme;
+
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
         // Check class decorators
@@ -59,6 +71,18 @@ public partial class TypeChecker
         TypeInfo? superclass;
         using (new EnvironmentScope(this, classTypeEnv))
             superclass = ResolveDeclaredSuperclass(classStmt);
+
+        // `class C1 extends C2 {} class C2 {}` — a class value referenced in its own or an earlier
+        // class's extends clause, before that class is textually declared, is TS2449 (class values
+        // aren't hoisted for this position). Recorded (not thrown) so the body is still checked.
+        if (classStmt.SuperclassExpr is Expr.Variable baseVar
+            && _classDeclarationLines.TryGetValue(baseVar.Name.Lexeme, out int baseLine)
+            && baseLine > classStmt.Name.Line)
+        {
+            RecordTypeError(new TypeCheckException(
+                $"Class '{baseVar.Name.Lexeme}' used before its declaration.",
+                line: classStmt.Name.Line, tsCode: "TS2449"));
+        }
 
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "next(): Node" to correctly resolve the return type.
@@ -120,27 +144,78 @@ public partial class TypeChecker
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
         // well-known-symbol member name (@@iterator, @@asyncIterator, …) so structural iterability and
         // member lookup see them (#592/#485). They carry the synthetic `<computed>` name, so they are
-        // pulled out of the name-keyed overload grouping below. Arbitrary computed keys (e.g. `[v]()`)
-        // aren't statically named members and are skipped (still parsed/checked, just untyped — like
-        // computed accessors).
-        foreach (var method in classStmt.Methods.Where(m => m.ComputedKey != null && m.Body != null))
+        // pulled out of the name-keyed overload grouping below and grouped here instead by (IsStatic,
+        // canonical name) — running the SAME overload/duplicate-implementation/static-consistency
+        // validation string-named methods get, rather than silently "last one wins" registration.
+        // Arbitrary computed keys (e.g. `[v]()`) aren't statically named members and are skipped
+        // (still parsed/checked, just untyped — like computed accessors).
+        var computedMethodGroups = classStmt.Methods
+            .Where(m => m.ComputedKey != null)
+            .Select(m => (Method: m, Name: TryGetWellKnownSymbolMemberName(m.ComputedKey)))
+            .Where(x => x.Name != null)
+            // Grouped by canonical NAME ONLY (not IsStatic too): the static-consistency check
+            // below needs static AND instance declarations of the same name in one group to
+            // compare them against each other — grouping by (IsStatic, Name) would silently
+            // split a static/instance mismatch into two single-member groups that never meet.
+            .GroupBy(x => x.Name!)
+            .ToList();
+
+        foreach (var group in computedMethodGroups)
         {
-            if (TryGetWellKnownSymbolMemberName(method.ComputedKey) is not { } memberName)
-                continue;
-            // Build the factory signature WITHOUT the generator-return wrapping BuildMethodFuncType
-            // applies: a [Symbol.iterator]()/[Symbol.asyncIterator]() factory must return the iterator
-            // type itself (e.g. `Iterator<number>` — what for...of consumes and reads its element from),
-            // not Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
+            string memberName = group.Key;
+            var members = group.Select(x => x.Method).ToList();
+
+            // TS2387/TS2388: tsc requires every declaration in an overload group to agree on
+            // static-ness. It compares consecutive pairs in source order and reports the mismatch
+            // at the LATER member, choosing the message from the EARLIER member's own static-ness
+            // ("must be static" when the earlier one was static, "must not be static" otherwise) —
+            // verified against symbolProperty42's exact (line, code) pairs.
+            for (int i = 1; i < members.Count; i++)
+            {
+                if (members[i - 1].IsStatic != members[i].IsStatic)
+                {
+                    var (msg, code) = members[i - 1].IsStatic
+                        ? (" Function overload must be static.", "TS2387")
+                        : (" Function overload must not be static.", "TS2388");
+                    RecordTypeError(new TypeCheckException(msg, line: members[i].Name.Line, tsCode: code));
+                }
+            }
+
+            var signatures = members.Where(m => m.Body == null && !m.IsAbstract).ToList();
+            var implementations = members.Where(m => m.Body != null).ToList();
+
+            if (implementations.Count > 1)
+            {
+                // tsc flags EVERY declaration in the group once a second implementation appears —
+                // signatures included, not just the implementations.
+                foreach (var m in members)
+                    RecordTypeError(new TypeCheckException(" Duplicate function implementation.", line: m.Name.Line, tsCode: "TS2393"));
+            }
+            else if (implementations.Count == 0 && signatures.Count > 0)
+            {
+                RecordTypeError(new TypeCheckException(
+                    " Function implementation is missing or not immediately following the declaration.",
+                    line: members[^1].Name.Line, tsCode: "TS2391"));
+            }
+
+            // Register the group's type from the single implementation when there is exactly one
+            // (the common, error-free case), else the last declaration as a best-effort fallback so
+            // an error'd group still gets SOME type. Build the factory signature WITHOUT the
+            // generator-return wrapping BuildMethodFuncType applies: a [Symbol.iterator]()/
+            // [Symbol.asyncIterator]() factory must return the iterator type itself (e.g.
+            // `Iterator<number>` — what for...of consumes and reads its element from), not
+            // Generator<Iterator<number>>. An un-annotated generator factory stays <inferred> here
             // and is filled in by the inferred-return post-pass below as Generator<yieldType>.
+            var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
-                method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
+                representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
+            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? new TypeInfo.Inferred();
             var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
-            if (method.IsStatic)
+            if (representative.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
             else
                 mutableClass.Methods[memberName] = funcType;
-            (method.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = method.Access;
+            (representative.IsStatic ? mutableClass.StaticMethodAccess : mutableClass.MethodAccess)[memberName] = representative.Access;
         }
 
         // First pass: collect signatures, grouping overloads
@@ -248,9 +323,19 @@ public partial class TypeChecker
             DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
             CheckDecorators(field.Decorators, fieldTarget);
 
-            string fieldName = field.Name.Lexeme;
+            string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? new TypeInfo.Any();
+
+            // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
+            // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
+            // is not allowed; a well-known symbol (`[Symbol.iterator]`) is a unique symbol, so it's fine.
+            if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol)
+            {
+                RecordTypeError(new TypeCheckException(
+                    "A computed property name in a class property declaration must have a simple literal type or a 'unique symbol' type.",
+                    line: TryGetExprLine(field.ComputedKey) ?? field.Name.Line, tsCode: "TS1166"));
+            }
 
             // Handle ES2022 private fields (#field)
             if (field.IsPrivate)
@@ -285,6 +370,13 @@ public partial class TypeChecker
         // Collect accessor types
         if (classStmt.Accessors != null)
         {
+            // TS2300: two getters (or two setters) with the same name/static-ness are a duplicate
+            // identifier — a class, unlike an object literal, can't have two same-kind accessors for
+            // one member at all (a get+set PAIR is fine; that's tracked separately below). Covers both
+            // plain and well-known-symbol computed names (`get [Symbol.hasInstance]()` declared twice),
+            // neither of which had any duplicate-accessor detection before.
+            var seenGetters = new Dictionary<(bool IsStatic, string Name), int>();
+            var seenSetters = new Dictionary<(bool IsStatic, string Name), int>();
             foreach (var accessor in classStmt.Accessors)
             {
                 // Check accessor decorators
@@ -292,6 +384,26 @@ public partial class TypeChecker
                     ? DecoratorTarget.Getter
                     : DecoratorTarget.Setter;
                 CheckDecorators(accessor.Decorators, accessorTarget);
+
+                string? canonicalName = accessor.ComputedKey != null
+                    ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
+                    : accessor.Name.Lexeme;
+                if (canonicalName != null)
+                {
+                    int line = TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+                    string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
+                    // A method already registered under this name (methods are processed above)
+                    // makes ANY accessor of the same name a duplicate too — a class member can't be
+                    // both a method and an accessor. tsc flags the accessor, not the method.
+                    var methodDict = accessor.IsStatic ? mutableClass.StaticMethods : mutableClass.Methods;
+                    var seen = accessor.Kind.Type == TokenType.GET ? seenGetters : seenSetters;
+                    var key = (accessor.IsStatic, canonicalName);
+                    if (methodDict.ContainsKey(canonicalName) || !seen.TryAdd(key, line))
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $" Duplicate identifier '{displayName}'.", line: line, tsCode: "TS2300"));
+                    }
+                }
 
                 // Computed accessor names (get [Symbol.x]()) have no static member
                 // name to register; their bodies are still checked later.
@@ -578,8 +690,8 @@ public partial class TypeChecker
                 TypeInfo initType = CheckExpr(field.Initializer);
                 // For ES2022 private static fields, look in StaticPrivateFieldTypes
                 TypeInfo staticFieldDeclaredType = field.IsPrivate
-                    ? classTypeForBody.StaticPrivateFieldTypes[field.Name.Lexeme]
-                    : classTypeForBody.StaticProperties[field.Name.Lexeme];
+                    ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
+                    : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
@@ -676,7 +788,7 @@ public partial class TypeChecker
                 if (field.IsStatic || field.Initializer == null) continue;
                 TypeInfo initType = CheckExpr(field.Initializer);
                 var declaredTypes = field.IsPrivate ? classTypeForBody.PrivateFieldTypes : classTypeForBody.FieldTypes;
-                if (declaredTypes.TryGetValue(field.Name.Lexeme, out var fieldDeclaredType)
+                if (declaredTypes.TryGetValue(GetFieldMemberName(field), out var fieldDeclaredType)
                     && fieldDeclaredType is not (TypeInfo.Inferred or TypeInfo.Any)
                     && !IsCompatible(fieldDeclaredType, initType))
                 {
@@ -989,6 +1101,12 @@ public partial class TypeChecker
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
         }
+
+        // Symbol-index conformance (TS2411) runs HERE — after method bodies — so an un-annotated
+        // `[Symbol.x]()` method carries its inferred return type rather than the <inferred> placeholder
+        // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
+        mutableClass.ResetFrozenCache();
+        ValidateClassMembersAgainstSymbolIndex(classStmt, mutableClass.Freeze());
     }
 
     /// <summary>
@@ -1237,22 +1355,23 @@ public partial class TypeChecker
         // Collect field types
         foreach (var field in classStmt.Fields)
         {
+            string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? new TypeInfo.Any();
 
             if (field.IsStatic)
             {
-                mutableClass.StaticProperties[field.Name.Lexeme] = fieldType;
+                mutableClass.StaticProperties[fieldName] = fieldType;
             }
             else
             {
-                mutableClass.FieldTypes[field.Name.Lexeme] = fieldType;
+                mutableClass.FieldTypes[fieldName] = fieldType;
             }
 
-            (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[field.Name.Lexeme] = field.Access;
+            (field.IsStatic ? mutableClass.StaticFieldAccess : mutableClass.FieldAccess)[fieldName] = field.Access;
             if (field.IsReadonly)
             {
-                mutableClass.ReadonlyFields.Add(field.Name.Lexeme);
+                mutableClass.ReadonlyFields.Add(fieldName);
             }
         }
 

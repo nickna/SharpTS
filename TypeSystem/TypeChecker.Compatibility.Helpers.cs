@@ -784,7 +784,8 @@ public partial class TypeChecker
     /// generic type arguments substituted. Returns false for branded or member-less/index-less targets
     /// (those stay nominal).
     /// </summary>
-    private bool StructurallyAssignableToClassTarget(TypeInfo targetResolved, TypeInfo source)
+    private bool StructurallyAssignableToClassTarget(TypeInfo targetResolved, TypeInfo source,
+        bool emptyTargetAcceptsObjectSource = false)
     {
         Dictionary<string, TypeInfo> members;
         bool hasIndex;
@@ -813,7 +814,11 @@ public partial class TypeChecker
             default:
                 return false;
         }
-        if (members.Count == 0 && !hasIndex) return false;
+        // A member-less, index-less unbranded target is structurally `{}`. For class-vs-class this
+        // stays nominal (caller passes false, preserving subclass-safety), but an object-like source
+        // (interface value / record) IS assignable to `{}` — that's the emptyTargetAcceptsObjectSource
+        // path, so `interface I → empty class C` no longer spuriously fails.
+        if (members.Count == 0 && !hasIndex) return emptyTargetAcceptsObjectSource;
         return CheckStructuralCompatibility(members, source) && IndexSignaturesSatisfied(indexCarrier, source);
     }
 

@@ -33,6 +33,15 @@ public partial class TypeChecker
             return new TypeInfo.Any();
         }
 
+        // TS2538: a value whose type can't be a property key — e.g. a function type such as
+        // `Symbol.for` (the method, not a call) — cannot be used as an index. This is distinct from
+        // the implicit-any TS7053 emitted below for a valid-but-unmodeled key.
+        if (indexType is TypeInfo.Function or TypeInfo.OverloadedFunction)
+        {
+            throw new TypeCheckException($" Type '{indexType}' cannot be used as an index type.",
+                line: TryGetExprLine(getIndex.Index), tsCode: "TS2538");
+        }
+
         // Indexing a method's inferred-return-type placeholder (still being resolved during
         // body checking, e.g. calling a sibling static method from a ternary). Treat as any.
         if (objType is TypeInfo.Inferred)
