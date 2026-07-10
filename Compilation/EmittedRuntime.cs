@@ -2359,12 +2359,6 @@ public class EmittedRuntime
     // TTY module methods
     public MethodBuilder TtyIsatty { get; set; } = null!;
 
-    // URL module methods
-    public MethodBuilder UrlCreateUrlObject { get; set; } = null!;
-    public MethodBuilder UrlParse { get; set; } = null!;
-    public MethodBuilder UrlFormat { get; set; } = null!;
-    public MethodBuilder UrlResolve { get; set; } = null!;
-
     // primitive:perf — only a single now() method is host-tied; the rest of
     // perf_hooks (mark/measure/entries/observer) is pure TypeScript in
     // stdlib/node/perf_hooks.ts. Backing fields initialize lazily on first call.
@@ -2641,48 +2635,6 @@ public class EmittedRuntime
     // DNS Resolver factory
     public MethodBuilder DnsResolverFactory { get; set; } = null!;
 
-    // ============================================================
-    // Private Field/Method Access Helpers for Async Contexts
-    // ============================================================
-    // These methods use reflection to access private fields/methods from
-    // async state machine MoveNext() methods where direct access isn't possible.
-
-    /// <summary>
-    /// Gets an instance private field value.
-    /// Signature: GetPrivateField(object instance, Type declaringClass, string fieldName) -> object
-    /// </summary>
-    public MethodBuilder GetPrivateField { get; set; } = null!;
-
-    /// <summary>
-    /// Sets an instance private field value.
-    /// Signature: SetPrivateField(object instance, Type declaringClass, string fieldName, object value) -> void
-    /// </summary>
-    public MethodBuilder SetPrivateField { get; set; } = null!;
-
-    /// <summary>
-    /// Calls an instance private method.
-    /// Signature: CallPrivateMethod(object instance, Type declaringClass, string methodName, object[] args) -> object
-    /// </summary>
-    public MethodBuilder CallPrivateMethod { get; set; } = null!;
-
-    /// <summary>
-    /// Gets a static private field value.
-    /// Signature: GetStaticPrivateField(Type declaringClass, string fieldName) -> object
-    /// </summary>
-    public MethodBuilder GetStaticPrivateField { get; set; } = null!;
-
-    /// <summary>
-    /// Sets a static private field value.
-    /// Signature: SetStaticPrivateField(Type declaringClass, string fieldName, object value) -> void
-    /// </summary>
-    public MethodBuilder SetStaticPrivateField { get; set; } = null!;
-
-    /// <summary>
-    /// Calls a static private method.
-    /// Signature: CallStaticPrivateMethod(Type declaringClass, string methodName, object[] args) -> object
-    /// </summary>
-    public MethodBuilder CallStaticPrivateMethod { get; set; } = null!;
-
     // $Stats type - emitted for fs.stat() and related methods
     // Provides Node.js-compatible Stats object with methods like isFile(), isDirectory(), etc.
     public Type StatsType { get; set; } = null!;
@@ -2871,14 +2823,8 @@ public class EmittedRuntime
     public MethodBuilder CryptoCheckPrimeSyncObj { get; set; } = null!;
 
     // crypto KeyObject/ECDH completeness (#1059/#1060)
-    /// <summary>Recovers the Y coordinate of a compressed EC point via modular sqrt.</summary>
-    public MethodBuilder EcdhDecompressY { get; set; } = null!;
     /// <summary>Encodes an ECPoint per Node point-conversion format (uncompressed/compressed/hybrid).</summary>
     public MethodBuilder EcdhEncodePoint { get; set; } = null!;
-    /// <summary>Decodes a raw EC point (any format) into an ECParameters point on a curve.</summary>
-    public MethodBuilder EcdhDecodePoint { get; set; } = null!;
-    /// <summary>The curve field byte length for a curve name (32/48/66).</summary>
-    public MethodBuilder EcdhFieldLength { get; set; } = null!;
 
     // crypto.X509Certificate (#1064). Null when UsesCrypto is off — the
     // `new X509Certificate(...)` constructor case guards on the ctor being present.
