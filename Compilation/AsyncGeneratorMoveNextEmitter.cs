@@ -178,66 +178,6 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         EmitReturnValueTaskBool(false);
     }
 
-    /// <summary>
-    /// Applies parameter defaults at async-generator entry — the async-generator analogue of the sync
-    /// generator and async function versions (this state machine previously ran no default prologue, so
-    /// defaults never fired in compiled mode). A defaulted parameter whose argument was omitted or
-    /// explicitly <c>undefined</c> arrives in its hoisted field as null / the <c>$Undefined</c> sentinel
-    /// and is replaced with the evaluated default. Evaluated in declaration order so a later default may
-    /// reference an earlier (already-defaulted) parameter. (#737)
-    /// </summary>
-    private void EmitDefaultParameters(List<Stmt.Parameter> parameters)
-    {
-        if (!parameters.Any(p => p.DefaultValue != null))
-            return;
-
-        foreach (var param in parameters)
-        {
-            if (param.DefaultValue == null) continue;
-
-            var field = _builder.GetVariableField(param.Name.Lexeme);
-            if (field == null) continue; // Parameter not hoisted (unused in body) — default is moot.
-
-            var applyDefault = _il.DefineLabel();
-            var checkUndefined = _il.DefineLabel();
-            var skipDefault = _il.DefineLabel();
-
-            // if (field == null) apply; else if (field is $Undefined) apply; else keep.
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, field);
-            _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Brtrue, checkUndefined);
-            _il.Emit(OpCodes.Pop);                       // pop the null
-            _il.Emit(OpCodes.Br, applyDefault);
-
-            _il.MarkLabel(checkUndefined);
-            _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
-            _il.Emit(OpCodes.Brtrue, applyDefault);
-            _il.Emit(OpCodes.Br, skipDefault);
-
-            _il.MarkLabel(applyDefault);
-            EmitExpression(param.DefaultValue);
-            EnsureBoxed();
-            var temp = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, field);
-
-            // A captured-and-mutated parameter's live storage is the function display-class field,
-            // not the state-machine field the body no longer reads. Mirror the default into the DC
-            // field so a nested arrow observes the default rather than the omitted-arg $Undefined
-            // sentinel (#792). Non-captured params return false here and keep the SM-field-only path.
-            if (TryGetFunctionDCField(param.Name.Lexeme, out var dcField))
-            {
-                _il.Emit(OpCodes.Ldloc, temp);
-                StoreToDCField(dcField);
-            }
-
-            _il.MarkLabel(skipDefault);
-        }
-    }
-
     private void EmitStateSwitch()
     {
         if (_analysis.SuspensionPointCount == 0) return;
