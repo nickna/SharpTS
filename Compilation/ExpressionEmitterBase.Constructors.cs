@@ -142,9 +142,7 @@ public abstract partial class ExpressionEmitterBase
             case "Blob":
             case "File":
                 IL.Emit(OpCodes.Ldstr, className + " is not yet supported in compiled mode (interpreter only); see SharpTS #1159");
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSTypeErrorCtor);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateException);
-                IL.Emit(OpCodes.Throw);
+                GuestErrorEmitter.ThrowErrorFromStack(IL, Ctx.Runtime!, Ctx.Runtime!.TSTypeErrorCtor);
                 IL.Emit(OpCodes.Ldnull); // unreachable; balances the expression's result slot
                 SetStackUnknown();
                 return true;

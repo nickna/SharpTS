@@ -67,9 +67,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Value is not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not a constructor");
     }
 }

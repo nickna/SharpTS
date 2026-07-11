@@ -147,9 +147,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, listType);
         il.Emit(OpCodes.Brtrue, iterableOkLabel);
         il.Emit(OpCodes.Ldstr, $"Promise.{combinatorName} argument is not iterable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
         il.MarkLabel(iterableOkLabel);
 
         var listLocal = il.DeclareLocal(listType);

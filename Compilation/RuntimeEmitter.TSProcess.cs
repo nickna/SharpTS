@@ -1751,10 +1751,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, pidOk);
-        il.Emit(OpCodes.Ldstr, "The \"pid\" argument must be of type number.");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "The \"pid\" argument must be of type number.");
         il.MarkLabel(pidOk);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);

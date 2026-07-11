@@ -288,19 +288,13 @@ public partial class RuntimeEmitter
         var notNullForKeysLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForKeysLabel);
-        il.Emit(OpCodes.Ldstr, "Object.keys called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.keys called on null or undefined");
         il.MarkLabel(notNullForKeysLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefForKeysLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForKeysLabel);
-        il.Emit(OpCodes.Ldstr, "Object.keys called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.keys called on null or undefined");
         il.MarkLabel(notUndefForKeysLabel);
 
         // Proxy short-circuit (#92): if obj is SharpTSProxy, dispatch TrapOwnKeys
@@ -770,10 +764,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, gopnTypeOkLabel);
 
         il.MarkLabel(gopnThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(gopnTypeOkLabel);
 
         // Proxy short-circuit (#92): if obj is SharpTSProxy, dispatch TrapOwnKeys

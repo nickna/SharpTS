@@ -53,10 +53,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, protoOkLabel);
 
         il.MarkLabel(protoThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object prototype may only be an Object or null");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object prototype may only be an Object or null");
 
         il.MarkLabel(protoOkLabel);
 
@@ -102,10 +99,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brtrue, propsIsUndefLabel);
         // Properties is null → throw TypeError per ToObject step.
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(propsIsUndefLabel);
 
         // Cast propertiesObject to Dictionary<string, object?>
@@ -424,10 +418,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, gOPSThrowLabel);
         il.Emit(OpCodes.Br, gOPSTypeOkLabel);
         il.MarkLabel(gOPSThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(gOPSTypeOkLabel);
 
         // Create the result list
@@ -518,19 +509,13 @@ public partial class RuntimeEmitter
         var notNullForGpoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForGpoLabel);
-        il.Emit(OpCodes.Ldstr, "Object.getPrototypeOf called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.getPrototypeOf called on null or undefined");
         il.MarkLabel(notNullForGpoLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefForGpoLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForGpoLabel);
-        il.Emit(OpCodes.Ldstr, "Object.getPrototypeOf called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.getPrototypeOf called on null or undefined");
         il.MarkLabel(notUndefForGpoLabel);
 
         var tempLocal = il.DeclareLocal(_types.Object);
@@ -762,10 +747,7 @@ public partial class RuntimeEmitter
         var afterRocLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterRocLabel);
         il.MarkLabel(rocThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object.setPrototypeOf called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.setPrototypeOf called on null or undefined");
         il.MarkLabel(afterRocLabel);
 
         // ECMA-262 §20.1.2.21 step 3: throw TypeError if Type(proto) is
@@ -800,10 +782,7 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Br, protoOkLabel);
         il.MarkLabel(protoThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object prototype may only be an Object or null");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object prototype may only be an Object or null");
         il.MarkLabel(protoOkLabel);
 
         // Check if object is null - if so, skip checks (dead code now that
@@ -822,10 +801,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         // It's a class instance - throw TypeError
-        il.Emit(OpCodes.Ldstr, "Cannot set prototype of class instance");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of class instance");
         il.MarkLabel(notClassInstanceLabel);
 
         // Check if object is extensible - if not, throw TypeError
@@ -834,10 +810,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, nullCheckDoneLabel);  // Object is extensible, proceed
 
         // Object is not extensible - throw TypeError
-        il.Emit(OpCodes.Ldstr, "Cannot set prototype of non-extensible object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of non-extensible object");
 
         il.MarkLabel(nullCheckDoneLabel);
 

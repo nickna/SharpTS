@@ -48,10 +48,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.TaskOfObject);
             il.Emit(OpCodes.Brtrue, isPromiseOkLabel);
-            il.Emit(OpCodes.Ldstr, "Promise.prototype.then called on non-Promise");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Promise.prototype.then called on non-Promise");
             il.MarkLabel(isPromiseOkLabel);
             var taskLocal = il.DeclareLocal(_types.TaskOfObject);
             EmitUnwrapToTask(il, runtime, taskLocal);
@@ -203,9 +200,7 @@ public partial class RuntimeEmitter
         // Not callable — throw TypeError. Message is parameterized so finally
         // callers don't see a "Promise.prototype.catch:" prefix.
         il.Emit(OpCodes.Ldstr, methodNameForError + ": this.then is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
         il.MarkLabel(thenCallableLabel);
         // args[0]: undefined (catch) or onFinally (finally — both slots fire
         //         the callback so it runs on fulfillment AND rejection).
@@ -247,9 +242,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, okLabel);
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
         il.MarkLabel(okLabel);
     }
 

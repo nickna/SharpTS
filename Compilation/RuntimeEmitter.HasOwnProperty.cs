@@ -451,10 +451,7 @@ public partial class RuntimeEmitter
         var pieAfterNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, pieAfterNullLabel);
         il.MarkLabel(pieNullThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(pieAfterNullLabel);
 
         // Symbol-keyed lookup. PDSGetPropertyDescriptor's name parameter is

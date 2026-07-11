@@ -358,10 +358,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4, 512);
         il.Emit(OpCodes.Blt, depthOkLabel);
-        il.Emit(OpCodes.Ldstr, "Converting circular structure to JSON");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Converting circular structure to JSON");
         il.MarkLabel(depthOkLabel);
 
         // Store value in local (we may modify it via toJSON)
@@ -556,10 +553,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "BigInt value can't be serialized in JSON");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "BigInt value can't be serialized in JSON");
 
         il.MarkLabel(notBigIntLabel);
     }

@@ -75,10 +75,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, skipTypeThrowLabel);
 
         il.MarkLabel(primitiveThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object.defineProperty called on non-object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperty called on non-object");
         il.MarkLabel(skipTypeThrowLabel);
 
         // Symbol-keyed path: Object.defineProperty(obj, symbol, {value:X}) must store X
@@ -223,10 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lenWasCoercedLocal);
         il.Emit(OpCodes.Br, skipArrayLenCheck);
         il.MarkLabel(rangeErrLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid array length");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
         il.MarkLabel(skipArrayLenCheck);
 
         // Check if object is frozen - if so, throw TypeError
@@ -313,10 +307,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, descTypeOkLabel);
 
         il.MarkLabel(descThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Property description must be an object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property description must be an object");
 
         il.MarkLabel(descTypeOkLabel);
 
@@ -565,10 +556,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, getterStoreLabel);
-        il.Emit(OpCodes.Ldstr, "Property descriptor 'get' is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'get' is not callable");
         il.MarkLabel(getterIsUndefLabel);
         // Store $Undefined.Instance so the descriptor remains classified as
         // accessor (slot non-null).
@@ -601,10 +589,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, setterStoreLabel);
-        il.Emit(OpCodes.Ldstr, "Property descriptor 'set' is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Property descriptor 'set' is not callable");
         il.MarkLabel(setterIsUndefLabel);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
@@ -745,10 +730,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noMixLabel);
         il.Emit(OpCodes.Ldloc, newIsDataOuter);
         il.Emit(OpCodes.Brfalse, noMixLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
         il.MarkLabel(noMixLabel);
 
         var validationEndLabel = il.DefineLabel();
@@ -993,10 +975,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, validationEndLabel);
 
         il.MarkLabel(throwRedefineLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot redefine property");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot redefine property");
 
         il.MarkLabel(validationEndLabel);
 
@@ -2410,10 +2389,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, dpsOkLabel);
 
         il.MarkLabel(dpsThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object.defineProperties called on non-object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperties called on non-object");
         il.MarkLabel(dpsOkLabel);
 
         // ECMA-262 §20.1.2.3 step 2: Let props be ? ToObject(Properties).
@@ -2429,10 +2405,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, dpsPropsOkLabel);
 
         il.MarkLabel(dpsPropsThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(dpsPropsOkLabel);
 
         // Save the ORIGINAL props identity for PDS lookups before the $TSObject

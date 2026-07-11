@@ -666,10 +666,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, executingField);
         il.Emit(OpCodes.Brfalse, okLabel);
-        il.Emit(OpCodes.Ldstr, "Generator is already running");
-        il.Emit(OpCodes.Newobj, _runtime!.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, _runtime!.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, _runtime!, "Generator is already running");
         il.MarkLabel(okLabel);
     }
 

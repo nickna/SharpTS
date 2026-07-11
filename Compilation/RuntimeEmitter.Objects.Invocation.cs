@@ -22,10 +22,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers)
             .GetMethod("TryEnsureSufficientExecutionStack", Type.EmptyTypes)!);
         il.Emit(OpCodes.Brtrue, stackOkLabel);
-        il.Emit(OpCodes.Ldstr, "Maximum call stack size exceeded");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Maximum call stack size exceeded");
         il.MarkLabel(stackOkLabel);
     }
 
@@ -40,9 +37,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.TypeOf);
         il.Emit(OpCodes.Ldstr, " is not a function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
     }
 
     private void EmitGetArrayMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -144,10 +139,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
-            il.Emit(OpCodes.Ldstr, "called value is not a function");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
             il.MarkLabel(notRegExpCallee);
         }
 
@@ -621,10 +613,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpCallee);
-            il.Emit(OpCodes.Ldstr, "called value is not a function");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "called value is not a function");
             il.MarkLabel(notRegExpCallee);
         }
 

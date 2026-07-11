@@ -264,19 +264,13 @@ public partial class RuntimeEmitter
         var notNullForValsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForValsLabel);
-        il.Emit(OpCodes.Ldstr, "Object.values called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.values called on null or undefined");
         il.MarkLabel(notNullForValsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefForValsLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForValsLabel);
-        il.Emit(OpCodes.Ldstr, "Object.values called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.values called on null or undefined");
         il.MarkLabel(notUndefForValsLabel);
 
         // String primitive: ToObject wraps it as a String exotic object whose
@@ -759,19 +753,13 @@ public partial class RuntimeEmitter
         var notNullForEntsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullForEntsLabel);
-        il.Emit(OpCodes.Ldstr, "Object.entries called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.entries called on null or undefined");
         il.MarkLabel(notNullForEntsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefForEntsLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefForEntsLabel);
-        il.Emit(OpCodes.Ldstr, "Object.entries called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.entries called on null or undefined");
         il.MarkLabel(notUndefForEntsLabel);
 
         // String primitive: yields [["0","a"], ["1","b"], ...] per ECMA-262
@@ -1397,10 +1385,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, notNullLabel);
 
         il.MarkLabel(requireOcThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Object.fromEntries: argument must not be null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.fromEntries: argument must not be null or undefined");
 
         il.MarkLabel(notNullLabel);
 

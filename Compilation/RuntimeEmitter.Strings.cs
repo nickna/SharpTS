@@ -584,9 +584,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpLabel);
             il.Emit(OpCodes.Ldstr, "First argument to String.prototype." + jsMethodName + " must not be a regular expression");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
             il.MarkLabel(notRegExpLabel);
         }
 
@@ -904,10 +902,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nonNegLabel);
 
         il.MarkLabel(throwRangeLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid count value");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid count value");
 
         il.MarkLabel(nonNegLabel);
 
@@ -1722,9 +1717,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSRangeErrorCtor);
 
         il.MarkLabel(validLabel);
 
@@ -1867,10 +1860,7 @@ public partial class RuntimeEmitter
 
         // Throw RangeError
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "The normalization form should be one of NFC, NFD, NFKC, NFKD.");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "The normalization form should be one of NFC, NFD, NFKC, NFKD.");
     }
 
     private void EmitStringLocaleCompare(TypeBuilder typeBuilder, EmittedRuntime runtime)

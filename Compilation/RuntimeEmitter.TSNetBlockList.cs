@@ -771,9 +771,7 @@ public partial class RuntimeEmitter
     private void EmitBlockListThrow(ILGenerator il, EmittedRuntime runtime, string message)
     {
         il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
     }
 
     /// <summary>

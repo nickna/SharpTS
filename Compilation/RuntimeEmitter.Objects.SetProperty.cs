@@ -861,10 +861,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, validLengthLabel);
 
             il.MarkLabel(rangeErrorLabel);
-            il.Emit(OpCodes.Ldstr, "Invalid array length");
-            il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
 
             il.MarkLabel(validLengthLabel);
             il.Emit(OpCodes.Ldarg_0);

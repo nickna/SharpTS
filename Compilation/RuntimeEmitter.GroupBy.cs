@@ -28,10 +28,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, gbCallableOkLabel);
-        il.Emit(OpCodes.Ldstr, "Object.groupBy: callback is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.groupBy: callback is not callable");
         il.MarkLabel(gbCallableOkLabel);
 
         // Locals

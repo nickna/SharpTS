@@ -393,9 +393,7 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, callName + " called on null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
         il.MarkLabel(okLabel);
     }
 }

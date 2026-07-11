@@ -71,10 +71,7 @@ public partial class RuntimeEmitter
         var afterReceiverNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterReceiverNullLabel);
         il.MarkLabel(receiverNullThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(afterReceiverNullLabel);
 
         // Walk: current = PDSGetPrototype(target);

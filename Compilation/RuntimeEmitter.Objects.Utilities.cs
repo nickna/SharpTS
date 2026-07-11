@@ -487,10 +487,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, listLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Brtrue, hasListLabel);
-        il.Emit(OpCodes.Ldstr, "Math.sumPrecise requires an iterable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Math.sumPrecise requires an iterable");
         il.MarkLabel(hasListLabel);
 
         var sumLocal = il.DeclareLocal(_types.Double);
@@ -530,10 +527,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, isDoubleLabel);
-        il.Emit(OpCodes.Ldstr, "Math.sumPrecise: every element must be a Number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Math.sumPrecise: every element must be a Number");
         il.MarkLabel(isDoubleLabel);
 
         il.Emit(OpCodes.Ldloc, elemLocal);

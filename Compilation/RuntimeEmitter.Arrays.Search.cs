@@ -295,10 +295,7 @@ public partial class RuntimeEmitter
         // `.call(null, ...)` must surface this throw rather than silently
         // iterate an empty list.
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
     }
 
     /// <summary>
@@ -334,10 +331,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notNullLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notNullLabel);
 
         // $Undefined → throw TypeError "null/undefined"
@@ -345,10 +339,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
 
         // Symbol → throw TypeError "Cannot convert a Symbol to a string".
@@ -358,10 +349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, passThroughLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
 
         // Pass-through (string, $TSObject, etc.).
         il.MarkLabel(passThroughLabel);
@@ -919,10 +907,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brfalse, afterTypeErrorCheck);
         il.MarkLabel(stillObjForThrow);
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(afterTypeErrorCheck);
     }
 

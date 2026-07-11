@@ -35,10 +35,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, ohoThrowLabel);
         il.Emit(OpCodes.Br, ohoOkLabel);
         il.MarkLabel(ohoThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(ohoOkLabel);
 
         // Delegate to HasOwnPropertyHelper(receiver, name).
@@ -497,10 +494,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
         il.Emit(OpCodes.Brfalse, skipFrozenThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot assign to read only property in frozen object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only property in frozen object");
         il.MarkLabel(skipFrozenThrowLabel);
 
         // Load target's PDS descriptor for the current key once — used by
@@ -553,10 +547,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSObjectHasSetter);
         il.Emit(OpCodes.Brtrue, skipSealedCheckLabel);
         il.MarkLabel(notTSObjectForAccessorCheckLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot add property to non-extensible object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot add property to non-extensible object");
         il.MarkLabel(skipSealedCheckLabel);
 
         // Per-key writable=false on target: ECMA-262 OrdinarySetWithOwnDescriptor
@@ -583,10 +574,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, targetKeyDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, skipNotWritableLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot assign to read only property");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only property");
         il.MarkLabel(skipNotWritableLabel);
 
         // String exotic object: indexed integer keys and "length" are
@@ -632,10 +620,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey", _types.String));
         il.Emit(OpCodes.Brfalse, skipStringWrapperThrowLabel);
         il.MarkLabel(throwStringWrapperLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot assign to read only property of String exotic object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only property of String exotic object");
         il.MarkLabel(skipStringWrapperThrowLabel);
 
         // target[kvp.Key] = kvp.Value
@@ -707,10 +692,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
         il.Emit(OpCodes.Brfalse, skipSymFrozenThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot assign to read only property in frozen object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only property in frozen object");
         il.MarkLabel(skipSymFrozenThrowLabel);
 
         // Sealed target + new key → throw.
@@ -723,10 +705,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, symKpKey);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
         il.Emit(OpCodes.Brtrue, skipSymSealedCheckLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot add property to sealed object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot add property to sealed object");
         il.MarkLabel(skipSymSealedCheckLabel);
 
         // targetSymDict[symKey] = symValue
@@ -760,10 +739,7 @@ public partial class RuntimeEmitter
 
         // Target is null/undefined - throw TypeError (ECMA-262 §20.1.2.1 step 1).
         il.MarkLabel(targetNullLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
 
         // Return coerced target (wrapped if a primitive was passed).
         il.MarkLabel(returnLabel);

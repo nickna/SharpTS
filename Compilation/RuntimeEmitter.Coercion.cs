@@ -398,10 +398,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, notNullishLabel);
         var throwTypeErrorLabel = il.DefineLabel();
         il.MarkLabel(throwTypeErrorLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notNullishLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
@@ -616,10 +613,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
         il.MarkLabel(notSymbolLabel);
 
         // A bigint coerces to its bare decimal form ("42"), not Stringify's "42n".
@@ -689,10 +683,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
         il.MarkLabel(notSymbolLabel);
 
         // A bigint coerces to its bare decimal form ("42"), not Stringify's "42n".
@@ -897,10 +888,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, primValLocal);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
         il.MarkLabel(unwrapNotSymLabel);
         // Stringify the primitive — handles bool/double/string identically to
         // the top-level fallback path.
@@ -1004,10 +992,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, resIsPrimitiveLabel);
         // Object result → TypeError per ECMA-262 7.1.1 step 1.b.iii.
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(resIsPrimitiveLabel);
         il.Emit(OpCodes.Ldloc, toPrimResultLocal);
         il.Emit(OpCodes.Call, runtime.ToJsString);
@@ -1096,10 +1081,7 @@ public partial class RuntimeEmitter
         var noThrowLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sawNonPrimitiveLocal);
         il.Emit(OpCodes.Brfalse, noThrowLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(noThrowLabel);
 
         // No usable toString/valueOf on this object — fall back to "[object Object]"
@@ -1226,10 +1208,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argLocal);
         il.Emit(OpCodes.Br, afterToPrimSymN);
         il.MarkLabel(doThrowN);
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(afterToPrimSymN);
 
         var emptyArgsLocalT = il.DeclareLocal(_types.ObjectArray);
@@ -1293,10 +1272,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brfalse, afterTeT);
         il.MarkLabel(stillObjTeT);
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(afterTeT);
 
         il.MarkLabel(skipToPrimLabelTop);
@@ -1309,10 +1285,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a number");
         il.MarkLabel(notSymbolLabel);
 
         // ECMA-262 7.1.4 step 2: BigInt → TypeError. `(0).toFixed(0n)` must
@@ -1322,10 +1295,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a BigInt to a number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a BigInt to a number");
         il.MarkLabel(notBigIntLabel);
 
         // ECMA-262 ToNumber: strings with "0x"/"0X" prefix parse as hex. Convert.ToDouble
@@ -1708,10 +1678,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brfalse, afterTypeErrorLabel);
         il.MarkLabel(stillObjAfterToString);
-        il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(afterTypeErrorLabel);
 
         il.MarkLabel(skipToPrimLabel);
@@ -1727,10 +1694,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolConvLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a number");
         il.MarkLabel(notSymbolConvLabel);
 
         // ECMA-262 21.1.1.1 step 5: Number(BigInt) returns a Number with the
