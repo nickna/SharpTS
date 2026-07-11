@@ -40,153 +40,84 @@ public static partial class ObjectBuiltIns
     public static object? GetStaticMethod(string name)
         => _staticLookup.GetMember(name);
 
+    /// <summary>
+    /// Enumerates the own enumerable (key, value) pairs of a receiver, encoding the
+    /// Object.keys/values/entries receiver-type ladder once. Branch order and per-branch
+    /// semantics are load-bearing:
+    /// - SharpTSObject: own enumerable fields.
+    /// - SharpTSArray: ECMA-262 — only present (non-hole) indices are own enumerable
+    ///   properties, so holes are skipped; keys are the stringified indices.
+    /// - SharpTSInstance: declared fields.
+    /// - IDictionary&lt;string, object?&gt;: runtime helpers (e.g. Web Streams iterator results)
+    ///   produce JS-object-shaped data without going through SharpTSObject; compiled mode has
+    ///   the matching dict branch in $Runtime.GetKeys, this keeps the interpreter at parity.
+    /// - SharpTSMath: built-in members are non-enumerable, so the own enumerable keys are
+    ///   exactly the user-assigned extras. Matches compiled mode (#288).
+    /// - Function/arrow function: functions are objects (ToObject is the identity), and their
+    ///   own enumerable keys are the user-assigned expando properties — lodash mixes its
+    ///   utility map onto the `lodash` function and enumerates it via keys() (#314); other
+    ///   callables have none.
+    /// Throws for non-object receivers; <paramref name="apiName"/> qualifies the message.
+    /// </summary>
+    private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(object? arg, string apiName)
+    {
+        switch (arg)
+        {
+            case SharpTSObject obj:
+                foreach (var k in obj.OwnEnumerableKeys())
+                    yield return new(k, obj.Fields[k]);
+                yield break;
+            case SharpTSArray arr:
+                for (int i = 0; i < arr.Length; i++)
+                    if (arr.HasIndex(i))
+                        yield return new(i.ToString(), arr[i]);
+                yield break;
+            case SharpTSInstance inst:
+                foreach (var n in inst.GetFieldNames())
+                    yield return new(n, inst.GetRawField(n));
+                yield break;
+            case IDictionary<string, object?> dict:
+                foreach (var kv in dict)
+                    yield return kv;
+                yield break;
+            case SharpTSMath math:
+                foreach (var kv in math.OwnEnumerableProperties)
+                    yield return new(kv.Key, kv.Value);
+                yield break;
+            case SharpTSFunction fn:
+                foreach (var k in fn.PropertyKeys)
+                    yield return new(k, fn.TryGetProperty(k, out var v) ? v : null);
+                yield break;
+            case SharpTSArrowFunction arrowFn:
+                foreach (var k in arrowFn.PropertyKeys)
+                    yield return new(k, arrowFn.TryGetProperty(k, out var av) ? av : null);
+                yield break;
+            case ISharpTSCallable:
+                yield break;
+            default:
+                throw new Exception($"{apiName} requires an object argument");
+        }
+    }
+
     private static RuntimeValue KeysV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var arg = args[0].ToObject();
-        if (arg is SharpTSObject obj)
-        {
-            var keys = obj.OwnEnumerableKeys().Select(k => (object?)k).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(keys));
-        }
-        if (arg is SharpTSArray arr)
-        {
-            // ECMA-262: only present (non-hole) indices are own enumerable
-            // properties, so Object.keys skips holes.
-            var keys = new List<object?>();
-            for (int i = 0; i < arr.Length; i++)
-                if (arr.HasIndex(i)) keys.Add(i.ToString());
-            return RuntimeValue.FromObject(new SharpTSArray(keys));
-        }
-        if (arg is SharpTSInstance inst)
-        {
-            var keys = inst.GetFieldNames().Select(k => (object?)k).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(keys));
-        }
-        // Plain Dictionary<string, object?> — used by runtime helpers (e.g.,
-        // Web Streams iterator results) that produce JS-object-shaped data
-        // without going through SharpTSObject. Compiled mode already has the
-        // matching dict branch in $Runtime.GetKeys; this branch keeps the
-        // interpreter at parity.
-        if (arg is IDictionary<string, object?> dict)
-        {
-            var keys = dict.Keys.Select(k => (object?)k).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(keys));
-        }
-        // Math singleton: built-in members are non-enumerable, so the own
-        // enumerable keys are exactly the user-assigned extras (empty unless the
-        // program assigned to Math). Matches compiled mode (#288).
-        if (arg is SharpTSMath math)
-        {
-            var keys = math.OwnEnumerableProperties.Select(kv => (object?)kv.Key).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(keys));
-        }
-        // Functions are objects (ECMA-262 ToObject is the identity for them):
-        // own enumerable keys are the user-assigned expando properties. lodash
-        // mixes its utility map onto the `lodash` function and enumerates it
-        // via keys() — the correct "[object Function]" tag (#314) routes
-        // functions through baseKeys → Object.keys instead of arrayLikeKeys,
-        // so throwing here broke lodash init.
-        if (arg is SharpTSFunction fn)
-            return RuntimeValue.FromObject(new SharpTSArray(fn.PropertyKeys.Select(k => (object?)k).ToList()));
-        if (arg is SharpTSArrowFunction arrowFn)
-            return RuntimeValue.FromObject(new SharpTSArray(arrowFn.PropertyKeys.Select(k => (object?)k).ToList()));
-        if (arg is ISharpTSCallable)
-            return RuntimeValue.FromObject(new SharpTSArray([]));
-        throw new Exception("Object.keys() requires an object argument");
+        var keys = EnumerateOwnEnumerable(args[0].ToObject(), "Object.keys()")
+            .Select(kv => (object?)kv.Key).ToList();
+        return RuntimeValue.FromObject(new SharpTSArray(keys));
     }
 
     private static RuntimeValue ValuesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var arg = args[0].ToObject();
-        if (arg is SharpTSObject obj)
-        {
-            var values = obj.OwnEnumerableKeys().Select(k => obj.Fields[k]).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(values));
-        }
-        if (arg is SharpTSArray arr)
-        {
-            var values = new List<object?>();
-            for (int i = 0; i < arr.Length; i++)
-                if (arr.HasIndex(i)) values.Add(arr[i]);
-            return RuntimeValue.FromObject(new SharpTSArray(values));
-        }
-        if (arg is SharpTSInstance inst)
-        {
-            var values = inst.GetFieldNames().Select(n => inst.GetRawField(n)).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(values));
-        }
-        if (arg is IDictionary<string, object?> dict)
-        {
-            return RuntimeValue.FromObject(new SharpTSArray(dict.Values.ToList()));
-        }
-        // Math singleton — see Object.keys (#288).
-        if (arg is SharpTSMath math)
-        {
-            var values = math.OwnEnumerableProperties.Select(kv => kv.Value).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(values));
-        }
-        // Functions are objects — see Object.keys.
-        if (arg is SharpTSFunction fn)
-            return RuntimeValue.FromObject(new SharpTSArray(
-                fn.PropertyKeys.Select(k => fn.TryGetProperty(k, out var v) ? v : null).ToList()));
-        if (arg is SharpTSArrowFunction arrowFn)
-            return RuntimeValue.FromObject(new SharpTSArray(
-                arrowFn.PropertyKeys.Select(k => arrowFn.TryGetProperty(k, out var v) ? v : null).ToList()));
-        if (arg is ISharpTSCallable)
-            return RuntimeValue.FromObject(new SharpTSArray([]));
-        throw new Exception("Object.values() requires an object argument");
+        var values = EnumerateOwnEnumerable(args[0].ToObject(), "Object.values()")
+            .Select(kv => kv.Value).ToList();
+        return RuntimeValue.FromObject(new SharpTSArray(values));
     }
 
     private static RuntimeValue EntriesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var arg = args[0].ToObject();
-        if (arg is SharpTSObject obj)
-        {
-            var entries = obj.OwnEnumerableKeys().Select(k =>
-                (object?)new SharpTSArray([(object?)k, obj.Fields[k]])).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(entries));
-        }
-        if (arg is SharpTSArray arr)
-        {
-            var entries = new List<object?>();
-            for (int i = 0; i < arr.Length; i++)
-            {
-                if (!arr.HasIndex(i)) continue;
-                entries.Add(new SharpTSArray([(object?)i.ToString(), arr[i]]));
-            }
-            return RuntimeValue.FromObject(new SharpTSArray(entries));
-        }
-        if (arg is SharpTSInstance inst)
-        {
-            var entries = inst.GetFieldNames().Select(n =>
-                (object?)new SharpTSArray([(object?)n, inst.GetRawField(n)])).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(entries));
-        }
-        if (arg is IDictionary<string, object?> dict)
-        {
-            var entries = dict.Select(kv =>
-                (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(entries));
-        }
-        // Math singleton — see Object.keys (#288).
-        if (arg is SharpTSMath math)
-        {
-            var entries = math.OwnEnumerableProperties.Select(kv =>
-                (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
-            return RuntimeValue.FromObject(new SharpTSArray(entries));
-        }
-        // Functions are objects — see Object.keys.
-        if (arg is SharpTSFunction fn)
-            return RuntimeValue.FromObject(new SharpTSArray(
-                fn.PropertyKeys.Select(k =>
-                    (object?)new SharpTSArray([(object?)k, fn.TryGetProperty(k, out var v) ? v : null])).ToList()));
-        if (arg is SharpTSArrowFunction arrowFn)
-            return RuntimeValue.FromObject(new SharpTSArray(
-                arrowFn.PropertyKeys.Select(k =>
-                    (object?)new SharpTSArray([(object?)k, arrowFn.TryGetProperty(k, out var v) ? v : null])).ToList()));
-        if (arg is ISharpTSCallable)
-            return RuntimeValue.FromObject(new SharpTSArray([]));
-        throw new Exception("Object.entries() requires an object argument");
+        var entries = EnumerateOwnEnumerable(args[0].ToObject(), "Object.entries()")
+            .Select(kv => (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
+        return RuntimeValue.FromObject(new SharpTSArray(entries));
     }
 
     private static object? FromEntries(Interpreter interpreter, List<object?> args)

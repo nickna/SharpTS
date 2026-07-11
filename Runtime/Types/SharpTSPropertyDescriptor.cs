@@ -105,55 +105,63 @@ public class SharpTSPropertyDescriptor
     /// <summary>
     /// Creates a PropertyDescriptor from a SharpTS object returned by a decorator.
     /// </summary>
-    public static SharpTSPropertyDescriptor FromObject(SharpTSObject obj)
+    /// <remarks>
+    /// Own-only fast path. Presence is detected via HasProperty/HasSetter (the latter only for
+    /// the value/get/set arms) so an explicit <c>value: undefined</c> (or a setter-only
+    /// <c>value</c> accessor) is recorded as specified rather than dropped, distinguishing
+    /// "omitted" from "undefined" (#801). The interpreter-aware pass in ObjectBuiltIns
+    /// re-derives these prototype-aware (walking the chain + ToBoolean) and overrides as needed.
+    /// </remarks>
+    public static SharpTSPropertyDescriptor FromObject(SharpTSObject obj) =>
+        Populate(
+            n => obj.HasProperty(n) || (n is "value" or "get" or "set" && obj.HasSetter(n)),
+            obj.GetProperty);
+
+    /// <summary>
+    /// Runs the six-field descriptor extraction (value/get/set/writable/enumerable/configurable)
+    /// over an abstract (<paramref name="has"/>, <paramref name="read"/>) view of the source —
+    /// each From* variant supplies only its own presence-probe/read pair. Presence flags are
+    /// tracked separately from the values so "omitted" stays distinct from "explicitly
+    /// undefined" (#801).
+    /// </summary>
+    private static SharpTSPropertyDescriptor Populate(Func<string, bool> has, Func<string, object?> read)
     {
         var descriptor = new SharpTSPropertyDescriptor();
 
-        // Own-only fast path. Presence is detected via HasProperty/HasSetter so an
-        // explicit `value: undefined` (or a setter-only `value` accessor) is recorded
-        // as specified rather than dropped, distinguishing "omitted" from "undefined"
-        // (#801). The interpreter-aware pass in ObjectBuiltIns re-derives these
-        // prototype-aware (walking the chain + ToBoolean) and overrides as needed.
-        if (obj.HasProperty("value") || obj.HasSetter("value"))
+        if (has("value"))
         {
-            descriptor.Value = obj.GetProperty("value");
+            descriptor.Value = read("value");
             descriptor.HasValue = true;
         }
 
-        if (obj.HasProperty("get") || obj.HasSetter("get"))
+        if (has("get"))
         {
             descriptor.HasGet = true;
-            if (obj.GetProperty("get") is ISharpTSCallable getterFn)
-            {
-                descriptor.Get = getterFn;
-            }
+            if (read("get") is ISharpTSCallable getterFn) descriptor.Get = getterFn;
         }
 
-        if (obj.HasProperty("set") || obj.HasSetter("set"))
+        if (has("set"))
         {
             descriptor.HasSet = true;
-            if (obj.GetProperty("set") is ISharpTSCallable setterFn)
-            {
-                descriptor.Set = setterFn;
-            }
+            if (read("set") is ISharpTSCallable setterFn) descriptor.Set = setterFn;
         }
 
-        if (obj.HasProperty("writable"))
+        if (has("writable"))
         {
             descriptor.HasWritable = true;
-            if (obj.GetProperty("writable") is bool w) descriptor.Writable = w;
+            if (read("writable") is bool w) descriptor.Writable = w;
         }
 
-        if (obj.HasProperty("enumerable"))
+        if (has("enumerable"))
         {
             descriptor.HasEnumerable = true;
-            if (obj.GetProperty("enumerable") is bool e) descriptor.Enumerable = e;
+            if (read("enumerable") is bool e) descriptor.Enumerable = e;
         }
 
-        if (obj.HasProperty("configurable"))
+        if (has("configurable"))
         {
             descriptor.HasConfigurable = true;
-            if (obj.GetProperty("configurable") is bool c) descriptor.Configurable = c;
+            if (read("configurable") is bool c) descriptor.Configurable = c;
         }
 
         return descriptor;
@@ -183,154 +191,37 @@ public class SharpTSPropertyDescriptor
         }
 
         // For compiled $Object type, use reflection to get properties
-        var descriptor = new SharpTSPropertyDescriptor();
         var type = obj.GetType();
 
         // Try to get the GetProperty method
         var getPropertyMethod = type.GetMethod("GetProperty", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null, [typeof(string)], null);
-
-        if (getPropertyMethod != null)
+        if (getPropertyMethod == null)
         {
-            object? GetProp(string name) => getPropertyMethod.Invoke(obj, [name]);
-
-            // Probe presence via HasProperty(string) when the type exposes it, so an
-            // explicit `value: undefined` is distinguished from an omitted value (#801).
-            var hasPropertyMethod = type.GetMethod("HasProperty",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
-                null, [typeof(string)], null);
-            bool HasProp(string name) => hasPropertyMethod?.Invoke(obj, [name]) is bool b && b;
-
-            if (HasProp("value"))
-            {
-                descriptor.Value = GetProp("value");
-                descriptor.HasValue = true;
-            }
-
-            if (HasProp("get"))
-            {
-                descriptor.HasGet = true;
-                if (GetProp("get") is ISharpTSCallable getterFn) descriptor.Get = getterFn;
-            }
-
-            if (HasProp("set"))
-            {
-                descriptor.HasSet = true;
-                if (GetProp("set") is ISharpTSCallable setterFn) descriptor.Set = setterFn;
-            }
-
-            if (HasProp("writable"))
-            {
-                descriptor.HasWritable = true;
-                if (GetProp("writable") is bool w) descriptor.Writable = w;
-            }
-
-            if (HasProp("enumerable"))
-            {
-                descriptor.HasEnumerable = true;
-                if (GetProp("enumerable") is bool e) descriptor.Enumerable = e;
-            }
-
-            if (HasProp("configurable"))
-            {
-                descriptor.HasConfigurable = true;
-                if (GetProp("configurable") is bool c) descriptor.Configurable = c;
-            }
+            return new SharpTSPropertyDescriptor();
         }
 
-        return descriptor;
+        // Probe presence via HasProperty(string) when the type exposes it, so an
+        // explicit `value: undefined` is distinguished from an omitted value (#801).
+        var hasPropertyMethod = type.GetMethod("HasProperty",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+            null, [typeof(string)], null);
+
+        return Populate(
+            name => hasPropertyMethod?.Invoke(obj, [name]) is bool b && b,
+            name => getPropertyMethod.Invoke(obj, [name]));
     }
 
     /// <summary>
     /// Creates a PropertyDescriptor from a Dictionary.
     /// </summary>
-    private static SharpTSPropertyDescriptor FromDictionary(Dictionary<string, object?> dict)
-    {
-        var descriptor = new SharpTSPropertyDescriptor();
-
-        if (dict.TryGetValue("value", out var value))
-        {
-            descriptor.Value = value;
-            descriptor.HasValue = true;
-        }
-
-        if (dict.TryGetValue("get", out var getter))
-        {
-            descriptor.HasGet = true;
-            if (getter is ISharpTSCallable getterFn) descriptor.Get = getterFn;
-        }
-
-        if (dict.TryGetValue("set", out var setter))
-        {
-            descriptor.HasSet = true;
-            if (setter is ISharpTSCallable setterFn) descriptor.Set = setterFn;
-        }
-
-        if (dict.TryGetValue("writable", out var writable))
-        {
-            descriptor.HasWritable = true;
-            if (writable is bool w) descriptor.Writable = w;
-        }
-
-        if (dict.TryGetValue("enumerable", out var enumerable))
-        {
-            descriptor.HasEnumerable = true;
-            if (enumerable is bool e) descriptor.Enumerable = e;
-        }
-
-        if (dict.TryGetValue("configurable", out var configurable))
-        {
-            descriptor.HasConfigurable = true;
-            if (configurable is bool c) descriptor.Configurable = c;
-        }
-
-        return descriptor;
-    }
+    private static SharpTSPropertyDescriptor FromDictionary(Dictionary<string, object?> dict) =>
+        Populate(dict.ContainsKey, k => dict[k]);
 
     /// <summary>
     /// Creates a PropertyDescriptor from an IDictionary.
     /// </summary>
-    private static SharpTSPropertyDescriptor FromIDictionary(System.Collections.IDictionary dict)
-    {
-        var descriptor = new SharpTSPropertyDescriptor();
-
-        if (dict.Contains("value"))
-        {
-            descriptor.Value = dict["value"];
-            descriptor.HasValue = true;
-        }
-
-        if (dict.Contains("get"))
-        {
-            descriptor.HasGet = true;
-            if (dict["get"] is ISharpTSCallable getterFn) descriptor.Get = getterFn;
-        }
-
-        if (dict.Contains("set"))
-        {
-            descriptor.HasSet = true;
-            if (dict["set"] is ISharpTSCallable setterFn) descriptor.Set = setterFn;
-        }
-
-        if (dict.Contains("writable"))
-        {
-            descriptor.HasWritable = true;
-            if (dict["writable"] is bool w) descriptor.Writable = w;
-        }
-
-        if (dict.Contains("enumerable"))
-        {
-            descriptor.HasEnumerable = true;
-            if (dict["enumerable"] is bool e) descriptor.Enumerable = e;
-        }
-
-        if (dict.Contains("configurable"))
-        {
-            descriptor.HasConfigurable = true;
-            if (dict["configurable"] is bool c) descriptor.Configurable = c;
-        }
-
-        return descriptor;
-    }
+    private static SharpTSPropertyDescriptor FromIDictionary(System.Collections.IDictionary dict) =>
+        Populate(dict.Contains, k => dict[k]);
 
     /// <summary>
     /// Creates a descriptor for a method.

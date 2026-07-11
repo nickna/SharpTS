@@ -175,6 +175,15 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     protected abstract SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length);
 
+    // Internal bridges so same-assembly callers (StructuredClone) can construct a view of the
+    // SAME concrete element type as an existing instance without maintaining a parallel
+    // typeName→constructor switch — the subclass set stays the single source of that mapping.
+    internal SharpTSTypedArray CreateViewFrom(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        CreateView(buffer, byteOffset, length);
+
+    internal SharpTSTypedArray CreateViewFrom(byte[] buffer, int byteOffset, int length) =>
+        CreateView(buffer, byteOffset, length);
+
     /// <summary>
     /// Resolves JS slice/subarray bounds (negative-from-end, clamped to [0, length])
     /// to a concrete (start, count) pair.
