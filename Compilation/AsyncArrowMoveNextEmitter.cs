@@ -218,55 +218,9 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         _il.MarkLabel(defaultLabel);
     }
 
-    /// <summary>
-    /// Applies parameter defaults at async-arrow entry (#646). For each parameter with a default
-    /// value, if its hoisted state-machine field holds null or the <c>$Undefined</c> sentinel, the
-    /// default expression is evaluated and stored. Mirrors the async-function path
-    /// (<see cref="AsyncMoveNextEmitter"/>); parameter fields are object-typed so the null /
-    /// <c>$Undefined</c> check is sound. Invoked only on initial entry (see EmitMoveNext placement),
-    /// so no defaults-applied guard field is required.
-    /// </summary>
-    private void EmitDefaultParameters(List<Stmt.Parameter> parameters)
-    {
-        foreach (var param in parameters)
-        {
-            if (param.DefaultValue == null) continue;
-
-            var field = _builder.GetVariableField(param.Name.Lexeme);
-            if (field == null) continue; // parameter not hoisted
-
-            var applyDefault = _il.DefineLabel();
-            var checkUndefined = _il.DefineLabel();
-            var skipDefault = _il.DefineLabel();
-
-            // Load the parameter field value.
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, field);
-
-            // null -> apply default; otherwise test for the $Undefined sentinel.
-            _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Brtrue, checkUndefined);
-            _il.Emit(OpCodes.Pop);
-            _il.Emit(OpCodes.Br, applyDefault);
-
-            _il.MarkLabel(checkUndefined);
-            _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
-            _il.Emit(OpCodes.Brtrue, applyDefault);
-            _il.Emit(OpCodes.Br, skipDefault);
-
-            // field = <default>
-            _il.MarkLabel(applyDefault);
-            EmitExpression(param.DefaultValue);
-            EnsureBoxed();
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, field);
-
-            _il.MarkLabel(skipDefault);
-        }
-    }
+    // Parameter defaults (#646) are applied by the shared StateMachineExitRoutingEmitter
+    // EmitDefaultParameters; invoked only on initial entry (see EmitMoveNext placement), so no
+    // defaults-applied guard field is required here.
 
     #region StatementEmitterBase Overrides
 

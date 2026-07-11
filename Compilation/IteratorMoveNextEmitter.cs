@@ -86,64 +86,30 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
     }
 
     /// <summary>
-    /// Applies parameter defaults at generator/async-generator entry. A defaulted parameter whose
-    /// argument was omitted or explicitly <c>undefined</c> arrives in its hoisted state-machine field as
-    /// null / the <c>$Undefined</c> sentinel; this replaces it with the evaluated default expression —
-    /// the iterator analogue of <see cref="ILEmitter.EmitDefaultParameters"/>, which these state
-    /// machines previously lacked (defaults never fired in compiled mode). Defaults are evaluated in
-    /// declaration order, so a later default may reference an earlier (already-defaulted) parameter via
-    /// its field. (#737)
+    /// Emits the resume dispatch at MoveNext entry: switch on the state field to each suspension
+    /// point's resume label; state -1 (initial execution) falls through the switch. No-op when the
+    /// body has no suspension points. The sync generator passes its yield-point count, the async
+    /// generator its combined yield+await count — the IL is otherwise identical.
     /// </summary>
-    protected void EmitDefaultParameters(List<Stmt.Parameter> parameters)
+    protected void EmitStateSwitch(FieldBuilder stateField, int suspensionPointCount, IReadOnlyDictionary<int, Label> stateLabels)
     {
-        if (!parameters.Any(p => p.DefaultValue != null))
-            return;
+        if (suspensionPointCount == 0) return;
 
-        foreach (var param in parameters)
+        // Load state field
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, stateField);
+
+        // Create labels array for switch
+        var labels = new Label[suspensionPointCount];
+        for (int i = 0; i < suspensionPointCount; i++)
         {
-            if (param.DefaultValue == null) continue;
-
-            var field = GetHoistedVariableField(param.Name.Lexeme);
-            if (field == null) continue; // Parameter not hoisted (unused in body) — default is moot.
-
-            var applyDefault = IL.DefineLabel();
-            var checkUndefined = IL.DefineLabel();
-            var skipDefault = IL.DefineLabel();
-
-            // if (field == null) apply; else if (field is $Undefined) apply; else keep.
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, field);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Brtrue, checkUndefined);
-            IL.Emit(OpCodes.Pop);                       // pop the null
-            IL.Emit(OpCodes.Br, applyDefault);
-
-            IL.MarkLabel(checkUndefined);
-            IL.Emit(OpCodes.Isinst, Ctx!.Runtime!.UndefinedType);
-            IL.Emit(OpCodes.Brtrue, applyDefault);
-            IL.Emit(OpCodes.Br, skipDefault);
-
-            IL.MarkLabel(applyDefault);
-            EmitExpression(param.DefaultValue);
-            EnsureBoxed();
-            var temp = IL.DeclareLocal(Types.Object);
-            IL.Emit(OpCodes.Stloc, temp);
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldloc, temp);
-            IL.Emit(OpCodes.Stfld, field);
-
-            // A captured-and-mutated parameter's live storage is the function display-class field,
-            // not the state-machine field the body no longer reads. Mirror the default into the DC
-            // field so a nested arrow observes the default rather than the omitted-arg $Undefined
-            // sentinel (#792). Non-captured params return false here and keep the SM-field-only path.
-            if (TryGetFunctionDCField(param.Name.Lexeme, out var dcField))
-            {
-                IL.Emit(OpCodes.Ldloc, temp);
-                StoreToDCField(dcField);
-            }
-
-            IL.MarkLabel(skipDefault);
+            labels[i] = stateLabels[i];
         }
+
+        // switch (state) { case 0: goto State0; case 1: goto State1; ... }
+        IL.Emit(OpCodes.Switch, labels);
+
+        // Fall through for state -1 (initial execution)
     }
 
     /// <summary>

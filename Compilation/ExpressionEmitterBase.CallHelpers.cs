@@ -1639,58 +1639,8 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
         IL.Emit(OpCodes.Brtrue, nullishLabel);
 
-        // Not nullish — evaluate arguments and invoke
-        List<LocalBuilder> argTemps = [];
-        List<bool> isSpread = [];
-        foreach (var arg in c.Arguments)
-        {
-            if (arg is Expr.Spread spread)
-            {
-                EmitExpression(spread.Expression);
-                EnsureBoxed();
-                isSpread.Add(true);
-            }
-            else
-            {
-                EmitExpression(arg);
-                EnsureBoxed();
-                isSpread.Add(false);
-            }
-            var temp = IL.DeclareLocal(Types.Object);
-            IL.Emit(OpCodes.Stloc, temp);
-            argTemps.Add(temp);
-        }
-
-        bool hasSpreads = isSpread.Any(s => s);
-
-        // Build args array
-        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
-        IL.Emit(OpCodes.Newarr, Types.Object);
-        for (int i = 0; i < argTemps.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, argTemps[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
-
-        if (hasSpreads)
-        {
-            // Build isSpread bool array and expand
-            IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
-            IL.Emit(OpCodes.Newarr, Types.Boolean);
-            for (int i = 0; i < argTemps.Count; i++)
-            {
-                if (isSpread[i])
-                {
-                    IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Ldc_I4, i);
-                    IL.Emit(OpCodes.Ldc_I4_1);
-                    IL.Emit(OpCodes.Stelem_I1);
-                }
-            }
-            EmitExpandCallArgs();
-        }
+        // Not nullish — evaluate arguments (await-safe, spreads flattened) and invoke
+        EmitArgsArrayWithSpread(c.Arguments);
 
         // InvokeMethodValue(receiver=null, function, args)
         var argsLocal = IL.DeclareLocal(Types.ObjectArray);

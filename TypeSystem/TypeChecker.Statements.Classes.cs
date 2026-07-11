@@ -390,7 +390,9 @@ public partial class TypeChecker
                     : accessor.Name.Lexeme;
                 if (canonicalName != null)
                 {
-                    int line = TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line;
+                    int line = accessor.ComputedKey != null
+                        ? TryGetExprLine(accessor.ComputedKey) ?? accessor.Name.Line
+                        : accessor.Name.Line;
                     string displayName = accessor.ComputedKey != null ? $"[Symbol.{canonicalName["@@".Length..]}]" : canonicalName;
                     // A method already registered under this name (methods are processed above)
                     // makes ANY accessor of the same name a duplicate too — a class member can't be

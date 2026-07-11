@@ -13,7 +13,6 @@ public partial class RuntimeEmitter
     private void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitRegExpCoerceArg(typeBuilder, runtime);
-        EmitCreateRegExp(typeBuilder, runtime);
         EmitCreateRegExpWithFlags(typeBuilder, runtime);
         EmitRegExpFromArgs(typeBuilder, runtime);
         EmitRegExpTest(typeBuilder, runtime);
@@ -213,23 +212,6 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(returnOriginalLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitCreateRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "CreateRegExp",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.String]
-        );
-        runtime.CreateRegExp = method;
-
-        var il = method.GetILGenerator();
-        // return new $RegExp(pattern)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPattern);
         il.Emit(OpCodes.Ret);
     }
 

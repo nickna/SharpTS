@@ -69,9 +69,6 @@ public partial class RuntimeEmitter
     {
         InitializeHttpTypes();
 
-        // Emit low-level helpers that use reflection for standalone DLLs (must be first)
-        EmitHttpLowLevelHelpers(typeBuilder, runtime);
-
         // Emit the $Headers class first (used by $FetchResponse)
         var moduleBuilder = typeBuilder.Module as ModuleBuilder ?? throw new CompileException("Module is not a ModuleBuilder");
         EmitHeadersClass(moduleBuilder, runtime);
@@ -105,86 +102,6 @@ public partial class RuntimeEmitter
 
         // Emit wrappers for module import support
         EmitHttpModuleWrappers(typeBuilder, runtime);
-    }
-
-    /// <summary>
-    /// Emits low-level helpers for HTTP operations.
-    /// These are now pure-IL implementations that don't require SharpTS.dll.
-    /// </summary>
-    private void EmitHttpLowLevelHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        EmitExtractResponseHeadersHelper(typeBuilder, runtime);
-        EmitWrapCallbackHelper(typeBuilder, runtime);
-        EmitCreateHttpServerHelper(typeBuilder, runtime);
-    }
-
-    /// <summary>
-    /// Emits: public static object ExtractResponseHeadersHelper(object response)
-    /// Extracts headers from HttpResponseMessage as a Dictionary.
-    /// Pure-IL implementation - no SharpTS dependency.
-    /// </summary>
-    private void EmitExtractResponseHeadersHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ExtractResponseHeadersHelper",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.ExtractResponseHeadersHelper = method;
-
-        var il = method.GetILGenerator();
-
-        // For now, return an empty dictionary
-        // The fetch implementation creates its own headers dictionary
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object WrapCallbackHelper(object callback)
-    /// In standalone mode, callbacks are already $TSFunction or $BoundTSFunction - just return as-is.
-    /// Pure-IL implementation - no SharpTS dependency.
-    /// </summary>
-    private void EmitWrapCallbackHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "WrapCallbackHelper",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.WrapCallbackHelper = method;
-
-        var il = method.GetILGenerator();
-
-        // In compiled standalone mode, callbacks are already $TSFunction or $BoundTSFunction
-        // Just return the callback as-is
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object CreateHttpServerHelper(object callback)
-    /// Creates a new $HttpServer instance directly.
-    /// Pure-IL implementation - no SharpTS dependency.
-    /// </summary>
-    private void EmitCreateHttpServerHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "CreateHttpServerHelper",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.CreateHttpServerHelper = method;
-
-        var il = method.GetILGenerator();
-
-        // Create new $HttpServer(callback) directly
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.TSHttpServerCtor);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

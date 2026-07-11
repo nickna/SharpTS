@@ -13,6 +13,5 @@ public partial class AsyncGeneratorMoveNextEmitter
     // the analysis. Empty for the common no-shadow case (and for analyses built without the renamer).
     // The block-scope-rename + function-DC variable overrides that consume this live in the shared
     // IteratorMoveNextEmitter base (#1124).
-    private static readonly IReadOnlyDictionary<object, string> NoRenames = new Dictionary<object, string>();
     protected override IReadOnlyDictionary<object, string> BlockScopeRenames => _analysis.BlockScopeRenames ?? NoRenames;
 }

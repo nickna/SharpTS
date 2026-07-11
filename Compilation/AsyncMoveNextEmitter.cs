@@ -219,7 +219,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         // This checks if hoisted parameters are undefined and assigns default values
         if (parameters != null)
         {
-            EmitDefaultParameters(parameters);
+            EmitDefaultParametersWithResumeGuard(parameters);
         }
 
         // Emit the function body (will emit await points inline)
@@ -296,16 +296,13 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
     }
 
     /// <summary>
-    /// Emits default parameter handling at the beginning of the async function body.
-    /// For each parameter with a default value, checks if the hoisted field is null or undefined
-    /// and assigns the default value if so.
-    /// Uses a flag field to skip default evaluation on state machine resume.
+    /// Applies parameter defaults at async-function entry via the shared
+    /// StateMachineExitRoutingEmitter core, wrapped in the DefaultsAppliedField guard so a state
+    /// machine resume does not re-evaluate defaults.
     /// </summary>
-    private void EmitDefaultParameters(List<Stmt.Parameter> parameters)
+    private void EmitDefaultParametersWithResumeGuard(List<Stmt.Parameter> parameters)
     {
-        // Check if any parameter has a default value
-        bool hasDefaults = parameters.Any(p => p.DefaultValue != null);
-        if (!hasDefaults) return;
+        if (!parameters.Any(p => p.DefaultValue != null)) return;
 
         // Check if defaults have already been applied (skip on resume)
         var skipAllDefaults = _il.DefineLabel();
@@ -313,57 +310,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         _il.Emit(OpCodes.Ldfld, _builder.DefaultsAppliedField!);
         _il.Emit(OpCodes.Brtrue, skipAllDefaults);
 
-        foreach (var param in parameters)
-        {
-            if (param.DefaultValue == null) continue;
-
-            string paramName = param.Name.Lexeme;
-            var field = _builder.GetVariableField(paramName);
-            if (field == null) continue; // Parameter not hoisted - skip
-
-            // Check if parameter is null or undefined and assign default value
-            // if (param === null || param === undefined) { param = <default>; }
-            var skipDefault = _il.DefineLabel();
-            var applyDefault = _il.DefineLabel();
-            var checkUndefined = _il.DefineLabel();
-
-            // Load the parameter field value
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, field);
-
-            // Check if it's null (apply default if null)
-            // Stack: [value]
-            _il.Emit(OpCodes.Dup);
-            // Stack: [value, value]
-            _il.Emit(OpCodes.Brtrue, checkUndefined);
-            // If null, we have [null] on stack
-            _il.Emit(OpCodes.Pop); // Pop the null
-            _il.Emit(OpCodes.Br, applyDefault);
-
-            // Check if it's undefined (apply default if undefined)
-            _il.MarkLabel(checkUndefined);
-            // Stack: [value]
-            _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
-            // Stack: [undefined_or_null]
-            _il.Emit(OpCodes.Brtrue, applyDefault);
-
-            // Value is neither null nor undefined - skip default assignment
-            // Stack: []
-            _il.Emit(OpCodes.Br, skipDefault);
-
-            // Value is null or undefined - emit default value and store to field
-            _il.MarkLabel(applyDefault);
-            // Stack: []
-            EmitExpression(param.DefaultValue);
-            EnsureBoxed();
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, field);
-
-            _il.MarkLabel(skipDefault);
-        }
+        EmitDefaultParameters(parameters);
 
         // Mark defaults as applied
         _il.Emit(OpCodes.Ldarg_0);
