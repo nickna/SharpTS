@@ -48,7 +48,7 @@ public partial class TypeChecker
         // treat all super access as Any — we can't statically know the exact signatures.
         if (_currentClass.Superclass is TypeInfo.MutableClass)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // super() constructor call - Method is null
@@ -59,7 +59,7 @@ public partial class TypeChecker
                 return SubstituteSuperclassTypeArgs(ctorType);
             }
             // Default constructor with no parameters
-            return new TypeInfo.Function([], new TypeInfo.Void());
+            return new TypeInfo.Function([], TypeInfo.Void.Shared);
         }
 
         if (superMethods != null && superMethods.TryGetValue(expr.Method.Lexeme, out var methodType))
@@ -84,7 +84,7 @@ public partial class TypeChecker
             // pattern) and at module top level. Type it as Any so members
             // resolve permissively — matches how CJS code uses
             // `function Foo() { this.x = 1 }`.
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
         // In static blocks, 'this' refers to the class constructor (the class type itself)
         if (_inStaticBlock)
@@ -116,9 +116,9 @@ public partial class TypeChecker
             switch (get.Name.Lexeme)
             {
                 case "for":
-                    return new TypeInfo.Function([new TypeInfo.String()], new TypeInfo.Symbol(), 1, false, null, ["key"]);
+                    return new TypeInfo.Function([TypeInfo.String.Shared], TypeInfo.Symbol.Shared, 1, false, null, ["key"]);
                 case "keyFor":
-                    return new TypeInfo.Function([new TypeInfo.Symbol()], new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]), 1, false, null, ["sym"]);
+                    return new TypeInfo.Function([TypeInfo.Symbol.Shared], new TypeInfo.Union([TypeInfo.String.Shared, TypeInfo.Undefined.Shared]), 1, false, null, ["sym"]);
                 case "prototype":
                     return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
             }
@@ -152,7 +152,7 @@ public partial class TypeChecker
             try { return ResolveMemberType(get, objType); }
             catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2339")
             {
-                return new TypeInfo.Undefined();
+                return TypeInfo.Undefined.Shared;
             }
         }
 
@@ -174,10 +174,10 @@ public partial class TypeChecker
         switch (objType)
         {
             case TypeInfo.Undefined:
-                if (get.Optional) return new TypeInfo.Undefined();
+                if (get.Optional) return TypeInfo.Undefined.Shared;
                 throw new TypeCheckException($"Property '{get.Name.Lexeme}' does not exist on type 'undefined'.", get.Name.Line, tsCode: "TS2339");
             case TypeInfo.Null:
-                if (get.Optional) return new TypeInfo.Undefined();
+                if (get.Optional) return TypeInfo.Undefined.Shared;
                 throw new TypeCheckException("Object is possibly 'null'.", get.Name.Line, tsCode: "TS2531");
         }
 
@@ -213,7 +213,7 @@ public partial class TypeChecker
                 CheckGetOnUnion(union, get.Name, get.Optional, get.Object),
             TypeCategory.Intersection when objType is TypeInfo.Intersection intersection =>
                 CheckGetOnIntersection(intersection, get.Name),
-            _ => new TypeInfo.Any()
+            _ => TypeInfo.Any.Shared
         };
     }
 
@@ -260,19 +260,19 @@ public partial class TypeChecker
         // If property is missing on some members, add undefined to result
         if (hasMissingProperty)
         {
-            memberTypes.Add(new TypeInfo.Undefined());
+            memberTypes.Add(TypeInfo.Undefined.Shared);
         }
 
         // For optional chaining with null/undefined in the union, add undefined to result
         if (isOptional && hasNullOrUndefined)
         {
-            memberTypes.Add(new TypeInfo.Undefined());
+            memberTypes.Add(TypeInfo.Undefined.Shared);
         }
 
         // If no members have the property at all, fall back to Any
         if (memberTypes.Count == 0)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Return union of all member types
@@ -725,7 +725,7 @@ public partial class TypeChecker
             {
                 TypeInfo valueType = CheckExpr(set.Value);
                 // cause accepts any type; name, message, stack must be string
-                if (propName != "cause" && !IsCompatible(new TypeInfo.String(), valueType))
+                if (propName != "cause" && !IsCompatible(TypeInfo.String.Shared, valueType))
                 {
                     throw new TypeCheckException($" Cannot assign '{valueType}' to property '{propName}' of type 'string'.", tsCode: "TS2322");
                 }
@@ -769,7 +769,7 @@ public partial class TypeChecker
             if (set.Name.Lexeme == "length")
             {
                 TypeInfo valueType = CheckExpr(set.Value);
-                var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                var numberType = TypeInfo.Primitive.Number;
                 if (!IsCompatible(numberType, valueType))
                     throw new TypeCheckException($" Cannot assign '{valueType}' to array 'length' (expected number).", tsCode: "TS2322");
                 return valueType;
@@ -885,7 +885,7 @@ public partial class TypeChecker
                 }
                 current = GetSuperclass(current);
             }
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle Instance type - check instance members
@@ -934,7 +934,7 @@ public partial class TypeChecker
                     current = GetSuperclass(current);
                 }
             }
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle Union type - check if all members have the property
@@ -980,10 +980,10 @@ public partial class TypeChecker
         // Handle Any type
         if (objType is TypeInfo.Any)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>

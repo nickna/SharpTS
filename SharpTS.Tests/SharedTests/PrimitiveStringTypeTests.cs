@@ -21,8 +21,8 @@ public class PrimitiveStringTypeTests
         // The assert/analyzer: 'string' must be TypeInfo.String, never Primitive(TYPE_STRING).
         Assert.Throws<ArgumentException>(() => new TypeInfo.Primitive(TokenType.TYPE_STRING));
         // number/boolean remain valid Primitive tokens.
-        _ = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        _ = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        _ = TypeInfo.Primitive.Number;
+        _ = TypeInfo.Primitive.Boolean;
     }
 
     [Fact]

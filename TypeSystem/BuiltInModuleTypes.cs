@@ -8,25 +8,25 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public static partial class BuiltInModuleTypes
 {
-    private static TypeInfo BooleanType => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    private static TypeInfo BooleanType => TypeInfo.Primitive.Boolean;
 
     /// <summary>
     /// Gets the exported types for the os module.
     /// </summary>
     public static Dictionary<string, TypeInfo> GetOsModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var numberType = TypeInfo.Primitive.Number;
 
         return new Dictionary<string, TypeInfo>
         {
             // Methods returning strings
-            ["platform"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["arch"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["hostname"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["homedir"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["tmpdir"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["type"] = new TypeInfo.Function([], new TypeInfo.String()),
-            ["release"] = new TypeInfo.Function([], new TypeInfo.String()),
+            ["platform"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["arch"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["hostname"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["homedir"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["tmpdir"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["type"] = new TypeInfo.Function([], TypeInfo.String.Shared),
+            ["release"] = new TypeInfo.Function([], TypeInfo.String.Shared),
 
             // Methods returning numbers
             ["totalmem"] = new TypeInfo.Function([], numberType),
@@ -36,18 +36,18 @@ public static partial class BuiltInModuleTypes
             ["cpus"] = new TypeInfo.Function([],
                 new TypeInfo.Array(new TypeInfo.Record(new Dictionary<string, TypeInfo>
                 {
-                    ["model"] = new TypeInfo.String(),
+                    ["model"] = TypeInfo.String.Shared,
                     ["speed"] = numberType
                 }.ToFrozenDictionary()))
             ),
             ["userInfo"] = new TypeInfo.Function([],
                 new TypeInfo.Record(new Dictionary<string, TypeInfo>
                 {
-                    ["username"] = new TypeInfo.String(),
+                    ["username"] = TypeInfo.String.Shared,
                     ["uid"] = numberType,
                     ["gid"] = numberType,
-                    ["shell"] = new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Null()]),
-                    ["homedir"] = new TypeInfo.String()
+                    ["shell"] = new TypeInfo.Union([TypeInfo.String.Shared, TypeInfo.Null.Shared]),
+                    ["homedir"] = TypeInfo.String.Shared
                 }.ToFrozenDictionary())
             ),
 
@@ -56,11 +56,11 @@ public static partial class BuiltInModuleTypes
 
             // networkInterfaces() -> object with interface names as keys
             ["networkInterfaces"] = new TypeInfo.Function([],
-                new TypeInfo.Any()  // Returns dynamic object structure
+                TypeInfo.Any.Shared  // Returns dynamic object structure
             ),
 
             // Properties
-            ["EOL"] = new TypeInfo.String()
+            ["EOL"] = TypeInfo.String.Shared
         };
     }
 
@@ -69,12 +69,12 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetCryptoModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var anyType = new TypeInfo.Any();
-        var bufferType = new TypeInfo.Buffer();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var anyType = TypeInfo.Any.Shared;
+        var bufferType = TypeInfo.Buffer.Shared;
         var bufferOrStringType = new TypeInfo.Union([bufferType, stringType]);
-        var voidType = new TypeInfo.Void();
+        var voidType = TypeInfo.Void.Shared;
 
         return new Dictionary<string, TypeInfo>
         {
@@ -263,11 +263,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetReadlineModuleTypes()
     {
-        var stringType = new TypeInfo.String();
-        var anyType = new TypeInfo.Any();
-        var voidType = new TypeInfo.Void();
+        var stringType = TypeInfo.String.Shared;
+        var anyType = TypeInfo.Any.Shared;
+        var voidType = TypeInfo.Void.Shared;
         var boolType = BooleanType;
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var numberType = TypeInfo.Primitive.Number;
 
         // Interface type returned by createInterface
         var interfaceType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
@@ -307,9 +307,9 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetBufferModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var bufferType = new TypeInfo.Buffer();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var bufferType = TypeInfo.Buffer.Shared;
 
         // Buffer constructor type - an object with static methods
         var bufferConstructorType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
@@ -319,7 +319,7 @@ public static partial class BuiltInModuleTypes
                 bufferType,
                 RequiredParams: 1),
             ["alloc"] = new TypeInfo.Function(
-                [numberType, new TypeInfo.Any(), stringType],
+                [numberType, TypeInfo.Any.Shared, stringType],
                 bufferType,
                 RequiredParams: 1),
             ["allocUnsafe"] = new TypeInfo.Function([numberType], bufferType),
@@ -328,7 +328,7 @@ public static partial class BuiltInModuleTypes
                 [new TypeInfo.Array(bufferType), numberType],
                 bufferType,
                 RequiredParams: 1),
-            ["isBuffer"] = new TypeInfo.Function([new TypeInfo.Any()], BooleanType),
+            ["isBuffer"] = new TypeInfo.Function([TypeInfo.Any.Shared], BooleanType),
             ["byteLength"] = new TypeInfo.Function(
                 [new TypeInfo.Union([stringType, bufferType]), stringType],
                 numberType,
@@ -337,7 +337,7 @@ public static partial class BuiltInModuleTypes
             ["isEncoding"] = new TypeInfo.Function([stringType], BooleanType)
         }.ToFrozenDictionary());
 
-        var anyType = new TypeInfo.Any();
+        var anyType = TypeInfo.Any.Shared;
         var byteSource = new TypeInfo.Union([bufferType, new TypeInfo.Array(numberType), stringType]);
 
         return new Dictionary<string, TypeInfo>
@@ -378,76 +378,76 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetZlibModuleTypes()
     {
-        var bufferType = new TypeInfo.Buffer();
-        var anyType = new TypeInfo.Any();
-        var inputType = new TypeInfo.Union([bufferType, new TypeInfo.String()]);
+        var bufferType = TypeInfo.Buffer.Shared;
+        var anyType = TypeInfo.Any.Shared;
+        var inputType = new TypeInfo.Union([bufferType, TypeInfo.String.Shared]);
         var transformType = anyType; // Transform stream type
 
         return new Dictionary<string, TypeInfo>
         {
             // Gzip methods
             ["gzipSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
             ["gunzipSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
 
             // Deflate methods (with zlib header)
             ["deflateSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
             ["inflateSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
 
             // DeflateRaw methods (no header)
             ["deflateRawSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
             ["inflateRawSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
 
             // Brotli methods
             ["brotliCompressSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
             ["brotliDecompressSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
 
             // Zstd methods
             ["zstdCompressSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
             ["zstdDecompressSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
 
             // Unzip (auto-detect)
             ["unzipSync"] = new TypeInfo.Function(
-                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                [new TypeInfo.Union([bufferType, TypeInfo.String.Shared]), anyType],
                 bufferType,
                 RequiredParams: 1
             ),
@@ -478,8 +478,8 @@ public static partial class BuiltInModuleTypes
 
             // Checksums (Node 22+): crc32(data[, value]) -> number
             ["crc32"] = new TypeInfo.Function(
-                [inputType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
-                new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
+                [inputType, TypeInfo.Primitive.Number],
+                TypeInfo.Primitive.Number,
                 RequiredParams: 1)
         };
     }
@@ -581,8 +581,8 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     private static Dictionary<string, TypeInfo> GetTtyPrimitiveTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var booleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var numberType = TypeInfo.Primitive.Number;
+        var booleanType = TypeInfo.Primitive.Boolean;
         return new Dictionary<string, TypeInfo>
         {
             ["isatty"] = new TypeInfo.Function([numberType], booleanType),
@@ -595,7 +595,7 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     private static Dictionary<string, TypeInfo> GetAsyncHooksPrimitiveTypes()
     {
-        var anyType = new TypeInfo.Any();
+        var anyType = TypeInfo.Any.Shared;
         return new Dictionary<string, TypeInfo>
         {
             ["create"] = new TypeInfo.Function([], anyType),
@@ -608,7 +608,7 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     private static Dictionary<string, TypeInfo> GetPerfPrimitiveTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var numberType = TypeInfo.Primitive.Number;
         return new Dictionary<string, TypeInfo>
         {
             ["now"] = new TypeInfo.Function([], numberType),
@@ -620,42 +620,42 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetTimersModuleTypes()
     {
-        var timeoutType = new TypeInfo.Any(); // Timeout handle type
-        var callbackType = new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Void(), HasRestParam: true);
+        var timeoutType = TypeInfo.Any.Shared; // Timeout handle type
+        var callbackType = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Void.Shared, HasRestParam: true);
 
         return new Dictionary<string, TypeInfo>
         {
             ["setTimeout"] = new TypeInfo.Function(
-                [callbackType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER), new TypeInfo.Any()],
+                [callbackType, TypeInfo.Primitive.Number, TypeInfo.Any.Shared],
                 timeoutType,
                 RequiredParams: 1,
                 HasRestParam: true
             ),
             ["clearTimeout"] = new TypeInfo.Function(
                 [timeoutType],
-                new TypeInfo.Void(),
+                TypeInfo.Void.Shared,
                 RequiredParams: 0
             ),
             ["setInterval"] = new TypeInfo.Function(
-                [callbackType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER), new TypeInfo.Any()],
+                [callbackType, TypeInfo.Primitive.Number, TypeInfo.Any.Shared],
                 timeoutType,
                 RequiredParams: 1,
                 HasRestParam: true
             ),
             ["clearInterval"] = new TypeInfo.Function(
                 [timeoutType],
-                new TypeInfo.Void(),
+                TypeInfo.Void.Shared,
                 RequiredParams: 0
             ),
             ["setImmediate"] = new TypeInfo.Function(
-                [callbackType, new TypeInfo.Any()],
+                [callbackType, TypeInfo.Any.Shared],
                 timeoutType,
                 RequiredParams: 1,
                 HasRestParam: true
             ),
             ["clearImmediate"] = new TypeInfo.Function(
                 [timeoutType],
-                new TypeInfo.Void(),
+                TypeInfo.Void.Shared,
                 RequiredParams: 0
             )
         };
@@ -666,8 +666,8 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetTimersPromisesModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var anyType = TypeInfo.Any.Shared;
+        var numberType = TypeInfo.Primitive.Number;
         var promiseAny = new TypeInfo.Promise(anyType);
 
         return new Dictionary<string, TypeInfo>

@@ -23,14 +23,14 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Enum indexEnum)
         {
             indexType = indexEnum.Kind == EnumKind.String
-                ? new TypeInfo.String()
-                : new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                ? TypeInfo.String.Shared
+                : TypeInfo.Primitive.Number;
         }
 
         // Allow indexing on 'any' type (returns 'any')
         if (objType is TypeInfo.Any)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // TS2538: a value whose type can't be a property key — e.g. a function type such as
@@ -46,7 +46,7 @@ public partial class TypeChecker
         // body checking, e.g. calling a sibling static method from a ternary). Treat as any.
         if (objType is TypeInfo.Inferred)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // A deferred recursive alias (`part.subparts: DeepReadonly<Part[]>`) is resolved one
@@ -80,7 +80,7 @@ public partial class TypeChecker
                     if (CheckGetIndexOnType(constraint, indexType, getIndex) is { } viaConstraint)
                         return viaConstraint;
                 }
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             }
             return CheckGetIndexOnType(evaluated, indexType, getIndex)
                 ?? throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{evaluated}'.", tsCode: "TS7053");
@@ -94,7 +94,7 @@ public partial class TypeChecker
                 .ToList();
             if (nonNullish.Count == 0)
             {
-                return new TypeInfo.Undefined();
+                return TypeInfo.Undefined.Shared;
             }
             objType = nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
         }
@@ -138,7 +138,7 @@ public partial class TypeChecker
                 {
                     // Return IndexedAccess type that will be resolved when concrete types are provided
                     // For now, return Any since we can't know the exact property type until instantiation
-                    return new TypeInfo.Any();
+                    return TypeInfo.Any.Shared;
                 }
             }
 
@@ -156,14 +156,14 @@ public partial class TypeChecker
                 if (keyOf2.SourceType is TypeInfo.TypeParameter keyOfTp2 && keyOfTp2.Name == objTp.Name)
                 {
                     // K extends keyof T and we're indexing T with K - allow it
-                    return new TypeInfo.Any();
+                    return TypeInfo.Any.Shared;
                 }
             }
 
             // If index is a string/number type, return Any for generic flexibility
             if (IsString(indexType) || IsNumber(indexType))
             {
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             }
 
             // A generic key whose constraint is key-like (K extends string | number | symbol)
@@ -173,7 +173,7 @@ public partial class TypeChecker
                 ApparentTypeOf(genericKeyForTp) is { } keyLikeApparent &&
                 IsCompatible(KeyLikeUnion, keyLikeApparent))
             {
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             }
 
             // Unconstrained type parameter can't be indexed with arbitrary types
@@ -188,19 +188,19 @@ public partial class TypeChecker
             if (keyOfSourceType is TypeInfo.TypeParameter)
             {
                 // The keyof is on a type parameter - in generic context, allow it
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             }
             // If we can verify the keyof source matches objType, allow it
             if (IsCompatible(keyOfSourceType, objType))
             {
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             }
         }
 
         // Allow indexing with 'any' type key (returns 'any')
         if (indexType is TypeInfo.Any)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // A generic key (K extends string | number | symbol) reaching an object with an index
@@ -235,13 +235,13 @@ public partial class TypeChecker
 
             // Allow bracket access on any object/interface (returns any for unknown keys)
             if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
 
             // `typeof x === 'object'` narrows x to TypeInfo.Object. Indexing such
             // a narrowed value by string is valid JS and must return Any — not
             // throwing here is important for code like `Object.keys(obj).forEach(k => obj[k])`.
             if (objType is TypeInfo.Object)
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
         }
 
         // Handle number index
@@ -273,7 +273,7 @@ public partial class TypeChecker
             // String indexed by number returns a string (single character, or undefined at runtime).
             if (objType is TypeInfo.String or TypeInfo.StringLiteral)
             {
-                return new TypeInfo.String();
+                return TypeInfo.String.Shared;
             }
 
             // TypedArray index access returns number
@@ -300,7 +300,7 @@ public partial class TypeChecker
                 {
                     throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.", tsCode: "TS2476");
                 }
-                return new TypeInfo.String();
+                return TypeInfo.String.Shared;
             }
 
             // Number index signature on interface/record
@@ -342,7 +342,7 @@ public partial class TypeChecker
             // reference types (SharedArrayBuffer[Symbol.species], typed arrays, Map,
             // Promise, ...) which otherwise fell through to a spurious TS7053.
             if (IsSymbolIndexableObject(objType))
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
         }
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
@@ -395,8 +395,8 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Enum indexEnum)
         {
             indexType = indexEnum.Kind == EnumKind.String
-                ? new TypeInfo.String()
-                : new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                ? TypeInfo.String.Shared
+                : TypeInfo.Primitive.Number;
         }
 
         // Invalidate any narrowings affected by this index assignment
@@ -676,7 +676,7 @@ public partial class TypeChecker
         }
 
         if (indexType is TypeInfo.Any)
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -693,7 +693,7 @@ public partial class TypeChecker
             if (objType is TypeInfo.Interface itf2 && itf2.StringIndexType != null)
                 return itf2.StringIndexType;
             if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
         }
 
         // Handle number index
@@ -728,7 +728,7 @@ public partial class TypeChecker
                 return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
             // String indexed by number yields a single-character string.
             if (objType is TypeInfo.String or TypeInfo.StringLiteral)
-                return new TypeInfo.String();
+                return TypeInfo.String.Shared;
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
                 return itf3.NumberIndexType;
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)

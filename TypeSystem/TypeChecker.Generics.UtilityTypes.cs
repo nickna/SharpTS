@@ -382,9 +382,9 @@ public partial class TypeChecker
             // Return a conditional type for lazy evaluation
             return new TypeInfo.ConditionalType(
                 functionType,
-                new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Any(), HasRestParam: true),
+                new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared, HasRestParam: true),
                 new TypeInfo.InferredTypeParameter("R"),
-                new TypeInfo.Never()
+                TypeInfo.Never.Shared
             ) { IsDistributive = true };
         }
 
@@ -399,7 +399,7 @@ public partial class TypeChecker
 
             return returnTypes.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => returnTypes[0],
                 _ => new TypeInfo.Union(returnTypes)
             };
@@ -411,12 +411,12 @@ public partial class TypeChecker
             TypeInfo.Function fn => fn.ReturnType,
             TypeInfo.OverloadedFunction of => of.Signatures.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => of.Signatures[0].ReturnType,
                 _ => new TypeInfo.Union(of.Signatures.Select(s => s.ReturnType).Distinct().ToList())
             },
             TypeInfo.GenericFunction gf => gf.ReturnType,
-            _ => new TypeInfo.Never()
+            _ => TypeInfo.Never.Shared
         };
     }
 
@@ -431,9 +431,9 @@ public partial class TypeChecker
         {
             return new TypeInfo.ConditionalType(
                 functionType,
-                new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Any(), HasRestParam: true),
+                new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared, HasRestParam: true),
                 new TypeInfo.InferredTypeParameter("P"),
-                new TypeInfo.Never()
+                TypeInfo.Never.Shared
             ) { IsDistributive = true };
         }
 
@@ -448,7 +448,7 @@ public partial class TypeChecker
 
             return paramTypes.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => paramTypes[0],
                 _ => new TypeInfo.Union(paramTypes)
             };
@@ -462,7 +462,7 @@ public partial class TypeChecker
                 // Use the last (most general) signature for overloaded functions
                 TypeInfo.Tuple.FromTypes(of.Signatures[^1].ParamTypes, of.Signatures[^1].ParamTypes.Count),
             TypeInfo.GenericFunction gf => TypeInfo.Tuple.FromTypes(gf.ParamTypes, gf.ParamTypes.Count),
-            _ => new TypeInfo.Never()
+            _ => TypeInfo.Never.Shared
         };
     }
 
@@ -477,9 +477,9 @@ public partial class TypeChecker
         {
             return new TypeInfo.ConditionalType(
                 classType,
-                new TypeInfo.Any(), // Represents constructor type
+                TypeInfo.Any.Shared, // Represents constructor type
                 new TypeInfo.InferredTypeParameter("P"),
-                new TypeInfo.Never()
+                TypeInfo.Never.Shared
             ) { IsDistributive = true };
         }
 
@@ -494,7 +494,7 @@ public partial class TypeChecker
 
             return ctorParams.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => ctorParams[0],
                 _ => new TypeInfo.Union(ctorParams)
             };
@@ -508,7 +508,7 @@ public partial class TypeChecker
             TypeInfo.GenericClass gc => ExtractConstructorParams(gc),
             TypeInfo.InstantiatedGeneric ig when ig.GenericDefinition is TypeInfo.GenericClass gc =>
                 SubstituteConstructorParams(gc, ig.TypeArguments),
-            _ => new TypeInfo.Never()
+            _ => TypeInfo.Never.Shared
         };
     }
 
@@ -571,9 +571,9 @@ public partial class TypeChecker
         {
             return new TypeInfo.ConditionalType(
                 classType,
-                new TypeInfo.Any(),
+                TypeInfo.Any.Shared,
                 new TypeInfo.InferredTypeParameter("R"),
-                new TypeInfo.Never()
+                TypeInfo.Never.Shared
             ) { IsDistributive = true };
         }
 
@@ -588,7 +588,7 @@ public partial class TypeChecker
 
             return instanceTypes.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => instanceTypes[0],
                 _ => new TypeInfo.Union(instanceTypes)
             };
@@ -601,7 +601,7 @@ public partial class TypeChecker
             TypeInfo.MutableClass mc => new TypeInfo.Instance(mc.Freeze()),
             TypeInfo.GenericClass gc => new TypeInfo.Instance(gc),
             TypeInfo.InstantiatedGeneric ig => new TypeInfo.Instance(ig),
-            _ => new TypeInfo.Never()
+            _ => TypeInfo.Never.Shared
         };
     }
 
@@ -616,7 +616,7 @@ public partial class TypeChecker
         {
             return new TypeInfo.ConditionalType(
                 type,
-                new TypeInfo.Promise(new TypeInfo.Any()),
+                new TypeInfo.Promise(TypeInfo.Any.Shared),
                 new TypeInfo.InferredTypeParameter("U"),
                 type
             ) { IsDistributive = true };
@@ -632,7 +632,7 @@ public partial class TypeChecker
 
             return awaitedTypes.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => awaitedTypes[0],
                 _ => new TypeInfo.Union(awaitedTypes)
             };
@@ -657,8 +657,8 @@ public partial class TypeChecker
         {
             return new TypeInfo.ConditionalType(
                 type,
-                new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()]),
-                new TypeInfo.Never(),
+                new TypeInfo.Union([TypeInfo.Null.Shared, TypeInfo.Undefined.Shared]),
+                TypeInfo.Never.Shared,
                 type
             ) { IsDistributive = true };
         }
@@ -672,7 +672,7 @@ public partial class TypeChecker
 
             return filtered.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => filtered[0],
                 _ => new TypeInfo.Union(filtered)
             };
@@ -681,8 +681,8 @@ public partial class TypeChecker
         // Single type - return never if null/undefined, otherwise return type
         return type switch
         {
-            TypeInfo.Null => new TypeInfo.Never(),
-            TypeInfo.Undefined => new TypeInfo.Never(),
+            TypeInfo.Null => TypeInfo.Never.Shared,
+            TypeInfo.Undefined => TypeInfo.Never.Shared,
             _ => type
         };
     }
@@ -700,7 +700,7 @@ public partial class TypeChecker
                 type,
                 constraint,
                 type,
-                new TypeInfo.Never()
+                TypeInfo.Never.Shared
             ) { IsDistributive = true };
         }
 
@@ -713,14 +713,14 @@ public partial class TypeChecker
 
             return extracted.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => extracted[0],
                 _ => new TypeInfo.Union(extracted)
             };
         }
 
         // Single type - keep if assignable to constraint
-        return IsCompatible(constraint, type) ? type : new TypeInfo.Never();
+        return IsCompatible(constraint, type) ? type : TypeInfo.Never.Shared;
     }
 
     /// <summary>
@@ -735,7 +735,7 @@ public partial class TypeChecker
             return new TypeInfo.ConditionalType(
                 type,
                 constraint,
-                new TypeInfo.Never(),
+                TypeInfo.Never.Shared,
                 type
             ) { IsDistributive = true };
         }
@@ -749,14 +749,14 @@ public partial class TypeChecker
 
             return remaining.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => remaining[0],
                 _ => new TypeInfo.Union(remaining)
             };
         }
 
         // Single type - remove if assignable to constraint
-        return IsCompatible(constraint, type) ? new TypeInfo.Never() : type;
+        return IsCompatible(constraint, type) ? TypeInfo.Never.Shared : type;
     }
 
     // ==================== UTILITY TYPE HELPERS ====================

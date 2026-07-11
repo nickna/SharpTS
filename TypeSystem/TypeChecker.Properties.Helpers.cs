@@ -80,7 +80,7 @@ public partial class TypeChecker
             allTypes.Add(tuple.RestElementType);
         var unique = allTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
         return unique.Count == 0
-            ? new TypeInfo.Any()
+            ? TypeInfo.Any.Shared
             : (unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique));
     }
 
@@ -126,7 +126,7 @@ public partial class TypeChecker
             }
             current = GetSuperclass(current);
         }
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -201,9 +201,9 @@ public partial class TypeChecker
     /// </summary>
     private static TypeInfo? ResolveObjectPrototypeMember(string name)
     {
-        var boolean = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-        var str = new TypeInfo.String();
-        var anyArg = new List<TypeInfo> { new TypeInfo.Any() };
+        var boolean = TypeInfo.Primitive.Boolean;
+        var str = TypeInfo.String.Shared;
+        var anyArg = new List<TypeInfo> { TypeInfo.Any.Shared };
         return name switch
         {
             "hasOwnProperty" => new TypeInfo.Function(anyArg, boolean, RequiredParams: 1),
@@ -211,8 +211,8 @@ public partial class TypeChecker
             "propertyIsEnumerable" => new TypeInfo.Function(anyArg, boolean, RequiredParams: 1),
             "toString" => new TypeInfo.Function([], str),
             "toLocaleString" => new TypeInfo.Function([], str),
-            "valueOf" => new TypeInfo.Function([], new TypeInfo.Object()),
-            "constructor" => new TypeInfo.Function([], new TypeInfo.Any()),
+            "valueOf" => new TypeInfo.Function([], TypeInfo.Object.Shared),
+            "constructor" => new TypeInfo.Function([], TypeInfo.Any.Shared),
             _ => null
         };
     }
@@ -279,7 +279,7 @@ public partial class TypeChecker
             return CheckGetOnRegularInstance(instanceClassType, memberName);
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -326,7 +326,7 @@ public partial class TypeChecker
             }
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -421,6 +421,6 @@ public partial class TypeChecker
 
             current = GetSuperclass(current);
         }
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 }

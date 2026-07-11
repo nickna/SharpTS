@@ -11,10 +11,10 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetFsModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var voidType = new TypeInfo.Void();
-        var anyType = new TypeInfo.Any();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var voidType = TypeInfo.Void.Shared;
+        var anyType = TypeInfo.Any.Shared;
 
         // Stats-like return type for statSync/lstatSync
         var statsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
@@ -59,8 +59,8 @@ public static partial class BuiltInModuleTypes
 
             // Read file - returns string if encoding provided, Buffer otherwise
             ["readFileSync"] = new TypeInfo.Function(
-                [stringType, new TypeInfo.Union([stringType, new TypeInfo.Null()])],
-                new TypeInfo.Union([stringType, new TypeInfo.Buffer()]),
+                [stringType, new TypeInfo.Union([stringType, TypeInfo.Null.Shared])],
+                new TypeInfo.Union([stringType, TypeInfo.Buffer.Shared]),
                 RequiredParams: 1
             ),
 
@@ -179,12 +179,12 @@ public static partial class BuiltInModuleTypes
             ["closeSync"] = new TypeInfo.Function([numberType], voidType),
             // readSync(fd, buffer, offset, length, position) -> bytesRead
             ["readSync"] = new TypeInfo.Function(
-                [numberType, new TypeInfo.Buffer(), numberType, numberType, anyType],
+                [numberType, TypeInfo.Buffer.Shared, numberType, numberType, anyType],
                 numberType
             ),
             // writeSync(fd, buffer, offset?, length?, position?) -> bytesWritten
             ["writeSync"] = new TypeInfo.Function(
-                [numberType, new TypeInfo.Union([new TypeInfo.Buffer(), stringType]), numberType, numberType, anyType],
+                [numberType, new TypeInfo.Union([TypeInfo.Buffer.Shared, stringType]), numberType, numberType, anyType],
                 numberType,
                 RequiredParams: 2
             ),
@@ -354,11 +354,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static TypeInfo.Record GetFsPromisesTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var voidType = new TypeInfo.Void();
-        var anyType = new TypeInfo.Any();
-        var bufferType = new TypeInfo.Buffer();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var voidType = TypeInfo.Void.Shared;
+        var anyType = TypeInfo.Any.Shared;
+        var bufferType = TypeInfo.Buffer.Shared;
 
         // Promise types
         var promiseVoid = new TypeInfo.Promise(voidType);
@@ -432,11 +432,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetProcessModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var booleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-        var voidType = new TypeInfo.Void();
-        var anyType = new TypeInfo.Any();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var booleanType = TypeInfo.Primitive.Boolean;
+        var voidType = TypeInfo.Void.Shared;
+        var anyType = TypeInfo.Any.Shared;
 
         var surface = new Dictionary<string, TypeInfo>
         {
@@ -549,19 +549,19 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetChildProcessModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var anyType = new TypeInfo.Any();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var anyType = TypeInfo.Any.Shared;
 
         var spawnResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             ["stdout"] = stringType,
             ["stderr"] = stringType,
             ["status"] = numberType,
-            ["signal"] = new TypeInfo.Union([stringType, new TypeInfo.Null()])
+            ["signal"] = new TypeInfo.Union([stringType, TypeInfo.Null.Shared])
         }.ToFrozenDictionary());
 
-        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var boolType = TypeInfo.Primitive.Boolean;
 
         // The second positional argument of spawn/execFile/fork is either the args array OR
         // (when omitted) the options/callback — Node overloads it. Accept all of them so
@@ -571,19 +571,19 @@ public static partial class BuiltInModuleTypes
         var childProcessType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             ["pid"] = numberType,
-            ["exitCode"] = new TypeInfo.Union([numberType, new TypeInfo.Null()]),
+            ["exitCode"] = new TypeInfo.Union([numberType, TypeInfo.Null.Shared]),
             ["killed"] = boolType,
             ["stdout"] = anyType,
             ["stderr"] = anyType,
             ["stdin"] = anyType,
             ["connected"] = boolType,
-            ["signalCode"] = new TypeInfo.Union([stringType, new TypeInfo.Null()]),
+            ["signalCode"] = new TypeInfo.Union([stringType, TypeInfo.Null.Shared]),
             ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["addListener"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["kill"] = new TypeInfo.Function([stringType], boolType, RequiredParams: 0),
             ["send"] = new TypeInfo.Function([anyType], boolType),
-            ["disconnect"] = new TypeInfo.Function([], new TypeInfo.Void()),
+            ["disconnect"] = new TypeInfo.Function([], TypeInfo.Void.Shared),
             ["ref"] = new TypeInfo.Function([], anyType),
             ["unref"] = new TypeInfo.Function([], anyType)
         }.ToFrozenDictionary());
@@ -630,11 +630,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetWorkerThreadsModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var anyType = TypeInfo.Any.Shared;
+        var numberType = TypeInfo.Primitive.Number;
         var boolType = BooleanType;
-        var stringType = new TypeInfo.String();
-        var voidType = new TypeInfo.Void();
+        var stringType = TypeInfo.String.Shared;
+        var voidType = TypeInfo.Void.Shared;
 
         return new Dictionary<string, TypeInfo>
         {
@@ -667,10 +667,10 @@ public static partial class BuiltInModuleTypes
     public static Dictionary<string, TypeInfo> GetClusterModuleTypes()
     {
         var boolType = BooleanType;
-        var anyType = new TypeInfo.Any();
-        var voidType = new TypeInfo.Void();
-        var stringType = new TypeInfo.String();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var anyType = TypeInfo.Any.Shared;
+        var voidType = TypeInfo.Void.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var numberType = TypeInfo.Primitive.Number;
         var stringArrayType = new TypeInfo.Array(stringType);
 
         // worker.process — the ChildProcess-like handle (#1169; thread-model approximation)
@@ -768,8 +768,8 @@ public static partial class BuiltInModuleTypes
     // GetAsyncHooksPrimitiveTypes for primitive:async_hooks.
     public static Dictionary<string, TypeInfo> GetVmModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
         var boolType = BooleanType;
 
         // Script instance type

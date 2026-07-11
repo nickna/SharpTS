@@ -98,7 +98,7 @@ public partial class TypeChecker
                 catch
                 {
                     // If type parsing fails, use Any as placeholder
-                    members[member.Name.Lexeme] = new TypeInfo.Any();
+                    members[member.Name.Lexeme] = TypeInfo.Any.Shared;
                 }
                 if (member.IsOptional)
                 {
@@ -474,7 +474,7 @@ public partial class TypeChecker
                 var sigEnv = ScopedSignatureTypeParamEnv(interfaceTypeEnv, sig.TypeParams, out var sigTypeParams);
                 using (new EnvironmentScope(this, sigEnv))
                 {
-                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? new TypeInfo.Any()).ToList();
+                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? TypeInfo.Any.Shared).ToList();
                     var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
@@ -495,7 +495,7 @@ public partial class TypeChecker
                 var sigEnv = ScopedSignatureTypeParamEnv(interfaceTypeEnv, sig.TypeParams, out var sigTypeParams);
                 using (new EnvironmentScope(this, sigEnv))
                 {
-                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? new TypeInfo.Any()).ToList();
+                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? TypeInfo.Any.Shared).ToList();
                     var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);

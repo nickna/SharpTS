@@ -310,7 +310,7 @@ public partial class TypeChecker
     {
         if (!sig.IsGeneric) return sig;
         var anyMap = new Dictionary<string, TypeInfo>();
-        foreach (var tp in sig.TypeParams!) anyMap[tp.Name] = new TypeInfo.Any();
+        foreach (var tp in sig.TypeParams!) anyMap[tp.Name] = TypeInfo.Any.Shared;
         var f = sig.Func;
         return new NormalizedSignature(null, new TypeInfo.Function(
             f.ParamTypes.Select(p => Substitute(p, anyMap)).ToList(),

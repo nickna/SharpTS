@@ -133,7 +133,7 @@ public partial class TypeChecker
 
         List<TypeInfo> resolvedArgs = typeArgStrings is { Count: > 0 }
             ? typeArgStrings.Select((_, i) => ResolveTypeArg(typeArgStrings, typeArgNodes, i)).ToList()
-            : [new TypeInfo.Any()];
+            : [TypeInfo.Any.Shared];
 
         protocolType = ResolveGenericType(name, resolvedArgs);
         return true;

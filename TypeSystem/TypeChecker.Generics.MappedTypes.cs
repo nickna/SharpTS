@@ -21,7 +21,7 @@ public partial class TypeChecker
         var keys = ExtractKeys(sourceType);
 
         if (keys.Count == 0)
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
 
         if (keys.Count == 1)
             return keys[0];
@@ -44,22 +44,22 @@ public partial class TypeChecker
                     keys.Add(new TypeInfo.StringLiteral(key));
                 // Add index signature key types
                 if (itf.StringIndexType != null)
-                    keys.Add(new TypeInfo.String());
+                    keys.Add(TypeInfo.String.Shared);
                 if (itf.NumberIndexType != null)
                     keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                 if (itf.SymbolIndexType != null)
-                    keys.Add(new TypeInfo.Symbol());
+                    keys.Add(TypeInfo.Symbol.Shared);
                 break;
 
             case TypeInfo.Record rec:
                 foreach (var key in rec.Fields.Keys)
                     keys.Add(new TypeInfo.StringLiteral(key));
                 if (rec.StringIndexType != null)
-                    keys.Add(new TypeInfo.String());
+                    keys.Add(TypeInfo.String.Shared);
                 if (rec.NumberIndexType != null)
                     keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                 if (rec.SymbolIndexType != null)
-                    keys.Add(new TypeInfo.Symbol());
+                    keys.Add(TypeInfo.Symbol.Shared);
                 break;
 
             case TypeInfo.Class cls:
@@ -154,11 +154,11 @@ public partial class TypeChecker
                         if (keyStr.StartsWith("\"") && keyStr.EndsWith("\""))
                             keys.Add(new TypeInfo.StringLiteral(keyStr[1..^1]));
                         else if (keyStr == "string")
-                            keys.Add(new TypeInfo.String());
+                            keys.Add(TypeInfo.String.Shared);
                         else if (keyStr == "number")
                             keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                         else if (keyStr == "symbol")
-                            keys.Add(new TypeInfo.Symbol());
+                            keys.Add(TypeInfo.Symbol.Shared);
                     }
                 }
                 break;
@@ -176,9 +176,9 @@ public partial class TypeChecker
 
             case TypeInfo.Any:
                 // keyof any = string | number | symbol
-                keys.Add(new TypeInfo.String());
+                keys.Add(TypeInfo.String.Shared);
                 keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
-                keys.Add(new TypeInfo.Symbol());
+                keys.Add(TypeInfo.Symbol.Shared);
                 break;
         }
 
@@ -467,7 +467,7 @@ public partial class TypeChecker
         // Get the property type for the given key
         if (indexType is TypeInfo.StringLiteral sl)
         {
-            return GetPropertyType(objectType, sl.Value) ?? new TypeInfo.Any();
+            return GetPropertyType(objectType, sl.Value) ?? TypeInfo.Any.Shared;
         }
 
         // For union of keys, return union of property types
@@ -481,7 +481,7 @@ public partial class TypeChecker
                 .Distinct(TypeInfoEqualityComparer.Instance)
                 .ToList();
 
-            if (types.Count == 0) return new TypeInfo.Any();
+            if (types.Count == 0) return TypeInfo.Any.Shared;
             if (types.Count == 1) return types[0];
             return new TypeInfo.Union(types);
         }
@@ -493,7 +493,7 @@ public partial class TypeChecker
             {
                 TypeInfo.Interface itf when itf.StringIndexType != null => itf.StringIndexType,
                 TypeInfo.Record rec when rec.StringIndexType != null => rec.StringIndexType,
-                _ => new TypeInfo.Any()
+                _ => TypeInfo.Any.Shared
             };
         }
 
@@ -514,7 +514,7 @@ public partial class TypeChecker
             }
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>

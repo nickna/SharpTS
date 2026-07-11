@@ -11,9 +11,9 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetDnsModuleTypes()
     {
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var stringType = new TypeInfo.String();
-        var anyType = new TypeInfo.Any();
+        var numberType = TypeInfo.Primitive.Number;
+        var stringType = TypeInfo.String.Shared;
+        var anyType = TypeInfo.Any.Shared;
 
         // Result type for lookup: { address: string, family: number }
         var lookupResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
@@ -50,62 +50,62 @@ public static partial class BuiltInModuleTypes
             // dns.resolve(hostname[, rrtype], callback) -> void
             ["resolve"] = new TypeInfo.Function(
                 [stringType, anyType, anyType],
-                new TypeInfo.Void(),
+                TypeInfo.Void.Shared,
                 RequiredParams: 2),
             // dns.resolve4(hostname, callback) -> void
             ["resolve4"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolve6(hostname, callback) -> void
             ["resolve6"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.reverse(ip, callback) -> void
             ["reverse"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveMx(hostname, callback) -> void
             ["resolveMx"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveTxt(hostname, callback) -> void
             ["resolveTxt"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveSrv(hostname, callback) -> void
             ["resolveSrv"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveCname(hostname, callback) -> void
             ["resolveCname"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveNs(hostname, callback) -> void
             ["resolveNs"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveSoa(hostname, callback) -> void
             ["resolveSoa"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolvePtr(hostname, callback) -> void
             ["resolvePtr"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveCaa(hostname, callback) -> void
             ["resolveCaa"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
             // dns.resolveNaptr(hostname, callback) -> void
             ["resolveNaptr"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Void()),
+                TypeInfo.Void.Shared),
 
             // dns.Resolver class constructor
             ["Resolver"] = new TypeInfo.Function([], anyType, RequiredParams: 0),
 
             // Default lookup result order (#1072)
-            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], TypeInfo.Void.Shared),
             ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType),
 
             // dns.promises sub-module
@@ -146,9 +146,9 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetDnsPromisesModuleTypes()
     {
-        var stringType = new TypeInfo.String();
-        var anyType = new TypeInfo.Any();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = TypeInfo.String.Shared;
+        var anyType = TypeInfo.Any.Shared;
+        var numberType = TypeInfo.Primitive.Number;
 
         var lookupResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
@@ -204,7 +204,7 @@ public static partial class BuiltInModuleTypes
             ["resolveNaptr"] = new TypeInfo.Function(
                 [stringType],
                 new TypeInfo.Promise(anyType)),
-            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], new TypeInfo.Void()),
+            ["setDefaultResultOrder"] = new TypeInfo.Function([stringType], TypeInfo.Void.Shared),
             ["getDefaultResultOrder"] = new TypeInfo.Function([], stringType)
         };
     }
@@ -213,10 +213,10 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetNetModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var voidType = new TypeInfo.Void();
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var numberType = TypeInfo.Primitive.Number;
+        var voidType = TypeInfo.Void.Shared;
         var booleanType = BooleanType;
 
         // EventEmitter methods shared by Server and Socket
@@ -332,9 +332,9 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetTlsModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var numberType = TypeInfo.Primitive.Number;
         var booleanType = BooleanType;
 
         // EventEmitter methods shared by Server and Socket
@@ -386,14 +386,14 @@ public static partial class BuiltInModuleTypes
             ["readyState"] = stringType,
             // TLS-specific properties
             ["authorized"] = booleanType,
-            ["authorizationError"] = new TypeInfo.Union([stringType, new TypeInfo.Null()]),
+            ["authorizationError"] = new TypeInfo.Union([stringType, TypeInfo.Null.Shared]),
             ["encrypted"] = booleanType,
-            ["alpnProtocol"] = new TypeInfo.Union([stringType, new TypeInfo.Null()]),
-            ["servername"] = new TypeInfo.Union([stringType, new TypeInfo.Undefined()]),
+            ["alpnProtocol"] = new TypeInfo.Union([stringType, TypeInfo.Null.Shared]),
+            ["servername"] = new TypeInfo.Union([stringType, TypeInfo.Undefined.Shared]),
             // TLS-specific methods
             ["getCipher"] = new TypeInfo.Function([], anyType),
             ["getPeerCertificate"] = new TypeInfo.Function([booleanType], anyType, RequiredParams: 0),
-            ["getProtocol"] = new TypeInfo.Function([], new TypeInfo.Union([stringType, new TypeInfo.Null()])),
+            ["getProtocol"] = new TypeInfo.Function([], new TypeInfo.Union([stringType, TypeInfo.Null.Shared])),
             ["renegotiate"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 0),
             // Advanced TLS APIs (throw "not supported" on this runtime — see #1032 SslStream ceilings)
             ["getSession"] = new TypeInfo.Function([], anyType),
@@ -427,7 +427,7 @@ public static partial class BuiltInModuleTypes
             ["createSecureContext"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
             // checkServerIdentity(host, cert) → Error | undefined
             ["checkServerIdentity"] = new TypeInfo.Function([stringType, anyType],
-                new TypeInfo.Union([anyType, new TypeInfo.Undefined()])),
+                new TypeInfo.Union([anyType, TypeInfo.Undefined.Shared])),
             ["getCiphers"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
             ["rootCertificates"] = new TypeInfo.Array(stringType),
             ["Server"] = new TypeInfo.Function([anyType, anyType], serverType, RequiredParams: 0),
@@ -441,10 +441,10 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetHttpModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var voidType = new TypeInfo.Void();
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var numberType = TypeInfo.Primitive.Number;
+        var voidType = TypeInfo.Void.Shared;
         var callbackType = new TypeInfo.Function([anyType, anyType], voidType);
 
         // Server type with full EventEmitter support
@@ -454,7 +454,7 @@ public static partial class BuiltInModuleTypes
             ["listen"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
             ["close"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
             ["address"] = new TypeInfo.Function([], anyType),
-            ["listening"] = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            ["listening"] = TypeInfo.Primitive.Boolean,
 
             // EventEmitter methods
             ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
@@ -495,7 +495,7 @@ public static partial class BuiltInModuleTypes
         var methodsType = new TypeInfo.Array(stringType);
 
         // Agent type with full API surface
-        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var boolType = TypeInfo.Primitive.Boolean;
         var agentType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             ["keepAlive"] = boolType,
@@ -547,11 +547,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetStreamModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
-        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var voidType = new TypeInfo.Void();
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var boolType = TypeInfo.Primitive.Boolean;
+        var numberType = TypeInfo.Primitive.Number;
+        var voidType = TypeInfo.Void.Shared;
 
         // Stream instance type (shared members for all stream types)
         var streamInstanceType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
@@ -586,7 +586,7 @@ public static partial class BuiltInModuleTypes
             ["readableLength"] = numberType,
             ["readableHighWaterMark"] = numberType,
             ["readableEncoding"] = stringType,
-            ["readableFlowing"] = new TypeInfo.Union([boolType, new TypeInfo.Null()]),
+            ["readableFlowing"] = new TypeInfo.Union([boolType, TypeInfo.Null.Shared]),
             ["readableObjectMode"] = boolType,
             ["destroyed"] = boolType,
 
@@ -780,8 +780,8 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetStreamPromisesModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var voidType = new TypeInfo.Void();
+        var anyType = TypeInfo.Any.Shared;
+        var voidType = TypeInfo.Void.Shared;
 
         return new Dictionary<string, TypeInfo>
         {
@@ -798,7 +798,7 @@ public static partial class BuiltInModuleTypes
     /// </remarks>
     public static Dictionary<string, TypeInfo> GetStreamWebModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
+        var anyType = TypeInfo.Any.Shared;
         return new Dictionary<string, TypeInfo>
         {
             ["ReadableStream"] = anyType,
@@ -818,11 +818,11 @@ public static partial class BuiltInModuleTypes
     /// </summary>
     public static Dictionary<string, TypeInfo> GetDgramModuleTypes()
     {
-        var anyType = new TypeInfo.Any();
-        var stringType = new TypeInfo.String();
-        var voidType = new TypeInfo.Void();
-        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var anyType = TypeInfo.Any.Shared;
+        var stringType = TypeInfo.String.Shared;
+        var voidType = TypeInfo.Void.Shared;
+        var numberType = TypeInfo.Primitive.Number;
+        var boolType = TypeInfo.Primitive.Boolean;
 
         // Socket instance type (extends EventEmitter)
         var socketType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
