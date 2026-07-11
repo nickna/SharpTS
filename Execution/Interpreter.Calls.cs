@@ -1005,21 +1005,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Core logical operation logic, shared between sync and async evaluation.
-    /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
-    /// </summary>
-    /// <param name="op">The operator type (OR_OR or AND_AND).</param>
-    /// <param name="left">The already-evaluated left operand.</param>
-    /// <param name="evaluateRight">A function to evaluate the right operand (only called if needed).</param>
-    /// <returns>The value that determined the result.</returns>
-    private object? EvaluateLogicalCore(TokenType op, object? left, Func<object?> evaluateRight)
-    {
-        if (op == TokenType.OR_OR)
-            return IsTruthy(left) ? left : evaluateRight();
-        return !IsTruthy(left) ? left : evaluateRight();
-    }
-
-    /// <summary>
     /// Evaluates a logical operator expression (AND/OR) with short-circuit evaluation.
     /// Uses RuntimeValue throughout to avoid boxing on the fast path.
     /// </summary>
@@ -1032,12 +1017,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Core nullish coalescing logic, shared between sync and async evaluation.
-    /// </summary>
-    private object? EvaluateNullishCoalescingCore(object? left, Func<object?> evaluateRight) =>
-        (left == null || left is Runtime.Types.SharpTSUndefined) ? evaluateRight() : left;
-
-    /// <summary>
     /// Evaluates the nullish coalescing operator (<c>??</c>).
     /// Uses RuntimeValue throughout — IsNullish check avoids boxing.
     /// </summary>
@@ -1046,12 +1025,6 @@ public partial class Interpreter
         var left = EvaluateRV(nc.Left);
         return left.IsNullish ? EvaluateRV(nc.Right) : left;
     }
-
-    /// <summary>
-    /// Core ternary operation logic, shared between sync and async evaluation.
-    /// </summary>
-    private object? EvaluateTernaryCore(object? condition, Func<object?> evalThen, Func<object?> evalElse) =>
-        IsTruthy(condition) ? evalThen() : evalElse();
 
     /// <summary>
     /// Evaluates a ternary conditional expression (<c>?:</c>).

@@ -432,18 +432,6 @@ public partial class Interpreter
         return ExecutionResult.Success();
     }
 
-    private async Task<ExecutionResult> ExecuteSwitchAsync(Stmt.Switch switchStmt)
-    {
-        // Use async context with unified core
-        return await ExecuteSwitchCore(_asyncContext, switchStmt);
-    }
-
-    private async Task<ExecutionResult> ExecuteTryCatchAsync(Stmt.TryCatch tryCatch)
-    {
-        // Use async context with unified core
-        return await ExecuteTryCatchCore(_asyncContext, tryCatch);
-    }
-
     // ===================== Async Statement Handlers for Registry =====================
     // These methods return ValueTask<ExecutionResult> for use with DispatchStmtAsync.
     // They wrap the existing async execution logic in ValueTask.

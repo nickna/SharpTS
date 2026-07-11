@@ -1447,24 +1447,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Gets a display name for a runtime object type.
-    /// </summary>
-    private static string GetRuntimeTypeName(object obj) => obj switch
-    {
-        string => "string",
-        SharpTSArray => "array",
-        SharpTSMath => "Math",
-        SharpTSMap => "Map",
-        SharpTSSet => "Set",
-        SharpTSDate => "Date",
-        SharpTSRegExp => "RegExp",
-        SharpTSError => "Error",
-        SharpTSInstance inst when inst.GetClass() is SharpTSErrorClass => inst.GetRawField("name")?.ToString() ?? "Error",
-        SharpTSPromise => "Promise",
-        _ => obj.GetType().Name
-    };
-
-    /// <summary>
     /// Evaluates a property assignment expression (dot notation with assignment).
     /// </summary>
     /// <param name="set">The property assignment expression AST node.</param>

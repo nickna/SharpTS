@@ -124,13 +124,6 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    // Keep the old method for backward compatibility (calls both phases when Duplex is available)
-    private void EmitTSReadableClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
-    {
-        EmitTSReadableTypeDefinition(moduleBuilder, runtime);
-        // Note: EmitTSReadableMethods will be called separately after Duplex is defined
-    }
-
     private void EmitTSReadableCtor(TypeBuilder typeBuilder, EmittedRuntime runtime, Type queueType)
     {
         var ctor = typeBuilder.DefineConstructor(

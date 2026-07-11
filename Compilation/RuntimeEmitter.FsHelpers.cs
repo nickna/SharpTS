@@ -140,28 +140,6 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public static void LibCCreateHardLink(string existingPath, string newPath)
-    /// Calls pure-IL hard link helper.
-    /// </summary>
-    private void EmitLibCCreateHardLinkHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "LibCCreateHardLink",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            [_types.String, _types.String]
-        );
-        runtime.LibCCreateHardLink = method;
-
-        var il = method.GetILGenerator();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.CreateHardLinkPure);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
     /// Emits a try-catch block that converts exceptions to Node.js-style errors.
     /// The emitTryBody action receives the afterTry label for the Leave instruction.
     /// </summary>

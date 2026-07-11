@@ -1125,22 +1125,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Pre-declares the $Runtime.ToNumber MethodBuilder slot. Body is filled
-    /// in by <see cref="EmitToNumber"/> later, after GetProperty/InvokeMethodValue
-    /// are available so the ToPrimitive(value, "number") chain can call them.
-    /// </summary>
-    internal void DeclareToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ToNumber",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Double,
-            [_types.Object]
-        );
-        runtime.ToNumber = method;
-    }
-
     private void EmitToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = (MethodBuilder)runtime.ToNumber;

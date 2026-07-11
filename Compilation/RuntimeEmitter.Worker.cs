@@ -407,31 +407,6 @@ public partial class RuntimeEmitter
         EmitDataViewSetter(runtimeType, runtime, "SetBigUint64", "setBigUint64", true);
     }
 
-    private void EmitNullableIntFromObject(ILGenerator il, int argIndex)
-    {
-        var hasValueLabel = il.DefineLabel();
-        var endLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Brfalse, hasValueLabel);
-
-        // Has value - unbox and wrap in nullable
-        il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, _types.NullableInt32Ctor);
-        il.Emit(OpCodes.Br, endLabel);
-
-        // Null
-        il.MarkLabel(hasValueLabel);
-        var localNullableInt = il.DeclareLocal(typeof(int?));
-        il.Emit(OpCodes.Ldloca, localNullableInt);
-        il.Emit(OpCodes.Initobj, typeof(int?));
-        il.Emit(OpCodes.Ldloc, localNullableInt);
-
-        il.MarkLabel(endLabel);
-    }
-
     private void EmitDataViewByteLength(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
         var method = runtimeType.DefineMethod(

@@ -7,27 +7,6 @@ namespace SharpTS.Compilation;
 
 public partial class ILEmitter
 {
-    #region Stack Type Tracking
-
-    /// <summary>
-    /// Returns the stack type that an expression will produce based on TypeMap.
-    /// This method stays in ILEmitter because it requires access to _ctx.TypeMap.
-    /// </summary>
-    private StackType GetExpressionStackType(Expr expr)
-    {
-        var type = _ctx.TypeMap?.Get(expr);
-        return type switch
-        {
-            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => StackType.Double,
-            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => StackType.Boolean,
-            TypeSystem.TypeInfo.String => StackType.String,
-            TypeSystem.TypeInfo.Null => StackType.Null,
-            _ => StackType.Unknown
-        };
-    }
-
-    #endregion
-
     #region Boxing and Type Conversion - Delegated to StateMachineEmitHelpers
 
     // Note: EnsureBoxed is inherited from ExpressionEmitterBase

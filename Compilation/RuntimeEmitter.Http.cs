@@ -2720,29 +2720,6 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits helper method to extract headers from HttpResponseMessage as a dictionary object.
-    /// Uses the reflection-based ExtractResponseHeadersHelper to avoid compile-time dependency on SharpTS.dll.
-    /// </summary>
-    private MethodBuilder EmitExtractResponseHeaders(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ExtractResponseHeaders",
-            MethodAttributes.Private | MethodAttributes.Static,
-            _types.Object,
-            [_httpResponseMessageType!]
-        );
-
-        var il = method.GetILGenerator();
-
-        // Call the reflection-based helper
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ExtractResponseHeadersHelper);
-        il.Emit(OpCodes.Ret);
-
-        return method;
-    }
-
-    /// <summary>
     /// Emits: public static object HttpCreateServer(object? callback)
     /// Creates a new $HttpServer instance with EventEmitter support.
     /// Pure-IL implementation using emitted $HttpServer type - no SharpTS dependency.

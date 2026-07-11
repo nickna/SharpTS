@@ -227,32 +227,6 @@ public partial class Parser
         return new Stmt.TypeAlias(name, typeDef, typeParams, typeDefNode);
     }
 
-    private string ParseFunctionTypeDefinition()
-    {
-        Consume(TokenType.LEFT_PAREN, "Expect '(' for function type.");
-        List<string> paramTypes = [];
-
-        if (!Check(TokenType.RIGHT_PAREN))
-        {
-            do
-            {
-                // Parameter can be: name: type or just type
-                if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)
-                {
-                    Advance(); // skip name
-                    Consume(TokenType.COLON, "");
-                }
-                paramTypes.Add(ParseTypeAnnotation());
-            } while (Match(TokenType.COMMA));
-        }
-
-        Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
-        Consume(TokenType.ARROW, "Expect '=>' after function type parameters.");
-        string returnType = ParseTypeAnnotation();
-
-        return $"({string.Join(", ", paramTypes)}) => {returnType}";
-    }
-
     private Stmt InterfaceDeclaration()
     {
         // Allow contextual-keyword names (e.g. lib.d.ts declares `interface Symbol`, `interface BigInt`).
