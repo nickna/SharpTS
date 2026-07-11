@@ -37,9 +37,6 @@ internal static class GuestErrorEmitter
     public static void ThrowRangeError(ILGenerator il, EmittedRuntime runtime, string message) =>
         ThrowError(il, runtime, runtime.TSRangeErrorCtor, message);
 
-    public static void ThrowReferenceError(ILGenerator il, EmittedRuntime runtime, string message) =>
-        ThrowError(il, runtime, runtime.TSReferenceErrorCtor, message);
-
     public static void ThrowSyntaxError(ILGenerator il, EmittedRuntime runtime, string message) =>
         ThrowError(il, runtime, runtime.TSSyntaxErrorCtor, message);
 }
