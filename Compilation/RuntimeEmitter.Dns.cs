@@ -126,10 +126,7 @@ public partial class RuntimeEmitter
             }
 
             il.MarkLabel(invalid);
-            il.Emit(OpCodes.Ldstr, "The argument 'order' must be one of: 'ipv4first', 'ipv6first', 'verbatim'");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "The argument 'order' must be one of: 'ipv4first', 'ipv6first', 'verbatim'");
 
             il.MarkLabel(valid);
             il.Emit(OpCodes.Ldloc, strLocal);

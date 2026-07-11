@@ -93,10 +93,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Value is not iterable.");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not iterable.");
     }
 
     #region Lazy Iterator Types
@@ -851,10 +848,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Reduce of empty iterator with no initial value.");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty iterator with no initial value.");
     }
 
     private void EmitIteratorToArray(TypeBuilder typeBuilder, EmittedRuntime runtime)

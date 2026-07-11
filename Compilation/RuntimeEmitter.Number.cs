@@ -981,10 +981,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.3 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        il.Emit(OpCodes.Ldstr, "Number.prototype.toFixed requires a Number this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toFixed requires a Number this value");
 
         // ECMA-262 21.1.3.3: digits = ToIntegerOrInfinity(digits, 0). Coerces
         // bool/string via ToNumber.
@@ -1002,20 +999,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, notNegativeLabel);
         // ECMA-262 21.1.3.3 step 3: range error for f < 0 or f > 100. Use $RangeError
         // (not bare Exception) so `assert.throws(RangeError, …)` succeeds.
-        il.Emit(OpCodes.Ldstr, "toFixed() digits argument must be between 0 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toFixed() digits argument must be between 0 and 100");
 
         il.MarkLabel(notNegativeLabel);
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        il.Emit(OpCodes.Ldstr, "toFixed() digits argument must be between 0 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toFixed() digits argument must be between 0 and 100");
 
         // return value.ToString($"F{digits}", CultureInfo.InvariantCulture).
         // ECMA-262: -0 formatted as "0" (no sign) — strip via abs on zero.
@@ -1102,10 +1093,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.5 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        il.Emit(OpCodes.Ldstr, "Number.prototype.toPrecision requires a Number this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toPrecision requires a Number this value");
 
         // Check if precision is null OR $Undefined - if so, return value.ToString().
         // ECMA-262 21.1.3.5 step 2: "If precision is undefined, return ! ToString(x)".
@@ -1169,20 +1157,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         var notTooSmallLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, notTooSmallLabel);
-        il.Emit(OpCodes.Ldstr, "toPrecision() argument must be between 1 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toPrecision() argument must be between 1 and 100");
 
         il.MarkLabel(notTooSmallLabel);
         il.Emit(OpCodes.Ldloc, precisionLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        il.Emit(OpCodes.Ldstr, "toPrecision() argument must be between 1 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toPrecision() argument must be between 1 and 100");
 
         il.MarkLabel(notTooLargeLabel);
         il.Emit(OpCodes.Br, formatLabel);
@@ -1388,10 +1370,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notDoubleLabel);
         // Per ECMA-262 21.1.3.2 step 1, thisNumberValue throws TypeError when
         // receiver is neither a Number primitive nor a Number-marker $TSObject.
-        il.Emit(OpCodes.Ldstr, "Number.prototype.toExponential requires a Number this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toExponential requires a Number this value");
 
         // Unused but keeps original valueLocal init for this branch (unreachable).
         il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -1414,10 +1393,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolDigitsLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a number");
         il.MarkLabel(notSymbolDigitsLabel);
 
         // Pre-coerce fractionDigits via ToIntegerOrInfinity unless it's
@@ -1558,20 +1534,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         var notNegativeLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, notNegativeLabel);
-        il.Emit(OpCodes.Ldstr, "toExponential() argument must be between 0 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toExponential() argument must be between 0 and 100");
 
         il.MarkLabel(notNegativeLabel);
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Ldc_I4, 100);
         var notTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, notTooLargeLabel);
-        il.Emit(OpCodes.Ldstr, "toExponential() argument must be between 0 and 100");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toExponential() argument must be between 0 and 100");
 
         // return Regex.Replace(value.ToString($"e{digits}", InvariantCulture),
         //                      @"e([+-])0+(?=\d)", "e$1");
@@ -1825,10 +1795,7 @@ public partial class RuntimeEmitter
         // Receiver is neither a Number primitive nor a Number-marker $TSObject
         // nor the Number.prototype singleton. ECMA-262 21.1.3.6 step 1 calls
         // thisNumberValue which throws TypeError in this case.
-        il.Emit(OpCodes.Ldstr, "Number.prototype.toString requires a Number this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.toString requires a Number this value");
 
         // Check if radix is null
         il.MarkLabel(hasRadixLabel);
@@ -1857,20 +1824,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         var radixValidLabel = il.DefineLabel();
         il.Emit(OpCodes.Bge, radixValidLabel);
-        il.Emit(OpCodes.Ldstr, "toString() radix must be between 2 and 36");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toString() radix must be between 2 and 36");
 
         il.MarkLabel(radixValidLabel);
         il.Emit(OpCodes.Ldloc, radixLocal);
         il.Emit(OpCodes.Ldc_I4, 36);
         var radixNotTooLargeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ble, radixNotTooLargeLabel);
-        il.Emit(OpCodes.Ldstr, "toString() radix must be between 2 and 36");
-        il.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "toString() radix must be between 2 and 36");
 
         // Handle special values
         il.MarkLabel(radixNotTooLargeLabel);

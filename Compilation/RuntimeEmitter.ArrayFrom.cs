@@ -43,19 +43,13 @@ public partial class RuntimeEmitter
         var nonNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, nonNullLabel);
-        il.Emit(OpCodes.Ldstr, "Array.from requires an array-like object - not null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from requires an array-like object - not null or undefined");
         il.MarkLabel(nonNullLabel);
         var nonUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brfalse, nonUndefLabel);
-        il.Emit(OpCodes.Ldstr, "Array.from requires an array-like object - not null or undefined");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from requires an array-like object - not null or undefined");
         il.MarkLabel(nonUndefLabel);
 
         // ECMA-262 23.1.2.1 step 2-3: if mapfn is undefined, mapping is false.
@@ -72,10 +66,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, mapFnOkLabel);
-        il.Emit(OpCodes.Ldstr, "Array.from: mapfn argument must be callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from: mapfn argument must be callable");
         il.MarkLabel(mapFnOkLabel);
 
         // ECMA-262 Array.from: if @@iterator is missing, treat receiver as

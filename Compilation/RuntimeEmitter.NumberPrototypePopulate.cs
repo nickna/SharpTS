@@ -129,10 +129,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwTypeErrorLabel);
-        il.Emit(OpCodes.Ldstr, "Number.prototype.valueOf requires that 'this' be a Number");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Number.prototype.valueOf requires that 'this' be a Number");
 
         return method;
     }

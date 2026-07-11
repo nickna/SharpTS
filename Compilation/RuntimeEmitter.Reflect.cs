@@ -549,10 +549,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
         var targetOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, targetOkLabel);
-        il.Emit(OpCodes.Ldstr, "Reflect.construct: target is not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reflect.construct: target is not a constructor");
         il.MarkLabel(targetOkLabel);
 
         // newTarget defaults to target if null/undefined.
@@ -582,10 +579,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
         var newTargetOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, newTargetOkLabel);
-        il.Emit(OpCodes.Ldstr, "Reflect.construct: newTarget is not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reflect.construct: newTarget is not a constructor");
         il.MarkLabel(newTargetOkLabel);
 
         // Convert argsList (arg1) to object[]

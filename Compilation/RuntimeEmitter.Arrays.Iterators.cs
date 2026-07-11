@@ -126,9 +126,7 @@ public partial class RuntimeEmitter
         // important because test262 harness's `assert.throws(TypeError, fn)` checks
         // `e instanceof TypeError`, and only $TypeError instances satisfy that.
         il.Emit(OpCodes.Ldstr, methodName + " callback is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
 
         il.MarkLabel(okLabel);
     }
@@ -2117,10 +2115,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, reduceCallableOk);
         il.Emit(OpCodes.Br, reduceCallableThrow);
         il.MarkLabel(reduceCallableThrow);
-        il.Emit(OpCodes.Ldstr, "Array.prototype.reduce callback is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.reduce callback is not callable");
         il.MarkLabel(reduceCallableOk);
 
         // Hoist the args[4] allocation once per helper invocation; pre-fill
@@ -2169,10 +2164,7 @@ public partial class RuntimeEmitter
         // No present element — TypeError per spec. Build a real $TypeError
         // instance (not a raw .NET Exception) so test262 patterns like
         // `e instanceof TypeError` and `e.constructor.name === 'TypeError'` hold.
-        il.Emit(OpCodes.Ldstr, "Reduce of empty array with no initial value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty array with no initial value");
 
         il.MarkLabel(scanFound);
         // acc = LoadArrayLikeElement(list, scan); i = scan + 1; (lazy-aware)
@@ -2299,10 +2291,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, reduceRCallableOk);
         il.Emit(OpCodes.Br, reduceRCallableThrow);
         il.MarkLabel(reduceRCallableThrow);
-        il.Emit(OpCodes.Ldstr, "Array.prototype.reduceRight callback is not callable");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.reduceRight callback is not callable");
         il.MarkLabel(reduceRCallableOk);
 
         // Hoist the args[4] allocation once per helper invocation; pre-fill
@@ -2350,10 +2339,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(scanEnd);
         // No present element — TypeError per spec. Throw a real $TypeError
         // instance (parity with EmitArrayReduce).
-        il.Emit(OpCodes.Ldstr, "Reduce of empty array with no initial value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty array with no initial value");
 
         il.MarkLabel(scanFound);
         // acc = LoadArrayLikeElement(list, scan); i = scan - 1; (lazy-aware)

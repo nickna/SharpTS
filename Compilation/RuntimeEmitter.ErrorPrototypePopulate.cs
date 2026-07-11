@@ -156,10 +156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, passLabel);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Error.prototype.toString called on non-object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Error.prototype.toString called on non-object");
 
         il.MarkLabel(passLabel);
 

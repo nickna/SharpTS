@@ -36,10 +36,7 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldloc, argLocal);
                     il.Emit(OpCodes.Isinst, ctx.Runtime!.TSSymbolType);
                     il.Emit(OpCodes.Brfalse, notSymbolLabel);
-                    il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-                    il.Emit(OpCodes.Newobj, ctx.Runtime!.TSTypeErrorCtor);
-                    il.Emit(OpCodes.Call, ctx.Runtime!.CreateException);
-                    il.Emit(OpCodes.Throw);
+                    GuestErrorEmitter.ThrowTypeError(il, ctx.Runtime!, "Cannot convert a Symbol value to a string");
                     il.MarkLabel(notSymbolLabel);
                     il.Emit(OpCodes.Ldloc, argLocal);
                     // Use ToJsString (ECMA-262 ToString protocol) rather than

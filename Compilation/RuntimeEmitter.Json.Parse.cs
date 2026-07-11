@@ -42,9 +42,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSSyntaxErrorCtor);
 
         il.MarkLabel(rethrowLabel);
         il.Emit(OpCodes.Rethrow);

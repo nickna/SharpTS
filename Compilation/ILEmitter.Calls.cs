@@ -129,9 +129,7 @@ public partial class ILEmitter
                 && _ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out _) == false)
             {
                 IL.Emit(OpCodes.Ldstr, name + " is not a function");
-                IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSTypeErrorCtor);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateException);
-                IL.Emit(OpCodes.Throw);
+                GuestErrorEmitter.ThrowErrorFromStack(IL, _ctx.Runtime!, _ctx.Runtime!.TSTypeErrorCtor);
                 IL.Emit(OpCodes.Ldnull);  // unreachable, balance stack
                 SetStackUnknown();
                 return;
@@ -410,10 +408,7 @@ public partial class ILEmitter
             // Pop the duplicated receiver since we're going to throw and skip
             // the materialize call that would have consumed it.
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldstr, "Invalid array length");
-            IL.Emit(OpCodes.Newobj, runtime.TSRangeErrorCtor);
-            IL.Emit(OpCodes.Call, runtime.CreateException);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowRangeError(IL, runtime, "Invalid array length");
             IL.MarkLabel(lengthOkLabel);
         }
 
@@ -473,10 +468,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Pop);
             EmitLengthSideEffect();
             // Throw: TypeError("undefined is not a function")
-            IL.Emit(OpCodes.Ldstr, "undefined is not a function");
-            IL.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            IL.Emit(OpCodes.Call, runtime.CreateException);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, runtime, "undefined is not a function");
             // Unreachable, but keep stack balanced for any dead-code analysis.
             return true;
         }
@@ -512,10 +504,7 @@ public partial class ILEmitter
             IL.MarkLabel(throwPath);
             IL.Emit(OpCodes.Pop); // Pop the duplicated receiver.
             EmitLengthSideEffect();
-            IL.Emit(OpCodes.Ldstr, "undefined is not a function");
-            IL.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            IL.Emit(OpCodes.Call, runtime.CreateException);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, runtime, "undefined is not a function");
 
             IL.MarkLabel(cbValid);
             // The callback expression is re-emitted later when methodArgs

@@ -59,10 +59,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
         il.Emit(OpCodes.Brtrue, isConstructorOkLabel);
-        il.Emit(OpCodes.Ldstr, "not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
         il.MarkLabel(skipConstructorCheckLabel);
         il.MarkLabel(isConstructorOkLabel);
 
@@ -74,10 +71,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notPlainObjectLabel);
-        il.Emit(OpCodes.Ldstr, "not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
         il.MarkLabel(notPlainObjectLabel);
 
         // newObj = new $Object(new Dictionary<string, object>())
@@ -186,10 +180,7 @@ public partial class RuntimeEmitter
         var notCallableSkip = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, notCallableLocal);
         il.Emit(OpCodes.Brfalse, notCallableSkip);
-        il.Emit(OpCodes.Ldstr, "not a constructor");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "not a constructor");
         il.MarkLabel(notCallableSkip);
 
         // Per JS: return result if it's an object, else newObj.

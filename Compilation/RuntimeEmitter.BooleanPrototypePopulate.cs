@@ -134,10 +134,7 @@ public partial class RuntimeEmitter
         // plain Object): per ECMA-262 §20.3.3.2 throw TypeError. The borrowed-
         // method tests `s1.toString = Boolean.prototype.toString; s1.toString()`
         // rely on this throw.
-        il.Emit(OpCodes.Ldstr, "Boolean.prototype.toString requires a Boolean this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Boolean.prototype.toString requires a Boolean this value");
 
         il.MarkLabel(falseLabel);
         il.Emit(OpCodes.Ldstr, "false");
@@ -208,10 +205,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBoolPrototypeLabel);
 
         // Other receivers: throw TypeError per ECMA-262 §20.3.3.3.
-        il.Emit(OpCodes.Ldstr, "Boolean.prototype.valueOf requires a Boolean this value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Boolean.prototype.valueOf requires a Boolean this value");
 
         // Unreachable but balances stack:
         il.Emit(OpCodes.Ldc_I4_0);

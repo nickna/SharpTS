@@ -759,10 +759,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid regular expression: invalid modifier group");
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Invalid regular expression: invalid modifier group");
     }
 
     /// <summary>
@@ -940,10 +937,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid regular expression flags");
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Invalid regular expression flags");
     }
 
     /// <summary>
@@ -1138,10 +1132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Invalid regular expression: invalid Unicode-mode pattern");
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowSyntaxError(il, runtime, "Invalid regular expression: invalid Unicode-mode pattern");
     }
 
     private void EmitTSRegExpCtorPattern(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1346,9 +1337,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, runtime.TSSyntaxErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSSyntaxErrorCtor);
 
         il.EndExceptionBlock();
 
@@ -1655,10 +1644,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, doWriteLabel);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot assign to read only property 'lastIndex'");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only property 'lastIndex'");
 
         il.MarkLabel(doWriteLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -2113,10 +2099,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, strLocal);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Brtrue, argOk);
-        il.Emit(OpCodes.Ldstr, "RegExp.escape called with a non-string argument");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.escape called with a non-string argument");
         il.MarkLabel(argOk);
 
         // sb = new StringBuilder(); first = 1; i = 0
@@ -3415,10 +3398,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rxLocal);
         var rxOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, rxOkLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype[Symbol.matchAll] requires a RegExp receiver");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.matchAll] requires a RegExp receiver");
         il.MarkLabel(rxOkLabel);
 
         // var list = rx.MatchAll(s);  // List<object?> of full-match substrings
@@ -3496,10 +3476,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rxLocal);
         var rxOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, rxOkLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype[Symbol.replace] requires a RegExp receiver");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.replace] requires a RegExp receiver");
         il.MarkLabel(rxOkLabel);
 
         // Spec-aligned global: assembled-flags-string controls looping per
@@ -3839,9 +3816,7 @@ public partial class RuntimeEmitter
         // writable=false (data) OR getter-only (accessor) → throw TypeError.
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Cannot assign to read only property '" + propName + "'");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
 
         il.MarkLabel(skipLabel);
     }
@@ -3862,10 +3837,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, execLocal);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, execOkLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype method called on non-RegExp without a callable exec");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype method called on non-RegExp without a callable exec");
         il.MarkLabel(execOkLabel);
 
         // result = exec.InvokeWithThis(rx, [S])
@@ -3921,10 +3893,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, resultOkLabel);
 
         il.MarkLabel(nonObjectLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp exec returned a non-Object, non-Null value");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp exec returned a non-Object, non-Null value");
 
         il.MarkLabel(resultOkLabel);
     }
@@ -4024,10 +3993,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rxLocal);
         var rxOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, rxOkLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype[Symbol.split] requires a RegExp receiver");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.split] requires a RegExp receiver");
         il.MarkLabel(rxOkLabel);
 
         // var parts = rx.Split(s);
@@ -4234,10 +4200,7 @@ public partial class RuntimeEmitter
 
         // TypeError for primitive `this`.
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype.flags called on non-object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype.flags called on non-object");
         return helper;
     }
 
@@ -4361,10 +4324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, throwLabel);
 
         il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype accessor called on non-RegExp");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype accessor called on non-RegExp");
 
         il.MarkLabel(checkRegExpLabel);
     }
@@ -4404,10 +4364,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, rxLocal);
         il.Emit(OpCodes.Ldloc, rxLocal);
         il.Emit(OpCodes.Brtrue, okLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype.exec called on non-RegExp");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype.exec called on non-RegExp");
         il.MarkLabel(okLabel);
 
         // s = ToString(arg1)
@@ -4441,10 +4398,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, rxLocal);
         il.Emit(OpCodes.Ldloc, rxLocal);
         il.Emit(OpCodes.Brtrue, okLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype.test called on non-RegExp");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype.test called on non-RegExp");
         il.MarkLabel(okLabel);
 
         EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
@@ -4487,10 +4441,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, rxLocal);
         il.Emit(OpCodes.Ldloc, rxLocal);
         il.Emit(OpCodes.Brtrue, okLabel);
-        il.Emit(OpCodes.Ldstr, "RegExp.prototype.toString called on non-RegExp");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype.toString called on non-RegExp");
         il.MarkLabel(okLabel);
 
         // return "/" + rx.Source + "/" + rx.Flags
@@ -4523,10 +4474,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, argIndex);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert a Symbol value to a string");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
         il.MarkLabel(notSymbolLabel);
 
         // Route through $Runtime.Stringify so user-installed toString
@@ -4616,9 +4564,7 @@ public partial class RuntimeEmitter
         // them from $RegExp's helpers despite emitting before $Runtime's
         // body is filled in.
         il.Emit(OpCodes.Ldstr, siteName + " called on non-object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
 
         il.MarkLabel(okLabel);
     }

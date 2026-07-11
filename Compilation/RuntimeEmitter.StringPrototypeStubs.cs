@@ -127,19 +127,13 @@ public partial class RuntimeEmitter
         var passThroughLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, passThroughLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(passThroughLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
         // Delegate to ObjectProtoToString for the actual conversion.
         il.Emit(OpCodes.Ldarg_0);
@@ -167,19 +161,13 @@ public partial class RuntimeEmitter
         var passThroughLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, passThroughLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(passThroughLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         var notUndefLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notUndefLabel);
-        il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -532,10 +520,7 @@ public partial class RuntimeEmitter
 
         // Other receivers — TypeError per spec. Borrowed-method calls of the
         // form `String.prototype.toString.call(42)` rely on this throw.
-        il.Emit(OpCodes.Ldstr, "String.prototype.toString requires that 'this' be a String");
-        il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-        il.Emit(OpCodes.Call, runtime.CreateException);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.toString requires that 'this' be a String");
 
         return method;
     }
@@ -558,20 +543,14 @@ public partial class RuntimeEmitter
             var notNullLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brtrue, notNullLabel);
-            il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
             il.MarkLabel(notNullLabel);
 
             var notUndefLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brfalse, notUndefLabel);
-            il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
             il.MarkLabel(notUndefLabel);
 
             // Coerce via $Runtime.ToJsString — JS-spec ToString protocol so
@@ -621,20 +600,14 @@ public partial class RuntimeEmitter
             var notNullLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brtrue, notNullLabel);
-            il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
             il.MarkLabel(notNullLabel);
 
             var notUndefLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brfalse, notUndefLabel);
-            il.Emit(OpCodes.Ldstr, "Cannot convert undefined or null to object");
-            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
-            il.Emit(OpCodes.Call, runtime.CreateException);
-            il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
             il.MarkLabel(notUndefLabel);
 
             il.Emit(OpCodes.Ldarg_0);
