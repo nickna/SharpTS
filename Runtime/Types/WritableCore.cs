@@ -1,3 +1,4 @@
+using SharpTS.Runtime.BuiltIns;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
@@ -65,6 +66,54 @@ internal sealed class WritableCore
 
     public void SetWriteCallback(ISharpTSCallable callback) => _writeCallback = callback;
     public void SetFinalCallback(ISharpTSCallable callback) => _finalCallback = callback;
+
+    /// <summary>
+    /// Shared writable-side member dispatch for the two composing streams: the
+    /// write/end/cork/uncork methods and the writable* property values (high-water-mark and
+    /// object-mode via the live accessors the owner supplied at construction). Returns null when
+    /// the name is not a writable-side member so the owner falls through to its own arms and its
+    /// EventEmitter/Readable base. destroy/destroyed stay per-class: Writable's destroy runs its
+    /// destroy callback, while Duplex's must tear down both sides and resolves <c>destroyed</c>
+    /// to the readable-side flag.
+    /// </summary>
+    public object? GetWritableMember(string name)
+    {
+        return name switch
+        {
+            "write" => BuiltInMethod.CreateV2("write", 1, 3, WriteMember),
+            "end" => BuiltInMethod.CreateV2("end", 0, 3, EndMember),
+            "cork" => BuiltInMethod.CreateV2("cork", 0, CorkMember),
+            "uncork" => BuiltInMethod.CreateV2("uncork", 0, UncorkMember),
+
+            "writable" => IsWritable,
+            "writableEnded" => Ended,
+            "writableFinished" => Finished,
+            "writableLength" => (double)WritableLength,
+            "writableCorked" => (double)(Corked ? 1 : 0),
+            "writableHighWaterMark" => (double)_highWaterMark(),
+            "writableObjectMode" => _objectMode(),
+
+            _ => null
+        };
+    }
+
+    private RuntimeValue WriteMember(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => Write(interpreter, args);
+
+    private RuntimeValue EndMember(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => End(interpreter, args);
+
+    private RuntimeValue CorkMember(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        Cork();
+        return RuntimeValue.Null;
+    }
+
+    private RuntimeValue UncorkMember(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    {
+        Uncork(interpreter);
+        return RuntimeValue.Null;
+    }
 
     /// <summary>
     /// Implements <c>stream.write(chunk, encoding?, callback?)</c>.
