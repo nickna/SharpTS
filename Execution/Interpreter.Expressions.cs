@@ -366,8 +366,9 @@ public partial class Interpreter
         // ToString coercion of an interpolated value goes through ToPrimitive
         // (string hint), so a boxed wrapper / object with own toString renders
         // its primitive (`${new String("ab")}` → "ab") rather than "[object Object]" (#708).
-        var evaluatedExprs = template.Expressions
-            .Select(e => ToPrimitive(Evaluate(e), PrimitiveHint.String)).ToList();
+        var evaluatedExprs = new List<object?>(template.Expressions.Count);
+        foreach (var e in template.Expressions)
+            evaluatedExprs.Add(ToPrimitive(Evaluate(e), PrimitiveHint.String));
         return RuntimeValue.FromString(BuildTemplateLiteralString(template.Strings, evaluatedExprs));
     }
 

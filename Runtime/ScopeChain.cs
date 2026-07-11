@@ -14,7 +14,10 @@ namespace SharpTS.Runtime;
 public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue, TSelf>
 {
     protected readonly Dictionary<string, TValue> _values = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _readOnlyNames = new(StringComparer.Ordinal);
+
+    // Lazily allocated: only named function expressions mark a read-only name, so the
+    // overwhelming majority of scopes never need the set.
+    private HashSet<string>? _readOnlyNames;
 
     /// <summary>
     /// The enclosing scope, or null if this is the global scope.
@@ -67,14 +70,15 @@ public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue,
     /// Marks a variable as read-only. Used for named function expressions
     /// where the function name cannot be reassigned inside the function body.
     /// </summary>
-    public void MarkAsReadOnly(string name) => _readOnlyNames.Add(name);
+    public void MarkAsReadOnly(string name) =>
+        (_readOnlyNames ??= new(StringComparer.Ordinal)).Add(name);
 
     /// <summary>
     /// Checks if a variable is read-only in the current or enclosing scopes.
     /// </summary>
     public bool IsReadOnly(string name)
     {
-        if (_readOnlyNames.Contains(name)) return true;
+        if (_readOnlyNames?.Contains(name) == true) return true;
         return Enclosing?.IsReadOnly(name) ?? false;
     }
 }
