@@ -1288,74 +1288,124 @@ public partial class ILEmitter
                 return;
 
             // Prefix increment on property: ++obj.prop
-            // Get current value
-            EmitExpression(get.Object);
-            EmitBoxIfNeeded(get.Object);
-            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
-            EmitUnboxToDouble();
-
-            // Increment or decrement
-            IL.Emit(OpCodes.Ldc_R8, 1.0);
-            if (pi.Operator.Type == TokenType.PLUS_PLUS)
-                IL.Emit(OpCodes.Add);
-            else
-                IL.Emit(OpCodes.Sub);
-
-            // Box new value and store in temp
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            var newValue = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, newValue);
-
-            // SetProperty(obj, name, newValue)
-            EmitExpression(get.Object);
-            EmitBoxIfNeeded(get.Object);
-            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-            IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
-
-            // Return new value (prefix behavior)
-            IL.Emit(OpCodes.Ldloc, newValue);
-            SetStackUnknown();
+            EmitIncrementProperty(get, pi.Operator.Type == TokenType.PLUS_PLUS, isPrefix: true);
             return;
         }
 
         if (pi.Operand is Expr.GetIndex gi)
         {
             // Prefix increment on array index: ++arr[i]
-            // Get current value
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            EmitExpression(gi.Index);
-            EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
-            EmitUnboxToDouble();
-
-            // Increment or decrement
-            IL.Emit(OpCodes.Ldc_R8, 1.0);
-            if (pi.Operator.Type == TokenType.PLUS_PLUS)
-                IL.Emit(OpCodes.Add);
-            else
-                IL.Emit(OpCodes.Sub);
-
-            // Box new value and store in temp
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            var newValue = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, newValue);
-
-            // SetIndex(obj, index, newValue)
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            EmitExpression(gi.Index);
-            EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
-
-            // Return new value (prefix behavior)
-            IL.Emit(OpCodes.Ldloc, newValue);
-            SetStackUnknown();
+            EmitIncrementIndex(gi, pi.Operator.Type == TokenType.PLUS_PLUS, isPrefix: true);
             return;
         }
+    }
+
+    /// <summary>
+    /// Shared read→±1→write lowering for <c>++</c>/<c>--</c> on a property (<c>obj.prop</c>).
+    /// <paramref name="isPrefix"/> selects the expression result — the new value (prefix) or a
+    /// saved copy of the old value (postfix). Local declaration order (postfix: old before new)
+    /// and box points match the previous per-arm copies exactly.
+    /// </summary>
+    private void EmitIncrementProperty(Expr.Get get, bool isIncrement, bool isPrefix)
+    {
+        // Get current value
+        EmitExpression(get.Object);
+        EmitBoxIfNeeded(get.Object);
+        IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        EmitUnboxToDouble();
+
+        LocalBuilder? oldValue = null;
+        if (!isPrefix)
+        {
+            // Save old value for postfix return
+            oldValue = IL.DeclareLocal(_ctx.Types.Double);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, oldValue);
+        }
+
+        // Increment or decrement
+        IL.Emit(OpCodes.Ldc_R8, 1.0);
+        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
+
+        // Box new value and store in temp
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        var newValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, newValue);
+
+        // SetProperty(obj, name, newValue)
+        EmitExpression(get.Object);
+        EmitBoxIfNeeded(get.Object);
+        IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+        IL.Emit(OpCodes.Ldloc, newValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+
+        if (isPrefix)
+        {
+            // Return new value (prefix behavior)
+            IL.Emit(OpCodes.Ldloc, newValue);
+        }
+        else
+        {
+            // Return old value (postfix behavior)
+            IL.Emit(OpCodes.Ldloc, oldValue!);
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        }
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Shared read→±1→write lowering for <c>++</c>/<c>--</c> on an index (<c>arr[i]</c>).
+    /// Same result seam as <see cref="EmitIncrementProperty"/>.
+    /// </summary>
+    private void EmitIncrementIndex(Expr.GetIndex gi, bool isIncrement, bool isPrefix)
+    {
+        // Get current value
+        EmitExpression(gi.Object);
+        EmitBoxIfNeeded(gi.Object);
+        EmitExpression(gi.Index);
+        EmitBoxIfNeeded(gi.Index);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        EmitUnboxToDouble();
+
+        LocalBuilder? oldValue = null;
+        if (!isPrefix)
+        {
+            // Save old value for postfix return
+            oldValue = IL.DeclareLocal(_ctx.Types.Double);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, oldValue);
+        }
+
+        // Increment or decrement
+        IL.Emit(OpCodes.Ldc_R8, 1.0);
+        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
+
+        // Box new value and store in temp
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        var newValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, newValue);
+
+        // SetIndex(obj, index, newValue)
+        EmitExpression(gi.Object);
+        EmitBoxIfNeeded(gi.Object);
+        EmitExpression(gi.Index);
+        EmitBoxIfNeeded(gi.Index);
+        IL.Emit(OpCodes.Ldloc, newValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+
+        if (isPrefix)
+        {
+            // Return new value (prefix behavior)
+            IL.Emit(OpCodes.Ldloc, newValue);
+        }
+        else
+        {
+            // Return old value (postfix behavior)
+            IL.Emit(OpCodes.Ldloc, oldValue!);
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        }
+        SetStackUnknown();
     }
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
@@ -1433,84 +1483,14 @@ public partial class ILEmitter
                 return;
 
             // Postfix increment on property: obj.prop++
-            // Get current value
-            EmitExpression(get.Object);
-            EmitBoxIfNeeded(get.Object);
-            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
-            EmitUnboxToDouble();
-
-            // Save old value for postfix return
-            var oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-
-            // Increment or decrement
-            IL.Emit(OpCodes.Ldc_R8, 1.0);
-            if (pi.Operator.Type == TokenType.PLUS_PLUS)
-                IL.Emit(OpCodes.Add);
-            else
-                IL.Emit(OpCodes.Sub);
-
-            // Box new value and store in temp
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            var newValue = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, newValue);
-
-            // SetProperty(obj, name, newValue)
-            EmitExpression(get.Object);
-            EmitBoxIfNeeded(get.Object);
-            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-            IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
-
-            // Return old value (postfix behavior)
-            IL.Emit(OpCodes.Ldloc, oldValue);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            SetStackUnknown();
+            EmitIncrementProperty(get, pi.Operator.Type == TokenType.PLUS_PLUS, isPrefix: false);
             return;
         }
 
         if (pi.Operand is Expr.GetIndex gi)
         {
             // Postfix increment on array index: arr[i]++
-            // Get current value
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            EmitExpression(gi.Index);
-            EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
-            EmitUnboxToDouble();
-
-            // Save old value
-            var oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-
-            // Increment or decrement
-            IL.Emit(OpCodes.Ldc_R8, 1.0);
-            if (pi.Operator.Type == TokenType.PLUS_PLUS)
-                IL.Emit(OpCodes.Add);
-            else
-                IL.Emit(OpCodes.Sub);
-
-            // Box new value and store in temp
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            var newValue = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, newValue);
-
-            // SetIndex(obj, index, newValue)
-            EmitExpression(gi.Object);
-            EmitBoxIfNeeded(gi.Object);
-            EmitExpression(gi.Index);
-            EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Ldloc, newValue);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
-
-            // Return old value
-            IL.Emit(OpCodes.Ldloc, oldValue);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            SetStackUnknown();
+            EmitIncrementIndex(gi, pi.Operator.Type == TokenType.PLUS_PLUS, isPrefix: false);
             return;
         }
     }

@@ -67,51 +67,23 @@ public class SharpTSWritable : SharpTSEventEmitter
     public void SetDestroyCallback(ISharpTSCallable callback) => _destroyCallback = callback;
 
     /// <summary>
-    /// Gets a member (method or property) by name for interpreter dispatch.
+    /// Gets a member (method or property) by name for interpreter dispatch. The writable-side
+    /// methods and properties come from the shared <see cref="WritableCore"/> dispatch.
     /// </summary>
     public override object? GetMember(string name)
     {
+        if (_writeCore.GetWritableMember(name) is { } writableMember)
+            return writableMember;
+
         return name switch
         {
-            // Writable-specific methods
-            "write" => BuiltInMethod.CreateV2("write", 1, 3, Write),
-            "end" => BuiltInMethod.CreateV2("end", 0, 3, End),
-            "cork" => BuiltInMethod.CreateV2("cork", 0, Cork),
-            "uncork" => BuiltInMethod.CreateV2("uncork", 0, Uncork),
             "destroy" => BuiltInMethod.CreateV2("destroy", 0, 1, Destroy),
             "setDefaultEncoding" => BuiltInMethod.CreateV2("setDefaultEncoding", 1, SetDefaultEncoding),
-
-            // Properties
-            "writable" => _writeCore.IsWritable,
-            "writableEnded" => _writeCore.Ended,
-            "writableFinished" => _writeCore.Finished,
-            "writableLength" => (double)_writeCore.WritableLength,
-            "writableCorked" => (double)(_writeCore.Corked ? 1 : 0),
-            "writableHighWaterMark" => (double)_highWaterMark,
-            "writableObjectMode" => _objectMode,
             "destroyed" => _writeCore.Destroyed,
 
             // Inherit from EventEmitter
             _ => base.GetMember(name)
         };
-    }
-
-    private RuntimeValue Write(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => _writeCore.Write(interpreter, args);
-
-    private RuntimeValue End(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-        => _writeCore.End(interpreter, args);
-
-    private RuntimeValue Cork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        _writeCore.Cork();
-        return RuntimeValue.Null;
-    }
-
-    private RuntimeValue Uncork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        _writeCore.Uncork(interpreter);
-        return RuntimeValue.Null;
     }
 
     /// <summary>
