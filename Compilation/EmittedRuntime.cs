@@ -2294,49 +2294,16 @@ public class EmittedRuntime
     public MethodBuilder AbortSignalTimeout { get; set; } = null!;
     public MethodBuilder AbortSignalAny { get; set; } = null!;
 
-    // Intl.NumberFormat support
+    // Intl constructor factories (instance methods dispatch reflectively on the
+    // returned SharpTSIntl* objects and need no emitted stubs)
     public MethodBuilder CreateIntlNumberFormat { get; set; } = null!;
-    public MethodBuilder IntlNumberFormatFormat { get; set; } = null!;
-    public MethodBuilder IntlNumberFormatResolvedOptions { get; set; } = null!;
-
-    // Intl.DateTimeFormat support
     public MethodBuilder CreateIntlDateTimeFormat { get; set; } = null!;
-    public MethodBuilder IntlDateTimeFormatFormat { get; set; } = null!;
-    public MethodBuilder IntlDateTimeFormatResolvedOptions { get; set; } = null!;
-    public MethodBuilder IntlDateTimeFormatFormatToParts { get; set; } = null!;
-    public MethodBuilder IntlDateTimeFormatFormatRange { get; set; } = null!;
-    public MethodBuilder IntlDateTimeFormatFormatRangeToParts { get; set; } = null!;
-
-    // Intl.Collator support
     public MethodBuilder CreateIntlCollator { get; set; } = null!;
-    public MethodBuilder IntlCollatorCompare { get; set; } = null!;
-    public MethodBuilder IntlCollatorResolvedOptions { get; set; } = null!;
-
-    // Intl.PluralRules support
     public MethodBuilder CreateIntlPluralRules { get; set; } = null!;
-    public MethodBuilder IntlPluralRulesSelect { get; set; } = null!;
-    public MethodBuilder IntlPluralRulesResolvedOptions { get; set; } = null!;
-
-    // Intl.RelativeTimeFormat support
     public MethodBuilder CreateIntlRelativeTimeFormat { get; set; } = null!;
-    public MethodBuilder IntlRelativeTimeFormatFormat { get; set; } = null!;
-    public MethodBuilder IntlRelativeTimeFormatResolvedOptions { get; set; } = null!;
-
-    // Intl.ListFormat support
     public MethodBuilder CreateIntlListFormat { get; set; } = null!;
-    public MethodBuilder IntlListFormatFormat { get; set; } = null!;
-    public MethodBuilder IntlListFormatFormatToParts { get; set; } = null!;
-    public MethodBuilder IntlListFormatResolvedOptions { get; set; } = null!;
-
-    // Intl.DisplayNames support
     public MethodBuilder CreateIntlDisplayNames { get; set; } = null!;
-    public MethodBuilder IntlDisplayNamesOf { get; set; } = null!;
-    public MethodBuilder IntlDisplayNamesResolvedOptions { get; set; } = null!;
-
-    // Intl.Segmenter support
     public MethodBuilder CreateIntlSegmenter { get; set; } = null!;
-    public MethodBuilder IntlSegmenterSegment { get; set; } = null!;
-    public MethodBuilder IntlSegmenterResolvedOptions { get; set; } = null!;
 
     // FS module - emitted $NodeError type for standalone assemblies
     // NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs
