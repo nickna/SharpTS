@@ -107,36 +107,8 @@ public partial class RuntimeEmitter
         // Pure-IL helpers for standalone DLLs (no reflection)
         EmitFsFlagsParsePureHelper(typeBuilder, runtime);
 
-        // Remaining reflection-based helpers (to be converted)
-        EmitCreateSharpTSDirHelper(typeBuilder, runtime);
-
         // Pure P/Invoke hard link implementation (Phase 21)
         EmitHardLinkPInvokeMethods(typeBuilder, runtime);
-    }
-
-    // Old reflection-based helpers removed - now using pure-IL:
-    // - FsFlagsParse -> FsFlagsParsePure (RuntimeEmitter.TSFsFlags.cs)
-    // - FdTable* -> $FileDescriptorTable (RuntimeEmitter.TSFileDescriptorTable.cs)
-
-    /// <summary>
-    /// Emits: public static object CreateSharpTSDir(string path)
-    /// Creates emitted $Dir directly.
-    /// </summary>
-    private void EmitCreateSharpTSDirHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "CreateSharpTSDir",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.String]
-        );
-        runtime.CreateSharpTSDir = method;
-
-        var il = method.GetILGenerator();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.DirCtor);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

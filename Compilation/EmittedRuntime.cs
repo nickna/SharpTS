@@ -1139,7 +1139,6 @@ public class EmittedRuntime
 
     // RegExp support - $Runtime wrapper methods
     public MethodBuilder RegExpCoerceArg { get; set; } = null!;
-    public MethodBuilder CreateRegExp { get; set; } = null!;
     public MethodBuilder CreateRegExpWithFlags { get; set; } = null!;
     public MethodBuilder RegExpFromArgs { get; set; } = null!;
     public MethodBuilder RegExpTest { get; set; } = null!;
@@ -1495,9 +1494,7 @@ public class EmittedRuntime
     public MethodBuilder FsStatfsRaw { get; set; } = null!;
 
     // File descriptor low-level helpers (reflection-based for standalone DLLs)
-    public MethodBuilder FsFlagsParse { get; set; } = null!;
     public MethodBuilder FsFlagsParsePure { get; set; } = null!;
-    public MethodBuilder CreateSharpTSDir { get; set; } = null!;
     public MethodBuilder CreateHardLinkPure { get; set; } = null!;
 
     // $FileDescriptorTable type (pure-IL for standalone DLLs)
@@ -1697,7 +1694,6 @@ public class EmittedRuntime
     public MethodBuilder WrapVoidTaskAsObjectTask { get; set; } = null!;
 
     // NodeError conversion helpers
-    public MethodBuilder ConvertToNodeError { get; set; } = null!;
     public MethodBuilder ThrowNodeError { get; set; } = null!;
 
     // Process module methods
@@ -1938,11 +1934,6 @@ public class EmittedRuntime
     public MethodBuilder HttpGetGlobalAgent { get; set; } = null!;
     public MethodBuilder HttpGetAgentConstructor { get; set; } = null!;
     public MethodBuilder HttpAgentFactory { get; set; } = null!;
-
-    // HTTP low-level helpers (pure-IL for standalone DLLs)
-    public MethodBuilder ExtractResponseHeadersHelper { get; set; } = null!;
-    public MethodBuilder WrapCallbackHelper { get; set; } = null!;
-    public MethodBuilder CreateHttpServerHelper { get; set; } = null!;
 
     // $HttpServer type - emitted for standalone HTTP server support
     public TypeBuilder TSHttpServerType { get; set; } = null!;
@@ -2805,7 +2796,6 @@ public class EmittedRuntime
     public MethodBuilder CryptoSignHashName { get; set; } = null!;
     public MethodBuilder CryptoEncodeBytes { get; set; } = null!;
     public MethodBuilder CryptoBytesFromAny { get; set; } = null!;
-    public MethodBuilder CryptoDecodeInput { get; set; } = null!;
     // One-shot sign/verify/hash cores on $Runtime (#1055)
     public MethodBuilder CryptoSignDataEx { get; set; } = null!;
     public MethodBuilder CryptoVerifyDataEx { get; set; } = null!;
