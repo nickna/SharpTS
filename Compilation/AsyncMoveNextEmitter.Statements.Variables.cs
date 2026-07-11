@@ -15,28 +15,16 @@ public partial class AsyncMoveNextEmitter
     /// <summary>
     /// Checks whether a variable is a captured function local with a function DC field available.
     /// </summary>
-    private bool TryGetFunctionDCField(string name, out FieldBuilder dcField)
-    {
-        dcField = null!;
-        return _builder.FunctionDCField != null &&
-               _ctx?.CapturedFunctionLocals?.Contains(name) == true &&
-               _ctx.FunctionDisplayClassFields?.TryGetValue(name, out dcField!) == true;
-    }
+    private bool TryGetFunctionDCField(string name, out FieldBuilder dcField) =>
+        TryGetFunctionDCField(_builder.FunctionDCField, name, out dcField);
 
     /// <summary>
     /// Stores a value (already on stack) to the function DC field for a captured variable.
-    /// Does NOT consume the value from the stack — caller must handle that.
+    /// Does NOT consume the value from the stack — the shared helper re-loads it so the caller can
+    /// mirror it into the hoisted field next.
     /// </summary>
-    private void StoreToDCField(string name, FieldBuilder dcField)
-    {
-        var temp = _il.DeclareLocal(_types.Object);
-        _il.Emit(OpCodes.Stloc, temp);
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField!);
-        _il.Emit(OpCodes.Ldloc, temp);
-        _il.Emit(OpCodes.Stfld, dcField);
-        _il.Emit(OpCodes.Ldloc, temp); // restore value to stack
-    }
+    private void StoreToDCField(FieldBuilder dcField) =>
+        StoreToDCField(_builder.FunctionDCField!, dcField, leaveValueOnStack: true);
 
     /// <summary>
     /// Overrides variable declaration to write to BOTH the hoisted field AND the function DC.
@@ -66,7 +54,7 @@ public partial class AsyncMoveNextEmitter
             }
 
             // Store to function DC
-            StoreToDCField(name, dcField);
+            StoreToDCField(dcField);
 
             // Also store to hoisted field (for async arrow captures)
             var hoistedField = _builder.GetVariableField(name);
@@ -127,7 +115,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Dup); // keep a copy as the expression result
 
             // Store to function DC
-            StoreToDCField(name, dcField);
+            StoreToDCField(dcField);
 
             // Also store to hoisted field
             var hoistedField = _builder.GetVariableField(name);
@@ -160,7 +148,7 @@ public partial class AsyncMoveNextEmitter
         if (TryGetFunctionDCField(name, out var dcField))
         {
             // Value is on stack — store to both locations
-            StoreToDCField(name, dcField);
+            StoreToDCField(dcField);
 
             // Also store to hoisted field
             var hoistedField = _builder.GetVariableField(name);

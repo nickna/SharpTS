@@ -10,30 +10,17 @@ public partial class IteratorMoveNextEmitter
     /// function display class (#674/#725) so a write inside an arrow/callback and the generator body
     /// observe the same storage. Both iterator state machines are reference types, so the DC — held by
     /// the <c>&lt;&gt;__functionDC</c> state-machine field — survives across yields (and, for the async
-    /// generator, awaits) and is the single source of truth. Returns false (no DC routing) for variables
-    /// that stay on the existing by-value snapshot / hoisted-field path.
+    /// generator, awaits) and is the single source of truth.
     /// </summary>
-    protected bool TryGetFunctionDCField(string name, out FieldBuilder dcField)
-    {
-        dcField = null!;
-        return GetFunctionDCField() != null &&
-               Ctx.CapturedFunctionLocals?.Contains(name) == true &&
-               Ctx.FunctionDisplayClassFields?.TryGetValue(name, out dcField!) == true;
-    }
+    protected bool TryGetFunctionDCField(string name, out FieldBuilder dcField) =>
+        TryGetFunctionDCField(GetFunctionDCField(), name, out dcField);
 
     /// <summary>
     /// Stores the value currently on the stack into <c>this.&lt;&gt;__functionDC.dcField</c>, consuming
     /// it. Caller is responsible for any duplicate it wants to keep as a result.
     /// </summary>
-    protected void StoreToDCField(FieldBuilder dcField)
-    {
-        var temp = IL.DeclareLocal(Types.Object);
-        IL.Emit(OpCodes.Stloc, temp);
-        IL.Emit(OpCodes.Ldarg_0);
-        IL.Emit(OpCodes.Ldfld, GetFunctionDCField()!);
-        IL.Emit(OpCodes.Ldloc, temp);
-        IL.Emit(OpCodes.Stfld, dcField);
-    }
+    protected void StoreToDCField(FieldBuilder dcField) =>
+        StoreToDCField(GetFunctionDCField()!, dcField, leaveValueOnStack: false);
 
     protected override void EmitVariable(Expr.Variable v)
     {

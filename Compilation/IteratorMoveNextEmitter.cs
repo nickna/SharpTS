@@ -147,6 +147,33 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
     }
 
     /// <summary>
+    /// Emits the resume dispatch at MoveNext entry: switch on the state field to each suspension
+    /// point's resume label; state -1 (initial execution) falls through the switch. No-op when the
+    /// body has no suspension points. The sync generator passes its yield-point count, the async
+    /// generator its combined yield+await count — the IL is otherwise identical.
+    /// </summary>
+    protected void EmitStateSwitch(FieldBuilder stateField, int suspensionPointCount, IReadOnlyDictionary<int, Label> stateLabels)
+    {
+        if (suspensionPointCount == 0) return;
+
+        // Load state field
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, stateField);
+
+        // Create labels array for switch
+        var labels = new Label[suspensionPointCount];
+        for (int i = 0; i < suspensionPointCount; i++)
+        {
+            labels[i] = stateLabels[i];
+        }
+
+        // switch (state) { case 0: goto State0; case 1: goto State1; ... }
+        IL.Emit(OpCodes.Switch, labels);
+
+        // Fall through for state -1 (initial execution)
+    }
+
+    /// <summary>
     /// Binds the caught exception value (on the IL stack) to the catch parameter, honouring whether the
     /// parameter was hoisted to a state-machine field (because it is read across a yield/await in the
     /// catch body) or lives in an IL local. Storing to a fresh local unconditionally — the original

@@ -1,9 +1,41 @@
+using System.Reflection.Emit;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
 public abstract partial class StateMachineExitRoutingEmitter
 {
+    /// <summary>
+    /// Checks whether a variable is a captured-AND-mutated function local routed through the shared
+    /// function display class (#674/#725), i.e. the state machine holds a function DC and the name
+    /// resolves to one of its fields. Returns false for variables that stay on the by-value snapshot /
+    /// hoisted-field path. Each family passes its own function-DC state-machine field.
+    /// </summary>
+    protected bool TryGetFunctionDCField(FieldBuilder? functionDC, string name, out FieldBuilder dcField)
+    {
+        dcField = null!;
+        return functionDC != null &&
+               Ctx.CapturedFunctionLocals?.Contains(name) == true &&
+               Ctx.FunctionDisplayClassFields?.TryGetValue(name, out dcField!) == true;
+    }
+
+    /// <summary>
+    /// Stores the value currently on the stack into <c>this.&lt;&gt;__functionDC.dcField</c>.
+    /// <paramref name="leaveValueOnStack"/> re-loads the value afterwards for callers that need to
+    /// keep it (the async family mirrors the store into the hoisted field next).
+    /// </summary>
+    protected void StoreToDCField(FieldBuilder functionDC, FieldBuilder dcField, bool leaveValueOnStack)
+    {
+        var temp = IL.DeclareLocal(Types.Object);
+        IL.Emit(OpCodes.Stloc, temp);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, functionDC);
+        IL.Emit(OpCodes.Ldloc, temp);
+        IL.Emit(OpCodes.Stfld, dcField);
+        if (leaveValueOnStack)
+            IL.Emit(OpCodes.Ldloc, temp);
+    }
+
     /// <summary>
     /// Per-binding storage names for block-scoped let/const shadows (#711/#766), supplied by each
     /// family's state analysis. Empty for the common no-shadow case.

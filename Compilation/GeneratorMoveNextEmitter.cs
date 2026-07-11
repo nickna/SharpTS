@@ -104,7 +104,7 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         _il.Emit(OpCodes.Beq, _returnFalseLabel);
 
         // Emit state dispatch switch
-        EmitStateSwitch();
+        EmitStateSwitch(_builder.StateField, _analysis.YieldPointCount, _stateLabels);
 
         // Apply parameter defaults on initial entry. The state switch jumps every resume state
         // (>= 0) to its yield label and the completed state (-2) short-circuits above, so only the
@@ -164,27 +164,6 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         _il.Emit(OpCodes.Ldc_I4_0);
         _il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitStateSwitch()
-    {
-        if (_analysis.YieldPointCount == 0) return;
-
-        // Load state field
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.StateField);
-
-        // Create labels array for switch
-        var labels = new Label[_analysis.YieldPointCount];
-        for (int i = 0; i < _analysis.YieldPointCount; i++)
-        {
-            labels[i] = _stateLabels[i];
-        }
-
-        // switch (state) { case 0: goto State0; case 1: goto State1; ... }
-        _il.Emit(OpCodes.Switch, labels);
-
-        // Fall through for state -1 (initial execution)
     }
 
 }
