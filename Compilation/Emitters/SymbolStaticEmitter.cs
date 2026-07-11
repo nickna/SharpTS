@@ -131,11 +131,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
             {
                 // Symbol.for(key) — spec length 1. Identity via GetOrCreate.
                 var runtime = ctx.Runtime!;
-                il.Emit(OpCodes.Ldtoken, runtime.SymbolFor);
-                il.Emit(OpCodes.Ldtoken, runtime.SymbolFor.DeclaringType!);
-                il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-                    ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+                ctx.Types.EmitLoadMethodInfo(il, runtime.SymbolFor);
                 il.Emit(OpCodes.Ldstr, "for");
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
@@ -145,11 +141,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
             {
                 // Symbol.keyFor(sym) — spec length 1.
                 var runtime = ctx.Runtime!;
-                il.Emit(OpCodes.Ldtoken, runtime.SymbolKeyFor);
-                il.Emit(OpCodes.Ldtoken, runtime.SymbolKeyFor.DeclaringType!);
-                il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-                    ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+                ctx.Types.EmitLoadMethodInfo(il, runtime.SymbolKeyFor);
                 il.Emit(OpCodes.Ldstr, "keyFor");
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

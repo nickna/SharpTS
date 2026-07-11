@@ -56,11 +56,7 @@ public sealed class RegExpStaticEmitter : IStaticTypeEmitterStrategy
         // ObjectStaticEmitter's Object.keys-as-value path; GetOrCreate gives the
         // wrapper stable identity across repeated reads.
         var il = emitter.IL;
-        il.Emit(OpCodes.Ldtoken, escape);
-        il.Emit(OpCodes.Ldtoken, escape.DeclaringType!);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-            ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfo(il, escape);
         il.Emit(OpCodes.Ldstr, "escape");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime!.TSFunctionGetOrCreate);

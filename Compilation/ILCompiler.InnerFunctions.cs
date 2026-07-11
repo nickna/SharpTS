@@ -861,7 +861,7 @@ public partial class ILCompiler
             // Stack has: displayInstance
             il.Emit(OpCodes.Ldtoken, method);
             il.Emit(OpCodes.Ldtoken, displayClass);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
         }
@@ -870,7 +870,7 @@ public partial class ILCompiler
             // Non-capturing: new TSFunction(null, staticMethod)
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldtoken, method);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
         }

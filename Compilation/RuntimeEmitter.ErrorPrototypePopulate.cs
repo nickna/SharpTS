@@ -61,11 +61,7 @@ public partial class RuntimeEmitter
         catch { /* already named — ignore */ }
         var errToStringWrapperLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, errorToStringSpec);
-        il.Emit(OpCodes.Ldtoken, errorToStringSpec.DeclaringType!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-            _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        _types.EmitLoadMethodInfo(il, errorToStringSpec);
         il.Emit(OpCodes.Ldstr, "toString");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

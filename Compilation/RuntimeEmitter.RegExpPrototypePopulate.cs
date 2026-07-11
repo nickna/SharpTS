@@ -73,11 +73,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, symbolDictLocal);
             il.Emit(OpCodes.Ldsfld, symbolField);
             il.Emit(OpCodes.Ldnull);                                // target
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -105,11 +101,7 @@ public partial class RuntimeEmitter
         {
             // var fn = new $TSFunction(null, helper.MethodInfo, jsName, jsLength);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, "get " + jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -157,11 +149,7 @@ public partial class RuntimeEmitter
         {
             // Build fn = new $TSFunction(null, helper, jsName, jsLength) → fnLocal.
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

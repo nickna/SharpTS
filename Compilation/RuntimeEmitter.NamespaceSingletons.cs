@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, dictLocal);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);

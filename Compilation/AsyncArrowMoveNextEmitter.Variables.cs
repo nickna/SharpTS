@@ -70,9 +70,7 @@ public partial class AsyncArrowMoveNextEmitter
         if (_ctx?.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod) == true)
         {
             _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Ldtoken, funcMethod);
-            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            Types.EmitLoadMethodInfoViaHandle(_il, funcMethod);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;

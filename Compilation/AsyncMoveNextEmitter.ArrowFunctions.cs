@@ -53,9 +53,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Box, _builder.StateMachineType);
         }
 
-        _il.Emit(OpCodes.Ldtoken, arrowBuilder.StubMethod);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, arrowBuilder.StubMethod);
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -91,9 +89,7 @@ public partial class AsyncMoveNextEmitter
 
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
-            _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            Types.EmitLoadMethodInfoViaHandle(_il, method);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;
@@ -137,9 +133,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Stfld, field);
         }
 
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -147,11 +141,7 @@ public partial class AsyncMoveNextEmitter
     private void EmitNonCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method)
     {
         _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod(
-            "GetMethodFromHandle",
-            [typeof(RuntimeMethodHandle)])!);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }

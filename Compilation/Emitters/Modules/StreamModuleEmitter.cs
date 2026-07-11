@@ -111,11 +111,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "pipeline");
         il.Emit(OpCodes.Ldnull); // target
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.StreamPromisePipeline);
-        var runtimeMethodHandle = ctx.Types.Resolve("System.RuntimeMethodHandle");
-        var methodBase = ctx.Types.Resolve("System.Reflection.MethodBase");
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.StreamPromisePipeline);
         il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
         il.Emit(OpCodes.Call, addMethod);
 
@@ -123,9 +119,7 @@ public sealed class StreamModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "finished");
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.StreamPromiseFinished);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.StreamPromiseFinished);
         il.Emit(OpCodes.Newobj, ctx.Runtime!.TSFunctionCtor);
         il.Emit(OpCodes.Call, addMethod);
 

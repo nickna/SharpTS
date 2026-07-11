@@ -120,7 +120,7 @@ public partial class ILEmitter
                     // Create TSFunction(null, methodInfo)
                     IL.Emit(OpCodes.Ldnull); // target (static method)
                     IL.Emit(OpCodes.Ldtoken, methodBuilder);
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+                    IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
                     IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);

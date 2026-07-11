@@ -659,13 +659,11 @@ public partial class ILEmitter
         if (declaringType != null)
         {
             IL.Emit(OpCodes.Ldtoken, declaringType);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle",
-                _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
+            IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
         }
         else
         {
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle",
-                _ctx.Types.RuntimeMethodHandle));
+            IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
         }
 
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
@@ -923,11 +921,7 @@ public partial class ILEmitter
         if (helperMethod != null)
         {
             IL.Emit(OpCodes.Ldnull); // target (null for static methods)
-            IL.Emit(OpCodes.Ldtoken, helperMethod);
-            var runtimeMethodHandle = _ctx.Types.Resolve("System.RuntimeMethodHandle");
-            var methodBase = _ctx.Types.Resolve("System.Reflection.MethodBase");
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
-            IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
+            _ctx.Types.EmitLoadMethodInfoViaHandle(IL, helperMethod);
             IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         }
         else

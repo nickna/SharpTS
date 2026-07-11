@@ -59,10 +59,6 @@ public partial class RuntimeEmitter
         var strEquals = _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!;
         var getTypeFromHandle = _types.Type.GetMethod("GetTypeFromHandle", [_types.RuntimeTypeHandle])!;
         var stringOpEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
-        // GetMethodFromHandle lives on MethodBase, not Type.
-        var getMethodFromHandle = _types.MethodBase.GetMethod(
-            "GetMethodFromHandle",
-            [_types.RuntimeMethodHandle, _types.RuntimeTypeHandle])!;
 
         // Emit one branch per (Type, name, runtimeMethod, specLength) tuple. Uses
         // TSFunctionGetOrCreate so the returned wrapper has stable identity:
@@ -88,10 +84,7 @@ public partial class RuntimeEmitter
 
             // Match — return TSFunctionGetOrCreate(method, name, length) so the
             // wrapper identity matches the syntactic-dispatch path.
-            il.Emit(OpCodes.Ldtoken, backingMethod);
-            il.Emit(OpCodes.Ldtoken, backingMethod.DeclaringType!);
-            il.Emit(OpCodes.Call, getMethodFromHandle);
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
             il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
@@ -135,10 +128,7 @@ public partial class RuntimeEmitter
 
             // TSFunctionGetOrCreate(MethodInfo, name, length) — identity-stable
             // wrapper (same MethodInfo key → same wrapper instance).
-            il.Emit(OpCodes.Ldtoken, backingMethod);
-            il.Emit(OpCodes.Ldtoken, backingMethod.DeclaringType!);
-            il.Emit(OpCodes.Call, getMethodFromHandle);
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
             il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

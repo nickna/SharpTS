@@ -509,11 +509,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);

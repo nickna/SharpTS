@@ -66,8 +66,6 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
             _types.String, _types.Object);
-        var getMethodFromHandle = _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-            _types.RuntimeMethodHandle, _types.RuntimeTypeHandle);
 
         EmitPrototypePopulateGuard(il, singletonField);
 
@@ -80,10 +78,7 @@ public partial class RuntimeEmitter
             // $TSFunction.GetOrCreate(MethodInfo, name, length) — cached identity
             // so `m.max === Math.max` (same instance the value-form static
             // emitter hands out).
-            il.Emit(OpCodes.Ldtoken, backing);
-            il.Emit(OpCodes.Ldtoken, backing.DeclaringType!);
-            il.Emit(OpCodes.Call, getMethodFromHandle);
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, backing);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

@@ -65,9 +65,7 @@ public partial class AsyncArrowMoveNextEmitter
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
             // No fields to populate, just create TSFunction
-            _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            Types.EmitLoadMethodInfoViaHandle(_il, method);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;
@@ -91,9 +89,7 @@ public partial class AsyncArrowMoveNextEmitter
 
         // Create TSFunction: new TSFunction(displayInstance, method)
         // Stack has: displayInstance
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -102,9 +98,7 @@ public partial class AsyncArrowMoveNextEmitter
     {
         // Create TSFunction for static method: new TSFunction(null, method)
         _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -173,9 +167,7 @@ public partial class AsyncArrowMoveNextEmitter
                 _il.Emit(OpCodes.Ldnull);
             }
 
-            _il.Emit(OpCodes.Ldtoken, nestedBuilder.StubMethod);
-            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            Types.EmitLoadMethodInfoViaHandle(_il, nestedBuilder.StubMethod);
             _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;
@@ -196,9 +188,7 @@ public partial class AsyncArrowMoveNextEmitter
         }
 
         // Load the stub method for the nested arrow
-        _il.Emit(OpCodes.Ldtoken, nestedBuilder.StubMethod);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, nestedBuilder.StubMethod);
 
         // Create TSFunction(target: self boxed, method: stub)
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);

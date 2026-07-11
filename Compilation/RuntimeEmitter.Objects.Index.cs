@@ -1649,11 +1649,7 @@ public partial class RuntimeEmitter
 
         // return new $TSFunction(rx, MethodInfo of helper)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, helperMethod);
-        il.Emit(OpCodes.Ldtoken, helperMethod.DeclaringType!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-            _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        _types.EmitLoadMethodInfo(il, helperMethod);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
 

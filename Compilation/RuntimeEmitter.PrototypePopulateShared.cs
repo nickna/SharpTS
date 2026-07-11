@@ -95,11 +95,7 @@ public partial class RuntimeEmitter
         }
         var wrapperLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldnull); // target — helpers take the receiver as __this
-        il.Emit(OpCodes.Ldtoken, helper);
-        il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-            _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        _types.EmitLoadMethodInfo(il, helper);
         il.Emit(OpCodes.Ldstr, jsName);
         il.Emit(OpCodes.Ldc_I4, jsLength);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

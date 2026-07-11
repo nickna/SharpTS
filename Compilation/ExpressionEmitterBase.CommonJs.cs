@@ -237,11 +237,7 @@ public abstract partial class ExpressionEmitterBase
                 if (helperMethod != null)
                 {
                     IL.Emit(OpCodes.Ldnull);
-                    IL.Emit(OpCodes.Ldtoken, helperMethod);
-                    var runtimeMethodHandle = Ctx.Types.Resolve("System.RuntimeMethodHandle");
-                    var methodBase = Ctx.Types.Resolve("System.Reflection.MethodBase");
-                    IL.Emit(OpCodes.Call, Ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
-                    IL.Emit(OpCodes.Castclass, Ctx.Types.MethodInfo);
+                    Ctx.Types.EmitLoadMethodInfoViaHandle(IL, helperMethod);
                     IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
                 }
                 else

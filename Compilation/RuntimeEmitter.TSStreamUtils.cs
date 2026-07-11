@@ -210,8 +210,7 @@ public partial class RuntimeEmitter
         // Return new $TSFunction(cleanupInstance, cleanupInvokeMethod)
         il.Emit(OpCodes.Ldloc, cleanupInstanceLocal);
         il.Emit(OpCodes.Ldtoken, _cleanupInvokeMethod);
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);

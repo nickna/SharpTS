@@ -633,9 +633,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
-            _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            Types.EmitLoadMethodInfoViaHandle(_il, method);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;
@@ -680,9 +678,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stfld, field);
         }
 
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -690,9 +686,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     private void EmitNonCapturingArrowFunction(MethodBuilder method)
     {
         _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(_il, method);
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }

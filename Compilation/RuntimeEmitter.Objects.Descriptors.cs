@@ -1438,11 +1438,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            il.Emit(OpCodes.Ldtoken, targetMethod);
-            il.Emit(OpCodes.Ldtoken, targetMethod.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, targetMethod);
             il.Emit(OpCodes.Ldstr, n);
             il.Emit(OpCodes.Ldc_I4, specLength);
             il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
@@ -1576,11 +1572,7 @@ public partial class RuntimeEmitter
             {
                 // Emit TSFunction.GetOrCreate(methodInfo, name, length) so the
                 // descriptor's .value === Number.X (same cached wrapper).
-                il.Emit(OpCodes.Ldtoken, methodTarget);
-                il.Emit(OpCodes.Ldtoken, methodTarget.DeclaringType!);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                    _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
+                _types.EmitLoadMethodInfo(il, methodTarget);
                 il.Emit(OpCodes.Ldstr, n);
                 il.Emit(OpCodes.Ldc_I4, methodArity);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
@@ -1840,11 +1832,7 @@ public partial class RuntimeEmitter
                 // returns the SAME instance as the static dispatch path
                 // (MathStaticEmitter uses TSFunctionGetOrCreate too), so
                 // `desc.value === Math.X` holds in user code.
-                il.Emit(OpCodes.Ldtoken, methodTarget);
-                il.Emit(OpCodes.Ldtoken, methodTarget.DeclaringType!);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                    _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
+                _types.EmitLoadMethodInfo(il, methodTarget);
                 il.Emit(OpCodes.Ldstr, n);
                 il.Emit(OpCodes.Ldc_I4, methodArity);
                 il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

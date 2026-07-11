@@ -260,8 +260,6 @@ public partial class ILCompiler
             return;
 
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
-        var getMethodFromHandle = _types.MethodBase.GetMethod(
-            "GetMethodFromHandle", [_types.RuntimeMethodHandle, _types.RuntimeTypeHandle])!;
 
         foreach (var (accessor, method) in list)
         {
@@ -277,7 +275,7 @@ public partial class ILCompiler
 
             // getter MethodInfo (or null)
             if (isGetter)
-                EmitMethodInfoLiteral(il, method, typeBuilder, getMethodFromHandle);
+                EmitMethodInfoLiteral(il, method, typeBuilder);
             else
                 il.Emit(OpCodes.Ldnull);
 
@@ -285,7 +283,7 @@ public partial class ILCompiler
             if (isGetter)
                 il.Emit(OpCodes.Ldnull);
             else
-                EmitMethodInfoLiteral(il, method, typeBuilder, getMethodFromHandle);
+                EmitMethodInfoLiteral(il, method, typeBuilder);
 
             // isStatic
             il.Emit(accessor.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
@@ -305,8 +303,6 @@ public partial class ILCompiler
             return;
 
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
-        var getMethodFromHandle = _types.MethodBase.GetMethod(
-            "GetMethodFromHandle", [_types.RuntimeMethodHandle, _types.RuntimeTypeHandle])!;
 
         foreach (var (method, key, builder) in list)
         {
@@ -319,7 +315,7 @@ public partial class ILCompiler
             emitter.EmitBoxIfNeeded(key);
 
             // method MethodInfo
-            EmitMethodInfoLiteral(il, builder, typeBuilder, getMethodFromHandle);
+            EmitMethodInfoLiteral(il, builder, typeBuilder);
 
             // isStatic
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
@@ -328,11 +324,11 @@ public partial class ILCompiler
         }
     }
 
-    private void EmitMethodInfoLiteral(ILGenerator il, MethodBuilder method, TypeBuilder declaringType, MethodInfo getMethodFromHandle)
+    private void EmitMethodInfoLiteral(ILGenerator il, MethodBuilder method, TypeBuilder declaringType)
     {
         il.Emit(OpCodes.Ldtoken, method);
         il.Emit(OpCodes.Ldtoken, declaringType);
-        il.Emit(OpCodes.Call, getMethodFromHandle);
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
     }
 
