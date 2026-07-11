@@ -175,33 +175,15 @@ public static class DnsModuleInterpreter
         if (callback == null)
             return RuntimeValue.FromBoxed(LookupCore(hostname, family, all, order));
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
+        return RunCallback(interpreter, callback,
+            () =>
             {
                 var result = LookupCore(hostname, family, all, order);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    if (result is SharpTSObject single)
-                        interpreter.InvokeGuestCallback(callback,
-                            [null, single.Fields["address"], single.Fields["family"]]);
-                    else
-                        interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback,
-                        [CreateDnsError(ExtractErrorCode(ex), hostname), null, null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+                if (result is SharpTSObject single)
+                    return [null, single.Fields["address"], single.Fields["family"]];
+                return [null, result];
+            },
+            ex => [CreateDnsError(ExtractErrorCode(ex), hostname), null, null]);
     }
 
     /// <summary>
@@ -297,30 +279,13 @@ public static class DnsModuleInterpreter
         if (callback == null)
             return RuntimeValue.FromObject(LookupServiceCore(address, port));
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
+        return RunCallback(interpreter, callback,
+            () =>
             {
                 var result = LookupServiceCore(address, port);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback,
-                        [null, result.Fields["hostname"], result.Fields["service"]]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback,
-                        [CreateDnsError(ExtractErrorCode(ex), address), null, null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-        return RuntimeValue.Undefined;
+                return [null, result.Fields["hostname"], result.Fields["service"]];
+            },
+            ex => [CreateDnsError(ExtractErrorCode(ex), address), null, null]);
     }
 
     /// <summary>
@@ -433,6 +398,7 @@ public static class DnsModuleInterpreter
         var token = instance.CancellationToken;
         _ = Task.Run(async () =>
         {
+            List<object?> cbArgs;
             try
             {
                 var queryTask = Task.Run(query);
@@ -441,29 +407,17 @@ public static class DnsModuleInterpreter
                 if (completed != queryTask)
                     throw new OperationCanceledException(token);
                 var raw = await queryTask;
-                var result = wrap(raw);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
+                cbArgs = [null, wrap(raw)];
             }
             catch (OperationCanceledException)
             {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError("ECANCELLED", identifier), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
+                cbArgs = [CreateDnsError("ECANCELLED", identifier), null];
             }
             catch (Exception ex)
             {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), identifier), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
+                cbArgs = [CreateDnsError(ExtractErrorCode(ex), identifier), null];
             }
+            ScheduleCallbackAndUnref(interpreter, callback, cbArgs);
         });
         return RuntimeValue.Undefined;
     }
@@ -590,6 +544,51 @@ public static class DnsModuleInterpreter
     #region Async Callback-based DNS Resolution
 
     /// <summary>
+    /// Delivers a guest callback on the event loop and releases the Ref taken for the background
+    /// work in a finally, so a throwing guest callback cannot leak the Ref and keep the loop alive
+    /// (mirrors the fs/crypto ScheduleCallbackAndUnref).
+    /// </summary>
+    private static void ScheduleCallbackAndUnref(Interp interpreter, ISharpTSCallable callback, List<object?> cbArgs)
+    {
+        interpreter.ScheduleTimer(0, 0, () =>
+        {
+            try
+            {
+                interpreter.InvokeGuestCallback(callback, cbArgs);
+            }
+            finally
+            {
+                interpreter.Unref();
+            }
+        }, isInterval: false);
+    }
+
+    /// <summary>
+    /// Runs blocking DNS work on the thread pool with the event loop Ref'd until the callback has
+    /// been delivered. <paramref name="work"/> returns the success callback args;
+    /// <paramref name="toErrorArgs"/> maps a thrown exception to the error callback args.
+    /// </summary>
+    private static RuntimeValue RunCallback(Interp interpreter, ISharpTSCallable callback,
+        Func<List<object?>> work, Func<Exception, List<object?>> toErrorArgs)
+    {
+        interpreter.Ref();
+        _ = Task.Run(() =>
+        {
+            List<object?> cbArgs;
+            try
+            {
+                cbArgs = work();
+            }
+            catch (Exception ex)
+            {
+                cbArgs = toErrorArgs(ex);
+            }
+            ScheduleCallbackAndUnref(interpreter, callback, cbArgs);
+        });
+        return RuntimeValue.Undefined;
+    }
+
+    /// <summary>
     /// Generic helper for callback-based async DNS resolution using DnsRecordResolver.
     /// </summary>
     private static RuntimeValue ResolveRecordAsync(Interp interpreter, string methodName, ReadOnlySpan<RuntimeValue> args,
@@ -599,30 +598,9 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception($"Runtime Error: dns.{methodName} callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var raw = resolveFunc(hostname);
-                var result = WrapDnsResult(raw);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-
-        return RuntimeValue.Undefined;
+        return RunCallback(interpreter, callback,
+            () => [null, WrapDnsResult(resolveFunc(hostname))],
+            ex => [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
     }
 
     /// <summary>
@@ -662,30 +640,9 @@ public static class DnsModuleInterpreter
         if (args.Length > 2 && args[1].IsString)
             rrtype = args[1].AsStringUnsafe();
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var raw = DnsRecordResolver.Resolve(hostname, rrtype);
-                var result = WrapDnsResult(raw);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-
-        return RuntimeValue.Undefined;
+        return RunCallback(interpreter, callback,
+            () => [null, WrapDnsResult(DnsRecordResolver.Resolve(hostname, rrtype))],
+            ex => [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
     }
 
     /// <summary>
@@ -697,31 +654,11 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: dns.resolve4 callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var result = ResolveAddresses(hostname, AddressFamily.InterNetwork);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            // Wire protocol throws Exception ("Runtime Error: dns.x ECODE host"), not
-            // SocketException; ExtractErrorCode parses both shapes.
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-
-        return RuntimeValue.Undefined;
+        // Wire protocol throws Exception ("Runtime Error: dns.x ECODE host"), not
+        // SocketException; ExtractErrorCode parses both shapes.
+        return RunCallback(interpreter, callback,
+            () => [null, ResolveAddresses(hostname, AddressFamily.InterNetwork)],
+            ex => [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
     }
 
     /// <summary>
@@ -733,31 +670,11 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: dns.resolve6 callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var result = ResolveAddresses(hostname, AddressFamily.InterNetworkV6);
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, result]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            // Wire protocol throws Exception ("Runtime Error: dns.x ECODE host"), not
-            // SocketException; ExtractErrorCode parses both shapes.
-            catch (Exception ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-
-        return RuntimeValue.Undefined;
+        // Wire protocol throws Exception ("Runtime Error: dns.x ECODE host"), not
+        // SocketException; ExtractErrorCode parses both shapes.
+        return RunCallback(interpreter, callback,
+            () => [null, ResolveAddresses(hostname, AddressFamily.InterNetworkV6)],
+            ex => [CreateDnsError(ExtractErrorCode(ex), hostname), null]);
     }
 
     /// <summary>
@@ -769,41 +686,16 @@ public static class DnsModuleInterpreter
         var callback = args[^1].ToObject() as ISharpTSCallable
             ?? throw new Exception("Runtime Error: dns.reverse callback is required");
 
-        interpreter.Ref();
-        _ = Task.Run(() =>
-        {
-            try
+        return RunCallback(interpreter, callback,
+            () =>
             {
                 if (!IPAddress.TryParse(ip, out var ipAddress))
                     throw new Exception($"invalid address {ip}");
 
                 var hostEntry = Dns.GetHostEntry(ipAddress);
-                var hostnames = new SharpTSArray(new List<object?> { hostEntry.HostName });
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [null, hostnames]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (SocketException ex)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError(GetErrorCode(ex), ip), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-            catch (Exception)
-            {
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    interpreter.InvokeGuestCallback(callback, [CreateDnsError("EAI_FAIL", ip), null]);
-                    interpreter.Unref();
-                }, isInterval: false);
-            }
-        });
-
-        return RuntimeValue.Undefined;
+                return [null, new SharpTSArray(new List<object?> { hostEntry.HostName })];
+            },
+            ex => [CreateDnsError(ex is SocketException sex ? GetErrorCode(sex) : "EAI_FAIL", ip), null]);
     }
 
     private static RuntimeValue ResolveMxAsync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args) =>
