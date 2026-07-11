@@ -1049,84 +1049,21 @@ public partial class Interpreter
     };
 
     /// <summary>
-    /// Evaluates property access on a record/object literal, walking the __proto__
-    /// chain when the property is not an own property. JS spec: property access
-    /// traverses the prototype chain until a match or null is reached.
+    /// Boxed adapter over <see cref="EvaluateGetOnRecordRV"/> — the single implementation of
+    /// record property reads. (A previous hand-maintained boxed copy had drifted: it stopped the
+    /// __proto__ walk at a <see cref="SharpTSInstance"/> prototype, so field reads through
+    /// `Object.create(new Point())`-style chains resolved to undefined for boxed callers.)
     /// </summary>
-    private object? EvaluateGetOnRecord(SharpTSObject simpleObj, string memberName)
-    {
-        // Check for getter first on the own object
-        var getter = simpleObj.GetGetter(memberName);
-        if (getter != null)
-        {
-            // Invoke the getter with 'this' bound to the object
-            var boundGetter = BindAccessorToObject(getter, simpleObj);
-            return boundGetter.Call(this, []);
-        }
-
-        // Own property
-        if (simpleObj.HasProperty(memberName))
-        {
-            var value = simpleObj.GetProperty(memberName);
-            // Bind 'this' for function expressions and object method shorthand (HasOwnThis=true),
-            // including generator / async-generator methods (#775).
-            if (TryBindReceiverForMethodAccess(value, simpleObj) is { } boundMethod)
-                return boundMethod;
-            return value;
-        }
-
-        // Walk __proto__ chain — JS constructor-function pattern relies on this so methods
-        // assigned via `Foo.prototype.x = ...` are reachable on `new Foo()` instances.
-        // Lodash's MapCache (lodash.js ~2177) does `this.clear()` in its ctor where `clear`
-        // lives on `MapCache.prototype`; without this walk it resolves to undefined.
-        object? current = simpleObj.HasProperty("__proto__") ? simpleObj.GetProperty("__proto__") : null;
-        for (int i = 0; i < 64 && current is SharpTSObject proto; i++)
-        {
-            var protoGetter = proto.GetGetter(memberName);
-            if (protoGetter != null)
-            {
-                var boundProtoGetter = BindAccessorToObject(protoGetter, simpleObj);
-                return boundProtoGetter.Call(this, []);
-            }
-            if (proto.HasProperty(memberName))
-            {
-                var value = proto.GetProperty(memberName);
-                if (TryBindReceiverForMethodAccess(value, simpleObj) is { } boundMethod)
-                    return boundMethod;
-                return value;
-            }
-            object? next = proto.HasProperty("__proto__") ? proto.GetProperty("__proto__") : null;
-            if (ReferenceEquals(next, proto)) break; // cycle guard
-            current = next;
-        }
-
-        // Boxed primitive method dispatch: `(new Number(5)).toFixed(2)` etc.
-        // Delegate through to the underlying primitive value's built-in methods.
-        if (simpleObj.HasProperty("__primitiveType")
-            && simpleObj.GetProperty("__primitiveType") is string _
-            && simpleObj.HasProperty("__primitiveValue"))
-        {
-            var pv = simpleObj.GetProperty("__primitiveValue");
-            if (pv != null)
-            {
-                var dispatched = BuiltInRegistry.Instance.GetInstanceMember(pv, memberName);
-                if (dispatched != null) return dispatched;
-            }
-        }
-
-        // Final fallback: inherited Object.prototype methods (see the RV
-        // overload for rationale). Excluded for null-prototype objects.
-        if (!simpleObj.IsNullPrototype
-            && SharpTSObjectPrototype.Instance.GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
-            return protoMethod.BindTo(simpleObj);
-
-        return SharpTSUndefined.Instance;
-    }
+    private object? EvaluateGetOnRecord(SharpTSObject simpleObj, string memberName) =>
+        EvaluateGetOnRecordRV(simpleObj, memberName).ToObject();
 
     /// <summary>
-    /// Evaluates property access on a record/object literal, returning RuntimeValue directly.
-    /// Walks __proto__ on miss so constructor-function prototype methods are reachable
-    /// (see <see cref="EvaluateGetOnRecord"/> for full rationale).
+    /// Evaluates property access on a record/object literal, walking the __proto__ chain when the
+    /// property is not an own property (JS spec: property access traverses the prototype chain
+    /// until a match or null). The constructor-function pattern relies on this so methods assigned
+    /// via `Foo.prototype.x = ...` are reachable on `new Foo()` instances — Lodash's MapCache
+    /// (lodash.js ~2177) does `this.clear()` in its ctor where `clear` lives on
+    /// `MapCache.prototype`; without the walk it resolves to undefined.
     /// </summary>
     private RuntimeValue EvaluateGetOnRecordRV(SharpTSObject simpleObj, string memberName)
     {
