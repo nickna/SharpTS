@@ -519,10 +519,17 @@ public partial class Interpreter
     /// methods read flags / lastIndex / exec / unicode / global via Get
     /// so user-installed getters fire and throw upstream).
     /// </summary>
+    // Synthetic Get nodes depend only on the property name and are immutable records the
+    // evaluator never keys by identity, so they are shared process-wide instead of allocating
+    // a Token + Expr.Get per internal Get() (the RegExp protocol methods call this per
+    // flags/lastIndex/exec read). Bounded by the set of names spec algorithms read.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Expr.Get> _syntheticGets =
+        new(StringComparer.Ordinal);
+
     internal object? GetProperty(object? obj, string name)
     {
-        var syntheticName = new Token(TokenType.IDENTIFIER, name, null, 0);
-        var syntheticGet = new Expr.Get(null!, syntheticName, Optional: false);
+        var syntheticGet = _syntheticGets.GetOrAdd(name, static n =>
+            new Expr.Get(null!, new Token(TokenType.IDENTIFIER, n, null, 0), Optional: false));
         return EvaluateGetOnObject(syntheticGet, obj).ToObject();
     }
 

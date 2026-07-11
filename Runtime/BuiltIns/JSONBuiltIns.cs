@@ -503,10 +503,25 @@ public static class JSONBuiltIns
         }
     }
 
+    // Per-thread memo of "indentStr repeated depth times". One pretty-print walk calls
+    // GetIndent at every nested node with the same step string and small depths, so the
+    // previous fresh Concat per node dominated pretty-print allocations. Reset when the
+    // step string changes; bounded by the deepest nesting seen on the thread.
+    [ThreadStatic] private static List<string>? _indentCache;
+    [ThreadStatic] private static string? _indentCacheStep;
+
     private static string GetIndent(string indentStr, int depth)
     {
-        // Optimization: Cache small indent strings? 
-        // For now, this is acceptable as it's only for pretty printing.
-        return string.Concat(Enumerable.Repeat(indentStr, depth));
+        if (depth == 0 || indentStr.Length == 0) return string.Empty;
+
+        if (_indentCache == null || _indentCacheStep != indentStr)
+        {
+            _indentCacheStep = indentStr;
+            _indentCache = [string.Empty];
+        }
+
+        while (_indentCache.Count <= depth)
+            _indentCache.Add(_indentCache[^1] + indentStr);
+        return _indentCache[depth];
     }
 }
