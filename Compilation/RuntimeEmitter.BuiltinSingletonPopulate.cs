@@ -69,32 +69,9 @@ public partial class RuntimeEmitter
         var getMethodFromHandle = _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
             _types.RuntimeMethodHandle, _types.RuntimeTypeHandle);
 
-        // Idempotent: cctor calls this once, but a future static-init reordering
-        // shouldn't double-fill.
-        var doFillLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, singletonField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, doFillLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(doFillLabel);
+        EmitPrototypePopulateGuard(il, singletonField);
 
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        void InstallNonEnumerable(string jsName, System.Action emitValue)
-        {
-            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
-            il.Emit(OpCodes.Stloc, descLocal);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Ldsfld, singletonField);
-            il.Emit(OpCodes.Ldstr, jsName);
-            il.Emit(OpCodes.Ldloc, descLocal);
-            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-            il.Emit(OpCodes.Pop);
-        }
 
         var fnLocal = il.DeclareLocal(_types.Object);
         foreach (var (jsName, backing, jsLength) in methods)
@@ -117,7 +94,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Callvirt, setItem);
-            InstallNonEnumerable(jsName, () => il.Emit(OpCodes.Ldloc, fnLocal));
+            EmitInstallNonEnumerable(il, runtime, singletonField, descLocal, jsName,
+                () => il.Emit(OpCodes.Ldloc, fnLocal));
         }
 
         il.Emit(OpCodes.Ret);
