@@ -489,6 +489,20 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(allStatements);
 
     // Compilation
+    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs,
+        compiler => compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo));
+}
+
+/// <summary>
+/// Shared EXE/DLL emission tail for both compile drivers. Constructs the ILCompiler, runs the
+/// supplied compile step, then saves, verifies (--verify), bundles into a single-file EXE (Exe
+/// target) or writes the runtimeconfig (DLL target), and co-locates SharpTS.dll / external
+/// references when the compilation soft-depends on them. <paramref name="compileBody"/> receives
+/// the configured compiler and performs the one step that differs between the drivers
+/// (whole-module-graph vs single-file compile).
+/// </summary>
+static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, Action<ILCompiler> compileBody)
+{
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
 
     if (target == OutputTarget.Exe)
@@ -500,7 +514,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
             // Compile to DLL format (will be bundled into EXE)
             ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
             compiler.SetDecoratorMode(decoratorMode);
-            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compileBody(compiler);
             compiler.Save(tempDllPath);
 
             // Run IL verification on the DLL if requested
@@ -544,7 +558,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         // Standard DLL output
         ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
         compiler.SetDecoratorMode(decoratorMode);
-        compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+        compileBody(compiler);
         compiler.Save(outputPath);
 
         GenerateRuntimeConfig(outputPath);
@@ -598,78 +612,8 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
 
     // Compilation Phase
-    string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-
-    if (target == OutputTarget.Exe)
-    {
-        // For EXE output, first compile to a temp DLL, then bundle into single-file EXE
-        var tempDllPath = Path.Combine(Path.GetTempPath(), $"{assemblyName}_{Guid.NewGuid():N}.dll");
-        try
-        {
-            // Compile to DLL format (will be bundled into EXE)
-            ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
-            compiler.SetDecoratorMode(decoratorMode);
-            compiler.Compile(statements, typeMap, deadCodeInfo);
-            compiler.Save(tempDllPath);
-
-            // Run IL verification on the DLL if requested
-            if (verifyIL)
-            {
-                VerifyCompiledAssembly(tempDllPath, sdkPath, externalRefs);
-            }
-
-            // Bundle into single-file EXE
-            try
-            {
-                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(tempDllPath, outputPath, assemblyName, bundlerMode);
-
-                if (!outputOptions.QuietMode)
-                {
-                    Console.WriteLine($"Compiled to {outputPath} (using {bundleResult.TechniqueDescription})");
-                }
-
-                // Co-locate SharpTS.dll next to the EXE when the program uses a feature that
-                // late-binds into the SharpTS runtime (eval, Proxy, Intl, vm, dns, @DotNetType
-                // dynamic events). Honors --standalone. Pure programs stay a single file.
-                CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
-                CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
-            }
-            catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
-            {
-                var bundlerName = bundlerMode == BundlerMode.Sdk ? "SDK" : "built-in";
-                Console.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
-                Console.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
-                Environment.Exit(1);
-            }
-        }
-        finally
-        {
-            // Clean up temp DLL
-            try { File.Delete(tempDllPath); } catch { }
-        }
-    }
-    else
-    {
-        // Standard DLL output
-        ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
-        compiler.SetDecoratorMode(decoratorMode);
-        compiler.Compile(statements, typeMap, deadCodeInfo);
-        compiler.Save(outputPath);
-
-        GenerateRuntimeConfig(outputPath);
-        CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
-        CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
-        if (!outputOptions.QuietMode)
-        {
-            Console.WriteLine($"Compiled to {outputPath}");
-        }
-
-        // Run IL verification if requested
-        if (verifyIL)
-        {
-            VerifyCompiledAssembly(outputPath, sdkPath, externalRefs);
-        }
-    }
+    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs,
+        compiler => compiler.Compile(statements, typeMap, deadCodeInfo));
 }
 
 /// <summary>
