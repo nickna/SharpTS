@@ -9,11 +9,8 @@ public partial class AsyncMoveNextEmitter
 
     // Per-binding storage names for block-scoped let/const shadows (#766), shared with the analyzer via
     // the analysis. Empty for the common no-shadow case (and for analyses built without the renamer).
-    private static readonly IReadOnlyDictionary<object, string> NoRenames = new Dictionary<object, string>();
-    private IReadOnlyDictionary<object, string> BlockScopeRenames => _analysis.BlockScopeRenames ?? NoRenames;
-
-    private static Token RenameToken(Token original, string lexeme) =>
-        new(original.Type, lexeme, original.Literal, original.Line, original.Start);
+    // The rename-then-delegate operator overrides that consume this live on StateMachineExitRoutingEmitter.
+    protected override IReadOnlyDictionary<object, string> BlockScopeRenames => _analysis.BlockScopeRenames ?? NoRenames;
 
     /// <summary>
     /// Checks whether a variable is a captured function local with a function DC field available.
@@ -185,44 +182,6 @@ public partial class AsyncMoveNextEmitter
         base.EmitStoreVariable(name);
     }
 
-    // Const declarations, compound/logical assignment, and increment/decrement reach the variable
-    // through the operator node's name token (or the increment operand). Rewriting that token to the
-    // shadowing binding's storage name before delegating to the base routes both the read and the
-    // write to the right field/local (#766). A renamed binding is never a DC/captured name, so the
-    // base path (which re-enters EmitVariable / EmitStoreVariable) resolves it as a plain slot.
-
-    protected override void EmitConstDeclaration(Stmt.Const c)
-    {
-        if (BlockScopeRenames.TryGetValue(c, out var renamed))
-            c = c with { Name = RenameToken(c.Name, renamed) };
-        base.EmitConstDeclaration(c);
-    }
-
-    protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
-    {
-        if (BlockScopeRenames.TryGetValue(ca, out var renamed))
-            ca = ca with { Name = RenameToken(ca.Name, renamed) };
-        base.EmitCompoundAssign(ca);
-    }
-
-    protected override void EmitLogicalAssign(Expr.LogicalAssign la)
-    {
-        if (BlockScopeRenames.TryGetValue(la, out var renamed))
-            la = la with { Name = RenameToken(la.Name, renamed) };
-        base.EmitLogicalAssign(la);
-    }
-
-    protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
-    {
-        if (pi.Operand is Expr.Variable v && BlockScopeRenames.TryGetValue(v, out var renamed))
-            pi = pi with { Operand = v with { Name = RenameToken(v.Name, renamed) } };
-        base.EmitPrefixIncrement(pi);
-    }
-
-    protected override void EmitPostfixIncrement(Expr.PostfixIncrement poi)
-    {
-        if (poi.Operand is Expr.Variable v && BlockScopeRenames.TryGetValue(v, out var renamed))
-            poi = poi with { Operand = v with { Name = RenameToken(v.Name, renamed) } };
-        base.EmitPostfixIncrement(poi);
-    }
+    // The rename-then-delegate overrides for const declarations, compound/logical assignment, and
+    // increment/decrement live on StateMachineExitRoutingEmitter (shared with the iterator family).
 }

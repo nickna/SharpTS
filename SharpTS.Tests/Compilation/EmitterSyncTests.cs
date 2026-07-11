@@ -43,6 +43,14 @@ public class EmitterSyncTests
             "EmitBreak",            // Route a break leaving a try through its enclosing finally(s)
             "EmitContinue",         // Route a continue leaving a try through its enclosing finally(s)
             "EmitBranchToLabel",    // #554/#727: Leave instead of Br when inside a real IL exception block
+            // --- #711/#766: a nested-block let/const that shadows an enclosing binding gets its own
+            //     storage; these overrides retoken the operator node so the read/write land on the
+            //     shadow's slot. Byte-identical across all four state machines, so they live here. ---
+            "EmitConstDeclaration", // Route a shadowing const declaration to its own slot
+            "EmitCompoundAssign",   // Route a shadowing compound assignment to its own slot
+            "EmitLogicalAssign",    // Route a shadowing logical assignment to its own slot
+            "EmitPrefixIncrement",  // Route a shadowing prefix ++/-- to its own slot
+            "EmitPostfixIncrement", // Route a shadowing postfix ++/-- to its own slot
         },
         [typeof(AsyncFunctionMoveNextEmitter)] = new()
         {
@@ -67,11 +75,8 @@ public class EmitterSyncTests
             "EmitAssign",           // Write a captured-and-mutated local through the function DC (+ #711/#766 rename)
             "EmitStoreVariable",    // Store side of compound/logical/increment through the function DC
             "EmitVarDeclaration",   // Initialize a captured-and-mutated local into the function DC (+ #711/#766 rename)
-            "EmitConstDeclaration", // Route a shadowing const declaration to its own slot
-            "EmitCompoundAssign",   // Route a shadowing compound assignment to its own slot
-            "EmitLogicalAssign",    // Route a shadowing logical assignment to its own slot
-            "EmitPrefixIncrement",  // Route a shadowing prefix ++/-- to its own slot
-            "EmitPostfixIncrement", // Route a shadowing postfix ++/-- to its own slot
+            // (EmitConstDeclaration/EmitCompoundAssign/EmitLogicalAssign/EmitPrefix-/PostfixIncrement
+            //  are inherited from StateMachineExitRoutingEmitter — see that entry above.)
         },
         [typeof(AsyncMoveNextEmitter)] = new()
         {
@@ -105,14 +110,8 @@ public class EmitterSyncTests
             "EmitAssign",           // Route captured function locals through function DC (+ #766 rename)
             "EmitStoreVariable",    // Route captured function locals through function DC
             "EmitVarDeclaration",   // Route captured function locals through function DC (+ #766 rename)
-            // --- #766: a nested-block let/const that shadows an enclosing binding gets its own storage;
-            // these overrides retoken the operator node so the read/write land on the shadow's own
-            // field/local instead of the outer binding's hoisted field (async analog of #711) ---
-            "EmitConstDeclaration", // #766: route a shadowing const declaration to its own slot
-            "EmitCompoundAssign",   // #766: route a shadowing compound assignment to its own slot
-            "EmitLogicalAssign",    // #766: route a shadowing logical assignment to its own slot
-            "EmitPrefixIncrement",  // #766: route a shadowing prefix ++/-- to its own slot
-            "EmitPostfixIncrement", // #766: route a shadowing postfix ++/-- to its own slot
+            // (The #766 shadowing-operator overrides are inherited from StateMachineExitRoutingEmitter
+            //  — see that entry above.)
         },
         [typeof(AsyncArrowMoveNextEmitter)] = new()
         {
@@ -142,15 +141,8 @@ public class EmitterSyncTests
             // (EmitAwait is inherited from AsyncFunctionMoveNextEmitter since #1122 — see above.)
             "EmitArrowFunction",    // Nested async arrows in state machine
             "EmitExpressionAsDouble", // Literal optimization
-            // --- #766: a nested-block let/const that shadows an enclosing binding gets its own storage;
-            // these overrides retoken the operator node so the read/write land on the shadow's own
-            // field/local instead of the outer binding's hoisted field (async analog of #711).
-            // (EmitVariable/EmitAssign/EmitVarDeclaration above are also rename-aware now.) ---
-            "EmitConstDeclaration", // #766: route a shadowing const declaration to its own slot
-            "EmitCompoundAssign",   // #766: route a shadowing compound assignment to its own slot
-            "EmitLogicalAssign",    // #766: route a shadowing logical assignment to its own slot
-            "EmitPrefixIncrement",  // #766: route a shadowing prefix ++/-- to its own slot
-            "EmitPostfixIncrement", // #766: route a shadowing postfix ++/-- to its own slot
+            // (The #766 shadowing-operator overrides are inherited from StateMachineExitRoutingEmitter
+            //  — see that entry above. EmitVariable/EmitAssign/EmitVarDeclaration above are rename-aware.)
         },
         [typeof(GeneratorMoveNextEmitter)] = new()
         {
