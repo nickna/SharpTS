@@ -251,58 +251,23 @@ public static class StructuredClone
 
         if (source.IsShared)
         {
-            // For SharedArrayBuffer-backed views, create new view over same buffer
+            // For SharedArrayBuffer-backed views, create new view over same buffer.
+            // source's own CreateViewFrom picks the concrete element type — the subclass set is
+            // the single source of the typeName→constructor mapping (a new element type can no
+            // longer silently miss the clone path).
             var sharedBuffer = source.SharedBuffer!;
-            result = CreateTypedArrayView(source.TypeName, sharedBuffer, source.ByteOffset, source.Length);
+            result = source.CreateViewFrom(sharedBuffer, source.ByteOffset, source.Length);
         }
         else
         {
             // For regular buffer, copy the data
             var newBuffer = new byte[source.ByteLength];
             Array.Copy(source.Buffer, source.ByteOffset, newBuffer, 0, source.ByteLength);
-            result = CreateTypedArrayFromBuffer(source.TypeName, newBuffer, source.Length);
+            result = source.CreateViewFrom(newBuffer, 0, source.Length);
         }
 
         cloned[source] = result;
         return result;
-    }
-
-    private static SharpTSTypedArray CreateTypedArrayView(string typeName, SharpTSSharedArrayBuffer buffer, int byteOffset, int length)
-    {
-        return typeName switch
-        {
-            "Int8Array" => new SharpTSInt8Array(buffer, byteOffset, length),
-            "Uint8Array" => new SharpTSUint8Array(buffer, byteOffset, length),
-            "Uint8ClampedArray" => new SharpTSUint8ClampedArray(buffer, byteOffset, length),
-            "Int16Array" => new SharpTSInt16Array(buffer, byteOffset, length),
-            "Uint16Array" => new SharpTSUint16Array(buffer, byteOffset, length),
-            "Int32Array" => new SharpTSInt32Array(buffer, byteOffset, length),
-            "Uint32Array" => new SharpTSUint32Array(buffer, byteOffset, length),
-            "Float32Array" => new SharpTSFloat32Array(buffer, byteOffset, length),
-            "Float64Array" => new SharpTSFloat64Array(buffer, byteOffset, length),
-            "BigInt64Array" => new SharpTSBigInt64Array(buffer, byteOffset, length),
-            "BigUint64Array" => new SharpTSBigUint64Array(buffer, byteOffset, length),
-            _ => throw new DataCloneError($"Unknown TypedArray type: {typeName}")
-        };
-    }
-
-    private static SharpTSTypedArray CreateTypedArrayFromBuffer(string typeName, byte[] buffer, int length)
-    {
-        return typeName switch
-        {
-            "Int8Array" => new SharpTSInt8Array(buffer, 0, length),
-            "Uint8Array" => new SharpTSUint8Array(buffer, 0, length),
-            "Uint8ClampedArray" => new SharpTSUint8ClampedArray(buffer, 0, length),
-            "Int16Array" => new SharpTSInt16Array(buffer, 0, length),
-            "Uint16Array" => new SharpTSUint16Array(buffer, 0, length),
-            "Int32Array" => new SharpTSInt32Array(buffer, 0, length),
-            "Uint32Array" => new SharpTSUint32Array(buffer, 0, length),
-            "Float32Array" => new SharpTSFloat32Array(buffer, 0, length),
-            "Float64Array" => new SharpTSFloat64Array(buffer, 0, length),
-            "BigInt64Array" => new SharpTSBigInt64Array(buffer, 0, length),
-            "BigUint64Array" => new SharpTSBigUint64Array(buffer, 0, length),
-            _ => throw new DataCloneError($"Unknown TypedArray type: {typeName}")
-        };
     }
 
     private static SharpTSMessagePort TransferMessagePort(SharpTSMessagePort port)
