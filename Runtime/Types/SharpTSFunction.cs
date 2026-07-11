@@ -217,7 +217,11 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         // Bind the JS-spec `arguments` array-like to the current call's args.
         // Arrow functions do NOT bind `arguments` — they inherit from the
         // enclosing non-arrow function (handled by SharpTSArrowFunction).
-        environment.Define("arguments", new SharpTSArray(arguments));
+        // Materialized only when the body can observe it (ArgumentsUsage scan).
+        if (ArgumentsUsage.UsesArguments(_declaration))
+        {
+            environment.Define("arguments", new SharpTSArray(arguments));
+        }
 
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
@@ -330,10 +334,14 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
 
         ParameterBinder.BindRV(_declaration.Parameters, arguments, environment, interpreter);
         // See Call for the JS-spec rationale; materialize the args span into a
-        // SharpTSArray so `arguments[i]` and `arguments.length` work.
-        var argsList = new List<object?>(arguments.Length);
-        for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
-        environment.Define("arguments", new SharpTSArray(argsList));
+        // SharpTSArray so `arguments[i]` and `arguments.length` work — but only
+        // when the body can observe it (ArgumentsUsage scan).
+        if (ArgumentsUsage.UsesArguments(_declaration))
+        {
+            var argsList = new List<object?>(arguments.Length);
+            for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
+            environment.Define("arguments", new SharpTSArray(argsList));
+        }
 
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
@@ -548,7 +556,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         // for lodash-style wrappers: `function outer() { return function() {
         // return func.apply(this, arguments); }; }` — the returned function is a
         // function expression, not an arrow, and must see its own `arguments`.
-        if (HasOwnThis)
+        // Materialized only when the body can observe it (ArgumentsUsage scan).
+        if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
         {
             environment.Define("arguments", new SharpTSArray(new List<object?>(arguments)));
         }
@@ -618,7 +627,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         }
 
         // Function expressions (HasOwnThis) bind their own `arguments`; true arrows do not.
-        if (HasOwnThis)
+        // Materialized only when the body can observe it (ArgumentsUsage scan).
+        if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
         {
             var argsList = new List<object?>(arguments.Length);
             for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
