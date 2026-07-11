@@ -130,7 +130,7 @@ public partial class TypeChecker
     internal TypeInfo VisitLiteral(Expr.Literal expr) => GetLiteralType(expr.Value);
     internal TypeInfo VisitVariable(Expr.Variable expr) => LookupVariable(expr.Name);
     internal TypeInfo VisitGrouping(Expr.Grouping expr) => CheckExpr(expr.Expression);
-    internal TypeInfo VisitRegexLiteral(Expr.RegexLiteral expr) => new TypeInfo.RegExp();
+    internal TypeInfo VisitRegexLiteral(Expr.RegexLiteral expr) => TypeInfo.RegExp.Shared;
     internal TypeInfo VisitAwait(Expr.Await expr) => CheckAwait(expr);
     internal TypeInfo VisitDynamicImport(Expr.DynamicImport expr) => CheckDynamicImport(expr);
     internal TypeInfo VisitImportMeta(Expr.ImportMeta expr) => CheckImportMeta(expr);
@@ -231,9 +231,9 @@ public partial class TypeChecker
         return new TypeInfo.Record(
             new Dictionary<string, TypeInfo>
             {
-                ["url"] = new TypeInfo.String(),
-                ["dirname"] = new TypeInfo.String(),
-                ["filename"] = new TypeInfo.String()
+                ["url"] = TypeInfo.String.Shared,
+                ["dirname"] = TypeInfo.String.Shared,
+                ["filename"] = TypeInfo.String.Shared
             }.ToFrozenDictionary()
         );
     }
@@ -285,7 +285,7 @@ public partial class TypeChecker
         }
 
         // Variable paths or unresolved modules: Promise<any>
-        return new TypeInfo.Promise(new TypeInfo.Any());
+        return new TypeInfo.Promise(TypeInfo.Any.Shared);
     }
 
     private TypeInfo CheckYield(Expr.Yield yieldExpr)
@@ -316,9 +316,9 @@ public partial class TypeChecker
         }
 
         // Bare `yield` yields `undefined`; it contributes `undefined` to the inferred yield type (#548).
-        _inferredYieldTypes?.Add(new TypeInfo.Undefined());
+        _inferredYieldTypes?.Add(TypeInfo.Undefined.Shared);
         // The yield EXPRESSION still evaluates to the (modeled) void type for an operand-less yield.
-        return new TypeInfo.Void();
+        return TypeInfo.Void.Shared;
     }
 
     /// <summary>
@@ -333,9 +333,9 @@ public partial class TypeChecker
         TypeInfo.Iterable iterable => iterable.ElementType,
         TypeInfo.Set set => set.ElementType,
         TypeInfo.Map map => TypeInfo.Tuple.FromTypes([map.KeyType, map.ValueType], 2),  // [K, V] tuples
-        TypeInfo.String => new TypeInfo.String(),  // String yields characters (as strings)
-        TypeInfo.StringLiteral => new TypeInfo.String(),  // String literal also yields characters
-        TypeInfo.Any => new TypeInfo.Any(),
+        TypeInfo.String => TypeInfo.String.Shared,  // String yields characters (as strings)
+        TypeInfo.StringLiteral => TypeInfo.String.Shared,  // String literal also yields characters
+        TypeInfo.Any => TypeInfo.Any.Shared,
         // A hand-written object exposing [Symbol.iterator] is iterable structurally (#485); dedicated
         // records are handled above, so only genuine structural objects reach here.
         _ when TryGetStructuralIterableElement(type, out var structuralElem) => structuralElem,
@@ -370,14 +370,14 @@ public partial class TypeChecker
                 return true;
             case TypeInfo.String:
             case TypeInfo.StringLiteral:
-                elementType = new TypeInfo.String();
+                elementType = TypeInfo.String.Shared;
                 return true;
             case TypeInfo.Any:
-                elementType = new TypeInfo.Any();
+                elementType = TypeInfo.Any.Shared;
                 return true;
             case TypeInfo.TypedArray typed:
                 elementType = typed.ElementType.StartsWith("Big")
-                    ? (TypeInfo)new TypeInfo.BigInt()
+                    ? (TypeInfo)TypeInfo.BigInt.Shared
                     : new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
                 return true;
             default:
@@ -556,9 +556,9 @@ public partial class TypeChecker
             double d => new TypeInfo.NumberLiteral(d),
             int i => new TypeInfo.NumberLiteral(i),
             bool b => new TypeInfo.BooleanLiteral(b),
-            null => new TypeInfo.Null(),
-            Runtime.Types.SharpTSUndefined => new TypeInfo.Undefined(),
-            _ => new TypeInfo.Any()
+            null => TypeInfo.Null.Shared,
+            Runtime.Types.SharpTSUndefined => TypeInfo.Undefined.Shared,
+            _ => TypeInfo.Any.Shared
         };
     }
 
@@ -581,7 +581,7 @@ public partial class TypeChecker
             }
         }
         // Template literals always result in string
-        return new TypeInfo.String();
+        return TypeInfo.String.Shared;
     }
 
     private TypeInfo CheckTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged)
@@ -598,8 +598,8 @@ public partial class TypeChecker
             TypeInfo.Function f => f.ReturnType,
             TypeInfo.OverloadedFunction of => of.Implementation.ReturnType,
             TypeInfo.GenericFunction gf => gf.ReturnType,
-            TypeInfo.Any => new TypeInfo.Any(),
-            TypeInfo.Class => new TypeInfo.Any(), // constructors are callable but shouldn't be used as tag
+            TypeInfo.Any => TypeInfo.Any.Shared,
+            TypeInfo.Class => TypeInfo.Any.Shared, // constructors are callable but shouldn't be used as tag
             _ => throw new TypeCheckException(
                 $"Type Error: Tagged template tag must be callable, got '{tagType}'.", tsCode: "TS2349")
         };
@@ -701,7 +701,7 @@ public partial class TypeChecker
                 else
                 {
                     // No return type annotation - use Any for now (will be inferred on pass 2)
-                    fields[name] = new TypeInfo.Any();
+                    fields[name] = TypeInfo.Any.Shared;
                 }
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
@@ -724,7 +724,7 @@ public partial class TypeChecker
                 else if (!fields.ContainsKey(name))
                 {
                     // No type annotation - use Any for now
-                    fields[name] = new TypeInfo.Any();
+                    fields[name] = TypeInfo.Any.Shared;
                 }
             }
             else
@@ -949,10 +949,10 @@ public partial class TypeChecker
     {
         return type switch
         {
-            TypeInfo.NumberLiteral => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-            TypeInfo.StringLiteral => new TypeInfo.String(),
-            TypeInfo.BooleanLiteral => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-            TypeInfo.BigIntLiteral => new TypeInfo.BigInt(),
+            TypeInfo.NumberLiteral => TypeInfo.Primitive.Number,
+            TypeInfo.StringLiteral => TypeInfo.String.Shared,
+            TypeInfo.BooleanLiteral => TypeInfo.Primitive.Boolean,
+            TypeInfo.BigIntLiteral => TypeInfo.BigInt.Shared,
             TypeInfo.Union u => new TypeInfo.Union(u.FlattenedTypes.Select(WidenLiteralType).ToList()),
             // `as const` (and other readonly) arrays/tuples/records keep their literal element/member
             // types — readonly literal types are never widened (#493). Without this, an `as const`
@@ -1123,7 +1123,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckArray(Expr.ArrayLiteral array)
     {
-        if (array.Elements.Count == 0) return new TypeInfo.Array(new TypeInfo.Any()); // Empty array is any[]? or generic?
+        if (array.Elements.Count == 0) return new TypeInfo.Array(TypeInfo.Any.Shared); // Empty array is any[]? or generic?
 
         List<TypeInfo> elementTypes = [];
         foreach (var element in array.Elements)
@@ -1404,7 +1404,7 @@ public partial class TypeChecker
             // TypeScript infers 'this' as the containing object type - use _pendingObjectThisType if available
             if (arrow.HasOwnThis && thisType == null)
             {
-                thisType = _pendingObjectThisType ?? new TypeInfo.Any();
+                thisType = _pendingObjectThisType ?? TypeInfo.Any.Shared;
             }
 
             // A default value may reference any PRECEDING parameter (`(a, b = a * 2)`), so each
@@ -1433,7 +1433,7 @@ public partial class TypeChecker
                 else
                 {
                     // No type annotation and no expected type - use Any
-                    paramType = new TypeInfo.Any();
+                    paramType = TypeInfo.Any.Shared;
                 }
                 paramTypes.Add(paramType);
 
@@ -1484,7 +1484,7 @@ public partial class TypeChecker
             }
             else
             {
-                returnType = new TypeInfo.Inferred();
+                returnType = TypeInfo.Inferred.Shared;
             }
         }
 
@@ -1534,7 +1534,7 @@ public partial class TypeChecker
         if (inferringArrowReturn)
         {
             _inferredReturnTypes = new List<TypeInfo>();
-            _currentFunctionReturnType = new TypeInfo.Inferred();
+            _currentFunctionReturnType = TypeInfo.Inferred.Shared;
         }
         else
         {
@@ -1625,7 +1625,7 @@ public partial class TypeChecker
                     }
                     else if (collected.Count == 0)
                     {
-                        returnType = new TypeInfo.Void();
+                        returnType = TypeInfo.Void.Shared;
                     }
                     else
                     {
@@ -1687,7 +1687,7 @@ public partial class TypeChecker
         {
             // `Any` covers the var-hoisting placeholder and explicit any-typed vars — neither participates.
             if (declaredType is TypeInfo.Any) return declaredType;
-            var redeclaredType = ResolveAnnotation(assign.RedeclarationTypeAnnotation, assign.RedeclarationTypeAnnotationNode) ?? new TypeInfo.Any();
+            var redeclaredType = ResolveAnnotation(assign.RedeclarationTypeAnnotation, assign.RedeclarationTypeAnnotationNode) ?? TypeInfo.Any.Shared;
             if (!TypeInfoEqualityComparer.Instance.Equals(declaredType, redeclaredType))
             {
                 throw new TypeCheckException(
@@ -1781,15 +1781,15 @@ public partial class TypeChecker
 
     private TypeInfo LookupVariable(Token name)
     {
-        if (name.Lexeme == "console") return new TypeInfo.Any();
-        if (name.Lexeme == "Math") return new TypeInfo.Any(); // Math is a special global object
-        if (name.Lexeme == "Object") return new TypeInfo.Any(); // Object is a special global object
-        if (name.Lexeme == "Array") return new TypeInfo.Any(); // Array is a special global object
-        if (name.Lexeme == "JSON") return new TypeInfo.Any(); // JSON is a special global object
-        if (name.Lexeme == "Promise") return new TypeInfo.Any(); // Promise is a special global object
-        if (name.Lexeme == "Number") return new TypeInfo.Any(); // Number is a special global object
-        if (name.Lexeme == "String") return new TypeInfo.Any(); // String is a special global object
-        if (name.Lexeme == "Boolean") return new TypeInfo.Any(); // Boolean is a special global object
+        if (name.Lexeme == "console") return TypeInfo.Any.Shared;
+        if (name.Lexeme == "Math") return TypeInfo.Any.Shared; // Math is a special global object
+        if (name.Lexeme == "Object") return TypeInfo.Any.Shared; // Object is a special global object
+        if (name.Lexeme == "Array") return TypeInfo.Any.Shared; // Array is a special global object
+        if (name.Lexeme == "JSON") return TypeInfo.Any.Shared; // JSON is a special global object
+        if (name.Lexeme == "Promise") return TypeInfo.Any.Shared; // Promise is a special global object
+        if (name.Lexeme == "Number") return TypeInfo.Any.Shared; // Number is a special global object
+        if (name.Lexeme == "String") return TypeInfo.Any.Shared; // String is a special global object
+        if (name.Lexeme == "Boolean") return TypeInfo.Any.Shared; // Boolean is a special global object
         if (name.Lexeme == "Symbol")
         {
             // tsc lets user code augment the global `SymbolConstructor` interface via declaration
@@ -1802,38 +1802,38 @@ public partial class TypeChecker
                 return userSymbolCtor;
             return WellKnownSymbolTypes.SymbolConstructor; // tsc's SymbolConstructor shape
         }
-        if (name.Lexeme == "Function") return new TypeInfo.Any(); // Function is the Function constructor
-        if (name.Lexeme == "Proxy") return new TypeInfo.Any(); // Proxy is a special global object
-        if (name.Lexeme == "Buffer") return new TypeInfo.Any(); // Buffer is a global constructor for binary data
-        if (name.Lexeme == "parseInt") return new TypeInfo.Any(); // Global parseInt function
-        if (name.Lexeme == "parseFloat") return new TypeInfo.Any(); // Global parseFloat function
-        if (name.Lexeme == "isNaN") return new TypeInfo.Any(); // Global isNaN function
-        if (name.Lexeme == "isFinite") return new TypeInfo.Any(); // Global isFinite function
-        if (name.Lexeme == "eval") return new TypeInfo.Any(); // Global eval(): (s: string) => any
-        if (name.Lexeme == "globalThis") return new TypeInfo.Any(); // globalThis ES2020
-        if (name.Lexeme == "fetch") return new TypeInfo.Any(); // fetch() global function
-        if (name.Lexeme == "setTimeout") return new TypeInfo.Any(); // setTimeout() global function
-        if (name.Lexeme == "setInterval") return new TypeInfo.Any(); // setInterval() global function
-        if (name.Lexeme == "clearTimeout") return new TypeInfo.Any(); // clearTimeout() global function
-        if (name.Lexeme == "clearInterval") return new TypeInfo.Any(); // clearInterval() global function
-        if (name.Lexeme == "queueMicrotask") return new TypeInfo.Any(); // queueMicrotask() global function
-        if (name.Lexeme == "encodeURIComponent") return new TypeInfo.Any(); // URI encoding global
-        if (name.Lexeme == "decodeURIComponent") return new TypeInfo.Any(); // URI decoding global
+        if (name.Lexeme == "Function") return TypeInfo.Any.Shared; // Function is the Function constructor
+        if (name.Lexeme == "Proxy") return TypeInfo.Any.Shared; // Proxy is a special global object
+        if (name.Lexeme == "Buffer") return TypeInfo.Any.Shared; // Buffer is a global constructor for binary data
+        if (name.Lexeme == "parseInt") return TypeInfo.Any.Shared; // Global parseInt function
+        if (name.Lexeme == "parseFloat") return TypeInfo.Any.Shared; // Global parseFloat function
+        if (name.Lexeme == "isNaN") return TypeInfo.Any.Shared; // Global isNaN function
+        if (name.Lexeme == "isFinite") return TypeInfo.Any.Shared; // Global isFinite function
+        if (name.Lexeme == "eval") return TypeInfo.Any.Shared; // Global eval(): (s: string) => any
+        if (name.Lexeme == "globalThis") return TypeInfo.Any.Shared; // globalThis ES2020
+        if (name.Lexeme == "fetch") return TypeInfo.Any.Shared; // fetch() global function
+        if (name.Lexeme == "setTimeout") return TypeInfo.Any.Shared; // setTimeout() global function
+        if (name.Lexeme == "setInterval") return TypeInfo.Any.Shared; // setInterval() global function
+        if (name.Lexeme == "clearTimeout") return TypeInfo.Any.Shared; // clearTimeout() global function
+        if (name.Lexeme == "clearInterval") return TypeInfo.Any.Shared; // clearInterval() global function
+        if (name.Lexeme == "queueMicrotask") return TypeInfo.Any.Shared; // queueMicrotask() global function
+        if (name.Lexeme == "encodeURIComponent") return TypeInfo.Any.Shared; // URI encoding global
+        if (name.Lexeme == "decodeURIComponent") return TypeInfo.Any.Shared; // URI decoding global
         // Base64 globals (also exported by the 'buffer' module): (data: string) => string
         if (name.Lexeme == "atob" || name.Lexeme == "btoa")
-            return new TypeInfo.Function([new TypeInfo.String()], new TypeInfo.String());
-        if (name.Lexeme == "undefined") return new TypeInfo.Undefined(); // Global undefined
-        if (name.Lexeme == "NaN") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global NaN
-        if (name.Lexeme == "Infinity") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global Infinity
-        if (name.Lexeme == "__dirname") return new TypeInfo.String(); // Node.js __dirname
-        if (name.Lexeme == "__filename") return new TypeInfo.String(); // Node.js __filename
+            return new TypeInfo.Function([TypeInfo.String.Shared], TypeInfo.String.Shared);
+        if (name.Lexeme == "undefined") return TypeInfo.Undefined.Shared; // Global undefined
+        if (name.Lexeme == "NaN") return TypeInfo.Primitive.Number; // Global NaN
+        if (name.Lexeme == "Infinity") return TypeInfo.Primitive.Number; // Global Infinity
+        if (name.Lexeme == "__dirname") return TypeInfo.String.Shared; // Node.js __dirname
+        if (name.Lexeme == "__filename") return TypeInfo.String.Shared; // Node.js __filename
         // CommonJS globals — bound by the CJS module wrapper at runtime. Treated as `any` because
         // CJS modules don't carry static type info for module.exports.
-        if (name.Lexeme == "require") return new TypeInfo.Any();
+        if (name.Lexeme == "require") return TypeInfo.Any.Shared;
         if (_currentModule?.IsCommonJs == true)
         {
             if (name.Lexeme == "module" || name.Lexeme == "exports" || name.Lexeme == "global")
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
         }
         // Worker-scoped globals — only valid inside a worker_threads worker script,
         // where SharpTSWorker.SetupWorkerGlobals binds them at runtime. Gated on
@@ -1841,35 +1841,35 @@ public partial class TypeChecker
         // Node (these are not main-thread globals).
         if (_isWorkerContext && name.Lexeme is "parentPort" or "postMessage"
             or "workerData" or "threadId" or "isMainThread")
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // Worker Threads globals
-        if (name.Lexeme == "structuredClone") return new TypeInfo.Any(); // structuredClone() global function
-        if (name.Lexeme == "SharedArrayBuffer") return new TypeInfo.Any(); // SharedArrayBuffer constructor
-        if (name.Lexeme == "ArrayBuffer") return new TypeInfo.Any(); // ArrayBuffer constructor
-        if (name.Lexeme == "Atomics") return new TypeInfo.Any(); // Atomics static object
-        if (name.Lexeme == "MessageChannel") return new TypeInfo.Any(); // MessageChannel constructor
-        if (name.Lexeme == "DataView") return new TypeInfo.Any(); // DataView constructor
-        if (name.Lexeme == "AbortController") return new TypeInfo.Any(); // AbortController constructor
-        if (name.Lexeme == "AbortSignal") return new TypeInfo.Any(); // AbortSignal static namespace
-        if (name.Lexeme == "Headers") return new TypeInfo.Any(); // Headers constructor
-        if (name.Lexeme == "Request") return new TypeInfo.Any(); // Request constructor
-        if (name.Lexeme == "Response") return new TypeInfo.Any(); // Response constructor/namespace
-        if (name.Lexeme == "Iterator") return new TypeInfo.Any(); // Iterator namespace (ES2025)
-        if (name.Lexeme == "Intl") return new TypeInfo.Any(); // Intl namespace
+        if (name.Lexeme == "structuredClone") return TypeInfo.Any.Shared; // structuredClone() global function
+        if (name.Lexeme == "SharedArrayBuffer") return TypeInfo.Any.Shared; // SharedArrayBuffer constructor
+        if (name.Lexeme == "ArrayBuffer") return TypeInfo.Any.Shared; // ArrayBuffer constructor
+        if (name.Lexeme == "Atomics") return TypeInfo.Any.Shared; // Atomics static object
+        if (name.Lexeme == "MessageChannel") return TypeInfo.Any.Shared; // MessageChannel constructor
+        if (name.Lexeme == "DataView") return TypeInfo.Any.Shared; // DataView constructor
+        if (name.Lexeme == "AbortController") return TypeInfo.Any.Shared; // AbortController constructor
+        if (name.Lexeme == "AbortSignal") return TypeInfo.Any.Shared; // AbortSignal static namespace
+        if (name.Lexeme == "Headers") return TypeInfo.Any.Shared; // Headers constructor
+        if (name.Lexeme == "Request") return TypeInfo.Any.Shared; // Request constructor
+        if (name.Lexeme == "Response") return TypeInfo.Any.Shared; // Response constructor/namespace
+        if (name.Lexeme == "Iterator") return TypeInfo.Any.Shared; // Iterator namespace (ES2025)
+        if (name.Lexeme == "Intl") return TypeInfo.Any.Shared; // Intl namespace
         // URL / URLSearchParams — migrated to stdlib/node/url.ts; no longer
         // implicit globals. Resolved through normal import lookup.
         if (name.Lexeme is "ReadableStream" or "WritableStream" or "TransformStream"
             or "ByteLengthQueuingStrategy" or "CountQueuingStrategy")
-            return new TypeInfo.Any(); // Web Streams constructors
-        if (name.Lexeme is "Blob" or "File") return new TypeInfo.Any(); // Blob/File constructors
+            return TypeInfo.Any.Shared; // Web Streams constructors
+        if (name.Lexeme is "Blob" or "File") return TypeInfo.Any.Shared; // Blob/File constructors
         // TypedArray constructors
         if (name.Lexeme is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
             or "Int16Array" or "Uint16Array" or "Int32Array" or "Uint32Array"
             or "Float32Array" or "Float64Array" or "BigInt64Array" or "BigUint64Array")
-            return new TypeInfo.Any(); // TypedArray constructor
+            return TypeInfo.Any.Shared; // TypedArray constructor
         // Error constructors (Error, TypeError, RangeError, etc.)
         if (BuiltInNames.IsErrorTypeName(name.Lexeme))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // Built-in constructors that can be referenced as variables.
         // Exposing these as Any lets code like `value instanceof Promise`,
         // `new TextEncoder()`, and `typeof Buffer === 'function'` type-check
@@ -1879,14 +1879,14 @@ public partial class TypeChecker
             or "Date" or "RegExp" or "Promise" or "Buffer"
             or "TextEncoder" or "TextDecoder"
             or "FinalizationRegistry" or "Proxy" or "BroadcastChannel")
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // `arguments` is a JS function-scoped array-like, bound at call time by
         // the runtime (SharpTSFunction / ILEmitter's function prologue). The
         // type checker doesn't track function-vs-module context, so we accept
         // it as Any everywhere; runtime throws a ReferenceError if referenced
         // outside a non-arrow function, matching JS semantics.
         if (name.Lexeme == "arguments")
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
 
         var type = _environment.Get(name.Lexeme);
         if (type == null)
@@ -1907,14 +1907,14 @@ public partial class TypeChecker
 
     private TypeInfo GetLiteralType(object? value)
     {
-        if (value is null) return new TypeInfo.Null();
-        if (value is Runtime.Types.SharpTSUndefined) return new TypeInfo.Undefined();
+        if (value is null) return TypeInfo.Null.Shared;
+        if (value is Runtime.Types.SharpTSUndefined) return TypeInfo.Undefined.Shared;
         if (value is int i) return new TypeInfo.NumberLiteral((double)i);
         if (value is double d) return new TypeInfo.NumberLiteral(d);
         if (value is string s) return new TypeInfo.StringLiteral(s);
         if (value is bool b) return new TypeInfo.BooleanLiteral(b);
         if (value is System.Numerics.BigInteger bi) return new TypeInfo.BigIntLiteral(bi);
-        return new TypeInfo.Void();
+        return TypeInfo.Void.Shared;
     }
 
     // Counter for generating unique anonymous class expression names
@@ -1989,7 +1989,7 @@ public partial class TypeChecker
                 );
 
                 TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
-                    ?? new TypeInfo.Inferred();
+                    ?? TypeInfo.Inferred.Shared;
 
                 // Wrap return type for generator/async generator methods (skip when inferring).
                 // An un-annotated generator method stays a plain <inferred> placeholder so the
@@ -2021,7 +2021,7 @@ public partial class TypeChecker
                     continue;
                 var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                     method.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-                TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
+                TypeInfo factoryReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
                 var computedFunc = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
                 if (method.IsStatic)
                     mutableClass.StaticMethods[memberName] = computedFunc;
@@ -2085,7 +2085,7 @@ public partial class TypeChecker
             {
                 string fieldName = field.Name.Lexeme;
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
-                    ?? new TypeInfo.Any();
+                    ?? TypeInfo.Any.Shared;
 
                 if (field.IsStatic)
                     mutableClass.StaticProperties[fieldName] = fieldType;
@@ -2107,14 +2107,14 @@ public partial class TypeChecker
                     {
                         TypeInfo getterRetType = accessor.ReturnType != null
                             ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                            : new TypeInfo.Any();
+                            : TypeInfo.Any.Shared;
                         mutableClass.Getters[propName] = getterRetType;
                     }
                     else
                     {
                         TypeInfo paramType = accessor.SetterParam?.Type != null
                             ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
-                            : new TypeInfo.Any();
+                            : TypeInfo.Any.Shared;
                         mutableClass.Setters[propName] = paramType;
                     }
                 }
@@ -2231,7 +2231,7 @@ public partial class TypeChecker
                     {
                         var (cpt, creq, chr, cpn) = BuildFunctionSignature(
                             method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cr = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
+                        TypeInfo cr = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
                         declaredMethodType = new TypeInfo.Function(cpt, cr, creq, chr, null, cpn);
                     }
                 }
@@ -2270,7 +2270,7 @@ public partial class TypeChecker
                 if (inferringMethodReturn)
                 {
                     _inferredReturnTypes = new List<TypeInfo>();
-                    _currentFunctionReturnType = new TypeInfo.Inferred();
+                    _currentFunctionReturnType = TypeInfo.Inferred.Shared;
                 }
                 else
                 {
@@ -2306,7 +2306,7 @@ public partial class TypeChecker
                         TypeInfo inferredReturn;
                         if (collected.Count == 0)
                         {
-                            inferredReturn = new TypeInfo.Void();
+                            inferredReturn = TypeInfo.Void.Shared;
                         }
                         else
                         {
@@ -2378,7 +2378,7 @@ public partial class TypeChecker
                     }
                     else
                     {
-                        accessorReturnType = new TypeInfo.Void();
+                        accessorReturnType = TypeInfo.Void.Shared;
                         if (accessor.SetterParam != null)
                         {
                             TypeInfo setterParamType = classTypeForBody.Setters[accessor.Name.Lexeme];

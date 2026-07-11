@@ -242,7 +242,7 @@ public partial class TypeChecker
                 {
                     var argTypes = call.Arguments
                         .Select(a => a is Expr.Variable v
-                            ? _environment.Get(v.Name.Lexeme) ?? new TypeInfo.Any()
+                            ? _environment.Get(v.Name.Lexeme) ?? TypeInfo.Any.Shared
                             : CheckExpr(a))
                         .ToList();
                     var typeArgs = InferTypeArguments(predGf, argTypes);
@@ -274,14 +274,14 @@ public partial class TypeChecker
                 .Where(t => t.ToString() != toExclude.ToString())
                 .ToList();
 
-            if (remaining.Count == 0) return new TypeInfo.Never();
+            if (remaining.Count == 0) return TypeInfo.Never.Shared;
             if (remaining.Count == 1) return remaining[0];
             return new TypeInfo.Union(remaining);
         }
 
         // If source equals toExclude, nothing remains
         if (source.ToString() == toExclude.ToString())
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
 
         // Otherwise, the type doesn't change in else branch
         return source;
@@ -302,8 +302,8 @@ public partial class TypeChecker
             TypeInfo? narrowedType = TypeofStringToType(typeStr);
             // Excluded type remains unknown (we don't know what else it could be)
             if (negated)
-                return (varName, new TypeInfo.Unknown(), narrowedType);
-            return (varName, narrowedType, new TypeInfo.Unknown());
+                return (varName, TypeInfo.Unknown.Shared, narrowedType);
+            return (varName, narrowedType, TypeInfo.Unknown.Shared);
         }
 
         // Handle any type narrowing
@@ -311,8 +311,8 @@ public partial class TypeChecker
         {
             TypeInfo? narrowedType = TypeofStringToType(typeStr);
             if (negated)
-                return (varName, new TypeInfo.Any(), narrowedType);
-            return (varName, narrowedType, new TypeInfo.Any());
+                return (varName, TypeInfo.Any.Shared, narrowedType);
+            return (varName, narrowedType, TypeInfo.Any.Shared);
         }
 
         if (currentType is TypeInfo.Union union)
@@ -336,15 +336,15 @@ public partial class TypeChecker
         {
             // Current type matches - narrowed stays same, excluded is never
             if (negated)
-                return (varName, new TypeInfo.Never(), currentType);
-            return (varName, currentType, new TypeInfo.Never());
+                return (varName, TypeInfo.Never.Shared, currentType);
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
         else
         {
             // Current type doesn't match - narrowed is never, excluded stays same
             if (negated)
-                return (varName, currentType, new TypeInfo.Never());
-            return (varName, new TypeInfo.Never(), currentType);
+                return (varName, currentType, TypeInfo.Never.Shared);
+            return (varName, TypeInfo.Never.Shared, currentType);
         }
     }
 
@@ -353,21 +353,21 @@ public partial class TypeChecker
     /// </summary>
     private static TypeInfo? TypeofStringToType(string typeStr) => typeStr switch
     {
-        "string" => new TypeInfo.String(),
-        "number" => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-        "boolean" => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-        "bigint" => new TypeInfo.BigInt(),
+        "string" => TypeInfo.String.Shared,
+        "number" => TypeInfo.Primitive.Number,
+        "boolean" => TypeInfo.Primitive.Boolean,
+        "bigint" => TypeInfo.BigInt.Shared,
         // Narrow to a permissive function type: accepts any args, returns any.
         // Without a rest param the type would constrain callers to 0 args,
         // breaking common patterns like `if (typeof cb === 'function') cb(err, val)`.
         "function" => new TypeInfo.Function(
-            [new TypeInfo.Array(new TypeInfo.Any())],
-            new TypeInfo.Any(),
+            [new TypeInfo.Array(TypeInfo.Any.Shared)],
+            TypeInfo.Any.Shared,
             RequiredParams: 0,
             HasRestParam: true),
-        "object" => new TypeInfo.Object(),
-        "symbol" => new TypeInfo.Symbol(),
-        "undefined" => new TypeInfo.Undefined(),
+        "object" => TypeInfo.Object.Shared,
+        "symbol" => TypeInfo.Symbol.Shared,
+        "undefined" => TypeInfo.Undefined.Shared,
         _ => null
     };
 
@@ -494,8 +494,8 @@ public partial class TypeChecker
             : checkingForNull ? t is TypeInfo.Null : t is TypeInfo.Undefined;
 
         TypeInfo nullishType = checkBoth
-            ? new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()])
-            : checkingForNull ? new TypeInfo.Null() : new TypeInfo.Undefined();
+            ? new TypeInfo.Union([TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])
+            : checkingForNull ? TypeInfo.Null.Shared : TypeInfo.Undefined.Shared;
 
         if (currentType is TypeInfo.Union union)
         {
@@ -503,7 +503,7 @@ public partial class TypeChecker
             var nonNullish = flattenedTypes.Where(t => !IsNullish(t)).ToList();
             var nullish = flattenedTypes.Where(IsNullish).ToList();
 
-            TypeInfo? nonNullishType = nonNullish.Count == 0 ? new TypeInfo.Never() :
+            TypeInfo? nonNullishType = nonNullish.Count == 0 ? TypeInfo.Never.Shared :
                 nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
             TypeInfo? nullishResultType = nullish.Count == 0 ? nullishType :
                 nullish.Count == 1 ? nullish[0] : new TypeInfo.Union(nullish);
@@ -519,14 +519,14 @@ public partial class TypeChecker
         if (currentType is TypeInfo.Null && (checkingForNull || checkBoth))
         {
             if (negated)
-                return (varName, new TypeInfo.Never(), currentType);
-            return (varName, currentType, new TypeInfo.Never());
+                return (varName, TypeInfo.Never.Shared, currentType);
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
         if (currentType is TypeInfo.Undefined && (!checkingForNull || checkBoth))
         {
             if (negated)
-                return (varName, new TypeInfo.Never(), currentType);
-            return (varName, currentType, new TypeInfo.Never());
+                return (varName, TypeInfo.Never.Shared, currentType);
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
 
         // Type is not nullable - narrowing has no effect
@@ -591,9 +591,9 @@ public partial class TypeChecker
                 }
             }
 
-            TypeInfo narrowed = matching.Count == 0 ? new TypeInfo.Never() :
+            TypeInfo narrowed = matching.Count == 0 ? TypeInfo.Never.Shared :
                 matching.Count == 1 ? matching[0] : new TypeInfo.Union(matching);
-            TypeInfo excluded = rest.Count == 0 ? new TypeInfo.Never() :
+            TypeInfo excluded = rest.Count == 0 ? TypeInfo.Never.Shared :
                 rest.Count == 1 ? rest[0] : new TypeInfo.Union(rest);
 
             if (negated)
@@ -605,8 +605,8 @@ public partial class TypeChecker
         if (TypeInfoEqualityComparer.Instance.Equals(currentType, literalType))
         {
             if (negated)
-                return (varName, new TypeInfo.Never(), currentType);
-            return (varName, currentType, new TypeInfo.Never());
+                return (varName, TypeInfo.Never.Shared, currentType);
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
 
         // A different literal of the same kind can never equal it.
@@ -616,8 +616,8 @@ public partial class TypeChecker
             currentType is TypeInfo.BigIntLiteral && literalType is TypeInfo.BigIntLiteral)
         {
             if (negated)
-                return (varName, currentType, new TypeInfo.Never());
-            return (varName, new TypeInfo.Never(), currentType);
+                return (varName, currentType, TypeInfo.Never.Shared);
+            return (varName, TypeInfo.Never.Shared, currentType);
         }
 
         // General primitive narrows to the literal in the true branch; the false
@@ -657,9 +657,9 @@ public partial class TypeChecker
             if (nonNull.Count == 0 && nullTypes.Count == 0)
                 return (null, null, null, null);
 
-            TypeInfo nonNullType = nonNull.Count == 0 ? new TypeInfo.Never() :
+            TypeInfo nonNullType = nonNull.Count == 0 ? TypeInfo.Never.Shared :
                 nonNull.Count == 1 ? nonNull[0] : new TypeInfo.Union(nonNull);
-            TypeInfo nullType = nullTypes.Count == 0 ? new TypeInfo.Null() :
+            TypeInfo nullType = nullTypes.Count == 0 ? TypeInfo.Null.Shared :
                 nullTypes.Count == 1 ? nullTypes[0] : new TypeInfo.Union(nullTypes);
 
             // if (obj.prop !== null) -> then: non-null, else: null
@@ -1072,7 +1072,7 @@ public partial class TypeChecker
         }
         Add(a);
         Add(b);
-        return parts.Count == 0 ? new TypeInfo.Never() :
+        return parts.Count == 0 ? TypeInfo.Never.Shared :
                parts.Count == 1 ? parts[0] : new TypeInfo.Union(parts);
     }
 
@@ -1178,11 +1178,11 @@ public partial class TypeChecker
             if (nonNullish.Count == 0 && nullishTypes.Count == 0)
                 return (null, null, null);
 
-            TypeInfo nonNullishType = nonNullish.Count == 0 ? new TypeInfo.Never() :
+            TypeInfo nonNullishType = nonNullish.Count == 0 ? TypeInfo.Never.Shared :
                 nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
             TypeInfo nullishType = nullishTypes.Count == 0
-                ? (checkBoth ? new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()])
-                    : checkingForNull ? new TypeInfo.Null() : new TypeInfo.Undefined())
+                ? (checkBoth ? new TypeInfo.Union([TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])
+                    : checkingForNull ? TypeInfo.Null.Shared : TypeInfo.Undefined.Shared)
                 : nullishTypes.Count == 1 ? nullishTypes[0] : new TypeInfo.Union(nullishTypes);
 
             // if (path !== null) -> then: non-null, else: null
@@ -1196,14 +1196,14 @@ public partial class TypeChecker
         if (currentType is TypeInfo.Null && (checkingForNull || checkBoth))
         {
             if (negated)
-                return (path, new TypeInfo.Never(), currentType);
-            return (path, currentType, new TypeInfo.Never());
+                return (path, TypeInfo.Never.Shared, currentType);
+            return (path, currentType, TypeInfo.Never.Shared);
         }
         if (currentType is TypeInfo.Undefined && (!checkingForNull || checkBoth))
         {
             if (negated)
-                return (path, new TypeInfo.Never(), currentType);
-            return (path, currentType, new TypeInfo.Never());
+                return (path, TypeInfo.Never.Shared, currentType);
+            return (path, currentType, TypeInfo.Never.Shared);
         }
 
         // Not nullable in the checked sense - no narrowing effect
@@ -1245,7 +1245,7 @@ public partial class TypeChecker
         // Non-union type: check if it has the property
         if (TypeHasProperty(currentType, propertyName))
         {
-            return (varName, currentType, new TypeInfo.Never());
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
 
         return (null, null, null);
@@ -1359,13 +1359,13 @@ public partial class TypeChecker
         // Non-union type
         if (currentType is TypeInfo.Array or TypeInfo.Tuple)
         {
-            return (varName, currentType, new TypeInfo.Never());
+            return (varName, currentType, TypeInfo.Never.Shared);
         }
 
         // For any/unknown, narrow to array
         if (currentType is TypeInfo.Any or TypeInfo.Unknown)
         {
-            return (varName, new TypeInfo.Array(new TypeInfo.Any()), currentType);
+            return (varName, new TypeInfo.Array(TypeInfo.Any.Shared), currentType);
         }
 
         return (null, null, null);
@@ -1412,7 +1412,7 @@ public partial class TypeChecker
         }
 
         static TypeInfo Build(List<TypeInfo> parts) =>
-            parts.Count == 0 ? new TypeInfo.Never() :
+            parts.Count == 0 ? TypeInfo.Never.Shared :
             parts.Count == 1 ? parts[0] :
             new TypeInfo.Union(parts);
 

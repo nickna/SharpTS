@@ -169,7 +169,7 @@ public class VariadicTupleTests
     public void TupleElement_RequiredKind_IsCorrect()
     {
         var elem = new TypeInfo.TupleElement(
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             TupleElementKind.Required,
             "name"
         );
@@ -183,7 +183,7 @@ public class VariadicTupleTests
     public void TupleElement_OptionalKind_IsCorrect()
     {
         var elem = new TypeInfo.TupleElement(
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             TupleElementKind.Optional,
             null
         );
@@ -197,7 +197,7 @@ public class VariadicTupleTests
     public void TupleElement_SpreadKind_IsCorrect()
     {
         var elem = new TypeInfo.TupleElement(
-            new TypeInfo.Array(new TypeInfo.String()),
+            new TypeInfo.Array(TypeInfo.String.Shared),
             TupleElementKind.Spread,
             null
         );
@@ -211,20 +211,20 @@ public class VariadicTupleTests
     public void TupleElement_ToString_FormatsCorrectly()
     {
         var requiredWithName = new TypeInfo.TupleElement(
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             TupleElementKind.Required,
             "name"
         );
         Assert.Contains("name:", requiredWithName.ToString());
 
         var optional = new TypeInfo.TupleElement(
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             TupleElementKind.Optional
         );
         Assert.Contains("?", optional.ToString());
 
         var spread = new TypeInfo.TupleElement(
-            new TypeInfo.Array(new TypeInfo.String()),
+            new TypeInfo.Array(TypeInfo.String.Shared),
             TupleElementKind.Spread
         );
         Assert.Contains("...", spread.ToString());
@@ -239,7 +239,7 @@ public class VariadicTupleTests
     {
         var elements = new List<TypeInfo.TupleElement>
         {
-            new(new TypeInfo.String(), TupleElementKind.Required),
+            new(TypeInfo.String.Shared, TupleElementKind.Required),
             new(new TypeInfo.Array(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER)), TupleElementKind.Spread),
         };
         var tuple = new TypeInfo.Tuple(elements, 1);
@@ -252,7 +252,7 @@ public class VariadicTupleTests
     {
         var elements = new List<TypeInfo.TupleElement>
         {
-            new(new TypeInfo.String(), TupleElementKind.Required),
+            new(TypeInfo.String.Shared, TupleElementKind.Required),
             new(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER), TupleElementKind.Optional),
         };
         var tuple = new TypeInfo.Tuple(elements, 1);
@@ -265,7 +265,7 @@ public class VariadicTupleTests
     {
         var elements = new List<TypeInfo.TupleElement>
         {
-            new(new TypeInfo.String(), TupleElementKind.Required),
+            new(TypeInfo.String.Shared, TupleElementKind.Required),
             new(new TypeInfo.Array(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER)), TupleElementKind.Spread),
         };
         var tuple = new TypeInfo.Tuple(elements, 1);
@@ -278,7 +278,7 @@ public class VariadicTupleTests
     {
         var elements = new List<TypeInfo.TupleElement>
         {
-            new(new TypeInfo.String(), TupleElementKind.Required),
+            new(TypeInfo.String.Shared, TupleElementKind.Required),
             new(new TypeInfo.Array(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER)), TupleElementKind.Spread),
             new(new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN), TupleElementKind.Required),
         };
@@ -298,7 +298,7 @@ public class VariadicTupleTests
     public void SpreadType_ToString_FormatsCorrectly()
     {
         var spread = new TypeInfo.SpreadType(
-            new TypeInfo.Array(new TypeInfo.String())
+            new TypeInfo.Array(TypeInfo.String.Shared)
         );
 
         Assert.StartsWith("...", spread.ToString());
@@ -307,7 +307,7 @@ public class VariadicTupleTests
     [Fact]
     public void SpreadType_Inner_PreservedCorrectly()
     {
-        var inner = new TypeInfo.Array(new TypeInfo.String());
+        var inner = new TypeInfo.Array(TypeInfo.String.Shared);
         var spread = new TypeInfo.SpreadType(inner);
 
         Assert.Equal(inner, spread.Inner);
@@ -340,7 +340,7 @@ public class VariadicTupleTests
     {
         var types = new List<TypeInfo>
         {
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER),
         };
         var names = new List<string?> { "name", null };
@@ -360,7 +360,7 @@ public class VariadicTupleTests
     {
         var types = new List<TypeInfo>
         {
-            new TypeInfo.String(),
+            TypeInfo.String.Shared,
             new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER),
         };
 

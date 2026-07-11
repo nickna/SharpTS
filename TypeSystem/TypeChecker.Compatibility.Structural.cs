@@ -420,13 +420,13 @@ public partial class TypeChecker
     /// <summary>Marker types for variance measurement: Sub is structurally assignable to Super
     /// but not conversely (extra member).</summary>
     private static readonly TypeInfo.Record VarianceMarkerSuper = new(
-        new Dictionary<string, TypeInfo> { ["'variance"] = new TypeInfo.String() }
+        new Dictionary<string, TypeInfo> { ["'variance"] = TypeInfo.String.Shared }
             .ToFrozenDictionary());
     private static readonly TypeInfo.Record VarianceMarkerSub = new(
         new Dictionary<string, TypeInfo>
         {
-            ["'variance"] = new TypeInfo.String(),
-            ["'sub"] = new TypeInfo.String(),
+            ["'variance"] = TypeInfo.String.Shared,
+            ["'sub"] = TypeInfo.String.Shared,
         }.ToFrozenDictionary());
 
     private Dictionary<TypeInfo.GenericInterface, TypeParameterVariance[]>? _measuredVariances;
@@ -466,8 +466,8 @@ public partial class TypeChecker
                 Dictionary<string, TypeInfo> subSubs = [];
                 for (int j = 0; j < gi.TypeParams.Count; j++)
                 {
-                    superSubs[gi.TypeParams[j].Name] = j == i ? VarianceMarkerSuper : new TypeInfo.Any();
-                    subSubs[gi.TypeParams[j].Name] = j == i ? VarianceMarkerSub : new TypeInfo.Any();
+                    superSubs[gi.TypeParams[j].Name] = j == i ? VarianceMarkerSuper : TypeInfo.Any.Shared;
+                    subSubs[gi.TypeParams[j].Name] = j == i ? VarianceMarkerSub : TypeInfo.Any.Shared;
                 }
                 // Covariant: I<Sub> assignable to I<Super>; contravariant: the reverse.
                 bool covariant = SubstitutedMembersRelated(gi, expectedSubs: superSubs, actualSubs: subSubs);

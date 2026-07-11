@@ -32,8 +32,8 @@ public partial class TypeChecker
         if (IsBareTypeName(typeName))
             return ResolveTypeName(typeName);
         return Parser.TryParseTypeFragment(typeName) is { } node
-            ? TryToTypeInfo(node) ?? new TypeInfo.Any()
-            : new TypeInfo.Any();
+            ? TryToTypeInfo(node) ?? TypeInfo.Any.Shared
+            : TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -155,23 +155,23 @@ public partial class TypeChecker
             }
         }
 
-        if (typeName == "string") return new TypeInfo.String();
-        if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-        if (typeName == "symbol") return new TypeInfo.Symbol();
-        if (typeName == "bigint") return new TypeInfo.BigInt();
+        if (typeName == "string") return TypeInfo.String.Shared;
+        if (typeName == "number") return TypeInfo.Primitive.Number;
+        if (typeName == "boolean") return TypeInfo.Primitive.Boolean;
+        if (typeName == "symbol") return TypeInfo.Symbol.Shared;
+        if (typeName == "bigint") return TypeInfo.BigInt.Shared;
         // The global Function type: any callable, i.e. (...args: any[]) => any. Parsing it to
         // Any made `T[K] extends Function` filters (FunctionPropertyNames et al.) match every
         // property — `X extends any` is always true — emptying the mapped result (#185).
         if (typeName == "Function") return new TypeInfo.Function(
-            [new TypeInfo.Array(new TypeInfo.Any())], new TypeInfo.Any(), RequiredParams: 0, HasRestParam: true);
-        if (typeName == "void") return new TypeInfo.Void();
-        if (typeName == "null") return new TypeInfo.Null();
-        if (typeName == "undefined") return new TypeInfo.Undefined();
-        if (typeName == "unknown") return new TypeInfo.Unknown();
-        if (typeName == "never") return new TypeInfo.Never();
-        if (typeName == "object") return new TypeInfo.Object();
-        if (typeName == "Buffer") return new TypeInfo.Buffer();
+            [new TypeInfo.Array(TypeInfo.Any.Shared)], TypeInfo.Any.Shared, RequiredParams: 0, HasRestParam: true);
+        if (typeName == "void") return TypeInfo.Void.Shared;
+        if (typeName == "null") return TypeInfo.Null.Shared;
+        if (typeName == "undefined") return TypeInfo.Undefined.Shared;
+        if (typeName == "unknown") return TypeInfo.Unknown.Shared;
+        if (typeName == "never") return TypeInfo.Never.Shared;
+        if (typeName == "object") return TypeInfo.Object.Shared;
+        if (typeName == "Buffer") return TypeInfo.Buffer.Shared;
         // Hot lib globals in TYPE position. Without these they fell through the user-type lookup
         // to `any`, making every Object/Date/wrapper-typed position vacuously compatible (same
         // failure mode as the `Function` mapping above). `Object` ≈ `{}` — everything non-nullish
@@ -179,11 +179,11 @@ public partial class TypeChecker
         // wrappers approximate their primitives (assignability matches in the directions the
         // corpus exercises); Date/RegExp map to their dedicated TypeInfos.
         if (typeName == "Object") return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-        if (typeName == "Date") return new TypeInfo.Date();
-        if (typeName == "RegExp") return new TypeInfo.RegExp();
-        if (typeName == "String") return new TypeInfo.String();
-        if (typeName == "Number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        if (typeName == "Boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if (typeName == "Date") return TypeInfo.Date.Shared;
+        if (typeName == "RegExp") return TypeInfo.RegExp.Shared;
+        if (typeName == "String") return TypeInfo.String.Shared;
+        if (typeName == "Number") return TypeInfo.Primitive.Number;
+        if (typeName == "Boolean") return TypeInfo.Primitive.Boolean;
         // Typed-array names in annotation position (`Int32Array`, `Float64Array`, …) resolve to
         // TypeInfo.TypedArray — the SAME type `new Int32Array(...)` produces — so element access on an
         // annotated typed array is typed `number` and the compiled unboxed fast paths fire. Without
@@ -232,7 +232,7 @@ public partial class TypeChecker
             return enumType;
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public partial class TypeChecker
     private TypeInfo SimplifyIntersection(List<TypeInfo> types)
     {
         // Handle empty or single type
-        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 0) return TypeInfo.Unknown.Shared;
         if (types.Count == 1) return types[0];
 
         // Flatten nested intersections so their object constituents participate in the member
@@ -257,15 +257,15 @@ public partial class TypeChecker
 
         // Check for never (absorbs everything)
         if (types.Any(t => t is TypeInfo.Never))
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
 
         // Check for any (absorbs in intersection)
         if (types.Any(t => t is TypeInfo.Any))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
 
         // Remove unknown (identity element)
         types = types.Where(t => t is not TypeInfo.Unknown).ToList();
-        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 0) return TypeInfo.Unknown.Shared;
         if (types.Count == 1) return types[0];
 
         // Check for conflicting primitives (e.g., string & number = never)
@@ -284,7 +284,7 @@ public partial class TypeChecker
 
         // If more than one primitive category is present, it's a conflict
         if (primitiveCount > 1)
-            return new TypeInfo.Never();  // Conflicting primitives
+            return TypeInfo.Never.Shared;  // Conflicting primitives
 
         // Collect object-like types for merging
         var records = types.OfType<TypeInfo.Record>().ToList();
@@ -347,7 +347,7 @@ public partial class TypeChecker
                         if (!IsCompatible(existingType, fieldType) && !IsCompatible(fieldType, existingType))
                         {
                             // Conflicting types - property becomes never
-                            mergedFields[name] = new TypeInfo.Never();
+                            mergedFields[name] = TypeInfo.Never.Shared;
                         }
                         // If compatible, keep the more specific type (or the first one)
 
@@ -519,7 +519,7 @@ public partial class TypeChecker
         string firstName = accessors[0].Name;
         // `typeof undefined` — the global undefined has no environment binding.
         if (firstName == "undefined" && accessors.Count == 1)
-            return new TypeInfo.Undefined();
+            return TypeInfo.Undefined.Shared;
         TypeInfo? currentType = _environment.Get(firstName);
 
         // `typeof globalThis` — the global object has no environment binding.
@@ -527,7 +527,7 @@ public partial class TypeChecker
         // resolves to `any`. Other bare globals in typeof-type position remain a
         // gap until lib.d.ts globals are loaded (#99).
         if (currentType == null && firstName == "globalThis")
-            currentType = new TypeInfo.Any();
+            currentType = TypeInfo.Any.Shared;
 
         if (currentType == null)
             throw new TypeCheckException($"Cannot find name '{firstName}' for typeof.", tsCode: "TS2304");
@@ -677,7 +677,7 @@ public partial class TypeChecker
                                  ?? gc.StaticProperties.GetValueOrDefault(propName),
         TypeInfo.Namespace ns => ns.GetMember(propName),
         // Property access on `any` stays `any` (e.g. `(typeof globalThis)["x"]`).
-        TypeInfo.Any => new TypeInfo.Any(),
+        TypeInfo.Any => TypeInfo.Any.Shared,
         _ => null
     };
 

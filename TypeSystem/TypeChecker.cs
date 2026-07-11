@@ -699,7 +699,7 @@ public partial class TypeChecker
 
         foreach (var param in parameters)
         {
-            TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode) ?? new TypeInfo.Any();
+            TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode) ?? TypeInfo.Any.Shared;
             paramTypes.Add(paramType);
             paramNames.Add(param.Name.Lexeme);
 
@@ -741,7 +741,7 @@ public partial class TypeChecker
             }
 
             paramScope.Define(param.Name.Lexeme,
-                param.IsOptional && param.DefaultValue == null ? CreateUnion(paramType, new TypeInfo.Undefined()) : paramType);
+                param.IsOptional && param.DefaultValue == null ? CreateUnion(paramType, TypeInfo.Undefined.Shared) : paramType);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
@@ -763,7 +763,7 @@ public partial class TypeChecker
         {
             var param = i < parameters.Count ? parameters[i] : null;
             result.Add(param is { IsOptional: true, DefaultValue: null }
-                ? CreateUnion(paramTypes[i], new TypeInfo.Undefined())
+                ? CreateUnion(paramTypes[i], TypeInfo.Undefined.Shared)
                 : paramTypes[i]);
         }
         return result;
@@ -840,9 +840,9 @@ public partial class TypeChecker
         PushDeclaredVariableScope();
 
         // Pre-define built-ins
-        _environment.Define("console", new TypeInfo.Any());
-        _environment.Define("Reflect", new TypeInfo.Any());
-        _environment.Define("process", new TypeInfo.Any());
+        _environment.Define("console", TypeInfo.Any.Shared);
+        _environment.Define("Reflect", TypeInfo.Any.Shared);
+        _environment.Define("process", TypeInfo.Any.Shared);
 
         // Pre-register type declarations (interfaces, classes, enums, type aliases)
         // This ensures types are available when parsing function signatures during hoisting
@@ -891,9 +891,9 @@ public partial class TypeChecker
         PushDeclaredVariableScope();
 
         // Pre-define built-ins
-        _environment.Define("console", new TypeInfo.Any());
-        _environment.Define("Reflect", new TypeInfo.Any());
-        _environment.Define("process", new TypeInfo.Any());
+        _environment.Define("console", TypeInfo.Any.Shared);
+        _environment.Define("Reflect", TypeInfo.Any.Shared);
+        _environment.Define("process", TypeInfo.Any.Shared);
 
         // Pre-register type declarations
         PreRegisterTypeDeclarations(statements);
@@ -1129,9 +1129,9 @@ public partial class TypeChecker
         PushDeclaredVariableScope();
 
         // Pre-define built-ins in the global environment
-        _environment.Define("console", new TypeInfo.Any());
-        _environment.Define("Reflect", new TypeInfo.Any());
-        _environment.Define("process", new TypeInfo.Any());
+        _environment.Define("console", TypeInfo.Any.Shared);
+        _environment.Define("Reflect", TypeInfo.Any.Shared);
+        _environment.Define("process", TypeInfo.Any.Shared);
 
         // Create a shared script environment for script files (they share global scope)
         var scriptEnv = new TypeEnvironment(_environment);
@@ -1225,9 +1225,9 @@ public partial class TypeChecker
                 // CJS modules have module, exports, and global in scope
                 if (module.IsCommonJs)
                 {
-                    moduleEnv.Define("exports", new TypeInfo.Any());
-                    moduleEnv.Define("module", new TypeInfo.Any());
-                    moduleEnv.Define("global", new TypeInfo.Any());
+                    moduleEnv.Define("exports", TypeInfo.Any.Shared);
+                    moduleEnv.Define("module", TypeInfo.Any.Shared);
+                    moduleEnv.Define("global", TypeInfo.Any.Shared);
                 }
 
                 // Bind imports from dependencies
@@ -1345,9 +1345,9 @@ public partial class TypeChecker
         // CJS modules have module, exports, and global in scope
         if (module.IsCommonJs)
         {
-            moduleEnv.Define("exports", new TypeInfo.Any());
-            moduleEnv.Define("module", new TypeInfo.Any());
-            moduleEnv.Define("global", new TypeInfo.Any());
+            moduleEnv.Define("exports", TypeInfo.Any.Shared);
+            moduleEnv.Define("module", TypeInfo.Any.Shared);
+            moduleEnv.Define("global", TypeInfo.Any.Shared);
         }
 
         using (new EnvironmentScope(this, moduleEnv))
@@ -1486,7 +1486,7 @@ public partial class TypeChecker
                                 }
                                 else if (sourceModule.IsCommonJs)
                                 {
-                                    module.ExportedTypes[exportedName] = new TypeInfo.Any();
+                                    module.ExportedTypes[exportedName] = TypeInfo.Any.Shared;
                                 }
                             }
                         }
@@ -1531,7 +1531,7 @@ public partial class TypeChecker
                 {
                     if (isCjsImport)
                     {
-                        env.Define(import.DefaultImport.Lexeme, new TypeInfo.Any());
+                        env.Define(import.DefaultImport.Lexeme, TypeInfo.Any.Shared);
                     }
                     else
                     {
@@ -1548,7 +1548,7 @@ public partial class TypeChecker
                 {
                     if (isCjsImport)
                     {
-                        env.Define(import.NamespaceImport.Lexeme, new TypeInfo.Any());
+                        env.Define(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared);
                     }
                     else
                     {
@@ -1570,7 +1570,7 @@ public partial class TypeChecker
 
                         if (isCjsImport)
                         {
-                            env.Define(localName, new TypeInfo.Any());
+                            env.Define(localName, TypeInfo.Any.Shared);
                             continue;
                         }
 
@@ -1613,16 +1613,16 @@ public partial class TypeChecker
     {
         return decl switch
         {
-            Stmt.Function f => _environment.Get(f.Name.Lexeme) ?? new TypeInfo.Any(),
-            Stmt.Class c => _environment.Get(c.Name.Lexeme) ?? new TypeInfo.Any(),
-            Stmt.Var v => _environment.Get(v.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.Function f => _environment.Get(f.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Class c => _environment.Get(c.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Var v => _environment.Get(v.Name.Lexeme) ?? TypeInfo.Any.Shared,
             // `export const x = …` now parses as Stmt.Const (was Stmt.Var before #428). The
             // environment holds the narrowed literal type recorded by VisitConst.
-            Stmt.Const c => _environment.Get(c.Name.Lexeme) ?? new TypeInfo.Any(),
-            Stmt.Interface i => _environment.Get(i.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.Const c => _environment.Get(c.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Interface i => _environment.Get(i.Name.Lexeme) ?? TypeInfo.Any.Shared,
             Stmt.TypeAlias t => ResolveAnnotation(t.TypeDefinition, t.TypeDefinitionNode)!,
-            Stmt.Enum e => _environment.Get(e.Name.Lexeme) ?? new TypeInfo.Any(),
-            _ => new TypeInfo.Any()
+            Stmt.Enum e => _environment.Get(e.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            _ => TypeInfo.Any.Shared
         };
     }
 

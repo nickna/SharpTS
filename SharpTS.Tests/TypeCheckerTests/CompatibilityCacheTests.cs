@@ -264,12 +264,12 @@ public class CompatibilityCacheTests
     {
         // Two Union instances with same member types but different List instances
         var union1 = new TypeInfo.Union([
-            new TypeInfo.String(),
-            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+            TypeInfo.String.Shared,
+            TypeInfo.Primitive.Number
         ]);
         var union2 = new TypeInfo.Union([
-            new TypeInfo.String(),
-            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+            TypeInfo.String.Shared,
+            TypeInfo.Primitive.Number
         ]);
 
         // Record equality would fail (different List instances)
@@ -285,12 +285,12 @@ public class CompatibilityCacheTests
     public void TypeInfoEqualityComparer_HandlesFunctionTypesWithEquivalentParams()
     {
         var func1 = new TypeInfo.Function(
-            [new TypeInfo.String(), new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
-            new TypeInfo.Void()
+            [TypeInfo.String.Shared, TypeInfo.Primitive.Number],
+            TypeInfo.Void.Shared
         );
         var func2 = new TypeInfo.Function(
-            [new TypeInfo.String(), new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
-            new TypeInfo.Void()
+            [TypeInfo.String.Shared, TypeInfo.Primitive.Number],
+            TypeInfo.Void.Shared
         );
 
         Assert.True(TypeInfoEqualityComparer.Instance.Equals(func1, func2));
@@ -303,8 +303,8 @@ public class CompatibilityCacheTests
     [Fact]
     public void TypeInfoEqualityComparer_DistinguishesDifferentUnionTypes()
     {
-        var union1 = new TypeInfo.Union([new TypeInfo.String()]);
-        var union2 = new TypeInfo.Union([new TypeInfo.Primitive(TokenType.TYPE_NUMBER)]);
+        var union1 = new TypeInfo.Union([TypeInfo.String.Shared]);
+        var union2 = new TypeInfo.Union([TypeInfo.Primitive.Number]);
 
         Assert.False(TypeInfoEqualityComparer.Instance.Equals(union1, union2));
     }
@@ -313,12 +313,12 @@ public class CompatibilityCacheTests
     public void TypeInfoEqualityComparer_HandlesIntersectionTypes()
     {
         var intersection1 = new TypeInfo.Intersection([
-            new TypeInfo.String(),
-            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+            TypeInfo.String.Shared,
+            TypeInfo.Primitive.Number
         ]);
         var intersection2 = new TypeInfo.Intersection([
-            new TypeInfo.String(),
-            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+            TypeInfo.String.Shared,
+            TypeInfo.Primitive.Number
         ]);
 
         Assert.True(TypeInfoEqualityComparer.Instance.Equals(intersection1, intersection2));
@@ -332,12 +332,12 @@ public class CompatibilityCacheTests
     public void TypeInfoEqualityComparer_HandlesTupleTypes()
     {
         var tuple1 = new TypeInfo.Tuple([
-            new TypeInfo.TupleElement(new TypeInfo.String(), TupleElementKind.Required),
-            new TypeInfo.TupleElement(new TypeInfo.Primitive(TokenType.TYPE_NUMBER), TupleElementKind.Required)
+            new TypeInfo.TupleElement(TypeInfo.String.Shared, TupleElementKind.Required),
+            new TypeInfo.TupleElement(TypeInfo.Primitive.Number, TupleElementKind.Required)
         ], RequiredCount: 2);
         var tuple2 = new TypeInfo.Tuple([
-            new TypeInfo.TupleElement(new TypeInfo.String(), TupleElementKind.Required),
-            new TypeInfo.TupleElement(new TypeInfo.Primitive(TokenType.TYPE_NUMBER), TupleElementKind.Required)
+            new TypeInfo.TupleElement(TypeInfo.String.Shared, TupleElementKind.Required),
+            new TypeInfo.TupleElement(TypeInfo.Primitive.Number, TupleElementKind.Required)
         ], RequiredCount: 2);
 
         Assert.True(TypeInfoEqualityComparer.Instance.Equals(tuple1, tuple2));

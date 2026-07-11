@@ -102,7 +102,7 @@ public static class DotNetTypeSynthesizer
         if (meta.HasEvents)
         {
             var subscribe = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.Any()], new TypeInfo.Void(), RequiredParams: 2);
+                [TypeInfo.String.Shared, TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 2);
             mc.Methods.TryAdd("addEventListener", subscribe);
             mc.Methods.TryAdd("removeEventListener", subscribe);
             mc.StaticMethods.TryAdd("addEventListener", subscribe);
@@ -155,13 +155,13 @@ public static class DotNetTypeSynthesizer
         {
             if (ctor.Parameters.Any(p => DotNetInteropClassifier.UnsupportedSlotReason(p.ParameterType) != null))
                 continue;
-            signatures.Add(BuildSignature(ctor.Parameters, new TypeInfo.Void(), type, mc));
+            signatures.Add(BuildSignature(ctor.Parameters, TypeInfo.Void.Shared, type, mc));
         }
 
         // Value types always support default construction (`new Guid()` → default(Guid)).
         if (type.IsValueType && !signatures.Any(s => s.MinArity == 0))
         {
-            signatures.Add(new TypeInfo.Function([], new TypeInfo.Void()));
+            signatures.Add(new TypeInfo.Function([], TypeInfo.Void.Shared));
         }
 
         if (signatures.Count == 0)
@@ -188,7 +188,7 @@ public static class DotNetTypeSynthesizer
             if (p.IsParams && i == parameters.Count - 1)
             {
                 // params-array: the checker models rest params as an array-typed final slot.
-                paramTypes.Add(new TypeInfo.Array(new TypeInfo.Any()));
+                paramTypes.Add(new TypeInfo.Array(TypeInfo.Any.Shared));
                 hasRest = true;
                 break;
             }
@@ -204,7 +204,7 @@ public static class DotNetTypeSynthesizer
     /// Only the individual signatures participate in call checking.
     /// </summary>
     private static TypeInfo.Function MostPermissiveSignature(List<TypeInfo.Function> signatures)
-        => new([new TypeInfo.Array(new TypeInfo.Any())], CommonReturnType(signatures), RequiredParams: 0, HasRestParam: true);
+        => new([new TypeInfo.Array(TypeInfo.Any.Shared)], CommonReturnType(signatures), RequiredParams: 0, HasRestParam: true);
 
     /// <summary>
     /// When every overload agrees on the return type, keep it (preserves chaining through
@@ -215,7 +215,7 @@ public static class DotNetTypeSynthesizer
         var first = signatures[0].ReturnType;
         for (int i = 1; i < signatures.Count; i++)
         {
-            if (!Equals(signatures[i].ReturnType, first)) return new TypeInfo.Any();
+            if (!Equals(signatures[i].ReturnType, first)) return TypeInfo.Any.Shared;
         }
         return first;
     }
@@ -226,9 +226,9 @@ public static class DotNetTypeSynthesizer
     /// </summary>
     private static TypeInfo MapSlot(Type clrType, Type self, TypeInfo.MutableClass mc)
     {
-        if (clrType == typeof(void)) return new TypeInfo.Void();
-        if (clrType == typeof(string) || clrType == typeof(char)) return new TypeInfo.String();
-        if (clrType == typeof(bool)) return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if (clrType == typeof(void)) return TypeInfo.Void.Shared;
+        if (clrType == typeof(string) || clrType == typeof(char)) return TypeInfo.String.Shared;
+        if (clrType == typeof(bool)) return TypeInfo.Primitive.Boolean;
 
         if (clrType == typeof(double) || clrType == typeof(float) ||
             clrType == typeof(int) || clrType == typeof(uint) ||
@@ -237,13 +237,13 @@ public static class DotNetTypeSynthesizer
             clrType == typeof(byte) || clrType == typeof(sbyte) ||
             clrType == typeof(decimal))
         {
-            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            return TypeInfo.Primitive.Number;
         }
 
         // The containing type itself: keeps fluent chains statically typed. Instance wraps the
         // MutableClass; Instance.ResolvedClassType resolves to the frozen Class after Freeze().
         if (clrType == self) return new TypeInfo.Instance(mc);
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 }

@@ -43,7 +43,7 @@ public partial class TypeChecker
             {
                 // All members are nullish — result is always undefined
                 foreach (var arg in call.Arguments) CheckExpr(arg);
-                return new TypeInfo.Undefined();
+                return TypeInfo.Undefined.Shared;
             }
             calleeType = nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
         }
@@ -99,7 +99,7 @@ public partial class TypeChecker
             {
                 return instFunc.ReturnType;
             }
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle overloaded function calls
@@ -187,7 +187,7 @@ public partial class TypeChecker
                 {
                     TypeInfo expectedParamType = paramIndex < regularParamCount
                         ? funcType.ParamTypes[paramIndex]
-                        : restElementType ?? new TypeInfo.Any();
+                        : restElementType ?? TypeInfo.Any.Shared;
 
                     // Apply contextual typing for array literals with tuple parameter types
                     if (expectedParamType is TypeInfo.Tuple tupleParamType && arg is Expr.ArrayLiteral argArrayLit)
@@ -258,7 +258,7 @@ public partial class TypeChecker
         else if (calleeType is TypeInfo.Any)
         {
              foreach(var arg in call.Arguments) CheckExpr(arg);
-             return new TypeInfo.Any();
+             return TypeInfo.Any.Shared;
         }
 
         // Handle interfaces with call signatures (callable interfaces)
@@ -359,7 +359,7 @@ public partial class TypeChecker
             if (methodType is TypeInfo.Function)
             {
                 foreach (var arg in call.Arguments) CheckExpr(arg);
-                { result = new TypeInfo.Void(); return true; }
+                { result = TypeInfo.Void.Shared; return true; }
             }
         }
 
@@ -378,7 +378,7 @@ public partial class TypeChecker
                     throw new TypeCheckException($"Symbol() description must be a string, got '{argType}'.", tsCode: "TS2345");
                 }
             }
-            { result = new TypeInfo.Symbol(); return true; }
+            { result = TypeInfo.Symbol.Shared; return true; }
         }
 
         // Handle Symbol.for(key) - returns a shared symbol from the global registry. `Symbol` bare
@@ -395,7 +395,7 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($"Symbol.for() argument must be a string, got '{argType}'.", tsCode: "TS2345");
             }
-            { result = new TypeInfo.Symbol(); return true; }
+            { result = TypeInfo.Symbol.Shared; return true; }
         }
 
         // Handle Symbol.keyFor(sym) - returns the key registered for a symbol, or undefined if none.
@@ -406,7 +406,7 @@ public partial class TypeChecker
                 throw new TypeCheckException("Symbol.keyFor() requires exactly one argument.", tsCode: "TS2554");
             }
             CheckExpr(call.Arguments[0]);
-            { result = new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Undefined()]); return true; }
+            { result = new TypeInfo.Union([TypeInfo.String.Shared, TypeInfo.Undefined.Shared]); return true; }
         }
 
         // Handle BigInt() constructor - converts number or string to bigint
@@ -423,7 +423,7 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException($"BigInt() argument must be a number, string, bigint, or boolean, got '{argType}'.", tsCode: "TS2345");
             }
-            { result = new TypeInfo.BigInt(); return true; }
+            { result = TypeInfo.BigInt.Shared; return true; }
         }
 
         // Handle Date() function call - returns current date as string (without 'new')
@@ -431,7 +431,7 @@ public partial class TypeChecker
         {
             // Date() called as a function (not with new) ignores arguments and returns a string
             foreach (var arg in call.Arguments) CheckExpr(arg);
-            { result = new TypeInfo.String(); return true; }
+            { result = TypeInfo.String.Shared; return true; }
         }
 
         // Handle Error() and error subtypes called without 'new' - still creates error objects
@@ -596,7 +596,7 @@ public partial class TypeChecker
             responseGet.Name.Lexeme is "json" or "redirect" or "error")
         {
             foreach (var arg in call.Arguments) CheckExpr(arg);
-            { result = new TypeInfo.Any(); return true; }
+            { result = TypeInfo.Any.Shared; return true; }
         }
 
         // Handle String.fromCharCode(), String.raw()
@@ -658,7 +658,7 @@ public partial class TypeChecker
         if (call.Callee is Expr.Variable evalVar && evalVar.Name.Lexeme == "eval")
         {
             foreach (var arg in call.Arguments) CheckExpr(arg);
-            { result = new TypeInfo.Any(); return true; }
+            { result = TypeInfo.Any.Shared; return true; }
         }
 
         // Timer functions (setTimeout / clearTimeout / setInterval / clearInterval)
@@ -684,7 +684,7 @@ public partial class TypeChecker
             }
 
             for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
-            { result = new TypeInfo.Timeout(); return true; }
+            { result = TypeInfo.Timeout.Shared; return true; }
         }
 
         if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout"
@@ -709,7 +709,7 @@ public partial class TypeChecker
             }
 
             for (int i = 2; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
-            { result = new TypeInfo.Timeout(); return true; }
+            { result = TypeInfo.Timeout.Shared; return true; }
         }
 
         if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval"
@@ -731,14 +731,14 @@ public partial class TypeChecker
                 throw new TypeCheckException($"queueMicrotask() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
             }
 
-            { result = new TypeInfo.Void(); return true; } // queueMicrotask returns undefined
+            { result = TypeInfo.Void.Shared; return true; } // queueMicrotask returns undefined
         }
 
         // Handle __objectRest (internal helper for object rest patterns)
         if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
         {
             foreach (var arg in call.Arguments) CheckExpr(arg);
-            { result = new TypeInfo.Any(); return true; } // Returns an object with remaining properties
+            { result = TypeInfo.Any.Shared; return true; } // Returns an object with remaining properties
         }
 
         // Handle __arrayDestructure (internal helper for array binding patterns, #685).
@@ -746,7 +746,7 @@ public partial class TypeChecker
         // access types correctly for non-indexable iterables.
         if (call.Callee is Expr.Variable arrDestVar && arrDestVar.Name.Lexeme == BuiltInNames.ArrayDestructure)
         {
-            var sourceType = call.Arguments.Count == 1 ? CheckExpr(call.Arguments[0]) : new TypeInfo.Any();
+            var sourceType = call.Arguments.Count == 1 ? CheckExpr(call.Arguments[0]) : TypeInfo.Any.Shared;
             { result = NormalizeArrayDestructureSourceType(sourceType); return true; }
         }
         result = null!;
@@ -1124,7 +1124,7 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    expectedType = new TypeInfo.Any();
+                    expectedType = TypeInfo.Any.Shared;
                 }
             }
             else
@@ -1268,6 +1268,6 @@ public partial class TypeChecker
             }
         }
 
-        return new TypeInfo.Void();
+        return TypeInfo.Void.Shared;
     }
 }

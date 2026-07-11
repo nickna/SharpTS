@@ -123,7 +123,7 @@ public partial class TypeChecker
             );
 
             TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
-                ?? new TypeInfo.Inferred();
+                ?? TypeInfo.Inferred.Shared;
 
             // Wrap return type for generator/async generator methods (skip when inferring)
             if (method.ReturnType != null && method.IsGenerator)
@@ -209,7 +209,7 @@ public partial class TypeChecker
             var representative = implementations.Count == 1 ? implementations[0] : members[^1];
             var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                 representative.Parameters, validateDefaults: true, contextName: $"method '{memberName}'");
-            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? new TypeInfo.Inferred();
+            TypeInfo factoryReturn = ResolveAnnotation(representative.ReturnType, representative.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
             var funcType = new TypeInfo.Function(cParamTypes, factoryReturn, cRequired, cHasRest, null, cParamNames);
             if (representative.IsStatic)
                 mutableClass.StaticMethods[memberName] = funcType;
@@ -325,7 +325,7 @@ public partial class TypeChecker
 
             string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
-                ?? new TypeInfo.Any();
+                ?? TypeInfo.Any.Shared;
 
             // TS1166: a computed DATA-property name (a class field, unlike a method/accessor) must be a
             // literal type or a 'unique symbol'. A plain, non-unique `symbol` — e.g. `[Symbol()]` —
@@ -420,7 +420,7 @@ public partial class TypeChecker
                 {
                     TypeInfo getterRetType = accessor.ReturnType != null
                         ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                        : new TypeInfo.Any();
+                        : TypeInfo.Any.Shared;
                     mutableClass.Getters[propName] = getterRetType;
 
                     // Track abstract getters
@@ -433,7 +433,7 @@ public partial class TypeChecker
                 {
                     TypeInfo paramType = accessor.SetterParam?.Type != null
                         ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
-                        : new TypeInfo.Any();
+                        : TypeInfo.Any.Shared;
                     mutableClass.Setters[propName] = paramType;
 
                     // Track abstract setters
@@ -477,7 +477,7 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    accessorType = new TypeInfo.Any();
+                    accessorType = TypeInfo.Any.Shared;
                 }
 
                 // Register as getter (always available)
@@ -841,7 +841,7 @@ public partial class TypeChecker
                     {
                         var (cParamTypes, cRequired, cHasRest, cParamNames) = BuildFunctionSignature(
                             method.Parameters, validateDefaults: true, contextName: "computed method");
-                        TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? new TypeInfo.Inferred();
+                        TypeInfo cReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode) ?? TypeInfo.Inferred.Shared;
                         declaredMethodType = new TypeInfo.Function(cParamTypes, cReturn, cRequired, cHasRest, null, cParamNames);
                     }
                 }
@@ -893,7 +893,7 @@ public partial class TypeChecker
                 if (inferringMethodReturn)
                 {
                     _inferredReturnTypes = new List<TypeInfo>();
-                    _currentFunctionReturnType = new TypeInfo.Inferred();
+                    _currentFunctionReturnType = TypeInfo.Inferred.Shared;
                 }
                 else
                 {
@@ -934,7 +934,7 @@ public partial class TypeChecker
                         TypeInfo inferredReturn;
                         if (collected.Count == 0)
                         {
-                            inferredReturn = new TypeInfo.Void();
+                            inferredReturn = TypeInfo.Void.Shared;
                         }
                         else
                         {
@@ -1008,18 +1008,18 @@ public partial class TypeChecker
                         // Computed-name accessors aren't registered in Getters/Setters
                         // (no static member name); derive types from the declaration.
                         accessorReturnType = accessor.ComputedKey != null
-                            ? (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : new TypeInfo.Any())
+                            ? (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared)
                             : classTypeForBody.Getters[accessor.Name.Lexeme];
                     }
                     else
                     {
                         // Setter has void return type
-                        accessorReturnType = new TypeInfo.Void();
+                        accessorReturnType = TypeInfo.Void.Shared;
                         // Add setter parameter to environment
                         if (accessor.SetterParam != null)
                         {
                             TypeInfo setterParamType = accessor.ComputedKey != null
-                                ? (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : new TypeInfo.Any())
+                                ? (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared)
                                 : classTypeForBody.Setters[accessor.Name.Lexeme];
                             accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
                         }
@@ -1179,7 +1179,7 @@ public partial class TypeChecker
                 var leafName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!;
                 var placeholder = new TypeInfo.MutableClass(leafName);
                 placeholder.Methods["constructor"] = new TypeInfo.Function(
-                    [new TypeInfo.Any()], new TypeInfo.Void(), RequiredParams: 0, HasRestParam: true);
+                    [TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 0, HasRestParam: true);
                 // When the base is a built-in iterable (`class C extends Array<number>`), record its
                 // element type as an @@iterator member. The global resolves to Any in value position so
                 // the type argument is otherwise dropped; recovering it lets an instance's for...of /
@@ -1209,7 +1209,7 @@ public partial class TypeChecker
     /// </summary>
     private bool TryGetBuiltInIterableElement(string baseName, List<string>? typeArgs, List<TypeNode?>? typeArgNodes, out TypeInfo element)
     {
-        TypeInfo Arg(int i) => typeArgs != null && i < typeArgs.Count ? ResolveTypeArg(typeArgs, typeArgNodes, i) : new TypeInfo.Any();
+        TypeInfo Arg(int i) => typeArgs != null && i < typeArgs.Count ? ResolveTypeArg(typeArgs, typeArgNodes, i) : TypeInfo.Any.Shared;
         switch (baseName)
         {
             case "Array" or "ReadonlyArray" or "Set" or "ReadonlySet":
@@ -1219,12 +1219,12 @@ public partial class TypeChecker
                 element = TypeInfo.Tuple.FromTypes([Arg(0), Arg(1)], 2);
                 return true;
             case "String":
-                element = new TypeInfo.String();
+                element = TypeInfo.String.Shared;
                 return true;
             case var n when BuiltInNames.IsTypedArrayName(n):
                 element = n is BuiltInNames.BigInt64Array or BuiltInNames.BigUint64Array
-                    ? new TypeInfo.BigInt()
-                    : new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                    ? TypeInfo.BigInt.Shared
+                    : TypeInfo.Primitive.Number;
                 return true;
             default:
                 element = null!;
@@ -1299,7 +1299,7 @@ public partial class TypeChecker
             );
 
             TypeInfo returnType = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)
-                ?? new TypeInfo.Inferred();
+                ?? TypeInfo.Inferred.Shared;
 
             // Wrap return type for generator/async generator methods (skip when inferring)
             if (method.ReturnType != null && method.IsGenerator)
@@ -1359,7 +1359,7 @@ public partial class TypeChecker
         {
             string fieldName = GetFieldMemberName(field);
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
-                ?? new TypeInfo.Any();
+                ?? TypeInfo.Any.Shared;
 
             if (field.IsStatic)
             {
@@ -1390,7 +1390,7 @@ public partial class TypeChecker
 
                 TypeInfo accessorType = accessor.ReturnType != null
                     ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                    : new TypeInfo.Any();
+                    : TypeInfo.Any.Shared;
 
                 if (accessor.Kind.Type == TokenType.GET)
                 {

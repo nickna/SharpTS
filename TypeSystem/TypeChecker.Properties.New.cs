@@ -123,7 +123,7 @@ public partial class TypeChecker
                 }
             }
 
-            return new TypeInfo.Date();
+            return TypeInfo.Date.Shared;
         }
 
         // Handle new RegExp() constructor
@@ -157,7 +157,7 @@ public partial class TypeChecker
                 }
             }
 
-            return new TypeInfo.RegExp();
+            return TypeInfo.RegExp.Shared;
         }
 
         // Handle new Map() and new Map<K, V>() constructor
@@ -176,8 +176,8 @@ public partial class TypeChecker
             }
 
             // Determine key and value types from type arguments or default to any
-            TypeInfo keyType = new TypeInfo.Any();
-            TypeInfo valueType = new TypeInfo.Any();
+            TypeInfo keyType = TypeInfo.Any.Shared;
+            TypeInfo valueType = TypeInfo.Any.Shared;
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
             {
@@ -208,7 +208,7 @@ public partial class TypeChecker
             }
 
             // Determine element type from type argument or default to any
-            TypeInfo elementType = new TypeInfo.Any();
+            TypeInfo elementType = TypeInfo.Any.Shared;
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
@@ -232,8 +232,8 @@ public partial class TypeChecker
             }
 
             // Determine key and value types from type arguments or default to any
-            TypeInfo keyType = new TypeInfo.Any();
-            TypeInfo valueType = new TypeInfo.Any();
+            TypeInfo keyType = TypeInfo.Any.Shared;
+            TypeInfo valueType = TypeInfo.Any.Shared;
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
             {
@@ -264,7 +264,7 @@ public partial class TypeChecker
             }
 
             // Determine element type from type argument or default to any
-            TypeInfo elementType = new TypeInfo.Any();
+            TypeInfo elementType = TypeInfo.Any.Shared;
 
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
@@ -328,7 +328,7 @@ public partial class TypeChecker
             }
 
             CheckExpr(newExpr.Arguments[0]);
-            var targetType = new TypeInfo.Any();
+            var targetType = TypeInfo.Any.Shared;
             return new TypeInfo.FinalizationRegistry(targetType);
         }
 
@@ -346,7 +346,7 @@ public partial class TypeChecker
             CheckExpr(newExpr.Arguments[1]);
 
             // Return any type since proxy is transparent to the type system
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle new EventEmitter() constructor
@@ -365,7 +365,7 @@ public partial class TypeChecker
                 CheckExpr(newExpr.Arguments[0]);
             }
 
-            return new TypeInfo.EventEmitter();
+            return TypeInfo.EventEmitter.Shared;
         }
 
         // Handle new AbortController() constructor
@@ -376,7 +376,7 @@ public partial class TypeChecker
                 throw new TypeCheckException("AbortController constructor does not accept arguments.", tsCode: "TS2554");
             }
 
-            return new TypeInfo.AbortController();
+            return TypeInfo.AbortController.Shared;
         }
 
         // Handle constructors that accept any arguments and return Any.
@@ -389,7 +389,7 @@ public partial class TypeChecker
         {
             foreach (var arg in newExpr.Arguments)
                 CheckExpr(arg);
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle new BroadcastChannel(name) constructor
@@ -400,7 +400,7 @@ public partial class TypeChecker
             var nameType = CheckExpr(newExpr.Arguments[0]);
             if (!IsString(nameType) && nameType is not TypeInfo.Any)
                 throw new TypeCheckException($"BroadcastChannel name must be a string, got '{nameType}'.", tsCode: "TS2345");
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle new SharedArrayBuffer(byteLength) / new ArrayBuffer(byteLength)
@@ -514,7 +514,7 @@ public partial class TypeChecker
                 CheckExpr(newExpr.Arguments[1]);
             }
 
-            return new TypeInfo.Worker();
+            return TypeInfo.Worker.Shared;
         }
 
         // Handle new vm.Script(code, options?) constructor
@@ -526,7 +526,7 @@ public partial class TypeChecker
             }
             foreach (var arg in newExpr.Arguments)
                 CheckExpr(arg);
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle new MessageChannel() constructor
@@ -538,7 +538,7 @@ public partial class TypeChecker
                 throw new TypeCheckException("MessageChannel constructor does not accept arguments.", tsCode: "TS2554");
             }
 
-            return new TypeInfo.MessageChannel();
+            return TypeInfo.MessageChannel.Shared;
         }
 
         // Handle new Promise<T>((resolve, reject) => { ... }) constructor
@@ -551,7 +551,7 @@ public partial class TypeChecker
             }
 
             // Determine the Promise value type from type arguments or default to any
-            TypeInfo valueType = new TypeInfo.Any();
+            TypeInfo valueType = TypeInfo.Any.Shared;
             if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
             {
                 valueType = ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, 0);
@@ -631,7 +631,7 @@ public partial class TypeChecker
         {
             foreach (var arg in newExpr.Arguments)
                 CheckExpr(arg);
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Handle new Intl.*() constructors — all accept any arguments and return Any
@@ -641,7 +641,7 @@ public partial class TypeChecker
         {
             foreach (var arg in newExpr.Arguments)
                 CheckExpr(arg);
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // Evaluate the callee expression type
@@ -726,7 +726,7 @@ public partial class TypeChecker
         // and any value whose static type isn't a known class.
         foreach (var arg in newExpr.Arguments)
             CheckExpr(arg);
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>

@@ -104,7 +104,7 @@ public partial class TypeChecker
         if (!optional) return false;
         // Widen the declared type with `undefined`; the existing union-compatibility rules then
         // accept an `undefined` / `T | undefined` argument without admitting any other mismatch.
-        return IsCompatible(new TypeInfo.Union([paramType, new TypeInfo.Undefined()]), argType);
+        return IsCompatible(new TypeInfo.Union([paramType, TypeInfo.Undefined.Shared]), argType);
     }
 
     /// <summary>

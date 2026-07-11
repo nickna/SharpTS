@@ -15,13 +15,13 @@ namespace SharpTS.Tests.TypeCheckerTests;
 /// </summary>
 public class BuiltInApparentMembersTests
 {
-    private static readonly TypeInfo Any = new TypeInfo.Any();
+    private static readonly TypeInfo Any = TypeInfo.Any.Shared;
 
     /// <summary>Representative instances of every structurally-decomposable built-in type.</summary>
     public static IEnumerable<object[]> DecomposableTypes()
     {
-        yield return ["Date", new TypeInfo.Date()];
-        yield return ["RegExp", new TypeInfo.RegExp()];
+        yield return ["Date", TypeInfo.Date.Shared];
+        yield return ["RegExp", TypeInfo.RegExp.Shared];
         yield return ["Map", new TypeInfo.Map(Any, Any)];
         yield return ["Set", new TypeInfo.Set(Any)];
         yield return ["WeakMap", new TypeInfo.WeakMap(Any, Any)];
@@ -35,11 +35,11 @@ public class BuiltInApparentMembersTests
         // #530 follow-up: the remaining GetXxxMemberType-backed built-ins.
         yield return ["Error", new TypeInfo.Error()];
         yield return ["AggregateError", new TypeInfo.Error("AggregateError")];
-        yield return ["Timeout", new TypeInfo.Timeout()];
-        yield return ["Buffer", new TypeInfo.Buffer()];
-        yield return ["EventEmitter", new TypeInfo.EventEmitter()];
-        yield return ["AbortController", new TypeInfo.AbortController()];
-        yield return ["AbortSignal", new TypeInfo.AbortSignal()];
+        yield return ["Timeout", TypeInfo.Timeout.Shared];
+        yield return ["Buffer", TypeInfo.Buffer.Shared];
+        yield return ["EventEmitter", TypeInfo.EventEmitter.Shared];
+        yield return ["AbortController", TypeInfo.AbortController.Shared];
+        yield return ["AbortSignal", TypeInfo.AbortSignal.Shared];
     }
 
     [Theory]
@@ -101,10 +101,10 @@ public class BuiltInApparentMembersTests
         // string/Array are NOT part of the dedicated apparent-members projection (it models the
         // index-signature-free records); keyof handles them through their own ExtractKeys cases, which
         // read the StringApparentMemberNames / ArrayApparentMemberNames lists guarded below (#527).
-        Assert.Null(BuiltInTypes.GetInstanceMemberNames(new TypeInfo.String()));
+        Assert.Null(BuiltInTypes.GetInstanceMemberNames(TypeInfo.String.Shared));
         Assert.Null(BuiltInTypes.GetInstanceMemberNames(new TypeInfo.Array(Any)));
         Assert.Null(BuiltInTypes.GetInstanceMemberNames(Any));
-        Assert.Null(BuiltInTypes.GetInstanceMemberType(new TypeInfo.String(), "length"));
+        Assert.Null(BuiltInTypes.GetInstanceMemberType(TypeInfo.String.Shared, "length"));
     }
 
     /// <summary>

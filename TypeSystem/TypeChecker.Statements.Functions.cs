@@ -149,7 +149,7 @@ public partial class TypeChecker
         CheckFunctionBodyAndInferReturn(
             funcStmt, funcEnv, paramTypes, requiredParams, hasRest,
             paramNames ?? new List<string>(), thisType, typeParams,
-            returnType: new TypeInfo.Inferred(), inferringReturnType: true, funcName, suppress: true);
+            returnType: TypeInfo.Inferred.Shared, inferringReturnType: true, funcName, suppress: true);
     }
 
     /// <summary>
@@ -166,11 +166,11 @@ public partial class TypeChecker
             {
                 case Stmt.Var v when v.IsVar:
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when v.IsVar:
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
             }
         }
@@ -202,19 +202,19 @@ public partial class TypeChecker
                 // `let` is Stmt.Var with IsVar == false; `var` is handled by HoistVarDeclarations.
                 case Stmt.Var v when !v.IsVar:
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Const c:
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
-                        _environment.Define(c.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when !v.IsVar:
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
-                        _environment.Define(v.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Const c }:
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
-                        _environment.Define(c.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
             }
         }
@@ -243,12 +243,12 @@ public partial class TypeChecker
                 case Stmt.Class cls:
                     _classDeclarationLines[cls.Name.Lexeme] = cls.Name.Line;
                     if (!_environment.IsDefinedLocally(cls.Name.Lexeme))
-                        _environment.Define(cls.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(cls.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Class exportCls }:
                     _classDeclarationLines[exportCls.Name.Lexeme] = exportCls.Name.Line;
                     if (!_environment.IsDefinedLocally(exportCls.Name.Lexeme))
-                        _environment.Define(exportCls.Name.Lexeme, new TypeInfo.Any());
+                        _environment.Define(exportCls.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
             }
         }
@@ -297,7 +297,7 @@ public partial class TypeChecker
         if (typeAnnotation is not null)
         {
             try { _environment.Define(name.Lexeme, ResolveAnnotation(typeAnnotation, typeAnnotationNode)!); }
-            catch { _environment.Define(name.Lexeme, new TypeInfo.Any()); }
+            catch { _environment.Define(name.Lexeme, TypeInfo.Any.Shared); }
             return;
         }
 
@@ -311,7 +311,7 @@ public partial class TypeChecker
             foreach (var param in arrow.Parameters)
             {
                 TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode)
-                    ?? new TypeInfo.Any();
+                    ?? TypeInfo.Any.Shared;
 
                 if (param.IsRest)
                 {
@@ -338,7 +338,7 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    returnType = new TypeInfo.Any();
+                    returnType = TypeInfo.Any.Shared;
                 }
             }
             else if (arrow.ReturnType != null)
@@ -356,7 +356,7 @@ public partial class TypeChecker
                 // the same type". Register a bare `any` instead, matching how
                 // HoistVarDeclarations/HoistClassDeclarations placeholder forward references —
                 // `any` is already exempt from that check.
-                _environment.Define(name.Lexeme, new TypeInfo.Any());
+                _environment.Define(name.Lexeme, TypeInfo.Any.Shared);
                 return;
             }
 
@@ -364,7 +364,7 @@ public partial class TypeChecker
             TypeInfo? thisType = ResolveAnnotation(arrow.ThisType, arrow.ThisTypeNode);
             if (arrow.HasOwnThis && thisType == null)
             {
-                thisType = new TypeInfo.Any();
+                thisType = TypeInfo.Any.Shared;
             }
 
             // Build and register the function type
@@ -420,7 +420,7 @@ public partial class TypeChecker
                 );
 
                 TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
-                    ?? new TypeInfo.Any(); // Any during hoisting — real type inferred when body is checked
+                    ?? TypeInfo.Any.Shared; // Any during hoisting — real type inferred when body is checked
 
                 TypeInfo? thisType = ResolveAnnotation(funcStmt.ThisType, funcStmt.ThisTypeNode);
 
@@ -505,7 +505,7 @@ public partial class TypeChecker
 
         bool inferringReturnType = funcStmt.ReturnType == null;
         TypeInfo returnType = ResolveAnnotation(funcStmt.ReturnType, funcStmt.ReturnTypeNode)
-            ?? new TypeInfo.Inferred();
+            ?? TypeInfo.Inferred.Shared;
 
         // Validate type predicate return types
         if (!inferringReturnType)
@@ -693,7 +693,7 @@ public partial class TypeChecker
         if (inferringReturnType)
         {
             _inferredReturnTypes = new List<TypeInfo>();
-            _currentFunctionReturnType = new TypeInfo.Inferred();
+            _currentFunctionReturnType = TypeInfo.Inferred.Shared;
         }
         else
         {
@@ -776,7 +776,7 @@ public partial class TypeChecker
                 TypeInfo inferredReturn;
                 if (collected.Count == 0)
                 {
-                    inferredReturn = new TypeInfo.Void();
+                    inferredReturn = TypeInfo.Void.Shared;
                 }
                 else
                 {
@@ -874,7 +874,7 @@ public partial class TypeChecker
         TypeInfo yieldType;
         if (collectedYields.Count == 0)
         {
-            yieldType = new TypeInfo.Never();
+            yieldType = TypeInfo.Never.Shared;
         }
         else
         {

@@ -50,17 +50,17 @@ public static class PrimitiveTypeMappings
     /// <returns>The corresponding TypeInfo record.</returns>
     public static TypeInfo ParseAnnotation(string annotation) => annotation.Trim() switch
     {
-        "number" => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-        "string" => new TypeInfo.String(),
-        "boolean" => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-        "void" => new TypeInfo.Void(),
-        "any" => new TypeInfo.Any(),
-        "unknown" => new TypeInfo.Unknown(),
-        "never" => new TypeInfo.Never(),
-        "null" => new TypeInfo.Null(),
-        "bigint" => new TypeInfo.BigInt(),
-        "symbol" => new TypeInfo.Symbol(),
-        _ => new TypeInfo.Any() // Complex types fallback to any/object
+        "number" => TypeInfo.Primitive.Number,
+        "string" => TypeInfo.String.Shared,
+        "boolean" => TypeInfo.Primitive.Boolean,
+        "void" => TypeInfo.Void.Shared,
+        "any" => TypeInfo.Any.Shared,
+        "unknown" => TypeInfo.Unknown.Shared,
+        "never" => TypeInfo.Never.Shared,
+        "null" => TypeInfo.Null.Shared,
+        "bigint" => TypeInfo.BigInt.Shared,
+        "symbol" => TypeInfo.Symbol.Shared,
+        _ => TypeInfo.Any.Shared // Complex types fallback to any/object
     };
 
     /// <summary>

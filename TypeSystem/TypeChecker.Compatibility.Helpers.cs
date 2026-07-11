@@ -586,7 +586,7 @@ public partial class TypeChecker
             {
                 if (!double.TryParse(name, out _)) continue;
                 var effective = isOptional && _strictNullChecks
-                    ? CreateUnion(memberType, new TypeInfo.Undefined())
+                    ? CreateUnion(memberType, TypeInfo.Undefined.Shared)
                     : memberType;
                 if (!IsCompatible(expNum, effective)) return false;
             }
@@ -665,7 +665,7 @@ public partial class TypeChecker
                 if (BuiltInTypes.GetInstanceMemberNames(t) is { } builtInNames)
                     foreach (var builtInName in builtInNames)
                         yield return (builtInName,
-                            BuiltInTypes.GetInstanceMemberType(t, builtInName) ?? new TypeInfo.Any(), false);
+                            BuiltInTypes.GetInstanceMemberType(t, builtInName) ?? TypeInfo.Any.Shared, false);
                 break;
         }
     }

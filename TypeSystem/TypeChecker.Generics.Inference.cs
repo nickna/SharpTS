@@ -78,7 +78,7 @@ public partial class TypeChecker
             else
             {
                 // Default to constraint or any if not inferred
-                result.Add(tp.Constraint ?? new TypeInfo.Any());
+                result.Add(tp.Constraint ?? TypeInfo.Any.Shared);
             }
         }
 
@@ -193,10 +193,10 @@ public partial class TypeChecker
         // tsc union normalization: `any` absorbs everything (any | X = any) and `never`
         // disappears (never | X = X).
         if (members.Any(m => m is TypeInfo.Any))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         members.RemoveAll(m => m is TypeInfo.Never);
         if (members.Count == 0)
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
 
         // Deduplicate (simple reference equality for now)
         var unique = members.Distinct().ToList();

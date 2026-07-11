@@ -101,7 +101,7 @@ public partial class TypeChecker
             {
                 var (_, anyInferred) = CheckExtendsWithInfer(checkType, extendsType);
                 var trueSubs = new Dictionary<string, TypeInfo>(substitutions);
-                CollectReferencedInferNames(conditional.TrueType, name => trueSubs[name] = new TypeInfo.Any());
+                CollectReferencedInferNames(conditional.TrueType, name => trueSubs[name] = TypeInfo.Any.Shared);
                 foreach (var (name, type) in anyInferred)
                     trueSubs[name] = type;
                 return CreateUnion(
@@ -188,7 +188,7 @@ public partial class TypeChecker
 
         // Build result union
         if (resultTypes.Count == 0)
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
         if (resultTypes.Count == 1)
             return resultTypes[0];
 
@@ -394,7 +394,7 @@ public partial class TypeChecker
                     // Infer the union of all tuple element types
                     TypeInfo unionOfElements = checkTuple.ElementTypes.Count switch
                     {
-                        0 => new TypeInfo.Never(),
+                        0 => TypeInfo.Never.Shared,
                         1 => checkTuple.ElementTypes[0],
                         _ => new TypeInfo.Union(checkTuple.ElementTypes)
                     };
@@ -711,7 +711,7 @@ public partial class TypeChecker
         switch (extendsType)
         {
             case TypeInfo.InferredTypeParameter infer:
-                subs.TryAdd(infer.Name, infer.Constraint ?? new TypeInfo.Unknown());
+                subs.TryAdd(infer.Name, infer.Constraint ?? TypeInfo.Unknown.Shared);
                 break;
             case TypeInfo.Array arr: CollectInferSubstitutions(arr.ElementType, subs); break;
             case TypeInfo.Promise p: CollectInferSubstitutions(p.ValueType, subs); break;
@@ -766,7 +766,7 @@ public partial class TypeChecker
             TypeInfo extendsParam = extendsFunc.ParamTypes[i];
             TypeInfo checkParam = i < checkFunc.ParamTypes.Count
                 ? checkFunc.ParamTypes[i]
-                : new TypeInfo.Any();
+                : TypeInfo.Any.Shared;
 
             if (!CheckExtendsRecursive(checkParam, extendsParam, inferredTypes))
                 return false;
@@ -891,7 +891,7 @@ public partial class TypeChecker
             TypeInfo.TypeParameter => new TypeInfo.IntrinsicStringType(operation, input),
             TypeInfo.IntrinsicStringType ist => new TypeInfo.IntrinsicStringType(operation,
                 EvaluateIntrinsicStringType(ist.Inner, ist.Operation)),  // Compose intrinsics
-            _ => new TypeInfo.String()  // Fallback for string, any, etc.
+            _ => TypeInfo.String.Shared  // Fallback for string, any, etc.
         };
     }
 
@@ -981,7 +981,7 @@ public partial class TypeChecker
                 if (typePart is TypeInfo.InferredTypeParameter infer)
                 {
                     if (!inferredTypes.TryGetValue(infer.Name, out _))
-                        inferredTypes[infer.Name] = new TypeInfo.String();
+                        inferredTypes[infer.Name] = TypeInfo.String.Shared;
                 }
             }
             return true;

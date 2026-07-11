@@ -13,12 +13,12 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 public static class BuiltInTypes
 {
-    private static readonly TypeInfo NumberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-    private static readonly TypeInfo StringType = new TypeInfo.String();
-    private static readonly TypeInfo BooleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-    private static readonly TypeInfo VoidType = new TypeInfo.Void();
-    private static readonly TypeInfo AnyType = new TypeInfo.Any();
-    private static readonly TypeInfo BigIntType = new TypeInfo.BigInt();
+    private static readonly TypeInfo NumberType = TypeInfo.Primitive.Number;
+    private static readonly TypeInfo StringType = TypeInfo.String.Shared;
+    private static readonly TypeInfo BooleanType = TypeInfo.Primitive.Boolean;
+    private static readonly TypeInfo VoidType = TypeInfo.Void.Shared;
+    private static readonly TypeInfo AnyType = TypeInfo.Any.Shared;
+    private static readonly TypeInfo BigIntType = TypeInfo.BigInt.Shared;
 
     /// <summary>
     /// Type signatures for static methods on the String namespace
@@ -473,7 +473,7 @@ public static class BuiltInTypes
             "name" => StringType,
             "message" => StringType,
             "stack" => StringType,
-            "cause" => new TypeInfo.Any(),
+            "cause" => TypeInfo.Any.Shared,
 
             // Methods
             "toString" => new TypeInfo.Function([], StringType),
@@ -495,7 +495,7 @@ public static class BuiltInTypes
         {
             "size" => NumberType,
             "get" => new TypeInfo.Function([keyType],
-                new TypeInfo.Union([valueType, new TypeInfo.Null()])),
+                new TypeInfo.Union([valueType, TypeInfo.Null.Shared])),
             "set" => new TypeInfo.Function([keyType, valueType],
                 new TypeInfo.Map(keyType, valueType)),  // Returns this for chaining
             "has" => new TypeInfo.Function([keyType], BooleanType),
@@ -560,7 +560,7 @@ public static class BuiltInTypes
         return name switch
         {
             "get" => new TypeInfo.Function([keyType],
-                new TypeInfo.Union([valueType, new TypeInfo.Null()])),
+                new TypeInfo.Union([valueType, TypeInfo.Null.Shared])),
             "set" => new TypeInfo.Function([keyType, valueType],
                 new TypeInfo.WeakMap(keyType, valueType)),  // Returns this for chaining
             "has" => new TypeInfo.Function([keyType], BooleanType),
@@ -594,7 +594,7 @@ public static class BuiltInTypes
         return name switch
         {
             "deref" => new TypeInfo.Function([],
-                new TypeInfo.Union([targetType, new TypeInfo.Undefined()])),
+                new TypeInfo.Union([targetType, TypeInfo.Undefined.Shared])),
             _ => null
         };
     }
@@ -614,9 +614,9 @@ public static class BuiltInTypes
             // the token optional. Before #456 the FinalizationRegistry<T> annotation degraded to `any`
             // so this signature was unobserved, and T was mis-placed at parameter 0 — meaning no call
             // satisfied both the checker and the runtime for a typed registry (#482).
-            "register" => new TypeInfo.Function([new TypeInfo.Object(), targetType, new TypeInfo.Object()],
-                new TypeInfo.Undefined(), RequiredParams: 2),
-            "unregister" => new TypeInfo.Function([new TypeInfo.Any()],
+            "register" => new TypeInfo.Function([TypeInfo.Object.Shared, targetType, TypeInfo.Object.Shared],
+                TypeInfo.Undefined.Shared, RequiredParams: 2),
+            "unregister" => new TypeInfo.Function([TypeInfo.Any.Shared],
                 new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN)),
             _ => null
         };
@@ -627,7 +627,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetSymbolStaticMemberType(string name)
     {
-        var symbolType = new TypeInfo.Symbol();
+        var symbolType = TypeInfo.Symbol.Shared;
 
         return name switch
         {
@@ -644,7 +644,7 @@ public static class BuiltInTypes
             // Static methods
             "for" => new TypeInfo.Function([StringType], symbolType),
             "keyFor" => new TypeInfo.Function([symbolType],
-                new TypeInfo.Union([StringType, new TypeInfo.Null()])),
+                new TypeInfo.Union([StringType, TypeInfo.Null.Shared])),
 
             _ => null
         };
@@ -655,7 +655,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetGlobalTimerFunctionType(string name)
     {
-        var timeoutType = new TypeInfo.Timeout();
+        var timeoutType = TypeInfo.Timeout.Shared;
 
         return name switch
         {
@@ -668,7 +668,7 @@ public static class BuiltInTypes
 
             // clearTimeout(handle?: Timeout): void
             "clearTimeout" => new TypeInfo.Function(
-                [new TypeInfo.Union([timeoutType, new TypeInfo.Null(), new TypeInfo.Undefined()])],
+                [new TypeInfo.Union([timeoutType, TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])],
                 VoidType,
                 RequiredParams: 0  // handle is optional (safe to call with null/undefined)
             ),
@@ -682,7 +682,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetTimeoutMemberType(string name)
     {
-        var timeoutType = new TypeInfo.Timeout();
+        var timeoutType = TypeInfo.Timeout.Shared;
 
         return name switch
         {
@@ -734,7 +734,7 @@ public static class BuiltInTypes
                 RequiredParams: 0,
                 HasRestParam: true),
             "apply" => new TypeInfo.Function(
-                [AnyType, new TypeInfo.Union([new TypeInfo.Array(AnyType), new TypeInfo.Null()])],
+                [AnyType, new TypeInfo.Union([new TypeInfo.Array(AnyType), TypeInfo.Null.Shared])],
                 returnType,              // Returns the function's return type
                 RequiredParams: 0),
             // JS functions are objects — any arbitrary property is legal at
@@ -749,7 +749,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetBufferMemberType(string name)
     {
-        var bufferType = new TypeInfo.Buffer();
+        var bufferType = TypeInfo.Buffer.Shared;
 
         // Accept Node's lowercase `Uint` spelling (readUint8, writeBigUint64LE, …)
         // as an alias for the canonical `UInt` form.
@@ -849,7 +849,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetBufferStaticMethodType(string name)
     {
-        var bufferType = new TypeInfo.Buffer();
+        var bufferType = TypeInfo.Buffer.Shared;
 
         return name switch
         {
@@ -892,8 +892,8 @@ public static class BuiltInTypes
         return name switch
         {
             "then" => new TypeInfo.Function(
-                [new TypeInfo.Union([new TypeInfo.Function([valueType], AnyType), new TypeInfo.Undefined()]),
-                 new TypeInfo.Union([new TypeInfo.Function([AnyType], AnyType), new TypeInfo.Undefined()])],
+                [new TypeInfo.Union([new TypeInfo.Function([valueType], AnyType), TypeInfo.Undefined.Shared]),
+                 new TypeInfo.Union([new TypeInfo.Function([AnyType], AnyType), TypeInfo.Undefined.Shared])],
                 promiseAny,
                 RequiredParams: 0),
             "catch" => new TypeInfo.Function(
@@ -911,13 +911,13 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetEventEmitterMemberType(string name)
     {
-        var eventEmitterType = new TypeInfo.EventEmitter();
+        var eventEmitterType = TypeInfo.EventEmitter.Shared;
         // Listener type is 'any' because EventEmitter callbacks are inherently untyped
         // and can have any number/type of parameters
         var listenerType = AnyType;
         // Event names are string | symbol — Node allows symbol event names
         // (e.g. EventEmitter.errorMonitor).
-        var eventNameType = new TypeInfo.Union([StringType, new TypeInfo.Symbol()]);
+        var eventNameType = new TypeInfo.Union([StringType, TypeInfo.Symbol.Shared]);
 
         return name switch
         {
@@ -959,7 +959,7 @@ public static class BuiltInTypes
     {
         return name switch
         {
-            "signal" => new TypeInfo.AbortSignal(),
+            "signal" => TypeInfo.AbortSignal.Shared,
             "abort" => new TypeInfo.Function([AnyType], VoidType, RequiredParams: 0),
             _ => null
         };
@@ -976,7 +976,7 @@ public static class BuiltInTypes
         {
             "aborted" => BooleanType,
             "reason" => AnyType,
-            "onabort" => new TypeInfo.Union([new TypeInfo.Function([], VoidType), new TypeInfo.Null()]),
+            "onabort" => new TypeInfo.Union([new TypeInfo.Function([], VoidType), TypeInfo.Null.Shared]),
             "throwIfAborted" => new TypeInfo.Function([], VoidType),
             "addEventListener" => new TypeInfo.Function([StringType, listenerType], VoidType),
             "removeEventListener" => new TypeInfo.Function([StringType, listenerType], VoidType),
@@ -989,7 +989,7 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetAbortSignalStaticMethodType(string name)
     {
-        var signalType = new TypeInfo.AbortSignal();
+        var signalType = TypeInfo.AbortSignal.Shared;
 
         return name switch
         {
@@ -1007,7 +1007,7 @@ public static class BuiltInTypes
     {
         return name switch
         {
-            "get" => new TypeInfo.Function([StringType], new TypeInfo.Union([StringType, new TypeInfo.Null()])),
+            "get" => new TypeInfo.Function([StringType], new TypeInfo.Union([StringType, TypeInfo.Null.Shared])),
             "set" => new TypeInfo.Function([StringType, StringType], VoidType),
             "has" => new TypeInfo.Function([StringType], BooleanType),
             "delete" => new TypeInfo.Function([StringType], BooleanType),
@@ -1126,7 +1126,7 @@ public static class BuiltInTypes
                 BooleanType),
             "find" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType, NumberType], BooleanType)],
-                new TypeInfo.Union([elementType, new TypeInfo.Undefined()])),
+                new TypeInfo.Union([elementType, TypeInfo.Undefined.Shared])),
             _ => null
         };
     }

@@ -100,7 +100,7 @@ public partial class TypeChecker
                 // constraint (keyof any) = skip.
                 var keys = TryToTypeInfo(mapped.Constraint);
                 if (keys is TypeInfo.TypeParameter keyParam)
-                    keys = ApparentTypeOf(keyParam) ?? new TypeInfo.Unknown();
+                    keys = ApparentTypeOf(keyParam) ?? TypeInfo.Unknown.Shared;
                 if (keys is not null && !IsGenericKeySourceUndecidable(keys) &&
                     !IsCompatible(KeyLikeUnion, keys))
                 {
@@ -184,7 +184,7 @@ public partial class TypeChecker
     }
 
     private static readonly TypeInfo KeyLikeUnion = new TypeInfo.Union(
-        [new TypeInfo.String(), new TypeInfo.Primitive(TokenType.TYPE_NUMBER), new TypeInfo.Symbol()]);
+        [TypeInfo.String.Shared, TypeInfo.Primitive.Number, TypeInfo.Symbol.Shared]);
 
     /// <summary>
     /// Key sources whose membership can't be decided at declaration time (deferred conditionals,

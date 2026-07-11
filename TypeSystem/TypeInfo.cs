@@ -134,6 +134,12 @@ public abstract record TypeInfo
 
     public record Primitive : TypeInfo
     {
+        /// <summary>Shared instances for the two hot primitive kinds — immutable
+        /// (init-guarded) records, so interning is safe and keeps the identity-based
+        /// compatibility fast path hitting.</summary>
+        public static readonly Primitive Number = new(TokenType.TYPE_NUMBER);
+        public static readonly Primitive Boolean = new(TokenType.TYPE_BOOLEAN);
+
         private readonly TokenType _type;
 
         public Primitive(TokenType type) => Type = type; // routes through the validating init accessor
@@ -902,11 +908,15 @@ public abstract record TypeInfo
     
     public record Void() : TypeInfo
     {
+        public static readonly Void Shared = new();
+
         public override string ToString() => "void";
     }
 
     public record Any() : TypeInfo
     {
+        public static readonly Any Shared = new();
+
         public override string ToString() => "any";
     }
 
@@ -915,31 +925,43 @@ public abstract record TypeInfo
     /// </summary>
     public record Inferred() : TypeInfo
     {
+        public static readonly Inferred Shared = new();
+
         public override string ToString() => "<inferred>";
     }
 
     public record Null() : TypeInfo
     {
+        public static readonly Null Shared = new();
+
         public override string ToString() => "null";
     }
 
     public record Undefined() : TypeInfo
     {
+        public static readonly Undefined Shared = new();
+
         public override string ToString() => "undefined";
     }
 
     public record Unknown() : TypeInfo
     {
+        public static readonly Unknown Shared = new();
+
         public override string ToString() => "unknown";
     }
 
     public record Never() : TypeInfo
     {
+        public static readonly Never Shared = new();
+
         public override string ToString() => "never";
     }
 
     public record Symbol() : TypeInfo
     {
+        public static readonly Symbol Shared = new();
+
         public override string ToString() => "symbol";
     }
 
@@ -956,6 +978,8 @@ public abstract record TypeInfo
 
     public record BigInt() : TypeInfo
     {
+        public static readonly BigInt Shared = new();
+
         public override string ToString() => "bigint";
     }
 
@@ -966,22 +990,30 @@ public abstract record TypeInfo
     /// </summary>
     public record Object() : TypeInfo
     {
+        public static readonly Object Shared = new();
+
         public override string ToString() => "object";
     }
 
     /// <summary>String type - represents the TypeScript string primitive.</summary>
     public record String() : TypeInfo
     {
+        public static readonly String Shared = new();
+
         public override string ToString() => "string";
     }
 
     public record Date() : TypeInfo
     {
+        public static readonly Date Shared = new();
+
         public override string ToString() => "Date";
     }
 
     public record RegExp() : TypeInfo
     {
+        public static readonly RegExp Shared = new();
+
         public override string ToString() => "RegExp";
     }
 
@@ -1010,6 +1042,8 @@ public abstract record TypeInfo
     /// </summary>
     public record Timeout() : TypeInfo
     {
+        public static readonly Timeout Shared = new();
+
         public override string ToString() => "Timeout";
     }
 
@@ -1019,6 +1053,8 @@ public abstract record TypeInfo
     /// </summary>
     public record Buffer() : TypeInfo
     {
+        public static readonly Buffer Shared = new();
+
         public override string ToString() => "Buffer";
     }
 
@@ -1028,6 +1064,8 @@ public abstract record TypeInfo
     /// </summary>
     public record EventEmitter() : TypeInfo
     {
+        public static readonly EventEmitter Shared = new();
+
         public override string ToString() => "EventEmitter";
     }
 
@@ -1036,6 +1074,8 @@ public abstract record TypeInfo
     /// </summary>
     public record AbortController() : TypeInfo
     {
+        public static readonly AbortController Shared = new();
+
         public override string ToString() => "AbortController";
     }
 
@@ -1044,6 +1084,8 @@ public abstract record TypeInfo
     /// </summary>
     public record AbortSignal() : TypeInfo
     {
+        public static readonly AbortSignal Shared = new();
+
         public override string ToString() => "AbortSignal";
     }
 
@@ -1053,6 +1095,8 @@ public abstract record TypeInfo
     /// </summary>
     public record Worker() : TypeInfo
     {
+        public static readonly Worker Shared = new();
+
         public override string ToString() => "Worker";
     }
 
@@ -1061,6 +1105,8 @@ public abstract record TypeInfo
     /// </summary>
     public record MessagePort() : TypeInfo
     {
+        public static readonly MessagePort Shared = new();
+
         public override string ToString() => "MessagePort";
     }
 
@@ -1069,6 +1115,8 @@ public abstract record TypeInfo
     /// </summary>
     public record MessageChannel() : TypeInfo
     {
+        public static readonly MessageChannel Shared = new();
+
         public override string ToString() => "MessageChannel";
     }
 
@@ -1111,6 +1159,8 @@ public abstract record TypeInfo
     /// </summary>
     public record AtomicsNamespace() : TypeInfo
     {
+        public static readonly AtomicsNamespace Shared = new();
+
         public override string ToString() => "typeof Atomics";
     }
 
@@ -1300,16 +1350,16 @@ public abstract record TypeInfo
 
                 // never absorbs everything in intersection
                 if (flattened.Any(t => t is Never))
-                    return _flattenedTypes = [new Never()];
+                    return _flattenedTypes = [Never.Shared];
 
                 // any absorbs in intersection
                 if (flattened.Any(t => t is Any))
-                    return _flattenedTypes = [new Any()];
+                    return _flattenedTypes = [Any.Shared];
 
                 // unknown is identity element - remove it
                 flattened = flattened.Where(t => t is not Unknown).ToList();
                 if (flattened.Count == 0)
-                    return _flattenedTypes = [new Unknown()];
+                    return _flattenedTypes = [Unknown.Shared];
 
                 return _flattenedTypes = flattened;
             }

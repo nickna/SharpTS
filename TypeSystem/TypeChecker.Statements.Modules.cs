@@ -212,7 +212,7 @@ public partial class TypeChecker
             case Stmt.Var varStmt:
                 // Ambient variable - register with declared type
                 TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
-                    ?? new TypeInfo.Any();
+                    ?? TypeInfo.Any.Shared;
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
 
@@ -265,7 +265,7 @@ public partial class TypeChecker
 
             case Stmt.Var varStmt:
                 TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
-                    ?? new TypeInfo.Any();
+                    ?? TypeInfo.Any.Shared;
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
 
@@ -338,14 +338,14 @@ public partial class TypeChecker
         if (builtInModuleName != null)
         {
             // Built-in module - define as any type (or we could define specific types)
-            _environment.Define(importReq.AliasName.Lexeme, new TypeInfo.Any());
+            _environment.Define(importReq.AliasName.Lexeme, TypeInfo.Any.Shared);
             return;
         }
 
         // Not in module context - allow but define as any
         if (_currentModule == null || _moduleResolver == null)
         {
-            _environment.Define(importReq.AliasName.Lexeme, new TypeInfo.Any());
+            _environment.Define(importReq.AliasName.Lexeme, TypeInfo.Any.Shared);
             return;
         }
 
@@ -357,7 +357,7 @@ public partial class TypeChecker
         if (importedModule == null)
         {
             // Module not found - allow but define as any (might be external)
-            _environment.Define(importReq.AliasName.Lexeme, new TypeInfo.Any());
+            _environment.Define(importReq.AliasName.Lexeme, TypeInfo.Any.Shared);
             return;
         }
 

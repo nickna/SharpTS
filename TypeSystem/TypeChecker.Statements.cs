@@ -178,7 +178,7 @@ public partial class TypeChecker
 
         if (stmt.Initializer != null)
         {
-            var provisionalType = declaredType ?? new TypeInfo.Any();
+            var provisionalType = declaredType ?? TypeInfo.Any.Shared;
             _environment.Define(stmt.Name.Lexeme, provisionalType);
             // Register as local variable for escape analysis
             _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
@@ -242,7 +242,7 @@ public partial class TypeChecker
                     // Widen top-level null/undefined to any for untyped let/var.
                     if (initializerType is TypeInfo.Null or TypeInfo.Undefined)
                     {
-                        initializerType = new TypeInfo.Any();
+                        initializerType = TypeInfo.Any.Shared;
                     }
                     declaredType = initializerType;
                     _environment.Define(stmt.Name.Lexeme, declaredType);
@@ -256,7 +256,7 @@ public partial class TypeChecker
             return VoidResult.Instance;
         }
 
-        declaredType ??= new TypeInfo.Any();
+        declaredType ??= TypeInfo.Any.Shared;
         _environment.Define(stmt.Name.Lexeme, declaredType);
         CheckVarRedeclaration(stmt, preExistingType, declaredType);
         // Record the declared type for assignment checking
@@ -361,7 +361,7 @@ public partial class TypeChecker
         {
             TypeInfo inferred = WidenLiteralType(CheckExpr(initializer));
             if (inferred is TypeInfo.Null or TypeInfo.Undefined)
-                return new TypeInfo.Any();
+                return TypeInfo.Any.Shared;
             return inferred;
         }
         catch (TypeMismatchException) { return null; }
@@ -417,7 +417,7 @@ public partial class TypeChecker
         }
         else
         {
-            _environment.Define(stmt.Name.Lexeme, new TypeInfo.Any());
+            _environment.Define(stmt.Name.Lexeme, TypeInfo.Any.Shared);
             constDeclaredType = WidenConstInitializerType(stmt.Initializer, CheckExpr(stmt.Initializer));
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
         }
@@ -451,7 +451,7 @@ public partial class TypeChecker
             }
             else
             {
-                _inferredReturnTypes.Add(new TypeInfo.Undefined());
+                _inferredReturnTypes.Add(TypeInfo.Undefined.Shared);
             }
             return VoidResult.Instance;
         }
@@ -473,7 +473,7 @@ public partial class TypeChecker
 
                 TypeInfo actualReturnType = stmt.Value != null
                     ? CheckExprWithContext(stmt.Value, expectedReturnType)
-                    : new TypeInfo.Void();
+                    : TypeInfo.Void.Shared;
 
                 MarkIfUndefinedReachableNumericReturn(stmt.Value, actualReturnType);
 
@@ -675,7 +675,7 @@ public partial class TypeChecker
                 // typeof matches the checked string) — that's `never`, not an absent type. Defining
                 // the binding as literal null here would make later lookups see it as undefined.
                 var thenEnv = new TypeEnvironment(_environment);
-                thenEnv.Define(guard.VarName, guard.NarrowedType ?? new TypeInfo.Never());
+                thenEnv.Define(guard.VarName, guard.NarrowedType ?? TypeInfo.Never.Shared);
                 using (new EnvironmentScope(this, thenEnv))
                 {
                     CheckStmt(stmt.ThenBranch);
@@ -952,7 +952,7 @@ public partial class TypeChecker
                 throw new TypeCheckException(
                     $" Type '{iterableType}' must have a '[Symbol.iterator]()' method that returns an iterator.",
                     tsCode: "TS2488"),
-            _ => new TypeInfo.Any()
+            _ => TypeInfo.Any.Shared
         };
 
         TypeEnvironment forOfEnv = new(_environment);
@@ -990,7 +990,7 @@ public partial class TypeChecker
         }
 
         TypeEnvironment forInEnv = new(_environment);
-        forInEnv.Define(stmt.Variable.Lexeme, new TypeInfo.String());
+        forInEnv.Define(stmt.Variable.Lexeme, TypeInfo.String.Shared);
 
         CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
         return VoidResult.Instance;
@@ -1684,14 +1684,14 @@ public partial class TypeChecker
                 .Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined)
                 .ToList();
 
-            if (remaining.Count == 0) return new TypeInfo.Never();
+            if (remaining.Count == 0) return TypeInfo.Never.Shared;
             if (remaining.Count == 1) return remaining[0];
             return new TypeInfo.Union(remaining);
         }
 
         // If the type itself is null or undefined, return never
         if (type is TypeInfo.Null or TypeInfo.Undefined)
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
 
         return type;
     }

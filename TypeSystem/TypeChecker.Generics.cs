@@ -302,8 +302,8 @@ public partial class TypeChecker
                 // through, resolve permissively rather than crash.
                 result = genericAlias.Value.DefinitionNode is { } definitionNode
                     ? TryExpandGenericAliasFromNode(baseName, definitionNode, genericAlias.Value.TypeParams, typeArgs)
-                        ?? new TypeInfo.Any()
-                    : new TypeInfo.Any();
+                        ?? TypeInfo.Any.Shared
+                    : TypeInfo.Any.Shared;
             }
             else
             {
@@ -315,7 +315,7 @@ public partial class TypeChecker
                     TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
                     TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
                     TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
-                    _ => new TypeInfo.Any() // Unknown generic type - fallback to any
+                    _ => TypeInfo.Any.Shared // Unknown generic type - fallback to any
                 };
             }
         }

@@ -26,7 +26,7 @@ public partial class TypeChecker
             OperatorDescriptor.Plus => CheckPlusOperator(left, right, line),
             OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right, line),
             OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, binary.Operator.Lexeme, line),
-            OperatorDescriptor.Equality => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            OperatorDescriptor.Equality => TypeInfo.Primitive.Boolean,
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
             OperatorDescriptor.In => CheckInOperator(right, line),
@@ -34,8 +34,8 @@ public partial class TypeChecker
             // symbolType1 case needs `Symbol() || {}` to stay a `symbol | {}` union, but CheckLogical
             // currently collapses it to a bare `symbol`, which would make a bare-symbol LHS check
             // fire spuriously on `(Symbol() || {}) instanceof Object`. Deferred with that inference gap.
-            OperatorDescriptor.InstanceOf => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-            _ => new TypeInfo.Any()
+            OperatorDescriptor.InstanceOf => TypeInfo.Primitive.Boolean,
+            _ => TypeInfo.Any.Shared
         };
     }
 
@@ -48,7 +48,7 @@ public partial class TypeChecker
     {
         if (right is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
             throw new TypeCheckException($"Type '{right}' is not assignable to type 'object'.", line > 0 ? line : null, tsCode: "TS2322");
-        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        return TypeInfo.Primitive.Boolean;
     }
 
     /// <summary>
@@ -82,10 +82,10 @@ public partial class TypeChecker
             throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
         }
         // Any/Inferred (incl. in unions) bypasses type checking - return any
-        if (IsAnyPermissive(left) || IsAnyPermissive(right)) return new TypeInfo.Any();
-        if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
-        if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        if (IsString(left) || IsString(right)) return new TypeInfo.String();
+        if (IsAnyPermissive(left) || IsAnyPermissive(right)) return TypeInfo.Any.Shared;
+        if (IsBigInt(left) && IsBigInt(right)) return TypeInfo.BigInt.Shared;
+        if (IsNumber(left) && IsNumber(right)) return TypeInfo.Primitive.Number;
+        if (IsString(left) || IsString(right)) return TypeInfo.String.Shared;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         throw new TypeCheckException("Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.", line > 0 ? line : null, tsCode: "TS2365");
@@ -101,16 +101,16 @@ public partial class TypeChecker
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // Allow number+number OR bigint+bigint, NOT mixed
         if (IsBigInt(left) && IsBigInt(right))
-            return new TypeInfo.BigInt();
+            return TypeInfo.BigInt.Shared;
         if (IsNumber(left) && IsNumber(right))
-            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            return TypeInfo.Primitive.Number;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         RecordInvalidArithmeticOperand(left, right, line);
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     /// <summary>
@@ -137,13 +137,13 @@ public partial class TypeChecker
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
-            return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+            return TypeInfo.Primitive.Boolean;
         // Allow number vs number, bigint vs bigint, or string vs string
         // (JS AbstractRelationalComparison: both strings → lexicographic).
         if ((IsBigInt(left) && IsBigInt(right))
             || (IsNumber(left) && IsNumber(right))
             || (IsString(left) && IsString(right)))
-            return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+            return TypeInfo.Primitive.Boolean;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot compare bigint and number directly. Use explicit conversion.", line > 0 ? line : null, tsCode: "TS2365");
         // tsc has a symbol-specific message for relational comparisons (one diagnostic for the whole
@@ -157,24 +157,24 @@ public partial class TypeChecker
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // Allow both number and bigint (separately)
         if (IsBigInt(left) && IsBigInt(right))
-            return new TypeInfo.BigInt();
+            return TypeInfo.BigInt.Shared;
         if (IsNumber(left) && IsNumber(right))
-            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            return TypeInfo.Primitive.Number;
         if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in bitwise operations.", line > 0 ? line : null, tsCode: "TS2365");
         // Same per-side TS2362/TS2363 split as arithmetic — tsc uses the identical codes for bitwise.
         RecordInvalidArithmeticOperand(left, right, line);
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     private TypeInfo CheckUnsignedShiftBinary(TypeInfo left, TypeInfo right, int line = 0)
     {
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
         if (IsBigInt(left) || IsBigInt(right))
             throw new TypeCheckException("Unsigned right shift (>>>) is not supported for bigint.", line > 0 ? line : null, tsCode: "TS2791");
@@ -191,7 +191,7 @@ public partial class TypeChecker
                 throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2362");
             throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
         }
-        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        return TypeInfo.Primitive.Number;
     }
 
     private TypeInfo CheckLogical(Expr.Logical logical)
@@ -266,7 +266,7 @@ public partial class TypeChecker
         // If one type is `any`, return `any`
         if (leftType is TypeInfo.Any || rightType is TypeInfo.Any)
         {
-            return new TypeInfo.Any();
+            return TypeInfo.Any.Shared;
         }
 
         // If one is assignable to the other, return the broader type
@@ -489,7 +489,7 @@ public partial class TypeChecker
             InvalidateNarrowingsFor(assignedPath);
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     private TypeInfo CheckCompoundSetIndex(Expr.CompoundSetIndex compound)
@@ -528,7 +528,7 @@ public partial class TypeChecker
             return arrayType.ElementType;
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     private TypeInfo CheckLogicalAssign(Expr.LogicalAssign logical)
@@ -580,7 +580,7 @@ public partial class TypeChecker
         // fires names the wider (subsuming) type directly — not its own first argument's counterpart.
         TypeInfo resultType;
         if (narrowedVar is TypeInfo.Never) resultType = valueType;
-        else if (narrowedVar is TypeInfo.Any || valueType is TypeInfo.Any) resultType = new TypeInfo.Any();
+        else if (narrowedVar is TypeInfo.Any || valueType is TypeInfo.Any) resultType = TypeInfo.Any.Shared;
         else if (IsCompatible(narrowedVar, valueType)) resultType = narrowedVar;
         else if (IsCompatible(valueType, narrowedVar)) resultType = valueType;
         else resultType = new TypeInfo.Union([narrowedVar, valueType]);
@@ -621,12 +621,12 @@ public partial class TypeChecker
             var kept = u.FlattenedTypes.Where(keep).ToList();
             return kept.Count switch
             {
-                0 => new TypeInfo.Never(),
+                0 => TypeInfo.Never.Shared,
                 1 => kept[0],
                 _ => new TypeInfo.Union(kept),
             };
         }
-        return keep(type) ? type : new TypeInfo.Never();
+        return keep(type) ? type : TypeInfo.Never.Shared;
     }
 
     /// <summary>A constituent that is always falsy: null, undefined, or a falsy literal.</summary>
@@ -659,7 +659,7 @@ public partial class TypeChecker
             InvalidateNarrowingsFor(assignedPath);
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     private TypeInfo CheckLogicalSetIndex(Expr.LogicalSetIndex logical)
@@ -693,7 +693,7 @@ public partial class TypeChecker
             return arrayType.ElementType;
         }
 
-        return new TypeInfo.Any();
+        return TypeInfo.Any.Shared;
     }
 
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
@@ -703,7 +703,7 @@ public partial class TypeChecker
         {
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: prefix.Operator.Line, tsCode: "TS2356");
         }
-        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        return TypeInfo.Primitive.Number;
     }
 
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
@@ -713,7 +713,7 @@ public partial class TypeChecker
         {
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: postfix.Operator.Line, tsCode: "TS2356");
         }
-        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        return TypeInfo.Primitive.Number;
     }
 
     private TypeInfo CheckNonNullAssertion(Expr.NonNullAssertion nna)
@@ -724,7 +724,7 @@ public partial class TypeChecker
         if (exprType is TypeInfo.Union u && (u.ContainsNull || u.ContainsUndefined))
         {
             var nonNullishTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined).ToList();
-            return nonNullishTypes.Count == 0 ? new TypeInfo.Never() :
+            return nonNullishTypes.Count == 0 ? TypeInfo.Never.Shared :
                 nonNullishTypes.Count == 1 ? nonNullishTypes[0] :
                 new TypeInfo.Union(nonNullishTypes);
         }
@@ -732,7 +732,7 @@ public partial class TypeChecker
         // If the type is just null or undefined, return never (asserting nullish is not nullish is a type error)
         if (exprType is TypeInfo.Null or TypeInfo.Undefined)
         {
-            return new TypeInfo.Never();
+            return TypeInfo.Never.Shared;
         }
 
         // Otherwise, return the type unchanged (it's already non-nullable)
@@ -753,7 +753,7 @@ public partial class TypeChecker
         // Type check the operand (for any side effects or errors)
         CheckExpr(delete.Operand);
         // delete always returns boolean
-        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        return TypeInfo.Primitive.Boolean;
     }
 
     private TypeInfo CheckUnary(Expr.Unary unary)
@@ -770,32 +770,32 @@ public partial class TypeChecker
             {
                 CheckExpr(unary.Right);
             }
-            return new TypeInfo.String();
+            return TypeInfo.String.Shared;
         }
         TypeInfo right = CheckExpr(unary.Right);
         if (unary.Operator.Type == TokenType.VOID)
-            return new TypeInfo.Undefined();
+            return TypeInfo.Undefined.Shared;
         if (unary.Operator.Type == TokenType.MINUS)
         {
             // tsc types -x as number when x is any; IsBigInt(any) is true via
             // IsTypeOfKind, which would mis-type -x as bigint and make any
             // enclosing binary expression take the bigint emit path (#190).
-            if (right is TypeInfo.Any) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-            if (IsBigInt(right)) return new TypeInfo.BigInt();
-            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            if (right is TypeInfo.Any) return TypeInfo.Primitive.Number;
+            if (IsBigInt(right)) return TypeInfo.BigInt.Shared;
+            if (IsNumber(right)) return TypeInfo.Primitive.Number;
             // tsc has a symbol-specific message for unary '-'/'~'/'+', distinct from the generic one.
             if (ContainsSymbolType(right))
                 throw new TypeCheckException("The '-' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Unary '-' expects a number or bigint.", tsCode: "TS2362");
         }
         if (unary.Operator.Type == TokenType.BANG)
-             return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+             return TypeInfo.Primitive.Boolean;
         if (unary.Operator.Type == TokenType.TILDE)
         {
             // Same any→number rule as unary minus above.
-            if (right is TypeInfo.Any) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-            if (IsBigInt(right)) return new TypeInfo.BigInt();
-            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            if (right is TypeInfo.Any) return TypeInfo.Primitive.Number;
+            if (IsBigInt(right)) return TypeInfo.BigInt.Shared;
+            if (IsNumber(right)) return TypeInfo.Primitive.Number;
             if (ContainsSymbolType(right))
                 throw new TypeCheckException("The '~' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
             throw new TypeCheckException("Bitwise NOT requires a numeric operand.", tsCode: "TS2362");

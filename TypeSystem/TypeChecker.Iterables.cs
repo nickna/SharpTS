@@ -24,7 +24,7 @@ public partial class TypeChecker
         var fields = new Dictionary<string, TypeInfo>
         {
             ["value"] = element,
-            ["done"] = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            ["done"] = TypeInfo.Primitive.Boolean,
         }.ToFrozenDictionary();
         return new TypeInfo.Record(fields, OptionalFields: new[] { "done" }.ToFrozenSet());
     }
@@ -65,10 +65,10 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExtractIteratorResultValue(TypeInfo? nextReturn) => nextReturn switch
     {
-        null or TypeInfo.Any => new TypeInfo.Any(),
+        null or TypeInfo.Any => TypeInfo.Any.Shared,
         TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance =>
-            GetMemberType(nextReturn, "value") ?? new TypeInfo.Any(),
-        _ => new TypeInfo.Any()
+            GetMemberType(nextReturn, "value") ?? TypeInfo.Any.Shared,
+        _ => TypeInfo.Any.Shared
     };
 
     /// <summary>
@@ -86,7 +86,7 @@ public partial class TypeChecker
 
         // next() on an async iterator returns Promise<IteratorResult<T>>; unwrap the Promise first.
         TypeInfo? nextReturn = GetCallableReturnType(nextMember);
-        TypeInfo iterResult = nextReturn is null ? new TypeInfo.Any() : ResolveAwaitedType(nextReturn);
+        TypeInfo iterResult = nextReturn is null ? TypeInfo.Any.Shared : ResolveAwaitedType(nextReturn);
         elementType = ExtractIteratorResultValue(iterResult);
         return true;
     }
@@ -115,7 +115,7 @@ public partial class TypeChecker
         }
 
         TypeInfo? iterator = GetCallableReturnType(iteratorFactory);
-        if (iterator is null) { elementType = new TypeInfo.Any(); return true; }
+        if (iterator is null) { elementType = TypeInfo.Any.Shared; return true; }
 
         return TryGetIteratorElementFromReturn(iterator, out elementType);
     }
@@ -140,7 +140,7 @@ public partial class TypeChecker
             if (IsCallableMember(iteratorFactory))
             {
                 TypeInfo? iterator = GetCallableReturnType(iteratorFactory);
-                if (iterator is null) { elementType = new TypeInfo.Any(); return true; }
+                if (iterator is null) { elementType = TypeInfo.Any.Shared; return true; }
                 return TryGetIteratorElementFromReturn(iterator, out elementType);
             }
             current = GetSuperclass(current);
@@ -163,7 +163,7 @@ public partial class TypeChecker
             case TypeInfo.Iterable ib: elementType = ib.ElementType; return true;
             default:
                 if (TryGetStructuralIteratorElement(iterator, out elementType)) return true;
-                elementType = new TypeInfo.Any();
+                elementType = TypeInfo.Any.Shared;
                 return true;
         }
     }
@@ -217,8 +217,8 @@ public partial class TypeChecker
             case TypeInfo.Iterator it: elementType = it.ElementType; return true;
             case TypeInfo.Generator gen: elementType = gen.YieldType; return true;
             case TypeInfo.Iterable iterable: elementType = iterable.ElementType; return true;
-            case TypeInfo.String or TypeInfo.StringLiteral: elementType = new TypeInfo.String(); return true;
-            case TypeInfo.Any: elementType = new TypeInfo.Any(); return true;
+            case TypeInfo.String or TypeInfo.StringLiteral: elementType = TypeInfo.String.Shared; return true;
+            case TypeInfo.Any: elementType = TypeInfo.Any.Shared; return true;
             case TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance:
                 return TryGetStructuralIterableElement(type, out elementType);
             default:
@@ -271,7 +271,7 @@ public partial class TypeChecker
             case TypeInfo.AsyncIterable ai: elementType = ai.ElementType; return true;
             case TypeInfo.AsyncIterator ait: elementType = ait.ElementType; return true;
             case TypeInfo.AsyncGenerator ag: elementType = ag.YieldType; return true;
-            case TypeInfo.Any: elementType = new TypeInfo.Any(); return true;
+            case TypeInfo.Any: elementType = TypeInfo.Any.Shared; return true;
             case TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance:
                 return TryGetStructuralAsyncIterableElement(type, out elementType);
             default:
@@ -299,7 +299,7 @@ public partial class TypeChecker
             return false;
 
         TypeInfo? iterator = GetCallableReturnType(iteratorFactory);
-        if (iterator is null) { elementType = new TypeInfo.Any(); return true; }
+        if (iterator is null) { elementType = TypeInfo.Any.Shared; return true; }
 
         switch (iterator)
         {
@@ -308,7 +308,7 @@ public partial class TypeChecker
             case TypeInfo.AsyncIterable ai: elementType = ai.ElementType; return true;
             default:
                 if (TryGetStructuralAsyncIteratorElement(iterator, out elementType)) return true;
-                elementType = new TypeInfo.Any();
+                elementType = TypeInfo.Any.Shared;
                 return true;
         }
     }
