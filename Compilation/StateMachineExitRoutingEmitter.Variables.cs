@@ -37,6 +37,70 @@ public abstract partial class StateMachineExitRoutingEmitter
     }
 
     /// <summary>
+    /// Applies parameter defaults at state-machine entry (#646/#737). A defaulted parameter whose
+    /// argument was omitted or explicitly <c>undefined</c> arrives in its hoisted state-machine field
+    /// as null / the <c>$Undefined</c> sentinel; this replaces it with the evaluated default
+    /// expression — the state-machine analogue of <see cref="ILEmitter.EmitDefaultParameters"/>.
+    /// Defaults are evaluated in declaration order, so a later default may reference an earlier
+    /// (already-defaulted) parameter via its field. The generators mirror an applied default into the
+    /// function display class (#792) via <see cref="ExpressionEmitterBase.GetFunctionDCField"/>; the
+    /// async families leave that virtual at its null default, so the mirror block never fires for
+    /// them. The async function wraps this in its defaults-applied resume guard
+    /// (<see cref="AsyncMoveNextEmitter"/>); the arrow and generators run it on initial entry only.
+    /// </summary>
+    protected void EmitDefaultParameters(List<Stmt.Parameter> parameters)
+    {
+        if (!parameters.Any(p => p.DefaultValue != null))
+            return;
+
+        foreach (var param in parameters)
+        {
+            if (param.DefaultValue == null) continue;
+
+            var field = GetHoistedVariableField(param.Name.Lexeme);
+            if (field == null) continue; // Parameter not hoisted (unused in body) — default is moot.
+
+            var applyDefault = IL.DefineLabel();
+            var checkUndefined = IL.DefineLabel();
+            var skipDefault = IL.DefineLabel();
+
+            // if (field == null) apply; else if (field is $Undefined) apply; else keep.
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, field);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brtrue, checkUndefined);
+            IL.Emit(OpCodes.Pop);                       // pop the null
+            IL.Emit(OpCodes.Br, applyDefault);
+
+            IL.MarkLabel(checkUndefined);
+            IL.Emit(OpCodes.Isinst, Ctx!.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Brtrue, applyDefault);
+            IL.Emit(OpCodes.Br, skipDefault);
+
+            IL.MarkLabel(applyDefault);
+            EmitExpression(param.DefaultValue);
+            EnsureBoxed();
+            var temp = IL.DeclareLocal(Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, field);
+
+            // A captured-and-mutated parameter's live storage is the function display-class field,
+            // not the state-machine field the body no longer reads. Mirror the default into the DC
+            // field so a nested arrow observes the default rather than the omitted-arg $Undefined
+            // sentinel (#792). Non-captured params return false here and keep the SM-field-only path.
+            if (TryGetFunctionDCField(GetFunctionDCField(), param.Name.Lexeme, out var dcField))
+            {
+                IL.Emit(OpCodes.Ldloc, temp);
+                StoreToDCField(GetFunctionDCField()!, dcField, leaveValueOnStack: false);
+            }
+
+            IL.MarkLabel(skipDefault);
+        }
+    }
+
+    /// <summary>
     /// Per-binding storage names for block-scoped let/const shadows (#711/#766), supplied by each
     /// family's state analysis. Empty for the common no-shadow case.
     /// </summary>
