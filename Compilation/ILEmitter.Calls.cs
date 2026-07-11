@@ -162,57 +162,17 @@ public partial class ILEmitter
             if (TryEmitOptionalChainMethodCall(c))
                 return;
 
-            // module.promises.methodName() (fs.promises, dns.promises, stream.promises)
-            if (methodGet.Object is Expr.Get promisesGet &&
-                promisesGet.Name.Lexeme == "promises" &&
-                promisesGet.Object is Expr.Variable promisesModuleVar &&
-                _ctx.BuiltInModuleNamespaces != null &&
-                _ctx.BuiltInModuleNamespaces.TryGetValue(promisesModuleVar.Name.Lexeme, out var promisesModuleName) &&
-                _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(promisesModuleName + "/promises") is { } promisesEmitter)
-            {
-                if (promisesEmitter.TryEmitMethodCall(this, methodGet.Name.Lexeme, c.Arguments))
-                {
-                    SetStackUnknown();
-                    return;
-                }
-            }
+            // module.promises + Class.staticMethod + inherited Promise statics:
+            // shared with TryEmitGetCalleeViaBaseClass so the dispatch rules
+            // can't drift (an earlier inline copy here omitted the
+            // Promise-subclass arm and shipped a MyP.resolve(1) crash).
+            // Extra-arg boxing stays on ILEmitter's EmitBoxIfNeeded via the
+            // EnsureBoxedArg override.
+            if (TryEmitModulePromisesMethodCall(methodGet, c.Arguments))
+                return;
 
-            // Class.staticMethod() with generic class support
-            if (methodGet.Object is Expr.Variable classVar &&
-                _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
-            {
-                string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-                if (_ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, methodGet.Name.Lexeme, classBuilder, out var callableMethod))
-                {
-                    var staticMethodParams = callableMethod!.GetParameters();
-                    for (int i = 0; i < c.Arguments.Count; i++)
-                    {
-                        EmitExpression(c.Arguments[i]);
-                        if (i < staticMethodParams.Length)
-                            EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
-                        else
-                            EmitBoxIfNeeded(c.Arguments[i]);
-                    }
-                    for (int i = c.Arguments.Count; i < staticMethodParams.Length; i++)
-                        EmitOmittedArgument(staticMethodParams[i].ParameterType);
-                    IL.Emit(OpCodes.Call, callableMethod);
-                    SetStackUnknown();
-                    return;
-                }
-
-                // Promise subclasses (#242/#309) inherit the Promise static side:
-                // MyP.resolve / MyP.reject / MyP.all etc. are not user-declared
-                // statics (so TryGetCallableStaticMethod above misses them) — emit
-                // the base Promise static and wrap the result in the subclass.
-                // Mirrors TryEmitGetCalleeViaBaseClass; the inline ILEmitter path
-                // had drifted and omitted this block, so MyP.resolve(1) threw.
-                if (methodGet.Name.Lexeme is "resolve" or "reject" or "all" or "race" or "allSettled" or "any" or "withResolvers"
-                    && _ctx.ClassRegistry.IsPromiseSubclass(resolvedClassName)
-                    && TryEmitDerivedPromiseStatic(resolvedClassName, classBuilder, methodGet.Name.Lexeme, c.Arguments))
-                {
-                    return;
-                }
-            }
+            if (TryEmitClassStaticDispatch(c, methodGet))
+                return;
 
             // Instance method dispatch (Array/String/Map/Promise/etc.)
             EmitMethodCall(methodGet, c.Arguments);

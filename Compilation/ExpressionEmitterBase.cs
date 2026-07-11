@@ -109,6 +109,17 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     #region Boxing and Type Conversion Delegations
     protected void EnsureBoxed() => _helpers.EnsureBoxed();
+
+    /// <summary>
+    /// Boxes an already-evaluated call argument left on the stack. The base
+    /// boxes from tracked stack state alone (state-machine emitters alias
+    /// EmitBoxIfNeeded to EnsureBoxed); ILEmitter overrides with its richer
+    /// EmitBoxIfNeeded, which adds a TypeMap reference-type skip and a
+    /// literal fallback for when stack-type tracking misses. This seam is the
+    /// single deliberate divergence inside the shared static-dispatch helpers
+    /// — keep it explicit rather than folding either behavior into the other.
+    /// </summary>
+    protected virtual void EnsureBoxedArg(Expr arg) => EnsureBoxed();
     protected void EnsureDouble() => _helpers.EnsureDouble();
     protected void EnsureBoolean() => _helpers.EnsureBoolean();
     protected void EnsureString() => _helpers.EnsureString();
