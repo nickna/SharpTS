@@ -300,18 +300,59 @@ public static class CryptoModuleInterpreter
         if (keylen < 0)
             throw new Exception("crypto.pbkdf2Sync keylen must be non-negative");
 
-        var hashAlgorithm = digest.ToLowerInvariant() switch
+        var hashAlgorithm = ParseKdfDigest(digest, "crypto.pbkdf2Sync");
+
+        var derivedKey = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, hashAlgorithm, keylen);
+        return RuntimeValue.FromObject(new SharpTSBuffer(derivedKey));
+    }
+
+    /// <summary>
+    /// Parses the SHA-family digest name accepted by the key-derivation APIs (pbkdf2/hkdf).
+    /// Deliberately narrower than <see cref="CryptoAlgorithms.ParseHashName"/>: the .NET KDF
+    /// primitives used here take only the SHA family (no MD5/SHA-3). <paramref name="apiName"/>
+    /// qualifies the sync APIs' error message; the async paths pass null (their message is
+    /// wrapped by CreateCryptoError with the syscall name).
+    /// </summary>
+    private static HashAlgorithmName ParseKdfDigest(string digest, string? apiName = null) =>
+        digest.ToLowerInvariant() switch
         {
             "sha1" => HashAlgorithmName.SHA1,
             "sha256" => HashAlgorithmName.SHA256,
             "sha384" => HashAlgorithmName.SHA384,
             "sha512" => HashAlgorithmName.SHA512,
-            // Note: MD5 is not supported for PBKDF2 in .NET - use SHA family instead
-            _ => throw new Exception($"crypto.pbkdf2Sync: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512")
+            _ => throw new Exception(apiName != null
+                ? $"{apiName}: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512"
+                : $"unsupported digest algorithm '{digest}'")
         };
 
-        var derivedKey = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, hashAlgorithm, keylen);
-        return RuntimeValue.FromObject(new SharpTSBuffer(derivedKey));
+    /// <summary>
+    /// Parses the Node scrypt options object (N/cost, r/blockSize, p/parallelization) with
+    /// Node's defaults and validates that N is a power of 2. <paramref name="errorPrefix"/>
+    /// qualifies the sync API's message; the async path passes the default (its message is
+    /// wrapped by CreateCryptoError).
+    /// </summary>
+    private static (int N, int r, int p) ParseScryptOptions(SharpTSObject? options, string errorPrefix = "")
+    {
+        // Default scrypt parameters (Node.js defaults)
+        int N = 16384;  // cost parameter (must be power of 2)
+        int r = 8;      // block size
+        int p = 1;      // parallelization
+
+        if (options != null)
+        {
+            var fields = options.Fields;
+            if (fields.TryGetValue("N", out var costObj) && costObj is double costVal) N = (int)costVal;
+            if (fields.TryGetValue("cost", out var cost2Obj) && cost2Obj is double cost2Val) N = (int)cost2Val;
+            if (fields.TryGetValue("r", out var rObj) && rObj is double rVal) r = (int)rVal;
+            if (fields.TryGetValue("blockSize", out var bsObj) && bsObj is double bsVal) r = (int)bsVal;
+            if (fields.TryGetValue("p", out var pObj) && pObj is double pVal) p = (int)pVal;
+            if (fields.TryGetValue("parallelization", out var parObj) && parObj is double parVal) p = (int)parVal;
+        }
+
+        if (N < 2 || (N & (N - 1)) != 0)
+            throw new Exception($"{errorPrefix}N must be a power of 2 greater than 1");
+
+        return (N, r, p);
     }
 
     private static RuntimeValue ScryptSync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -327,32 +368,9 @@ public static class CryptoModuleInterpreter
         if (keylen < 0)
             throw new Exception("crypto.scryptSync keylen must be non-negative");
 
-        // Default scrypt parameters (Node.js defaults)
-        int N = 16384;  // cost parameter (must be power of 2)
-        int r = 8;      // block size
-        int p = 1;      // parallelization
-
-        // Parse options if provided
-        if (args.Length > 3 && args[3].ToObject() is SharpTSObject options)
-        {
-            var fields = options.Fields;
-            if (fields.TryGetValue("N", out var costObj) && costObj is double costVal)
-                N = (int)costVal;
-            if (fields.TryGetValue("cost", out var cost2Obj) && cost2Obj is double cost2Val)
-                N = (int)cost2Val;
-            if (fields.TryGetValue("r", out var rObj) && rObj is double rVal)
-                r = (int)rVal;
-            if (fields.TryGetValue("blockSize", out var bsObj) && bsObj is double bsVal)
-                r = (int)bsVal;
-            if (fields.TryGetValue("p", out var pObj) && pObj is double pVal)
-                p = (int)pVal;
-            if (fields.TryGetValue("parallelization", out var parObj) && parObj is double parVal)
-                p = (int)parVal;
-        }
-
-        // Validate N is a power of 2
-        if (N < 2 || (N & (N - 1)) != 0)
-            throw new Exception("crypto.scryptSync: N must be a power of 2 greater than 1");
+        var (N, r, p) = ParseScryptOptions(
+            args.Length > 3 && args[3].ToObject() is SharpTSObject options ? options : null,
+            "crypto.scryptSync: ");
 
         // Use shared scrypt implementation
         var derivedKey = SharpTS.Compilation.ScryptImpl.DeriveBytes(password, salt, N, r, p, keylen);
@@ -602,14 +620,7 @@ public static class CryptoModuleInterpreter
         if (keylen == 0)
             return RuntimeValue.FromObject(new SharpTSBuffer([]));
 
-        var hashAlgorithm = digest.ToLowerInvariant() switch
-        {
-            "sha1" => HashAlgorithmName.SHA1,
-            "sha256" => HashAlgorithmName.SHA256,
-            "sha384" => HashAlgorithmName.SHA384,
-            "sha512" => HashAlgorithmName.SHA512,
-            _ => throw new Exception($"crypto.hkdfSync: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512")
-        };
+        var hashAlgorithm = ParseKdfDigest(digest, "crypto.hkdfSync");
 
         var derivedKey = HKDF.DeriveKey(hashAlgorithm, ikm, keylen, salt, info);
         return RuntimeValue.FromObject(new SharpTSBuffer(derivedKey));
@@ -796,14 +807,7 @@ public static class CryptoModuleInterpreter
                 if (digest == null) throw new Exception("digest must be a string");
                 if (iterations < 1) throw new Exception("iterations must be at least 1");
 
-                var hashAlgorithm = digest.ToLowerInvariant() switch
-                {
-                    "sha1" => HashAlgorithmName.SHA1,
-                    "sha256" => HashAlgorithmName.SHA256,
-                    "sha384" => HashAlgorithmName.SHA384,
-                    "sha512" => HashAlgorithmName.SHA512,
-                    _ => throw new Exception($"unsupported digest algorithm '{digest}'")
-                };
+                var hashAlgorithm = ParseKdfDigest(digest);
 
                 var derivedKey = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, hashAlgorithm, keylen);
                 ScheduleCallbackAndUnref(interpreter, callback, null, new SharpTSBuffer(derivedKey));
@@ -840,20 +844,7 @@ public static class CryptoModuleInterpreter
                 if (password == null) throw new Exception("password is required");
                 if (salt == null) throw new Exception("salt is required");
 
-                int N = 16384, r = 8, p = 1;
-                if (options != null)
-                {
-                    var fields = options.Fields;
-                    if (fields.TryGetValue("N", out var costObj) && costObj is double costVal) N = (int)costVal;
-                    if (fields.TryGetValue("cost", out var cost2Obj) && cost2Obj is double cost2Val) N = (int)cost2Val;
-                    if (fields.TryGetValue("r", out var rObj) && rObj is double rVal) r = (int)rVal;
-                    if (fields.TryGetValue("blockSize", out var bsObj) && bsObj is double bsVal) r = (int)bsVal;
-                    if (fields.TryGetValue("p", out var pObj) && pObj is double pVal) p = (int)pVal;
-                    if (fields.TryGetValue("parallelization", out var parObj) && parObj is double parVal) p = (int)parVal;
-                }
-
-                if (N < 2 || (N & (N - 1)) != 0)
-                    throw new Exception("N must be a power of 2 greater than 1");
+                var (N, r, p) = ParseScryptOptions(options);
 
                 var derivedKey = SharpTS.Compilation.ScryptImpl.DeriveBytes(password, salt, N, r, p, keylen);
                 ScheduleCallbackAndUnref(interpreter, callback, null, new SharpTSBuffer(derivedKey));
@@ -934,14 +925,7 @@ public static class CryptoModuleInterpreter
                     return;
                 }
 
-                var hashAlgorithm = digest.ToLowerInvariant() switch
-                {
-                    "sha1" => HashAlgorithmName.SHA1,
-                    "sha256" => HashAlgorithmName.SHA256,
-                    "sha384" => HashAlgorithmName.SHA384,
-                    "sha512" => HashAlgorithmName.SHA512,
-                    _ => throw new Exception($"unsupported digest algorithm '{digest}'")
-                };
+                var hashAlgorithm = ParseKdfDigest(digest);
 
                 var derivedKey = HKDF.DeriveKey(hashAlgorithm, ikm, keylen, salt, info);
                 ScheduleCallbackAndUnref(interpreter, callback, null, new SharpTSBuffer(derivedKey));
