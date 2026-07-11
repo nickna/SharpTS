@@ -1635,15 +1635,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
 
         // Non-capturing arrow: static method, null target.
+        // The helper's trailing Castclass is load-bearing here: GetMethodFromHandle
+        // returns MethodBase while $TSFunctionCtor expects MethodInfo, and without
+        // it a path leading here from a state-machine label with a different stack
+        // state trips ILVerify PathStackDepth into an InvalidProgramException.
         IL.Emit(OpCodes.Ldnull);
-        IL.Emit(OpCodes.Ldtoken, method);
-        IL.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        // GetMethodFromHandle returns MethodBase; $TSFunctionCtor expects MethodInfo.
-        // Without this Castclass, ILVerify rejects the stack type — the JIT has been
-        // tolerant so far, but a path leading here from a state-machine label with a
-        // different stack state trips PathStackDepth, which promotes the type error
-        // to an outright InvalidProgramException.
-        IL.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(IL, method);
         IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -1758,9 +1755,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             }
         }
 
-        IL.Emit(OpCodes.Ldtoken, method);
-        IL.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
-        IL.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        Types.EmitLoadMethodInfoViaHandle(IL, method);
         IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
     }
@@ -1841,11 +1836,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             if (Ctx.ProgramType != null)
             {
                 IL.Emit(OpCodes.Ldtoken, Ctx.ProgramType);
-                IL.Emit(OpCodes.Call, Types.GetMethod(Types.MethodBase, "GetMethodFromHandle", Types.RuntimeMethodHandle, Types.RuntimeTypeHandle));
+                IL.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandleWithType);
             }
             else
             {
-                IL.Emit(OpCodes.Call, Types.GetMethod(Types.MethodBase, "GetMethodFromHandle", Types.RuntimeMethodHandle));
+                IL.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, typeof(MethodInfo));
             int arity = 0;

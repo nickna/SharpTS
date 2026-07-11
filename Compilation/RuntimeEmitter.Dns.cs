@@ -653,7 +653,7 @@ public partial class RuntimeEmitter
         // return new TSFunction(null, implMethod)
         getterIl.Emit(OpCodes.Ldnull); // target (static method)
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
-        getterIl.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
         getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         getterIl.Emit(OpCodes.Ret);
@@ -731,7 +731,7 @@ public partial class RuntimeEmitter
         // return new TSFunction(null, implMethod)
         getterIl.Emit(OpCodes.Ldnull); // target (static method)
         getterIl.Emit(OpCodes.Ldtoken, implMethod);
-        getterIl.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        getterIl.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         getterIl.Emit(OpCodes.Castclass, _types.MethodInfo);
         getterIl.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         getterIl.Emit(OpCodes.Ret);

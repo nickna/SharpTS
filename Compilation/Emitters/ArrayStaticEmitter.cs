@@ -174,11 +174,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
         // Spec doesn't strictly require it but propertyHelper's delete-then-
         // hasOwn round-trip depends on per-instance deletion tracking.
         var il = ctx.IL;
-        il.Emit(OpCodes.Ldtoken, info.method);
-        il.Emit(OpCodes.Ldtoken, info.method.DeclaringType!);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-            ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfo(il, info.method);
         il.Emit(OpCodes.Ldstr, info.jsName);
         il.Emit(OpCodes.Ldc_I4, info.jsLength);
         il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

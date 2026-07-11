@@ -369,7 +369,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // target (the buffer)
         il.Emit(OpCodes.Ldtoken, runtime.TSBufferToString);
         il.Emit(OpCodes.Ldtoken, runtime.TSBufferType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
@@ -414,7 +414,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, helper);
             il.Emit(OpCodes.Ldtoken, runtime.StatsType);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);
@@ -531,11 +531,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
@@ -864,11 +860,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldtoken, helper);
-            il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -941,11 +933,7 @@ public partial class RuntimeEmitter
             void EmitSignalMethodWrapper(MethodBuilder helper, string jsName, int jsLength)
             {
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldtoken, helper);
-                il.Emit(OpCodes.Ldtoken, helper.DeclaringType!);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-                    _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
+                _types.EmitLoadMethodInfo(il, helper);
                 il.Emit(OpCodes.Ldstr, jsName);
                 il.Emit(OpCodes.Ldc_I4, jsLength);
                 il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

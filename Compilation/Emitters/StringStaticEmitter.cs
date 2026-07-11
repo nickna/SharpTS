@@ -141,11 +141,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
         // String.fromCharCode(...codeUnits) → 1; fromCodePoint(...codePoints) → 1;
         // raw(template, ...substitutions) → 1.
         var il = ctx.IL;
-        il.Emit(OpCodes.Ldtoken, method);
-        il.Emit(OpCodes.Ldtoken, method.DeclaringType!);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-            ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfo(il, method);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

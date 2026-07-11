@@ -144,7 +144,7 @@ public partial class ILEmitter
 
         // Load method info for the stub method
         IL.Emit(OpCodes.Ldtoken, stubMethod);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Create TSFunction
@@ -167,7 +167,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, method);
 
         // For static methods on a non-generic type:
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
@@ -477,11 +477,11 @@ public partial class ILEmitter
                 if (_ctx.ProgramType != null)
                 {
                     IL.Emit(OpCodes.Ldtoken, _ctx.ProgramType);
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
+                    IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+                    IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
                 IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
@@ -569,7 +569,7 @@ public partial class ILEmitter
         // Wrap: new $TSFunction(displayInstance, method)
         IL.Emit(OpCodes.Ldtoken, method);
         IL.Emit(OpCodes.Ldtoken, displayClass);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
 

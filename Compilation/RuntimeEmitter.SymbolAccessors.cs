@@ -209,8 +209,7 @@ public partial class RuntimeEmitter
         var getMethodHandle = _types.GetProperty(_types.MethodBase, "MethodHandle").GetGetMethod()!;
         var getDeclaringType = _types.GetProperty(typeof(System.Reflection.MemberInfo), "DeclaringType").GetGetMethod()!;
         var containsGenericParams = _types.Type.GetProperty("ContainsGenericParameters")!.GetGetMethod()!;
-        var getMethodFromHandle = _types.GetMethod(_types.MethodBase, "GetMethodFromHandle",
-            _types.RuntimeMethodHandle, _types.RuntimeTypeHandle);
+        var getMethodFromHandle = _types.MethodBaseGetMethodFromHandleWithType;
 
         // ---- SymbolRegistryKey(Type owner) ----
         // return owner.IsConstructedGenericType ? owner.GetGenericTypeDefinition() : owner;

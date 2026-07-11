@@ -480,11 +480,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // $TSFunction.GetOrCreate(MethodInfo, name, length) — cached identity
         // (Math.abs === Math.abs) so delete-and-readd round-trips on the
         // same instance.
-        il.Emit(OpCodes.Ldtoken, info.adapter);
-        il.Emit(OpCodes.Ldtoken, info.adapter.DeclaringType!);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.MethodBase, "GetMethodFromHandle",
-            ctx.Types.RuntimeMethodHandle, ctx.Types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        ctx.Types.EmitLoadMethodInfo(il, info.adapter);
         il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Ldc_I4, info.len);
         il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);

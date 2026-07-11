@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation;
@@ -526,6 +527,44 @@ public class TypeProvider
     /// </summary>
     public MethodInfo MethodBaseGetMethodFromHandle =>
         _methodBaseGetMethodFromHandle ??= GetMethod(MethodBase, "GetMethodFromHandle", RuntimeMethodHandle);
+
+    private MethodInfo? _methodBaseGetMethodFromHandleWithType;
+
+    /// <summary>
+    /// Gets the MethodBase.GetMethodFromHandle(RuntimeMethodHandle, RuntimeTypeHandle)
+    /// overload — required when the declaring type is generic or a TypeBuilder whose
+    /// token alone can't resolve the method.
+    /// </summary>
+    public MethodInfo MethodBaseGetMethodFromHandleWithType =>
+        _methodBaseGetMethodFromHandleWithType ??=
+            GetMethod(MethodBase, "GetMethodFromHandle", RuntimeMethodHandle, RuntimeTypeHandle);
+
+    /// <summary>
+    /// Emits the canonical "load a MethodInfo at runtime from a metadata token"
+    /// block in its two-token, declaring-type-qualified form:
+    /// <c>Ldtoken method; Ldtoken method.DeclaringType; Call GetMethodFromHandle(handle, typeHandle); Castclass MethodInfo</c>.
+    /// Use this form when the declaring type may be generic or emitted (TypeBuilder).
+    /// </summary>
+    public void EmitLoadMethodInfo(ILGenerator il, MethodInfo method)
+    {
+        il.Emit(OpCodes.Ldtoken, method);
+        il.Emit(OpCodes.Ldtoken, method.DeclaringType!);
+        il.Emit(OpCodes.Call, MethodBaseGetMethodFromHandleWithType);
+        il.Emit(OpCodes.Castclass, MethodInfo);
+    }
+
+    /// <summary>
+    /// Emits the single-token form of the MethodInfo load:
+    /// <c>Ldtoken method; Call GetMethodFromHandle(handle); Castclass MethodInfo</c>.
+    /// Only valid when the declaring type is non-generic and resolvable from the
+    /// method token alone (the established form at all state-machine emit sites).
+    /// </summary>
+    public void EmitLoadMethodInfoViaHandle(ILGenerator il, MethodInfo method)
+    {
+        il.Emit(OpCodes.Ldtoken, method);
+        il.Emit(OpCodes.Call, MethodBaseGetMethodFromHandle);
+        il.Emit(OpCodes.Castclass, MethodInfo);
+    }
 
     /// <summary>
     /// Gets the StringBuilder.Append(string) method.

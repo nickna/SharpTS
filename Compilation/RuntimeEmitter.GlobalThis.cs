@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
         void EmitGetOrCreateTSFn(MethodBuilder wrappedMethod, string jsName, int jsLength)
         {
             il.Emit(OpCodes.Ldtoken, wrappedMethod);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
@@ -374,7 +374,7 @@ public partial class RuntimeEmitter
         // Create and cache the TSFunction
         il.Emit(OpCodes.Ldnull); // target (static method)
         il.Emit(OpCodes.Ldtoken, wrappedMethod);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Stsfld, cachedField);

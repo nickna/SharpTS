@@ -263,8 +263,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldtoken, method);
         il.Emit(OpCodes.Ldtoken, declaringType);
-        il.Emit(OpCodes.Call, _types.MethodBase.GetMethod(
-            "GetMethodFromHandle", [_types.RuntimeMethodHandle, _types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
     }
 

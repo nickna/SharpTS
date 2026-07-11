@@ -696,9 +696,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureNext);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -708,9 +706,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureReturn);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -722,9 +718,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);         // target
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureGetSelf);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -818,9 +812,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureNext);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureNext);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -830,9 +822,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureReturn);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureReturn);
         il.Emit(OpCodes.Ldstr, "return");
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
@@ -843,9 +833,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolAsyncIterator);
         il.Emit(OpCodes.Ldloc, closureLocal);
-        il.Emit(OpCodes.Ldtoken, _asyncIntervalClosureGetSelf);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        _types.EmitLoadMethodInfoViaHandle(il, _asyncIntervalClosureGetSelf);
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);

@@ -3015,8 +3015,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "destroy");
         il.Emit(OpCodes.Ldnull); // target (static)
         il.Emit(OpCodes.Ldtoken, _agentDestroyMethod);
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Call, runtime.SetProperty);
@@ -3026,8 +3025,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "getName");
         il.Emit(OpCodes.Ldnull); // target (static)
         il.Emit(OpCodes.Ldtoken, _agentGetNameMethod);
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Call, runtime.SetProperty);
@@ -3218,8 +3216,7 @@ public partial class RuntimeEmitter
             var il = getterMethod.GetILGenerator();
             il.Emit(OpCodes.Ldnull); // target (static)
             il.Emit(OpCodes.Ldtoken, factoryMethod);
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
             il.Emit(OpCodes.Ret);

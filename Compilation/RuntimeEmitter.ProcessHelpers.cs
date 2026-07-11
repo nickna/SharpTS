@@ -744,8 +744,7 @@ public partial class RuntimeEmitter
             // Create $TSFunction wrapping the write impl method
             il.Emit(OpCodes.Ldnull); // target (static method, no instance)
             il.Emit(OpCodes.Ldtoken, writeImpl);
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
 
@@ -886,7 +885,7 @@ public partial class RuntimeEmitter
         // Create new TSFunction(null, implMethod)
         il.Emit(OpCodes.Ldnull); // target (static method)
         il.Emit(OpCodes.Ldtoken, implMethod);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);

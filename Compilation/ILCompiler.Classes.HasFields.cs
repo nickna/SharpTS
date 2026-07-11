@@ -354,9 +354,7 @@ public partial class ILCompiler
 
             // Get the TypeBuilder for the two-token ldtoken pattern
             var typeBuilder = _classes.Builders[className];
-            var getMethodFromHandleWithType = _types.GetMethod(
-                _types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle);
+            var getMethodFromHandleWithType = _types.MethodBaseGetMethodFromHandleWithType;
 
             foreach (var (methodName, methodBuilder) in instanceMethods)
             {
@@ -698,9 +696,7 @@ public partial class ILCompiler
 
             // Get the TypeBuilder for the two-token ldtoken pattern
             var typeBuilder = _classExprs.Builders[classExpr];
-            var getMethodFromHandleWithType = _types.GetMethod(
-                _types.MethodBase, "GetMethodFromHandle",
-                _types.RuntimeMethodHandle, _types.RuntimeTypeHandle);
+            var getMethodFromHandleWithType = _types.MethodBaseGetMethodFromHandleWithType;
 
             foreach (var (methodName, methodBuilder) in instanceMethods)
             {
