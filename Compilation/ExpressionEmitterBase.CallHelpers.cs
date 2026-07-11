@@ -1073,6 +1073,110 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
+    /// Emits <c>module.promises.methodName()</c> (fs.promises, dns.promises,
+    /// stream.promises) via the registered "/promises" module emitter.
+    /// Shared by <see cref="TryEmitGetCalleeViaBaseClass"/> and ILEmitter's
+    /// EmitCall so the dispatch rules can't drift apart.
+    /// </summary>
+    protected bool TryEmitModulePromisesMethodCall(Expr.Get methodGet, List<Expr> arguments)
+    {
+        if (methodGet.Object is Expr.Get promisesGet &&
+            promisesGet.Name.Lexeme == "promises" &&
+            promisesGet.Object is Expr.Variable promisesModuleVar &&
+            Ctx.BuiltInModuleNamespaces != null &&
+            Ctx.BuiltInModuleNamespaces.TryGetValue(promisesModuleVar.Name.Lexeme, out var promisesModuleName) &&
+            Ctx.BuiltInModuleEmitterRegistry?.GetEmitter(promisesModuleName + "/promises") is { } promisesEmitter &&
+            promisesEmitter.TryEmitMethodCall(this, methodGet.Name.Lexeme, arguments))
+        {
+            SetStackUnknown();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Emits <c>Class.staticMethod()</c> (with generic class support) and the
+    /// inherited Promise statics on Promise subclasses (#242/#309:
+    /// MyP.resolve / reject / all / … are not user-declared statics, so the
+    /// static-method lookup misses them — emit the base Promise static and
+    /// wrap the result in the subclass). Shared by
+    /// <see cref="TryEmitGetCalleeViaBaseClass"/> and ILEmitter's EmitCall;
+    /// the ILEmitter copy of this block had previously drifted and omitted
+    /// the Promise-subclass arm, so MyP.resolve(1) threw. Extra-arg boxing
+    /// goes through the <see cref="EnsureBoxedArg"/> seam (ILEmitter overrides
+    /// it with its richer EmitBoxIfNeeded).
+    /// </summary>
+    protected bool TryEmitClassStaticDispatch(Expr.Call c, Expr.Get methodGet)
+    {
+        if (methodGet.Object is not Expr.Variable classVar ||
+            !Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        {
+            return false;
+        }
+
+        string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
+        if (Ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, methodGet.Name.Lexeme, classBuilder, out var callableMethod))
+        {
+            var staticMethodParams = callableMethod!.GetParameters();
+            var paramCount = staticMethodParams.Length;
+
+            // When a later argument can suspend, spill each argument to a registered, boxed
+            // object local first — emitting them directly onto the IL stack would leave the
+            // earlier args (and partial evaluation) stacked across the await/yield, which is
+            // invalid IL and loses values across the MoveNext re-entry (#439). Await-free calls
+            // (all of synchronous mode) keep the direct on-stack emission.
+            if (AnyContainsSuspension(c.Arguments))
+            {
+                var argLocals = new LocalBuilder[c.Arguments.Count];
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    Type pType = i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object;
+                    argLocals[i] = i < staticMethodParams.Length
+                        ? SpillConvertedArg(c.Arguments[i], pType)
+                        : SpillBoxed(c.Arguments[i]);
+                }
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Ldloc, argLocals[i]);
+                    EmitCoerceBoxedToType(i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    EmitExpression(c.Arguments[i]);
+                    if (i < staticMethodParams.Length)
+                        EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
+                    else
+                        EnsureBoxedArg(c.Arguments[i]);
+                }
+            }
+
+            for (int i = c.Arguments.Count; i < paramCount; i++)
+                EmitOmittedArgument(staticMethodParams[i].ParameterType);
+
+            IL.Emit(OpCodes.Call, callableMethod);
+            SetStackUnknown();
+            return true;
+        }
+
+        // Promise subclasses (#242) inherit the Promise static side:
+        // emit the base Promise static (leaves Task<object?> on the
+        // stack), then construct the subclass around it via its executor
+        // constructor — PromiseFromExecutor adopts a raw task, so the
+        // result is a subclass-typed promise (NewPromiseCapability-lite).
+        if (methodGet.Name.Lexeme is "resolve" or "reject" or "all" or "race" or "allSettled" or "any" or "withResolvers"
+            && Ctx.ClassRegistry.IsPromiseSubclass(resolvedClassName)
+            && TryEmitDerivedPromiseStatic(resolvedClassName, classBuilder, methodGet.Name.Lexeme, c.Arguments))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Tries to handle an Expr.Get callee via shared dispatch patterns:
     /// module.promises, class statics, Promise.then/catch/finally, type-first dispatch,
     /// fallback string/array methods, ambiguous methods.
@@ -1087,84 +1191,11 @@ public abstract partial class ExpressionEmitterBase
         if (_callHandlers.TryHandle(this, c))
             return true;
 
-        // module.promises.methodName() (fs.promises, dns.promises, stream.promises)
-        if (methodGet.Object is Expr.Get promisesGet &&
-            promisesGet.Name.Lexeme == "promises" &&
-            promisesGet.Object is Expr.Variable promisesModuleVar &&
-            Ctx.BuiltInModuleNamespaces != null &&
-            Ctx.BuiltInModuleNamespaces.TryGetValue(promisesModuleVar.Name.Lexeme, out var promisesModuleName) &&
-            Ctx.BuiltInModuleEmitterRegistry?.GetEmitter(promisesModuleName + "/promises") is { } promisesEmitter)
-        {
-            if (promisesEmitter.TryEmitMethodCall(this, methodGet.Name.Lexeme, c.Arguments))
-            {
-                SetStackUnknown();
-                return true;
-            }
-        }
+        if (TryEmitModulePromisesMethodCall(methodGet, c.Arguments))
+            return true;
 
-        // Class.staticMethod() with generic class support
-        if (methodGet.Object is Expr.Variable classVar &&
-            Ctx.Classes.TryGetValue(Ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
-        {
-            string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (Ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, methodGet.Name.Lexeme, classBuilder, out var callableMethod))
-            {
-                var staticMethodParams = callableMethod!.GetParameters();
-                var paramCount = staticMethodParams.Length;
-
-                // When a later argument can suspend, spill each argument to a registered, boxed
-                // object local first — emitting them directly onto the IL stack would leave the
-                // earlier args (and partial evaluation) stacked across the await/yield, which is
-                // invalid IL and loses values across the MoveNext re-entry (#439). Await-free calls
-                // (all of synchronous mode) keep the direct on-stack emission.
-                if (AnyContainsSuspension(c.Arguments))
-                {
-                    var argLocals = new LocalBuilder[c.Arguments.Count];
-                    for (int i = 0; i < c.Arguments.Count; i++)
-                    {
-                        Type pType = i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object;
-                        argLocals[i] = i < staticMethodParams.Length
-                            ? SpillConvertedArg(c.Arguments[i], pType)
-                            : SpillBoxed(c.Arguments[i]);
-                    }
-                    for (int i = 0; i < c.Arguments.Count; i++)
-                    {
-                        IL.Emit(OpCodes.Ldloc, argLocals[i]);
-                        EmitCoerceBoxedToType(i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object);
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < c.Arguments.Count; i++)
-                    {
-                        EmitExpression(c.Arguments[i]);
-                        if (i < staticMethodParams.Length)
-                            EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
-                        else
-                            EnsureBoxed();
-                    }
-                }
-
-                for (int i = c.Arguments.Count; i < paramCount; i++)
-                    EmitOmittedArgument(staticMethodParams[i].ParameterType);
-
-                IL.Emit(OpCodes.Call, callableMethod);
-                SetStackUnknown();
-                return true;
-            }
-
-            // Promise subclasses (#242) inherit the Promise static side:
-            // emit the base Promise static (leaves Task<object?> on the
-            // stack), then construct the subclass around it via its executor
-            // constructor — PromiseFromExecutor adopts a raw task, so the
-            // result is a subclass-typed promise (NewPromiseCapability-lite).
-            if (methodGet.Name.Lexeme is "resolve" or "reject" or "all" or "race" or "allSettled" or "any" or "withResolvers"
-                && Ctx.ClassRegistry.IsPromiseSubclass(resolvedClassName)
-                && TryEmitDerivedPromiseStatic(resolvedClassName, classBuilder, methodGet.Name.Lexeme, c.Arguments))
-            {
-                return true;
-            }
-        }
+        if (TryEmitClassStaticDispatch(c, methodGet))
+            return true;
 
         // Promise instance methods: promise.then/catch/finally
         string methodName = methodGet.Name.Lexeme;

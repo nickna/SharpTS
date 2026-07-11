@@ -134,6 +134,13 @@ public partial class ILEmitter
         }
     }
 
+    /// <summary>
+    /// Routes the shared static-dispatch helpers' extra-arg boxing through
+    /// EmitBoxIfNeeded so ILEmitter keeps its TypeMap/literal-aware boxing
+    /// (the base seam defaults to stack-state-only EnsureBoxed).
+    /// </summary>
+    protected override void EnsureBoxedArg(Expr arg) => EmitBoxIfNeeded(arg);
+
     public void EmitBoxIfNeeded(Expr expr)
     {
         // First, check if we already have an unboxed value type on the stack
