@@ -179,4 +179,46 @@ public class ArgumentsMagicVariableTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("\na\nabc\n", output);
     }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Arguments_FunctionExpression_ApplyForwarding(ExecutionMode mode)
+    {
+        // Lodash-style wrapper: the returned function EXPRESSION binds its own
+        // `arguments` and forwards them via apply. Guards the lazy-materialization
+        // scan (interpreter only materializes `arguments` for bodies that observe
+        // it): the inner expression's usage must not be attributed to `outer`,
+        // and must still be materialized for the inner function itself.
+        var source = @"
+            function sum(a: number, b: number): number { return a + b; }
+            function outer(func: any): any {
+                return function (): any {
+                    return func.apply(this, arguments);
+                };
+            }
+            const wrapped = outer(sum);
+            console.log(wrapped(3, 4));
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("7\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Arguments_VisibleToDirectEval(ExecutionMode mode)
+    {
+        // Direct eval runs against the live scope chain, so `arguments` must be
+        // materialized even though the identifier never appears in the AST —
+        // the lazy-materialization scan treats any `eval` reference in the body
+        // as a conservative use. Interpreter-only: compiled eval is a separate
+        // soft-dependency feature.
+        var source = @"
+            function probe(a: number, b: number): any {
+                return eval('arguments.length');
+            }
+            console.log(probe(1, 2));
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n", output);
+    }
 }

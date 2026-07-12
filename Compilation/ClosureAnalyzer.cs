@@ -1069,7 +1069,9 @@ public class ClosureAnalyzer : AstVisitorBase
     /// Returns true if any statement (directly or inside a nested arrow) references
     /// the identifier <c>arguments</c>, stopping at nested non-arrow function boundaries
     /// (those have their own <c>arguments</c> binding per JS spec, so a reference inside
-    /// them belongs to the nested function, not this one).
+    /// them belongs to the nested function, not this one). Scanning lives in the shared
+    /// <see cref="ArgumentsRefScanner"/> (also used by the interpreter's lazy
+    /// <c>arguments</c> materialization).
     /// </summary>
     private static bool ReferencesArgumentsIdentifierNonArrow(List<Stmt> stmts)
     {
@@ -1080,33 +1082,5 @@ public class ClosureAnalyzer : AstVisitorBase
             if (scanner.Found) return true;
         }
         return false;
-    }
-
-    private sealed class ArgumentsRefScanner : AstVisitorBase
-    {
-        public bool Found { get; private set; }
-
-        protected override void VisitVariable(Expr.Variable expr)
-        {
-            if (expr.Name.Lexeme == "arguments")
-            {
-                Found = true;
-                ShouldContinue = false;
-            }
-        }
-
-        // Nested non-arrow function declarations/expressions introduce their own
-        // `arguments` binding — references inside belong to that inner function,
-        // so stop descending.
-        protected override void VisitFunction(Stmt.Function stmt) { /* skip */ }
-
-        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
-        {
-            // Function expressions (HasOwnThis=true) behave like declarations: their
-            // own `arguments` shadows ours. True arrow functions (HasOwnThis=false)
-            // inherit lexically, so we must recurse.
-            if (expr.HasOwnThis) return;
-            base.VisitArrowFunction(expr);
-        }
     }
 }
