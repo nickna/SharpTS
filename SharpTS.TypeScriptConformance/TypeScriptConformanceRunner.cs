@@ -133,15 +133,20 @@ public sealed class TypeScriptConformanceRunner
         TypeCheckDiagnosticResult checkResult;
         try
         {
-            // strictNullChecks follows the test's directives (strictNullChecks overrides strict),
-            // defaulting off — matching how tsc generated the legacy *.errors.txt baselines.
+            // Each strictness knob follows the test's directives, with the specific directive
+            // overriding @strict and everything defaulting off — matching how tsc generated the
+            // legacy *.errors.txt baselines.
             bool strictNullChecks = metadata.StrictNullChecks ?? metadata.Strict;
+            bool noImplicitAny = metadata.NoImplicitAny ?? metadata.Strict;
             // Raise the error cap well above the product default (10) so we collect every diagnostic
             // a test expects — *.errors.txt baselines can list many errors in one file.
-            var checker = new TypeChecker(
-                strictNullChecks: strictNullChecks,
-                maxErrors: 1000,
-                strictFunctionTypes: metadata.Strict);
+            var checker = new TypeChecker(new TypeCheckerOptions
+            {
+                StrictNullChecks = strictNullChecks,
+                StrictFunctionTypes = metadata.Strict,
+                NoImplicitAny = noImplicitAny,
+                MaxErrors = 1000,
+            });
             checkResult = checker.CheckWithRecovery(parseResult.Statements);
         }
         catch (Exception ex)
@@ -228,6 +233,11 @@ public sealed class TypeScriptConformanceRunner
     /// </summary>
     private static string? ResolveNewestTargetBaseline(string baselinesDir, string basename)
     {
+        // A missing baselines directory means "no baseline", not a crash. Without this an
+        // uninitialized external/typescript submodule takes down the resolver with a
+        // DirectoryNotFoundException instead of bucketing cleanly.
+        if (!Directory.Exists(baselinesDir)) return null;
+
         string? best = null;
         var bestRank = int.MinValue;
         foreach (var path in Directory.EnumerateFiles(baselinesDir, $"{basename}(target=*).errors.txt"))
