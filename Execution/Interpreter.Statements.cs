@@ -1211,6 +1211,7 @@ public partial class Interpreter
     /// </summary>
     internal bool IsIterableSource(object? value) =>
         value is SharpTSArray or SharpTSMap or SharpTSSet or SharpTSIterator or SharpTSGenerator
+            or SharpTSTypedArray or SharpTSBuffer
             or string or List<object?> or IEnumerable<object?>
         || TryGetSymbolIterator(value) != null;
 

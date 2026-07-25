@@ -39,8 +39,13 @@ public class ScriptLikeModuleTopLevelCaptureTests
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal(expected, output.Replace("\r\n", "\n").Trim());
+        Assert.Equal(Normalize(expected), Normalize(output));
     }
+
+    // Both sides need normalizing, not just the output: these source files are checked out
+    // with CRLF on Windows, so the expected raw-string literals carry \r\n of their own.
+    private static string Normalize(string s) =>
+        string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).Trim();
 
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]

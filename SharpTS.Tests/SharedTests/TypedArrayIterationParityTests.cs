@@ -26,8 +26,13 @@ public class TypedArrayIterationParityTests
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal(expected, output.Replace("\r\n", "\n").Trim());
+        Assert.Equal(Normalize(expected), Normalize(output));
     }
+
+    // Both sides need normalizing, not just the output: these source files are checked out
+    // with CRLF on Windows, so the expected raw-string literals carry \r\n of their own.
+    private static string Normalize(string s) =>
+        string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).Trim();
 
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
@@ -106,6 +111,30 @@ public class TypedArrayIterationParityTests
 
         var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunModules(files, "main.ts", mode));
         Assert.Contains("not iterable for yield*", ex.Message);
+    }
+
+    /// <summary>
+    /// <c>Array.from</c> picks the iterator protocol over the array-like (length + indices)
+    /// path via <c>IsIterableSource</c>, which is documented to agree with
+    /// <c>GetIterableElements</c>. It had fallen behind: typed arrays and Buffers took the
+    /// array-like path, whose property reader does not understand them, so <c>length</c> came
+    /// back undefined and <c>ToLength(undefined)</c> made the result empty — a silent
+    /// <c>[]</c> rather than an error.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ArrayFrom_OverTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        Expect("""
+            console.log('u8   ' + JSON.stringify(Array.from(new Uint8Array([1, 2, 3]))));
+            console.log('buf  ' + JSON.stringify(Array.from(Buffer.from([4, 5]))));
+            console.log('map  ' + JSON.stringify(Array.from(new Uint8Array([1, 2]), (x: any) => (x as number) * 10)));
+            """,
+            """
+            u8   [1,2,3]
+            buf  [4,5]
+            map  [10,20]
+            """, mode);
     }
 
     /// <summary>
