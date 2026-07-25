@@ -568,6 +568,8 @@ public partial class TypeChecker
         }
 
         // This is an implementation (has a body)
+        ReportImplicitAnyParameters(funcStmt.Parameters, isAmbient: funcStmt.IsDeclare);
+
         TypeInfo funcType;
 
         // Check if there are pending overload signatures for this function

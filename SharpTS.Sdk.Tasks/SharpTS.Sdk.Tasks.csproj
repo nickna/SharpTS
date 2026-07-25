@@ -22,4 +22,20 @@
     <PackageReference Include="Microsoft.Build.Framework" Version="18.0.2" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.0.2" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Single source of truth for the tsconfig.json JSON contract, owned by the main SharpTS
+      project. Source-linked rather than <ProjectReference>d on purpose: SharpTS.Sdk packs
+      SharpTS.Sdk.Tasks.dll as ONE loose file into build\ and loads it via
+      <UsingTask AssemblyFile=...>, so a second assembly on this project's reference graph
+      would also have to be packed there. Linking a single .cs keeps the contract shared with
+      zero packaging impact and keeps Microsoft.Build.* out of the SharpTS CLI.
+
+      Only the shared six-key subset is linked. The CLI-only members (extends, strictness,
+      include/exclude, [JsonExtensionData]) live in the sibling TsConfigJson.Cli.cs partial,
+      which is intentionally NOT linked.
+    -->
+    <Compile Include="..\Configuration\TsConfigJson.cs" Link="TsConfigJson.cs" />
+  </ItemGroup>
 </Project>

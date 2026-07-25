@@ -150,6 +150,44 @@ sharpts --experimentalDecorators script.ts  # Legacy (Stage 2) decorators
 sharpts --noDecorators script.ts            # Disable decorators
 ```
 
+**Type-checking strictness:**
+
+The tsc-compatible strictness flags apply in every mode (run, compile, REPL), and accept tsc's
+`=false` negation form:
+
+```bash
+sharpts --strict script.ts                  # strictNullChecks + strictFunctionTypes + noImplicitAny
+sharpts --strictNullChecks=false script.ts  # individual flags override the umbrella
+sharpts --noImplicitAny script.ts
+sharpts --noEmit script.ts                  # type-check only; exit 1 on errors
+```
+
+SharpTS's defaults are `strictNullChecks: true`, `strictFunctionTypes: false`,
+`noImplicitAny: false` — unchanged unless you ask.
+
+> `noImplicitAny` reports unannotated parameters of **declared** functions, methods and
+> constructors. Arrow and function-expression parameters are exempt: SharpTS contextually types
+> a callback only for some callee shapes, so reporting there would flag idiomatic code such as
+> `promise.then(v => …)`. This under-reports relative to tsc rather than over-reporting.
+
+**tsconfig.json:**
+
+A `tsconfig.json` next to (or above) the entry script is discovered automatically, `extends`
+chains included. Command-line flags win over it.
+
+```bash
+sharpts -p ./configs/tsconfig.json script.ts  # explicit config (file or directory)
+sharpts --no-tsconfig script.ts               # skip discovery entirely
+sharpts --showConfig script.ts                # print the resolved config as JSON, then exit
+```
+
+SharpTS reads the strictness options, `checkJs`, the decorator options, `preserveConstEnums`,
+`outDir`, and `files[0]`. Emit options such as `target`, `module`, `jsx` and `sourceMap` do not
+apply — SharpTS compiles to .NET IL, not JavaScript — and are ignored silently; set
+`SHARPTS_TSCONFIG_VERBOSE=1` to list them. An unrecognized key is reported with a suggestion.
+`include`/`exclude` do not select inputs: SharpTS compiles the entry file and everything it
+imports.
+
 ## Examples
 
 ### Hello World

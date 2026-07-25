@@ -19,13 +19,21 @@ public sealed class ReplEngine : IDisposable
     private VariableResolver _resolver;
     private TypeChecker _typeChecker;
     private readonly DecoratorMode _decoratorMode;
+    private readonly TypeCheckerOptions _typeOptions;
     private readonly List<string> _sessionHistory = [];
     private readonly List<Stmt> _accumulatedStatements = [];
     private readonly ReplCompletionSession _completionSession;
 
-    public ReplEngine(DecoratorMode decoratorMode)
+    /// <param name="typeOptions">
+    /// Resolved strictness for the session. Null keeps product defaults. The checker instance is
+    /// long-lived across REPL lines, and its assignability caches are keyed by type pair only —
+    /// so a future `.strict on` command must build a NEW checker via <see cref="CreateTypeChecker"/>
+    /// and replay the session, never mutate the live one.
+    /// </param>
+    public ReplEngine(DecoratorMode decoratorMode, TypeCheckerOptions? typeOptions = null)
     {
         _decoratorMode = decoratorMode;
+        _typeOptions = typeOptions ?? TypeCheckerOptions.Default;
         _interpreter = new Interpreter();
         _interpreter.SetDecoratorMode(decoratorMode);
         _resolver = new VariableResolver(_interpreter);
@@ -46,7 +54,7 @@ public sealed class ReplEngine : IDisposable
 
     private TypeChecker CreateTypeChecker()
     {
-        var checker = new TypeChecker();
+        var checker = new TypeChecker(_typeOptions);
         checker.SetDecoratorMode(_decoratorMode);
         return checker;
     }

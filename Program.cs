@@ -40,6 +40,7 @@
 using System.Reflection;
 using SharpTS.Cli;
 using SharpTS.Compilation;
+using SharpTS.Configuration;
 using PEPacker;
 using PEPacker.Bundling;
 using SharpTS.Declaration;
@@ -77,38 +78,188 @@ switch (command)
         break;
 
     case ParsedCommand.Repl repl:
-        var replRefs = LoadDotNetReferences(Environment.CurrentDirectory, repl.Options.References);
+        // tsconfig discovery starts at the CWD for the REPL, matching the manifest lookup below.
+        var (replOptions, replConfig) = ApplyTsConfig(repl.Options, Environment.CurrentDirectory);
+        if (replOptions.ShowConfig)
+        {
+            PrintResolvedConfig(replOptions, repl.Options.Strictness, replConfig);
+            return;
+        }
+        var replRefs = LoadDotNetReferences(Environment.CurrentDirectory, replOptions.References);
         if (replRefs.ManifestPath != null)
             Console.WriteLine($"Loaded {replRefs.ManifestPath}: {replRefs.References.Count} assembly reference(s)");
-        RunPromptAsync(repl.Options.DecoratorMode).GetAwaiter().GetResult();
+        if (replConfig != null)
+            Console.WriteLine($"Loaded {replConfig.ConfigPath}");
+        RunPromptAsync(replOptions).GetAwaiter().GetResult();
         break;
 
     case ParsedCommand.Script script:
-        RunFile(script.ScriptPath, script.Options.DecoratorMode, script.Options.EmitDecoratorMetadata, script.ScriptArgs, script.Options.CheckJs, script.Options.References);
+        // Discovery starts at the entry script's directory — the same convention
+        // LoadDotNetReferences uses for sharpts.json.
+        var (scriptOptions, scriptConfig) = ApplyTsConfig(
+            script.Options, Path.GetDirectoryName(Path.GetFullPath(script.ScriptPath)) ?? ".");
+        if (scriptOptions.ShowConfig)
+        {
+            PrintResolvedConfig(scriptOptions, script.Options.Strictness, scriptConfig);
+            return;
+        }
+        RunFile(script.ScriptPath, scriptOptions, script.ScriptArgs);
         break;
 
     case ParsedCommand.Compile compile:
+        var (compileOptions, compileConfig) = ApplyTsConfig(
+            compile.GlobalOptions, Path.GetDirectoryName(Path.GetFullPath(compile.InputFile)) ?? ".");
+        if (compileOptions.ShowConfig)
+        {
+            PrintResolvedConfig(compileOptions, compile.GlobalOptions.Strictness, compileConfig);
+            return;
+        }
         var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode, compile.CompileOptions.Standalone);
         CompileFile(
             compile.InputFile,
             compile.OutputFile,
-            compile.CompileOptions.PreserveConstEnums,
+            compile.CompileOptions.PreserveConstEnums || (compileConfig?.PreserveConstEnums ?? false),
             compile.CompileOptions.UseReferenceAssemblies,
             compile.CompileOptions.SdkPath,
             compile.CompileOptions.VerifyIL,
-            compile.GlobalOptions.DecoratorMode,
-            compile.GlobalOptions.EmitDecoratorMetadata,
+            compileOptions.DecoratorMode,
+            compileOptions.EmitDecoratorMetadata,
             compile.PackOptions,
             outputOptions,
             compile.CompileOptions.References,
             compile.CompileOptions.Target,
-            compile.CompileOptions.Bundler
+            compile.CompileOptions.Bundler,
+            compileOptions
         );
         break;
 
     case ParsedCommand.GenDecl genDecl:
         GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json, genDecl.References);
         break;
+}
+
+/// <summary>
+/// Discovers tsconfig.json (or loads the one named by -p/--project) and folds it under the
+/// command line, which wins per key. Returns the options execution should actually use.
+/// </summary>
+/// <remarks>
+/// Config errors are user-facing configuration problems, so they follow the same seam as
+/// <see cref="LoadDotNetReferences"/>: print and exit 1.
+/// <para>Only strictness merges with full tri-state fidelity. <c>checkJs</c>,
+/// <c>preserveConstEnums</c> and <c>emitDecoratorMetadata</c> are plain bools on
+/// <see cref="GlobalOptions"/>, so an absent flag is indistinguishable from an explicit
+/// <c>false</c> and tsconfig can only turn them ON — the same one-way merge
+/// SharpTS.Sdk/Sdk/Sdk.targets already performs. Decorator mode applies from tsconfig only when
+/// the command line left it at its default.</para>
+/// </remarks>
+static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(GlobalOptions cli, string startDirectory)
+{
+    if (cli.NoTsConfig)
+        return (cli, null);
+
+    try
+    {
+        string? path = cli.ProjectPath is { } explicitPath
+            ? TsConfigLoader.ResolveProjectPath(explicitPath)
+            : TsConfigLoader.Discover(startDirectory);
+
+        if (path is null)
+            return (cli, null);
+
+        var config = TsConfigLoader.Load(path);
+
+        // Warnings never affect the exit code. They go straight to the console rather than
+        // through the diagnostic stream, which the run path only prints when there are errors.
+        if (!cli.ShowConfig)
+        {
+            foreach (var warning in config.Warnings)
+                Console.WriteLine(warning);
+        }
+
+        var merged = cli with
+        {
+            Strictness = new StrictnessOptions
+            {
+                Strict = cli.Strictness.Strict ?? config.Strictness.Strict,
+                StrictNullChecks = cli.Strictness.StrictNullChecks ?? config.Strictness.StrictNullChecks,
+                StrictFunctionTypes = cli.Strictness.StrictFunctionTypes ?? config.Strictness.StrictFunctionTypes,
+                NoImplicitAny = cli.Strictness.NoImplicitAny ?? config.Strictness.NoImplicitAny,
+            },
+            CheckJs = cli.CheckJs || (config.CheckJs ?? false),
+            EmitDecoratorMetadata = cli.EmitDecoratorMetadata || (config.EmitDecoratorMetadata ?? false),
+            DecoratorMode = cli.DecoratorMode == DecoratorMode.Stage3 && config.DecoratorMode is { } m
+                ? m
+                : cli.DecoratorMode,
+        };
+
+        return (merged, config);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.Message);
+        Environment.Exit(1);
+        throw; // unreachable
+    }
+}
+
+/// <summary>
+/// Prints the resolved configuration and where each value came from, then exits 0. Output is a
+/// single JSON document so it can be piped to a tool; SharpTS-specific detail is namespaced
+/// under "sharpts" so the "compilerOptions" block stays tsc-shaped.
+/// </summary>
+/// <param name="cliStrictness">
+/// The command line's own strictness layer, BEFORE the tsconfig fold — provenance is
+/// unrecoverable from the merged options, where a tsconfig value is indistinguishable from a
+/// flag.
+/// </param>
+static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStrictness, TsConfigResult? config)
+{
+    string Origin(bool? cliValue, bool? configValue) =>
+        cliValue is not null ? "cli" : configValue is not null ? "tsconfig" : "default";
+
+    var effective = options.TypeCheckerOptions;
+    var cliLayer = cliStrictness;
+    var configLayer = config?.Strictness ?? new StrictnessOptions();
+
+    // `strict` acts as the fallback, so a key it supplied reports the umbrella as its source.
+    string OriginVia(bool? cliValue, bool? configValue)
+    {
+        string origin = Origin(cliValue, configValue);
+        if (origin != "default") return origin;
+        return cliLayer.Strict is not null ? "cli (via strict)"
+            : configLayer.Strict is not null ? "tsconfig (via strict)"
+            : "default";
+    }
+
+    var payload = new Dictionary<string, object?>
+    {
+        ["compilerOptions"] = new Dictionary<string, object?>
+        {
+            ["strictNullChecks"] = effective.StrictNullChecks,
+            ["strictFunctionTypes"] = effective.StrictFunctionTypes,
+            ["noImplicitAny"] = effective.NoImplicitAny,
+            ["checkJs"] = options.CheckJs,
+            ["emitDecoratorMetadata"] = options.EmitDecoratorMetadata,
+        },
+        ["sharpts"] = new Dictionary<string, object?>
+        {
+            ["configFile"] = config?.ConfigPath,
+            ["extendsChain"] = config?.ExtendsChain ?? [],
+            ["decoratorMode"] = options.DecoratorMode.ToString(),
+            ["entryPoint"] = config?.EntryFile,
+            ["outDir"] = config?.OutDir,
+            ["provenance"] = new Dictionary<string, object?>
+            {
+                ["strictNullChecks"] = OriginVia(cliLayer.StrictNullChecks, configLayer.StrictNullChecks),
+                ["strictFunctionTypes"] = OriginVia(cliLayer.StrictFunctionTypes, configLayer.StrictFunctionTypes),
+                ["noImplicitAny"] = OriginVia(cliLayer.NoImplicitAny, configLayer.NoImplicitAny),
+            },
+            ["notes"] = config?.Warnings ?? [],
+        },
+    };
+
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+        payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
 /// <summary>
@@ -130,7 +281,7 @@ static ReferenceSet LoadDotNetReferences(string startDirectory, IReadOnlyList<st
     }
 }
 
-static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null, bool checkJs = false, IReadOnlyList<string>? references = null)
+static void RunFile(string path, GlobalOptions options, string[]? scriptArgs = null)
 {
     string absolutePath = Path.GetFullPath(path);
     string source = File.ReadAllText(absolutePath);
@@ -138,7 +289,7 @@ static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecorator
     // Third-party assembly references (sharpts.json walked up from the entry script,
     // plus -r flags) load before any module resolution so dotnet: imports and
     // @DotNetType declarations can see the types.
-    LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references ?? []);
+    LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", options.References);
 
     // Set script arguments for process.argv
     SharpTS.Runtime.BuiltIns.ProcessBuiltIns.SetScriptArguments(absolutePath, scriptArgs ?? []);
@@ -156,16 +307,18 @@ static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecorator
     // Check if the file contains imports/exports or path references - if so, use module mode
     if (hasPathReferences || source.Contains("import ") || source.Contains("export ") || isCjsFile)
     {
-        RunModuleFile(absolutePath, decoratorMode, emitDecoratorMetadata, scriptArgs);
+        RunModuleFile(absolutePath, options, scriptArgs);
     }
     else
     {
-        Run(source, decoratorMode, emitDecoratorMetadata, filePath: absolutePath, checkJs: checkJs);
+        Run(source, options.DecoratorMode, options.EmitDecoratorMetadata, filePath: absolutePath,
+            checkJs: options.CheckJs, typeOptions: options.TypeCheckerOptions, noEmit: options.NoEmit);
     }
 }
 
-static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null)
+static void RunModuleFile(string absolutePath, GlobalOptions options, string[]? scriptArgs = null)
 {
+    var decoratorMode = options.DecoratorMode;
     try
     {
         // Load the entry module and all dependencies
@@ -175,7 +328,7 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
 
         // Type checking across all modules (still uses Check-style API for modules)
         // Module type checking has its own error handling
-        var checker = new TypeChecker();
+        var checker = new TypeChecker(options.TypeCheckerOptions);
         checker.SetDecoratorMode(decoratorMode);
         var typeMap = checker.CheckModules(allModules, resolver);
 
@@ -186,8 +339,15 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
         {
             foreach (var d in diagnostics.Where(d => d.Severity == SharpTS.Diagnostics.DiagnosticSeverity.Error))
                 Console.WriteLine($"Error: {d}");
+            // This path has always returned 0 on type errors. Under --noEmit the exit code IS
+            // the result, so gate the nonzero exit on the flag rather than changing it for
+            // everyone (CliScriptExecutionTests / CliCommonJsTests pin the current behavior).
+            if (options.NoEmit) Environment.Exit(1);
             return;
         }
+
+        // --noEmit: type-check only, never interpret.
+        if (options.NoEmit) return;
 
         // Interpretation
         var interpreter = new Interpreter();
@@ -228,8 +388,9 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
     }
 }
 
-static async Task RunPromptAsync(DecoratorMode decoratorMode)
+static async Task RunPromptAsync(GlobalOptions options)
 {
+    var decoratorMode = options.DecoratorMode;
     PrintBanner();
     if (decoratorMode != DecoratorMode.None)
     {
@@ -239,11 +400,11 @@ static async Task RunPromptAsync(DecoratorMode decoratorMode)
     Console.WriteLine("Type .help for available commands.");
     Console.WriteLine();
 
-    using var repl = new SharpTS.Repl.ReplEngine(decoratorMode);
+    using var repl = new SharpTS.Repl.ReplEngine(decoratorMode, options.TypeCheckerOptions);
     await repl.RunAsync();
 }
 
-static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMetadata = false, Interpreter? interpreter = null, string? filePath = null, bool checkJs = false)
+static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMetadata = false, Interpreter? interpreter = null, string? filePath = null, bool checkJs = false, TypeCheckerOptions? typeOptions = null, bool noEmit = false)
 {
     interpreter ??= new Interpreter();
     interpreter.SetDecoratorMode(decoratorMode);
@@ -276,7 +437,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
         TypeMap? typeMap = null;
         if (TypeCheckPolicy.ShouldTypeCheck(filePath, lexer.Pragmas, checkJsDefault: checkJs))
         {
-            TypeChecker checker = new();
+            TypeChecker checker = new(typeOptions ?? TypeCheckerOptions.Default);
             checker.SetDecoratorMode(decoratorMode);
             var typeResult = checker.CheckWithRecovery(parseResult.Statements);
 
@@ -293,6 +454,11 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
             }
             typeMap = typeResult.TypeMap;
         }
+
+        // --noEmit: type-check only, never interpret. Deliberately outside the
+        // ShouldTypeCheck block so a .js file that skipped checking still stops here
+        // rather than running.
+        if (noEmit) return;
 
         // Variable Resolution Phase (enables O(1) lookups)
         var resolver = new VariableResolver(interpreter);
@@ -322,7 +488,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions)
 {
     try
     {
@@ -419,12 +585,15 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs, globalOptions);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas, externalRefs);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas, externalRefs, globalOptions);
         }
+
+        // --noEmit stopped before any assembly was written, so there is nothing to pack.
+        if (globalOptions.NoEmit) return;
 
         // Package if requested
         if (packOptions.Pack)
@@ -453,7 +622,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions)
 {
     // Phase 1: Load all static dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -461,7 +630,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     var allModules = resolver.GetModulesInOrder(entryModule);
 
     // Phase 2: Initial type checking to discover dynamic import paths
-    var checker = new TypeChecker();
+    var checker = new TypeChecker(globalOptions.TypeCheckerOptions);
     checker.SetDecoratorMode(decoratorMode);
     var typeMap = checker.CheckModules(allModules, resolver);
 
@@ -481,6 +650,19 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
             // (CheckModules is incremental - only checks newly added modules)
             typeMap = checker.CheckModules(allModules, resolver);
         }
+    }
+
+    // --noEmit: report what the checker found and stop before any IL is produced. This driver
+    // does not error-gate CheckModules at all in the normal path; keeping the gate flag-scoped
+    // avoids changing compile exit codes for everyone else.
+    if (globalOptions.NoEmit)
+    {
+        var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
+        var diagnostics = checker.GetDiagnostics();
+        reporter.ReportAll(diagnostics);
+        if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+            Environment.Exit(1);
+        return;
     }
 
     // Dead Code Analysis
@@ -577,9 +759,10 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null, ReferenceSet? externalRefs = null)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null, ReferenceSet? externalRefs = null, GlobalOptions? globalOptions = null)
 {
     externalRefs ??= ReferenceSet.Empty;
+    globalOptions ??= new GlobalOptions();
     // Set up diagnostic reporter
     var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
 
@@ -587,9 +770,9 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     // Compiler still needs a TypeMap; an empty one falls back to dynamic dispatch.
     TypeMap typeMap = new();
     var effectivePragmas = pragmas ?? TypeScriptPragmas.Empty;
-    if (TypeCheckPolicy.ShouldTypeCheck(sourcePath, effectivePragmas, checkJsDefault: false))
+    if (TypeCheckPolicy.ShouldTypeCheck(sourcePath, effectivePragmas, checkJsDefault: globalOptions.CheckJs))
     {
-        TypeChecker checker = new TypeChecker().WithFilePath(outputPath);
+        TypeChecker checker = new TypeChecker(globalOptions.TypeCheckerOptions).WithFilePath(outputPath);
         checker.SetDecoratorMode(decoratorMode);
         var typeResult = checker.CheckWithRecovery(statements);
 
@@ -606,6 +789,9 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
         typeMap = typeResult.TypeMap;
     }
+
+    // --noEmit: type-check only, never produce an assembly.
+    if (globalOptions.NoEmit) return;
 
     // Dead Code Analysis Phase
     DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
@@ -1006,6 +1192,32 @@ static void PrintHelp()
     Console.WriteLine("  --decorators                  Enable TC39 Stage 3 decorators");
     Console.WriteLine("  --emitDecoratorMetadata       Emit design-time type metadata");
     Console.WriteLine("  -r, --reference <asm.dll>     Add a .NET assembly reference (repeatable; all modes)");
+    Console.WriteLine("  --checkJs                     Type-check .js/.cjs/.mjs/.jsx files too");
+    Console.WriteLine("  --noEmit                      Type-check only; don't run or emit an assembly");
+    Console.WriteLine();
+    Console.WriteLine("Type Checking (tsc-compatible; all accept =false, e.g. --strict=false):");
+    Console.WriteLine("  --strict                      Umbrella for the three flags below");
+    Console.WriteLine("  --strictNullChecks            null/undefined are not assignable to other types");
+    Console.WriteLine("                                (SharpTS default: on)");
+    Console.WriteLine("  --strictFunctionTypes         Compare function parameters contravariantly");
+    Console.WriteLine("                                (SharpTS default: off)");
+    Console.WriteLine("  --noImplicitAny               Report unannotated parameters of declared");
+    Console.WriteLine("                                functions, methods and constructors");
+    Console.WriteLine("                                (SharpTS default: off)");
+    Console.WriteLine();
+    Console.WriteLine("Configuration (tsconfig.json):");
+    Console.WriteLine("  -p, --project <path>          Use this tsconfig.json (file or directory)");
+    Console.WriteLine("  --no-tsconfig                 Skip tsconfig.json discovery entirely");
+    Console.WriteLine("  --showConfig                  Print the resolved config as JSON and exit");
+    Console.WriteLine();
+    Console.WriteLine("  A tsconfig.json next to (or above) the entry script is discovered");
+    Console.WriteLine("  automatically. Command-line flags win over it. 'extends' chains are");
+    Console.WriteLine("  followed. SharpTS reads the strictness options, checkJs, the decorator");
+    Console.WriteLine("  options, preserveConstEnums, outDir, and files[0]; emit options such as");
+    Console.WriteLine("  target/module/jsx do not apply because SharpTS compiles to .NET IL.");
+    Console.WriteLine("  Set SHARPTS_TSCONFIG_VERBOSE=1 to list every option that was ignored.");
+    Console.WriteLine("  SharpTS compiles the entry file and everything it imports; include/exclude");
+    Console.WriteLine("  do not select inputs.");
     Console.WriteLine();
     Console.WriteLine(".NET References:");
     Console.WriteLine("  A sharpts.json next to (or above) the entry script supplies project-level");

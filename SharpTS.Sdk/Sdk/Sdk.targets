@@ -62,6 +62,14 @@
       <_SharpTSArgs>$(_SharpTSArgs) -o "$(SharpTSOutputPath)$(SharpTSOutputFileName)"</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --msbuild-errors</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --quiet</_SharpTSArgs>
+      <!--
+        The CLI discovers tsconfig.json on its own (walking up from the entry script). This
+        target has already read $(SharpTSTsConfigPath) and translated it into explicit flags
+        above, so let MSBuild remain the single source of truth: suppress the CLI's own
+        discovery. Without this, an SDK build would read tsconfig.json twice and could pick up
+        options MSBuild deliberately does not forward.
+      -->
+      <_SharpTSArgs>$(_SharpTSArgs) --no-tsconfig</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSPreserveConstEnums)' == 'true'">$(_SharpTSArgs) --preserveConstEnums</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSExperimentalDecorators)' == 'true'">$(_SharpTSArgs) --experimentalDecorators</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSDecorators)' == 'true'">$(_SharpTSArgs) --decorators</_SharpTSArgs>

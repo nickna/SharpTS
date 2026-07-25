@@ -811,6 +811,12 @@ public partial class TypeChecker
                     CheckDecorators(param.Decorators, DecoratorTarget.Parameter);
                 }
 
+                // Methods and constructors both arrive here (the constructor is a Method named
+                // "constructor"), and only implementations do — the Where(Body != null) filter
+                // above already excluded overload signatures.
+                ReportImplicitAnyParameters(method.Parameters,
+                    isAmbient: classStmt.IsDeclare || method.IsAbstract);
+
                 // For static methods, use a different environment without this/super
                 TypeEnvironment methodEnv;
                 if (method.IsStatic)

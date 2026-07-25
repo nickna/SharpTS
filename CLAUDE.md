@@ -44,6 +44,7 @@ Source → Lexer → Parser → TypeChecker → Interpreter (tree-walk)
 | `Diagnostics/` | Error reporting, source locations |
 | `Packaging/` | NuGet package generation |
 | `Cli/` | Command-line argument parsing |
+| `Configuration/` | tsconfig.json discovery/`extends`/merge + strictness option resolution |
 | `Declaration/` | TypeScript declaration generation from .NET types |
 | `SharpTS.LanguageServer/` | Standalone OmniSharp-based LSP server (`sharpts-lsp` tool) for IDE integration |
 | `SharpTS.Tests/` | xUnit test project |
