@@ -144,6 +144,80 @@ public class SpreadIntoRestParameterTests
     }
 
     /// <summary>
+    /// A spread argument only has to be iterable, not an array. The runtime expander walks
+    /// Symbol.iterator, so every iterable kind must both type-check and expand — in both
+    /// modes. The type checker previously demanded an array outright (TS2488), which also
+    /// rejected tuples, and typed arrays/Buffers were missing from the interpreter's
+    /// iterable switch even though the compiled path expanded them.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SpreadIntoRest_AcceptsEveryIterableKind(ExecutionMode mode)
+    {
+        AssertLines("""
+            function collect(...p: any[]): string { return JSON.stringify(p); }
+            const o = { m(...p: any[]): string { return JSON.stringify(p); } };
+            class K { m(...p: any[]): string { return JSON.stringify(p); } }
+            function* gen(): Generator<string> { yield 'a'; yield 'b'; }
+
+            const arr: string[] = ['a', 'b'];
+            const tup: [string, number] = ['a', 1];
+            const set = new Set<string>(['a', 'b']);
+            const map = new Map<string, number>([['a', 1]]);
+            const u8 = new Uint8Array([1, 2]);
+            const buf = Buffer.from([3, 4]);
+
+            console.log('array     ' + collect(...arr));
+            console.log('tuple     ' + collect(...tup));
+            console.log('set       ' + collect(...set));
+            console.log('setValues ' + collect(...set.values()));
+            console.log('map       ' + collect(...map));
+            console.log('string    ' + collect(...'ab'));
+            console.log('generator ' + collect(...gen()));
+            console.log('typedarray ' + collect(...u8));
+            console.log('buffer    ' + collect(...buf));
+            console.log('objMethod ' + o.m(...set));
+            console.log('classMeth ' + new K().m(...gen()));
+            console.log('mixed     ' + collect('z', ...set));
+            """,
+            """
+            array     ["a","b"]
+            tuple     ["a",1]
+            set       ["a","b"]
+            setValues ["a","b"]
+            map       [["a",1]]
+            string    ["a","b"]
+            generator ["a","b"]
+            typedarray [1,2]
+            buffer    [3,4]
+            objMethod ["a","b"]
+            classMeth ["a","b"]
+            mixed     ["z","a","b"]
+            """, mode);
+    }
+
+    /// <summary>
+    /// A genuinely non-iterable spread operand must still be rejected — the fix widened the
+    /// check to "iterable", not "anything".
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SpreadIntoRest_RejectsNonIterable(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                function collect(...p: any[]): string { return JSON.stringify(p); }
+                const n: number = 5;
+                console.log(collect(...n));
+                """
+        };
+
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Contains("iterable", ex.Message);
+    }
+
+    /// <summary>
     /// The async/state-machine emitters reach rest packing through their own argument
     /// spilling (an <c>await</c> in an argument must not strand a partly-built array on
     /// the IL stack), so they get their own coverage — including a spread that follows

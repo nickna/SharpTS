@@ -166,19 +166,44 @@ public partial class TypeChecker
             {
                 if (arg is Expr.Spread spread)
                 {
-                    // Spread argument - check that it's an array
+                    // A spread argument only has to be *iterable*, not an array: the runtime
+                    // expander walks Symbol.iterator, so Set/Map/string/generator/iterator/
+                    // TypedArray and hand-written iterables all spread correctly, and tsc
+                    // accepts them. TS2488 is reserved for genuinely non-iterable operands.
+                    // Uses the same predicate as array-literal spread (CheckArray) so the two
+                    // spread positions can't drift apart. (#1282)
                     TypeInfo spreadType = CheckExpr(spread.Expression);
-                    if (spreadType is TypeInfo.Array arrType)
+                    if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
-                        // Check element type compatibility with rest param or remaining regular params
-                        if (restElementType != null && !IsCompatible(restElementType, arrType.ElementType))
+                        // A tuple's arity and per-position types are known, so check each
+                        // element against the rest parameter instead of collapsing to one type.
+                        if (restElementType != null)
                         {
-                            throw new TypeCheckException($"Spread element type '{arrType.ElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                            foreach (var tupleElem in tupleSpread.ElementTypes)
+                            {
+                                if (!IsCompatible(restElementType, tupleElem))
+                                {
+                                    throw new TypeCheckException($"Spread element type '{tupleElem}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                                }
+                            }
+                            if (tupleSpread.RestElementType != null
+                                && !IsCompatible(restElementType, tupleSpread.RestElementType))
+                            {
+                                throw new TypeCheckException($"Spread element type '{tupleSpread.RestElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                            }
                         }
                     }
-                    else if (spreadType is not TypeInfo.Any)
+                    else if (TryGetSpreadElementType(spreadType, out var spreadElementType))
                     {
-                        throw new TypeCheckException($"Spread argument must be an array.", tsCode: "TS2488");
+                        // Check element type compatibility with rest param or remaining regular params
+                        if (restElementType != null && !IsCompatible(restElementType, spreadElementType))
+                        {
+                            throw new TypeCheckException($"Spread element type '{spreadElementType}' not compatible with rest parameter type '{restElementType}'.", tsCode: "TS2345");
+                        }
+                    }
+                    else
+                    {
+                        throw new TypeCheckException($"Spread argument must be an iterable type (array, iterator, set, map, string, or generator), got '{spreadType}'.", tsCode: "TS2488");
                     }
                     // After spread, we can't reliably match params
                     break;
