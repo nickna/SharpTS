@@ -55,6 +55,9 @@ public static class ConsoleBuiltIns
     public static object? GetMember(string name)
         => _lookup.GetMember(name);
 
+    /// <summary>Member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> MemberNames => _lookup.MemberNames;
+
     // ===================== Helper Methods =====================
 
     /// <summary>

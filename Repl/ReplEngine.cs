@@ -13,7 +13,7 @@ namespace SharpTS.Repl;
 /// Enhanced REPL engine using PrettyPrompt for multi-line editing,
 /// syntax highlighting, persistent history, and auto-display of results.
 /// </summary>
-public sealed class ReplEngine
+public sealed class ReplEngine : IDisposable
 {
     private Interpreter _interpreter;
     private VariableResolver _resolver;
@@ -21,6 +21,7 @@ public sealed class ReplEngine
     private readonly DecoratorMode _decoratorMode;
     private readonly List<string> _sessionHistory = [];
     private readonly List<Stmt> _accumulatedStatements = [];
+    private readonly ReplCompletionSession _completionSession;
 
     public ReplEngine(DecoratorMode decoratorMode)
     {
@@ -29,7 +30,19 @@ public sealed class ReplEngine
         _interpreter.SetDecoratorMode(decoratorMode);
         _resolver = new VariableResolver(_interpreter);
         _typeChecker = CreateTypeChecker();
+
+        // Holds the current interpreter/checker by reference so the prompt callbacks, which are
+        // built once before the read loop, keep working after `.reset` replaces them.
+        _completionSession = new ReplCompletionSession(
+            _interpreter, _typeChecker, decoratorMode, _accumulatedStatements);
+        Completions = new ReplCompletionProvider(_completionSession);
     }
+
+    /// <summary>
+    /// Autocomplete over the current session state. Exposed for tests, which cannot drive
+    /// <see cref="RunAsync"/> because it blocks on a real console prompt.
+    /// </summary>
+    internal ReplCompletionProvider Completions { get; }
 
     private TypeChecker CreateTypeChecker()
     {
@@ -47,7 +60,7 @@ public sealed class ReplEngine
         Directory.CreateDirectory(historyDir);
         var historyPath = Path.Combine(historyDir, "repl_history");
 
-        var callbacks = new ReplCallbacks();
+        var callbacks = new ReplCallbacks(Completions);
         var configuration = new PromptConfiguration(
             prompt: new FormattedString("> ", new FormatSpan(0, 2, AnsiColor.Cyan)));
 
@@ -55,6 +68,9 @@ public sealed class ReplEngine
             persistentHistoryFilepath: historyPath,
             callbacks: callbacks,
             configuration: configuration);
+
+        // Tracks a Ctrl+C that discarded the previous line, so a second one exits.
+        var cancelledPreviousLine = false;
 
         while (true)
         {
@@ -65,10 +81,21 @@ public sealed class ReplEngine
 
             if (!response.IsSuccess)
             {
-                // Ctrl+C was pressed — reset current input, continue loop
+                // Ctrl+C. PrettyPrompt reports it as an unsuccessful read whose text is always
+                // empty — so there is no way to tell a cancelled line from a cancelled empty
+                // prompt — and it suppresses process termination, which means this loop is the
+                // only thing that can end the session. A second consecutive press exits, matching
+                // the Node REPL. (Ctrl+D cannot be used for this: PrettyPrompt binds it to
+                // forward-delete, so it never reaches here.)
+                if (cancelledPreviousLine)
+                    break;
+
+                cancelledPreviousLine = true;
+                Console.WriteLine("(To exit, press Ctrl+C again or type .exit)");
                 continue;
             }
 
+            cancelledPreviousLine = false;
             var input = response.Text;
 
             if (string.IsNullOrWhiteSpace(input))
@@ -83,6 +110,10 @@ public sealed class ReplEngine
                     _decoratorMode, _sessionHistory, _accumulatedStatements);
                 commands.Execute(input);
 
+                // `.load` appends to the accumulated statements, so any dot-command may have
+                // changed what completion should offer.
+                _completionSession.OnStatementsAppended();
+
                 if (commands.ExitRequested)
                     break;
 
@@ -94,6 +125,8 @@ public sealed class ReplEngine
                     _resolver = new VariableResolver(_interpreter);
                     _typeChecker = CreateTypeChecker();
                     _accumulatedStatements.Clear();
+                    // Point completion at the new state and drop its cached member lists.
+                    _completionSession.Replace(_interpreter, _typeChecker);
                     Console.WriteLine("REPL state has been reset.");
                 }
 
@@ -142,6 +175,9 @@ public sealed class ReplEngine
         }
     }
 
+    /// <summary>Disposes the interpreter that owns the session's runtime state.</summary>
+    public void Dispose() => _interpreter.Dispose();
+
     private static ParseDiagnosticResult TryParse(string source, DecoratorMode decoratorMode)
     {
         var lexer = new Lexer(source);
@@ -150,7 +186,11 @@ public sealed class ReplEngine
         return parser.Parse();
     }
 
-    private void ExecuteInput(string source)
+    /// <summary>
+    /// Runs one line of REPL input: parse, resolve, interpret, accumulate.
+    /// Internal so tests can build up real session state without driving the console prompt.
+    /// </summary>
+    internal void ExecuteInput(string source)
     {
         try
         {
@@ -192,9 +232,10 @@ public sealed class ReplEngine
             // Execute and capture result
             var result = _interpreter.InterpretRepl(parseResult.Statements);
 
-            // Accumulate statements so .type can resolve types from previous inputs.
-            // Type checking is deferred — only runs when .type is actually invoked.
+            // Accumulate statements so .type and autocomplete can resolve types from previous
+            // inputs. Type checking is deferred — it only runs when one of them is invoked.
             _accumulatedStatements.AddRange(parseResult.Statements);
+            _completionSession.OnStatementsAppended();
 
             // Tick event loop after execution to process async work
             _interpreter.TickEventLoop();

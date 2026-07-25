@@ -496,6 +496,33 @@ The compilation directory has grown substantially. Key organizational patterns:
 
 ### Tooling & IDE Integration
 
+**Interactive REPL** (`Repl/`):
+
+Built on the PrettyPrompt library, which supplies multi-line editing, persistent history, and the
+completion pane. Session state — the `Interpreter`, the `TypeChecker`, and the accumulated
+statements — lives on `ReplEngine` and is replaced wholesale by `.reset`; `ReplCompletionSession`
+holds it by reference so the callbacks, which are constructed once before the read loop, keep
+working across a reset.
+
+| File | Purpose |
+|------|---------|
+| `ReplEngine.cs` | Read-eval-print loop, session state, Ctrl+C interruption |
+| `ReplCallbacks.cs` | PrettyPrompt callbacks: highlighting, multi-line detection, completion |
+| `ReplCompletionContext.cs` | Classifies what the caret should complete |
+| `ReplCompletionProvider.cs` | Computes autocomplete candidates |
+| `DotCommands.cs` | `.help`, `.type`, `.load`, … |
+| `ValueFormatter.cs` | ANSI-coloured display of evaluation results |
+
+Autocomplete resolves members through the **`TypeChecker`**, generalizing `.type`: the receiver
+expression is parsed and checked against the accumulated session statements, then
+`TypeChecker.GetCompletionMembers` enumerates the resulting `TypeInfo`. That is what lets arbitrary
+receivers (`getUser().`, `arr[0].`) complete and supplies each member's type for the tooltip. Two
+consequences worth knowing: the checker models the built-in singletons (`console`, `Math`, `JSON`,
+…) as `any`, so those fall back to the runtime member tables in `Runtime/BuiltIns/`; and
+runtime-only shapes (a property added after construction, `JSON.parse` results) are invisible to it.
+Identifier completion deliberately skips type checking and reads the live `RuntimeEnvironment`
+instead, because it runs on every keystroke.
+
 **Declaration Generation** (`Declaration/`):
 | File | Purpose |
 |------|---------|

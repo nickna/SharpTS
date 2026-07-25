@@ -40,6 +40,9 @@ public static partial class ObjectBuiltIns
     public static object? GetStaticMethod(string name)
         => _staticLookup.GetMember(name);
 
+    /// <summary>Static member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> StaticMemberNames => _staticLookup.MemberNames;
+
     /// <summary>
     /// Enumerates the own enumerable (key, value) pairs of a receiver, encoding the
     /// Object.keys/values/entries receiver-type ladder once. Branch order and per-branch

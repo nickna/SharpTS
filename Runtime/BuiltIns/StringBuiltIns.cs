@@ -69,6 +69,9 @@ public static class StringBuiltIns
     public static object? GetStaticMember(string name)
         => _staticLookup.GetMember(name);
 
+    /// <summary>Static member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> StaticMemberNames => _staticLookup.MemberNames;
+
     /// <summary>
     /// Returns the unbound <see cref="BuiltInMethod"/> for a
     /// String.prototype.* method, or null if no such method exists. Used by

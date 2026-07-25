@@ -96,6 +96,12 @@ dotnet tool install -g SharpTS
 sharpts
 ```
 
+The interactive prompt supports multi-line editing, syntax highlighting, persistent history, and
+autocomplete. Suggestions appear as you type — session variables, functions and classes, built-in
+globals, and keywords — and typing `.` offers the members of the receiver's type along with each
+member's signature. Press `Tab` to accept a suggestion, `Ctrl+Space` to request one, and `Esc` to
+dismiss the list. Type `.help` for the dot-commands.
+
 **Run a TypeScript file (interpreted):**
 
 ```bash

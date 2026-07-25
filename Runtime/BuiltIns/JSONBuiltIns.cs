@@ -24,6 +24,9 @@ public static class JSONBuiltIns
 
     public static object? GetStaticMethod(string name) => _lookup.GetMember(name);
 
+    /// <summary>Member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> MemberNames => _lookup.MemberNames;
+
     private static RuntimeValue ParseJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
         var text = args[0].ToObject()?.ToString() ?? "null";

@@ -39,6 +39,13 @@ public sealed class BuiltInRegistry
     }
 
     /// <summary>
+    /// The names of every registered built-in namespace, for REPL autocomplete. Some of these
+    /// (notably <c>console</c>) have no singleton instance and so never reach the realm's global
+    /// constant table, making this the only complete source of built-in global names.
+    /// </summary>
+    public IEnumerable<string> NamespaceNames => _namespaces.Keys;
+
+    /// <summary>
     /// Gets the singleton instance for a namespace (e.g., Math returns SharpTSMath.Instance).
     /// </summary>
     /// <param name="name">The namespace name</param>

@@ -24,6 +24,12 @@ public sealed class BuiltInTypeMemberLookup<TReceiver>
     }
 
     /// <summary>
+    /// The names of every property and method in this table, for REPL autocomplete.
+    /// The dispatch switches themselves are not enumerable, so completion reads the tables directly.
+    /// </summary>
+    public IEnumerable<string> MemberNames => _properties.Keys.Concat(_methods.Keys);
+
+    /// <summary>
     /// Gets a member (property or method) for an instance type.
     /// Methods are bound to the receiver before being returned.
     /// </summary>
@@ -69,6 +75,11 @@ public sealed class BuiltInStaticMemberLookup
         _methods = methods;
         _rawConstants = rawConstants;
     }
+
+    /// <summary>
+    /// The names of every constant and method in this table, for REPL autocomplete.
+    /// </summary>
+    public IEnumerable<string> MemberNames => _rawConstants.Keys.Concat(_methods.Keys);
 
     /// <summary>
     /// Gets a static member (constant or method).

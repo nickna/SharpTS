@@ -37,6 +37,15 @@ public abstract class ScopeChain<TValue, TSelf> where TSelf : ScopeChain<TValue,
     }
 
     /// <summary>
+    /// The names defined directly in this scope, excluding enclosing scopes.
+    /// Walk <see cref="Enclosing"/> to enumerate the whole chain.
+    /// </summary>
+    /// <remarks>
+    /// Used by REPL autocomplete to list the bindings currently in scope.
+    /// </remarks>
+    public IEnumerable<string> Names => _values.Keys;
+
+    /// <summary>
     /// Defines a variable in the current scope.
     /// </summary>
     public void Define(string name, TValue value) => _values[name] = value;

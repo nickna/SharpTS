@@ -64,6 +64,9 @@ public static class MathBuiltIns
     public static object? GetMember(string name)
         => _lookup.GetMember(name);
 
+    /// <summary>Member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> MemberNames => _lookup.MemberNames;
+
     private static RuntimeValue Min(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.FromNumber(double.PositiveInfinity);
