@@ -1,5 +1,7 @@
 using PrettyPrompt;
+using PrettyPrompt.Completion;
 using PrettyPrompt.Consoles;
+using PrettyPrompt.Documents;
 using PrettyPrompt.Highlighting;
 using SharpTS.Parsing;
 
@@ -7,9 +9,9 @@ namespace SharpTS.Repl;
 
 /// <summary>
 /// PrettyPrompt callbacks for the SharpTS REPL.
-/// Handles multi-line detection via TransformKeyPressAsync and syntax highlighting.
+/// Handles multi-line detection via TransformKeyPressAsync, syntax highlighting, and autocomplete.
 /// </summary>
-internal sealed class ReplCallbacks : PromptCallbacks
+internal sealed class ReplCallbacks(ReplCompletionProvider completions) : PromptCallbacks
 {
     // Token type to color mapping for syntax highlighting
     private static readonly Dictionary<TokenType, AnsiColor> TokenColors = new()
@@ -128,6 +130,101 @@ internal sealed class ReplCallbacks : PromptCallbacks
     }
 
     /// <summary>
+    /// Supplies autocomplete candidates for the caret position.
+    /// </summary>
+    protected override Task<IReadOnlyList<CompletionItem>> GetCompletionItemsAsync(
+        string text, int caret, TextSpan spanToBeReplaced, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<CompletionItem> items;
+        try
+        {
+            items = completions
+                .GetCandidates(text, caret)
+                .Select(candidate => (CompletionItem)new ReplCompletionItem(candidate))
+                .ToList();
+        }
+        catch
+        {
+            // A completion failure must never take down the prompt.
+            items = [];
+        }
+
+        return Task.FromResult(items);
+    }
+
+    /// <summary>
+    /// Opens the completion window as the user types, and after a dot.
+    /// </summary>
+    /// <remarks>
+    /// PrettyPrompt's default only opens after <c>.</c> or <c>(</c>, at the first character of the
+    /// prompt, or after a space — and it opens even inside string literals. This override gives
+    /// IntelliSense-style behaviour instead: suggest while a word is being typed, but stay silent
+    /// wherever <see cref="ReplCompletionContext.Classify"/> says completion does not apply (inside
+    /// strings, templates, comments, and after a numeric literal such as <c>1.</c>).
+    /// </remarks>
+    protected override Task<bool> ShouldOpenCompletionWindowAsync(
+        string text, int caret, KeyPress keyPress, CancellationToken cancellationToken)
+        => Task.FromResult(ShouldOpenCompletionWindow(text, caret));
+
+    /// <summary>The trigger policy, separated from the callback so it can be tested directly.</summary>
+    internal static bool ShouldOpenCompletionWindow(string text, int caret)
+    {
+        var context = ReplCompletionContext.Classify(text, caret);
+
+        return context.Kind switch
+        {
+            // Only once a word is actually started, so the menu does not appear on a bare prompt or
+            // after every space.
+            ReplCompletionContextKind.Identifier => context.Partial.Length > 0,
+            ReplCompletionContextKind.None => false,
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// Determines the span a committed completion replaces.
+    /// </summary>
+    /// <remarks>
+    /// The default word detection uses <c>IsLetterOrDigit(c) || c == '_'</c>, which excludes <c>$</c>
+    /// even though it is a legal identifier character — committing <c>$foo</c> over a caret in
+    /// <c>$fo</c> would produce <c>$$foo</c>. It also stops at the <c>.</c> of a dot-command and at
+    /// the separators in a path argument. Deriving the span from the same classification that
+    /// produced the candidates keeps the two consistent.
+    /// </remarks>
+    protected override Task<TextSpan> GetSpanToReplaceByCompletionAsync(
+        string text, int caret, CancellationToken cancellationToken)
+    {
+        var context = ReplCompletionContext.Classify(text, caret);
+
+        return context.Kind == ReplCompletionContextKind.None
+            ? base.GetSpanToReplaceByCompletionAsync(text, caret, cancellationToken)
+            : Task.FromResult(TextSpan.FromBounds(context.ReplaceStart, caret));
+    }
+
+    /// <summary>
+    /// Lets Enter submit a finished line instead of committing the highlighted suggestion.
+    /// </summary>
+    /// <remarks>
+    /// Both Enter and Tab commit completions by default, and the menu is open most of the time under
+    /// IntelliSense-style triggering — so Enter would rarely reach the prompt. Returning false here
+    /// leaves the key unhandled, and it falls through to the code pane, which submits.
+    ///
+    /// The <c>IsInputComplete</c> guard is load-bearing, not cosmetic. PrettyPrompt skips
+    /// <see cref="TransformKeyPressAsync"/> whenever a key would commit a completion, so rejecting
+    /// Enter unconditionally would also bypass the Enter-to-newline transform below and break
+    /// multi-line editing. Since that transform only fires for *incomplete* input, restricting the
+    /// rejection to complete input means the bypass can only ever happen where the transform would
+    /// have done nothing anyway.
+    /// </remarks>
+    protected override Task<bool> ConfirmCompletionCommit(
+        string text, int caret, KeyPress keyPress, CancellationToken cancellationToken)
+        => Task.FromResult(ShouldCommitCompletion(keyPress.ConsoleKeyInfo.Key, text));
+
+    /// <summary>The commit policy, separated from the callback so it can be tested directly.</summary>
+    internal static bool ShouldCommitCompletion(ConsoleKey key, string text)
+        => key != ConsoleKey.Enter || !IsInputComplete(text);
+
+    /// <summary>
     /// Provides real-time syntax highlighting by tokenizing the current input.
     /// </summary>
     protected override Task<IReadOnlyCollection<FormatSpan>> HighlightCallbackAsync(
@@ -219,6 +316,74 @@ internal sealed class ReplCallbacks : PromptCallbacks
             // Lexer threw on malformed input — treat as incomplete so user can continue editing
             return false;
         }
+    }
+
+    /// <summary>
+    /// A completion item that ranks by category and colours itself to match the live highlighting.
+    /// </summary>
+    /// <remarks>
+    /// Nested so it can reuse <see cref="TokenColors"/>: a <c>const</c> suggestion is then the exact
+    /// same blue it turns once committed.
+    /// </remarks>
+    private sealed class ReplCompletionItem : CompletionItem
+    {
+        private readonly int _categoryRank;
+
+        public ReplCompletionItem(ReplCompletionCandidate candidate)
+            : base(
+                replacementText: candidate.Name,
+                displayText: Display(candidate),
+                filterText: candidate.Name,
+                getExtendedDescription: candidate.Detail is null
+                    ? null
+                    : _ => Task.FromResult(new FormattedString(candidate.Detail)))
+            => _categoryRank = RankOf(candidate.Kind);
+
+        /// <summary>
+        /// Ranks by how well the item matches what has been typed first, then by category, so that
+        /// a session binding beats a global which beats a keyword among equally good matches.
+        /// </summary>
+        public override int GetCompletionItemPriority(string text, int caret, TextSpan spanToBeReplaced)
+        {
+            var basePriority = base.GetCompletionItemPriority(text, caret, spanToBeReplaced);
+
+            // The base uses `int.MinValue + priority` to mark non-matching items; scaling that would
+            // overflow, so leave negatives alone.
+            return basePriority < 0 ? basePriority : basePriority * 10 + _categoryRank;
+        }
+
+        private static int RankOf(ReplCompletionKind kind) => kind switch
+        {
+            ReplCompletionKind.Member => 5,
+            ReplCompletionKind.Binding => 4,
+            ReplCompletionKind.DotCommand => 3,
+            ReplCompletionKind.FilePath => 3,
+            ReplCompletionKind.Global => 2,
+            _ => 1, // Keyword — real bindings should always win.
+        };
+
+        private static FormattedString Display(ReplCompletionCandidate candidate)
+        {
+            var color = ColorOf(candidate);
+            return color is null
+                ? new FormattedString(candidate.Name)
+                : new FormattedString(
+                    candidate.Name, new FormatSpan(0, candidate.Name.Length, color.Value));
+        }
+
+        private static AnsiColor? ColorOf(ReplCompletionCandidate candidate) => candidate.Kind switch
+        {
+            // Reuse the highlighter's own mapping so keyword colouring cannot drift from it.
+            ReplCompletionKind.Keyword =>
+                Lexer.KeywordTokenType(candidate.Name) is { } tokenType
+                && TokenColors.TryGetValue(tokenType, out var keywordColor)
+                    ? keywordColor
+                    : AnsiColor.Blue,
+            ReplCompletionKind.Global => AnsiColor.Cyan,
+            ReplCompletionKind.DotCommand => AnsiColor.Magenta,
+            ReplCompletionKind.FilePath => AnsiColor.Green,
+            _ => null, // Members and bindings stay default, as identifiers are in the buffer.
+        };
     }
 
     /// <summary>

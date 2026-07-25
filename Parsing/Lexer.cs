@@ -58,6 +58,15 @@ public class Lexer(string source)
     public TypeScriptPragmas Pragmas =>
         new(_hasTsCheck, _hasTsNoCheck, _tsIgnoreLines, _tsExpectErrorLines);
 
+    /// <summary>
+    /// Every reserved word the lexer recognizes, for REPL autocomplete.
+    /// </summary>
+    internal static IEnumerable<string> KeywordNames => Keywords.Keys;
+
+    /// <summary>Maps a keyword's spelling to its token type, or null if it is not a keyword.</summary>
+    internal static TokenType? KeywordTokenType(string name) =>
+        Keywords.TryGetValue(name, out var type) ? type : null;
+
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
         { "abstract", TokenType.ABSTRACT },

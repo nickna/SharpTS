@@ -239,7 +239,7 @@ static async Task RunPromptAsync(DecoratorMode decoratorMode)
     Console.WriteLine("Type .help for available commands.");
     Console.WriteLine();
 
-    var repl = new SharpTS.Repl.ReplEngine(decoratorMode);
+    using var repl = new SharpTS.Repl.ReplEngine(decoratorMode);
     await repl.RunAsync();
 }
 

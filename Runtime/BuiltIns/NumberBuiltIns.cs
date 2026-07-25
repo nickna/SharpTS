@@ -75,6 +75,9 @@ public static class NumberBuiltIns
     public static object? GetStaticMember(string name)
         => _staticLookup.GetMember(name);
 
+    /// <summary>Static member names for REPL autocomplete.</summary>
+    public static IEnumerable<string> StaticMemberNames => _staticLookup.MemberNames;
+
     /// <summary>
     /// Gets an instance member for a number value (e.g., (123).toFixed(2)).
     /// </summary>

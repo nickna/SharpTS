@@ -40,6 +40,22 @@ internal sealed class DotCommands
     }
 
     /// <summary>
+    /// Every dot-command with its one-line help text. Single source of truth: <see cref="Execute"/>,
+    /// <see cref="PrintHelp"/>, and REPL autocomplete all read this, so a new command shows up in
+    /// all three without further edits.
+    /// </summary>
+    public static readonly (string Name, string Args, string Help)[] Commands =
+    [
+        (".help", "", "Show this help message"),
+        (".clear", "", "Clear the console screen"),
+        (".exit", "", "Exit the REPL (also: Ctrl+C twice)"),
+        (".reset", "", "Reset interpreter state (fresh environment)"),
+        (".type", " <expr>", "Show the TypeScript type of an expression"),
+        (".save", " <file>", "Save session history to a TypeScript file"),
+        (".load", " <file>", "Load and execute a TypeScript file"),
+    ];
+
+    /// <summary>
     /// Returns true if the input is a dot-command.
     /// </summary>
     public static bool IsDotCommand(string input)
@@ -95,22 +111,24 @@ internal sealed class DotCommands
 
     private static void PrintHelp()
     {
+        Console.WriteLine("REPL Commands:");
+        foreach (var (name, args, help) in Commands)
+            Console.WriteLine($"  {name + args,-18} {help}");
+
         Console.WriteLine("""
-            REPL Commands:
-              .help              Show this help message
-              .clear             Clear the console screen
-              .exit              Exit the REPL (also: Ctrl+D)
-              .reset             Reset interpreter state (fresh environment)
-              .type <expr>       Show the TypeScript type of an expression
-              .save <file>       Save session history to a TypeScript file
-              .load <file>       Load and execute a TypeScript file
 
             Keyboard Shortcuts:
               Enter              Submit input (or continue on incomplete input)
               Shift+Enter        Force new line
-              Up/Down            Navigate command history
-              Ctrl+C             Cancel current input / interrupt execution
+              Up/Down            Navigate completions when open, else command history
+              Ctrl+C             Discard current input / interrupt execution; twice to exit
               Ctrl+L             Clear screen
+
+            Completion:
+              (as you type)      Suggestions appear for names and after '.'
+              Tab                Accept the highlighted suggestion
+              Ctrl+Space         Show suggestions
+              Escape             Dismiss suggestions
             """);
     }
 

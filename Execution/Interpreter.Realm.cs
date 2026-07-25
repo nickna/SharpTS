@@ -42,6 +42,11 @@ public partial class Interpreter
     /// </summary>
     private static readonly FrozenDictionary<string, object> _globalConstants = CreateGlobalsLookup();
 
+    /// <summary>
+    /// The names of every global constant and built-in singleton, for REPL autocomplete.
+    /// </summary>
+    internal static IEnumerable<string> GlobalNames => _globalConstants.Keys;
+
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
     // `RegExp.prototype.constructor === RegExp` and, by inheritance,
