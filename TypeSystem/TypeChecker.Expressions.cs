@@ -324,6 +324,16 @@ public partial class TypeChecker
     /// <summary>
     /// Gets the element type from an iterable type (for yield* delegation).
     /// </summary>
+    /// <remarks>
+    /// Deliberately NOT delegated to <see cref="TryGetSpreadElementType"/>, even though the two
+    /// lists overlap almost entirely. The spreadable set is now wider than what the compiled
+    /// <c>yield*</c> emitters can lower: their fallback arm casts the operand to
+    /// <c>IEnumerable</c> after a Map/Set/Symbol.iterator chain, so a typed array or Buffer
+    /// reaches it and throws <c>InvalidCastException</c> at runtime. Accepting those here would
+    /// trade a clean compile-time TS2488 for a compiled crash. Widen this only together with
+    /// typed-array arms in GeneratorMoveNextEmitter.Expressions.Yield and the two
+    /// AsyncGeneratorMoveNextEmitter sites. (#1282)
+    /// </remarks>
     private TypeInfo GetIterableElementType(TypeInfo type) => type switch
     {
         TypeInfo.Array arr => arr.ElementType,
@@ -379,6 +389,10 @@ public partial class TypeChecker
                 elementType = typed.ElementType.StartsWith("Big")
                     ? (TypeInfo)TypeInfo.BigInt.Shared
                     : new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+                return true;
+            // Buffer is a Uint8Array subclass in Node, so it spreads to numbers. (#1282)
+            case TypeInfo.Buffer:
+                elementType = new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
                 return true;
             default:
                 // A hand-written object exposing [Symbol.iterator] is spreadable structurally (#485).

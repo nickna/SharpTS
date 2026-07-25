@@ -33,6 +33,7 @@ public static class ParameterTypeResolver
             // Fallback: try to resolve from parameter type annotations
             var fallback = parameters.Select(p => WidenIfUndefinedReachableParam(ResolveParameterType(p, typeMapper), p, typeMap)).ToArray();
             WidenDefaultedParamsToObject(fallback, parameters, typeof(object));
+            ForceRestParamsToListMarker(fallback, parameters);
             return fallback;
         }
 
@@ -85,7 +86,37 @@ public static class ParameterTypeResolver
             .ToArray();
 
         WidenDefaultedParamsToObject(resolved, parameters, typeof(object));
+        ForceRestParamsToListMarker(resolved, parameters);
         return resolved;
+    }
+
+    /// <summary>
+    /// Pins every rest parameter to the <c>List&lt;object&gt;</c> marker type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rest-ness is not carried in metadata — every dispatch path recognizes a rest parameter
+    /// purely by this exact trailing CLR type (see the <c>hasRestParam</c> checks in
+    /// <c>ILEmitter.Calls.MethodDispatch</c> and the <c>_hasListRest</c> cache
+    /// <c>$TSFunction.AdjustArgs</c> reads). Any other slot type silently disables rest
+    /// packing: the callee then receives only the first trailing argument and the rest are
+    /// dropped.
+    /// </para>
+    /// <para>
+    /// Applied centrally at the end of every resolver because the annotation-driven fallbacks
+    /// mapped the declaration's element type instead. That made correctness accidental — a rest
+    /// param written <c>...p: string[]</c> happened to map onto <c>List&lt;object&gt;</c> and
+    /// worked, while <c>...p: any[]</c> mapped to a plain <c>object</c> slot and broke. Class
+    /// methods and constructors never applied the rule on any path at all (#1282).
+    /// </para>
+    /// </remarks>
+    private static void ForceRestParamsToListMarker(Type[] resolved, List<Stmt.Parameter> parameters)
+    {
+        for (int i = 0; i < parameters.Count && i < resolved.Length; i++)
+        {
+            if (parameters[i].IsRest)
+                resolved[i] = typeof(List<object>);
+        }
     }
 
     /// <summary>
@@ -422,6 +453,7 @@ public static class ParameterTypeResolver
         }
 
         WidenValueTypeDefaultedMethodParams(resolved, parameters, className, methodName, isStatic, typeMapper, typeMap);
+        ForceRestParamsToListMarker(resolved, parameters);
         return resolved;
     }
 
@@ -618,6 +650,7 @@ public static class ParameterTypeResolver
     {
         var resolved = ResolveConstructorParametersCore(className, parameters, typeMapper, typeMap);
         WidenDefaultedParamsToObject(resolved, parameters, typeof(object));
+        ForceRestParamsToListMarker(resolved, parameters);
         return resolved;
     }
 

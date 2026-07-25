@@ -1,0 +1,154 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+/// <summary>
+/// Typed arrays and Buffers are iterable in JS (<c>%TypedArray%.prototype[@@iterator]</c>;
+/// Buffer is a Uint8Array subclass), so every iteration position must accept them
+/// identically in both execution modes.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The interpreter carried three near-copies of one "which values are iterable" switch —
+/// <c>ExecuteForOf</c>, <c>GetIterableElements</c> (spread / <c>yield*</c>), and the
+/// for-await-of one in <c>Interpreter.Async.cs</c> — and they had drifted: Buffer appeared
+/// in one, typed arrays in none. So <c>[...u8]</c> and <c>for (const b of u8)</c> disagreed
+/// with each other and with the compiled path, which expands both. (#1282)
+/// </para>
+/// <para>
+/// Expectations were checked against Node v25.5.0.
+/// </para>
+/// </remarks>
+public class TypedArrayIterationParityTests
+{
+    private static void Expect(string source, string expected, ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal(Normalize(expected), Normalize(output));
+    }
+
+    // Both sides need normalizing, not just the output: these source files are checked out
+    // with CRLF on Windows, so the expected raw-string literals carry \r\n of their own.
+    private static string Normalize(string s) =>
+        string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).Trim();
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ForOf_OverTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        // Previously (interpreted): "for...of requires an iterable (array, Map, Set, or iterator)."
+        Expect("""
+            const u8 = new Uint8Array([1, 2, 3]);
+            const i16 = new Int16Array([-1, 300]);
+            const buf = Buffer.from([4, 5]);
+
+            const a: number[] = [];
+            for (const x of u8) { a.push(x as number); }
+            console.log('u8  ' + JSON.stringify(a));
+
+            const b: number[] = [];
+            for (const x of i16) { b.push(x as number); }
+            console.log('i16 ' + JSON.stringify(b));
+
+            const c: number[] = [];
+            for (const x of buf) { c.push(x as number); }
+            console.log('buf ' + JSON.stringify(c));
+            """,
+            """
+            u8  [1,2,3]
+            i16 [-1,300]
+            buf [4,5]
+            """, mode);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ArrayLiteralSpread_OfTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        Expect("""
+            const u8 = new Uint8Array([1, 2, 3]);
+            const buf = Buffer.from([4, 5]);
+            console.log('u8   ' + JSON.stringify([...u8]));
+            console.log('buf  ' + JSON.stringify([...buf]));
+            console.log('both ' + JSON.stringify([0, ...u8, ...buf]));
+            """,
+            """
+            u8   [1,2,3]
+            buf  [4,5]
+            both [0,1,2,3,4,5]
+            """, mode);
+    }
+
+    // NOTE: for-await-of over a sync iterable is deliberately not covered here. The
+    // interpreter handles it (and now covers typed arrays/Buffers alongside arrays and
+    // Sets), but compiled output cannot iterate ANY sync iterable in a for-await-of —
+    // `for await (const x of ['a','b'])` throws
+    // `InvalidCastException: '$Array' to '$IAsyncGenerator'` because the emitter assumes an
+    // async generator. That is a pre-existing compiled gap far wider than typed arrays, so a
+    // dual-mode test here would assert a failure unrelated to this fix rather than pin it.
+
+    /// <summary>
+    /// <c>yield* typedArray</c> stays a compile-time TS2488 in both modes, on purpose: the
+    /// compiled generator emitters' fallback arm casts the operand to <c>IEnumerable</c>, which
+    /// a typed array does not implement, so accepting it would swap a clean diagnostic for an
+    /// <c>InvalidCastException</c> at runtime. Pinned so the rejection stays deliberate and
+    /// symmetric rather than drifting into a crash.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void YieldStar_OverTypedArray_RejectedInBothModes(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const u8 = new Uint8Array([1, 2]);
+                function* g(): Generator<any> { yield 0; yield* u8; }
+                console.log(JSON.stringify([...g()]));
+                """
+        };
+
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Contains("not iterable for yield*", ex.Message);
+    }
+
+    /// <summary>
+    /// <c>Array.from</c> picks the iterator protocol over the array-like (length + indices)
+    /// path via <c>IsIterableSource</c>, which is documented to agree with
+    /// <c>GetIterableElements</c>. It had fallen behind: typed arrays and Buffers took the
+    /// array-like path, whose property reader does not understand them, so <c>length</c> came
+    /// back undefined and <c>ToLength(undefined)</c> made the result empty — a silent
+    /// <c>[]</c> rather than an error.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ArrayFrom_OverTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        Expect("""
+            console.log('u8   ' + JSON.stringify(Array.from(new Uint8Array([1, 2, 3]))));
+            console.log('buf  ' + JSON.stringify(Array.from(Buffer.from([4, 5]))));
+            console.log('map  ' + JSON.stringify(Array.from(new Uint8Array([1, 2]), (x: any) => (x as number) * 10)));
+            """,
+            """
+            u8   [1,2,3]
+            buf  [4,5]
+            map  [10,20]
+            """, mode);
+    }
+
+    /// <summary>
+    /// A zero-length typed array contributes nothing rather than throwing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void EmptyTypedArray_IteratesToNothing(ExecutionMode mode)
+    {
+        Expect("""
+            const empty = new Uint8Array(0);
+            const acc: number[] = [];
+            for (const x of empty) { acc.push(x as number); }
+            console.log(JSON.stringify(acc) + ' ' + JSON.stringify([...empty]));
+            """, "[] []", mode);
+    }
+}

@@ -294,29 +294,40 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, methodName);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
 
-        // Create args array. For arity > 0, route through the per-thread
-        // $CallArgsPool to skip per-call newarr — the dispatch chain
-        // (InvokeMethodValue → $TSFunction.Invoke → MethodInvoker.Invoke)
-        // reads values out of the array without retaining a reference,
-        // so cross-call reuse on the same thread is sound.
-        if (arguments.Count == 0)
+        // Create args array. A `...spread` argument has to be flattened into the array before
+        // dispatch — otherwise the callee sees the iterable itself as one argument, which then
+        // silently lands in a rest parameter as a single nested element (#1282). The pooled
+        // fast path below can't serve that case (the expanded length isn't known statically and
+        // ExpandCallArgs allocates its own array), so spreads take the shared helper instead.
+        if (arguments.Any(a => a is Expr.Spread))
         {
-            IL.Emit(OpCodes.Ldc_I4_0);
-            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+            EmitArgsArrayWithSpread(arguments);
         }
         else
         {
-            IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.CallArgsPoolGet);
-        }
+            // For arity > 0, route through the per-thread $CallArgsPool to skip per-call
+            // newarr — the dispatch chain (InvokeMethodValue → $TSFunction.Invoke →
+            // MethodInvoker.Invoke) reads values out of the array without retaining a
+            // reference, so cross-call reuse on the same thread is sound.
+            if (arguments.Count == 0)
+            {
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CallArgsPoolGet);
+            }
 
-        for (int i = 0; i < arguments.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            EmitExpression(arguments[i]);
-            EmitBoxIfNeeded(arguments[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                EmitExpression(arguments[i]);
+                EmitBoxIfNeeded(arguments[i]);
+                IL.Emit(OpCodes.Stelem_Ref);
+            }
         }
 
         // Call InvokeMethodValue(receiver, function, args) to bind 'this'
@@ -394,6 +405,20 @@ public partial class ILEmitter
             targetParams[expectedParamCount - 1].ParameterType == typeof(List<object>);
         int regularParamCount = hasRestParam ? expectedParamCount - 1 : expectedParamCount;
 
+        // Spreads can only be lowered statically inside the trailing rest region, where the
+        // runtime flattens them into the rest list. Anywhere else their runtime length decides
+        // which value lands in which parameter slot, which this positional emit cannot know —
+        // so hand those shapes to the dynamic dispatch path (it flattens via ExpandCallArgs)
+        // instead of passing the spread array itself as a single argument (#1282). Bail before
+        // emitting any IL: once the receiver is pushed, returning false would strand it.
+        for (int i = 0; i < Math.Min(arguments.Count, regularParamCount); i++)
+        {
+            if (arguments[i] is Expr.Spread)
+                return false;
+        }
+        if (!hasRestParam && arguments.Any(a => a is Expr.Spread))
+            return false;
+
         // Emit: ((ClassName)receiver).method(args)
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
@@ -421,17 +446,66 @@ public partial class ILEmitter
             // Collect all trailing args into a List<object> via the runtime CreateArray
             // helper (which wraps an object[] into the List<object> rest marker type).
             int restArgsCount = Math.Max(0, arguments.Count - regularParamCount);
+            bool restHasSpread = false;
+            for (int i = 0; i < restArgsCount; i++)
+            {
+                if (arguments[regularParamCount + i] is Expr.Spread) { restHasSpread = true; break; }
+            }
+
+            // With a spread present, spill each trailing arg (spreads spill their inner
+            // expression) so the isSpread companion array can be built without re-evaluating
+            // anything, then let ExpandCallArgs flatten in place. Without this a `...xs`
+            // argument lands in the rest list as one nested array rather than its elements.
+            LocalBuilder[]? restLocals = null;
+            if (restHasSpread)
+            {
+                restLocals = new LocalBuilder[restArgsCount];
+                for (int i = 0; i < restArgsCount; i++)
+                {
+                    var restArg = arguments[regularParamCount + i];
+                    var inner = restArg is Expr.Spread sp ? sp.Expression : restArg;
+                    EmitExpression(inner);
+                    EmitBoxIfNeeded(inner);
+                    var tmp = IL.DeclareLocal(_ctx.Types.Object);
+                    IL.Emit(OpCodes.Stloc, tmp);
+                    restLocals[i] = tmp;
+                }
+            }
+
             IL.Emit(OpCodes.Ldc_I4, restArgsCount);
             IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
             for (int i = 0; i < restArgsCount; i++)
             {
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldc_I4, i);
-                var arg = arguments[regularParamCount + i];
-                EmitExpression(arg);
-                EmitBoxIfNeeded(arg);
+                if (restLocals != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, restLocals[i]);
+                }
+                else
+                {
+                    var arg = arguments[regularParamCount + i];
+                    EmitExpression(arg);
+                    EmitBoxIfNeeded(arg);
+                }
                 IL.Emit(OpCodes.Stelem_Ref);
             }
+
+            if (restHasSpread)
+            {
+                IL.Emit(OpCodes.Ldc_I4, restArgsCount);
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Boolean);
+                for (int i = 0; i < restArgsCount; i++)
+                {
+                    if (arguments[regularParamCount + i] is not Expr.Spread) continue;
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    IL.Emit(OpCodes.Ldc_I4_1);
+                    IL.Emit(OpCodes.Stelem_I1);
+                }
+                EmitExpandCallArgs();
+            }
+
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
         }
         else

@@ -1066,7 +1066,12 @@ public partial class ILCompiler
     {
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.Path;
+            // NormalizeToEmissionPath, not module.Path: a script-like module's top-level
+            // vars are registered under null (the shared global bucket) by
+            // AnalyzeCapturedTopLevelVarsAcrossModules, so anything that resolves their
+            // storage has to look there too. Declaring a function under module.Path
+            // instead binds it to a per-module bucket its captures don't live in. (#1282)
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             _modules.CurrentDotNetNamespace = _modules.Namespaces.GetValueOrDefault(module.Path);
 
             foreach (var stmt in module.Statements)
@@ -1125,7 +1130,7 @@ public partial class ILCompiler
         // the right per-module state.
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.IsScript ? null : module.Path;
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             CollectArrowsFromStatementsInCurrentModule(module.Statements);
         }
         _modules.CurrentPath = null;
@@ -1151,7 +1156,7 @@ public partial class ILCompiler
     {
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.Path;
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             DefineAllClassMethods(module.Statements);
         }
         _modules.CurrentPath = null;
@@ -1174,7 +1179,7 @@ public partial class ILCompiler
         // for classes whose methods were already registered.
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.Path;
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             DefineAllClassMethods(module.Statements);
         }
         _modules.CurrentPath = null;
@@ -1183,7 +1188,7 @@ public partial class ILCompiler
         // This must be done before EmitMethodBodyFromStatement since methods need to be defined
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.Path;
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             EmitAllHasFieldsInterfaceMethodBodies(module.Statements);
         }
         _modules.CurrentPath = null;
@@ -1191,7 +1196,7 @@ public partial class ILCompiler
         // Now emit the actual class/function method bodies
         foreach (var module in modules)
         {
-            _modules.CurrentPath = module.Path;
+            _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
             foreach (var stmt in module.Statements)
             {
                 EmitMethodBodyFromStatement(stmt);

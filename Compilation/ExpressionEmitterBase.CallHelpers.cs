@@ -968,7 +968,7 @@ public abstract partial class ExpressionEmitterBase
     /// Emits the ExpandCallArgs call with Symbol.iterator and runtime type arguments.
     /// Expects args array and isSpread array on the stack.
     /// </summary>
-    private void EmitExpandCallArgs()
+    protected void EmitExpandCallArgs()
     {
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.SymbolIterator);
         IL.Emit(OpCodes.Ldtoken, Ctx.Runtime!.RuntimeType);

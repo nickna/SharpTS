@@ -765,11 +765,16 @@ public partial class Interpreter
             return IterateWithBreakContinue(customIterator, forOf.Variable.Lexeme, forOf.Body, labels);
         }
 
-        // Get elements based on iterable type
+        // Get elements based on iterable type.
+        // NOTE: three near-copies of this switch exist — here, GetIterableElements (spread /
+        // yield*), and the for-await-of one in Interpreter.Async.cs. They have drifted before:
+        // typed arrays were iterable in only one of them, so `for (const b of u8)` threw while
+        // `[...u8]` worked. Add new iterable kinds to all three. (#1282)
         IEnumerable<object?> elements = iterable switch
         {
             SharpTSArray array => array,
             SharpTSBuffer buffer => buffer.Data.Select(b => (object?)(double)b),  // yields byte values as numbers
+            SharpTSTypedArray typed => typed.ToArray(),    // %TypedArray%.prototype[@@iterator]
             SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
@@ -1185,6 +1190,12 @@ public partial class Interpreter
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
+            // Typed arrays and Buffers are iterable in JS (%TypedArray%.prototype[@@iterator]),
+            // and the compiled path expands them, but they carry no Symbol.iterator in this
+            // runtime so TryGetSymbolIterator above misses them. Read their elements directly
+            // instead of throwing "not iterable". (#1282)
+            SharpTSTypedArray typed => typed.ToArray(),
+            SharpTSBuffer buf => buf.Data.Select(b => (object?)(double)b),
             string s => s.Select(c => (object?)c.ToString()),
             List<object?> list => list,                    // plain List<object?>
             IEnumerable<object?> enumerable => enumerable, // IEnumerable<object?> (e.g., SharpTSIntlSegments)
@@ -1200,6 +1211,7 @@ public partial class Interpreter
     /// </summary>
     internal bool IsIterableSource(object? value) =>
         value is SharpTSArray or SharpTSMap or SharpTSSet or SharpTSIterator or SharpTSGenerator
+            or SharpTSTypedArray or SharpTSBuffer
             or string or List<object?> or IEnumerable<object?>
         || TryGetSymbolIterator(value) != null;
 

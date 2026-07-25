@@ -120,10 +120,14 @@ public partial class Interpreter
             return ExecutionResult.Success();
         }
 
-        // Get elements based on iterable type
+        // Get elements based on iterable type. for-await-of accepts a sync iterable too, so
+        // this mirrors ExecuteForOf — see the note there about the three copies of this
+        // switch and keeping their iterable kinds in step. (#1282)
         IEnumerable<object?> items = iterable switch
         {
             SharpTSArray arr => arr,
+            SharpTSBuffer buffer => buffer.Data.Select(b => (object?)(double)b),  // byte values as numbers
+            SharpTSTypedArray typed => typed.ToArray(),    // %TypedArray%.prototype[@@iterator]
             SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
