@@ -94,6 +94,66 @@ public class TypeScriptConformanceRunnerTests
         }
         finally { File.Delete(tmp); }
     }
+
+    #region Strictness directives reach the checker
+
+    /// <summary>
+    /// Runs a synthetic test through the real runner and returns the TS codes it produced.
+    /// A <c>/fake-root</c> means no <c>*.errors.txt</c> baseline is found, so the outcome is
+    /// uninteresting — what is pinned here is the directive → TypeChecker option wiring.
+    /// </summary>
+    private static IReadOnlyList<string> ActualCodes(string source)
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tmp, source);
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+            Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
+            Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
+            return result.ActualDiagnostics?.Select(d => d.TsCode).ToList() ?? [];
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    // An unannotated parameter on a DECLARED function — the one shape SharpTS reports
+    // noImplicitAny for. Arrows are deliberately exempt, so they cannot be used here.
+    private const string ImplicitAnyParam = "function f(x) { return x; }\n";
+
+    [Fact]
+    public void NoDirectives_DoNotEnableNoImplicitAny()
+    {
+        // The legacy corpus was generated with noImplicitAny off; that must stay the default.
+        Assert.DoesNotContain("TS7006", ActualCodes(ImplicitAnyParam));
+    }
+
+    [Fact]
+    public void StrictDirective_EnablesNoImplicitAny()
+    {
+        Assert.Contains("TS7006", ActualCodes("// @strict: true\n" + ImplicitAnyParam));
+    }
+
+    [Fact]
+    public void NoImplicitAnyDirective_EnablesItWithoutStrict()
+    {
+        Assert.Contains("TS7006", ActualCodes("// @noImplicitAny: true\n" + ImplicitAnyParam));
+    }
+
+    [Fact]
+    public void NoImplicitAnyDirective_OverridesStrict()
+    {
+        // The specific directive beats the umbrella, matching how @strictNullChecks behaves.
+        Assert.DoesNotContain("TS7006",
+            ActualCodes("// @strict: true\n// @noImplicitAny: false\n" + ImplicitAnyParam));
+    }
+
+    [Fact]
+    public void StrictDirectiveFalse_LeavesNoImplicitAnyOff()
+    {
+        Assert.DoesNotContain("TS7006", ActualCodes("// @strict: false\n" + ImplicitAnyParam));
+    }
+
+    #endregion
 }
 
 /// <summary>
