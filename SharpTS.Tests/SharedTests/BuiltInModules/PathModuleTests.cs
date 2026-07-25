@@ -444,15 +444,21 @@ public class PathModuleTests
                 console.log(path.win32.isAbsolute('\\\\server\\share'));
                 console.log(path.win32.isAbsolute('/foo'));
                 console.log(path.win32.isAbsolute('foo'));
+                console.log(path.win32.isAbsolute('C:'));
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal("true", lines[0]);  // C:\foo is absolute in Win32
-        Assert.Equal("true", lines[1]);  // \\server\share is UNC path, absolute
-        Assert.Equal("false", lines[2]); // /foo is NOT absolute in Win32 (no drive letter)
-        Assert.Equal("false", lines[3]); // foo is relative
+        Assert.Equal("true", lines[0]);  // C:\foo — drive letter + separator
+        Assert.Equal("true", lines[1]);  // \\server\share — UNC path
+        // Any leading separator is absolute on win32, matching Node. This line previously
+        // asserted `false` — a divergence that also contradicted resolve/parse/normalize in
+        // the same module, and masked two genuine normalize bugs. See
+        // PathWin32ConformanceTests for the Node-generated table. (#1282)
+        Assert.Equal("true", lines[2]);
+        Assert.Equal("false", lines[3]); // foo — relative
+        Assert.Equal("false", lines[4]); // C: — drive-relative, not absolute
     }
 
     [Theory]

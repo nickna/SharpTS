@@ -333,15 +333,15 @@ function isDriveLetter(code: number): boolean {
 }
 
 function win32IsAbsolute(p: string): boolean {
-    // SharpTS-specific: requires drive-letter + sep OR UNC-style double sep.
-    // Single-leading-separator paths ('/foo') return false to avoid ambiguity
-    // with POSIX-style paths.
+    // Any leading separator is absolute (Node treats '/foo' and '\foo' as
+    // rooted on win32), as is a drive letter followed by a separator.
+    // Note 'C:' alone is *not* absolute — it is drive-relative.
     const len = p.length;
     if (len === 0) return false;
     const c0 = p.charCodeAt(0);
-    if (len >= 2 && isWin32Sep(c0) && isWin32Sep(p.charCodeAt(1))) return true;
-    if (isDriveLetter(c0) && len > 2 && p.charCodeAt(1) === CHAR_COLON && isWin32Sep(p.charCodeAt(2))) return true;
-    return false;
+    if (isWin32Sep(c0)) return true;
+    return isDriveLetter(c0) && len > 2
+        && p.charCodeAt(1) === CHAR_COLON && isWin32Sep(p.charCodeAt(2));
 }
 
 function normalizeStringWin32(path: string, allowAboveRoot: boolean, separator: string): string {
@@ -416,34 +416,47 @@ function win32Normalize(p: string): string {
     let isAbsolute = false;
     const code = p.charCodeAt(0);
 
-    // UNC path: \\server\share\...
-    if (len >= 2 && isWin32Sep(code) && isWin32Sep(p.charCodeAt(1))) {
-        let j = 2;
-        let last = j;
-        // Match server
-        while (j < len && !isWin32Sep(p.charCodeAt(j))) j++;
-        if (j < len && j !== last) {
-            const firstPart = p.slice(last, j);
-            last = j;
-            while (j < len && isWin32Sep(p.charCodeAt(j))) j++;
+    // Single character: '/' normalizes to '\', anything else is already normal.
+    if (len === 1) return code === CHAR_FORWARD_SLASH ? '\\' : p;
+
+    if (isWin32Sep(code)) {
+        // A leading separator means absolute — UNC or otherwise.
+        isAbsolute = true;
+
+        if (isWin32Sep(p.charCodeAt(1))) {
+            // Possible UNC root: \\server\share\...
+            let j = 2;
+            let last = j;
+            // Match server
+            while (j < len && !isWin32Sep(p.charCodeAt(j))) j++;
             if (j < len && j !== last) {
+                const firstPart = p.slice(last, j);
                 last = j;
-                while (j < len && !isWin32Sep(p.charCodeAt(j))) j++;
-                if (j === len || j !== last) {
-                    device = '\\\\' + firstPart + '\\' + p.slice(last, j);
-                    rootEnd = j;
+                while (j < len && isWin32Sep(p.charCodeAt(j))) j++;
+                if (j < len && j !== last) {
+                    last = j;
+                    // Match share
+                    while (j < len && !isWin32Sep(p.charCodeAt(j))) j++;
+                    if (j === len) {
+                        // A UNC root and nothing else — already normalized.
+                        return '\\\\' + firstPart + '\\' + p.slice(last) + '\\';
+                    }
+                    if (j !== last) {
+                        device = '\\\\' + firstPart + '\\' + p.slice(last, j);
+                        rootEnd = j;
+                    }
                 }
             }
+        } else {
+            rootEnd = 1;
         }
-    } else if (isDriveLetter(code) && len > 1 && p.charCodeAt(1) === CHAR_COLON) {
+    } else if (isDriveLetter(code) && p.charCodeAt(1) === CHAR_COLON) {
         device = p.slice(0, 2);
         rootEnd = 2;
         if (len > 2 && isWin32Sep(p.charCodeAt(2))) {
             isAbsolute = true;
             rootEnd = 3;
         }
-    } else if (isWin32Sep(code)) {
-        return '\\';
     }
 
     let tail = rootEnd < len ? normalizeStringWin32(p.slice(rootEnd), !isAbsolute, '\\') : '';
