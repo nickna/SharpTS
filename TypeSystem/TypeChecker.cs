@@ -78,6 +78,16 @@ public partial class TypeChecker
     private readonly bool _strictFunctionTypes;
 
     /// <summary>
+    /// When true (TypeScript's <c>noImplicitAny</c>), unannotated parameters of DECLARED
+    /// functions, methods and constructors report TS7006 (TS7019 for rest parameters).
+    /// Arrow/function-expression parameters are deliberately exempt — see
+    /// <c>ReportImplicitAnyParameters</c>. Defaults to false. Never participates in
+    /// assignability, so unlike <see cref="_strictFunctionTypes"/> it needs no
+    /// compatibility-cache guard.
+    /// </summary>
+    private readonly bool _noImplicitAny;
+
+    /// <summary>
     /// Non-zero while comparing members declared with method syntax — within such a comparison,
     /// function parameters relate bivariantly even under <see cref="_strictFunctionTypes"/>.
     /// </summary>
@@ -104,13 +114,100 @@ public partial class TypeChecker
     /// </summary>
     private bool _isWorkerContext;
 
-    /// <summary>Creates a type checker. <paramref name="strictNullChecks"/> defaults to true.</summary>
-    public TypeChecker(bool strictNullChecks = true, int maxErrors = 10, bool strictFunctionTypes = false)
+    /// <summary>
+    /// Parameters already reported by <see cref="ReportImplicitAnyParameters"/>, by reference
+    /// identity. Needed because a function's signature is visited more than once:
+    /// HoistFunctionDeclarations re-runs for every enclosing function body, and CheckModules can
+    /// re-enter a module after dynamic-import discovery.
+    /// </summary>
+    private HashSet<Stmt.Parameter>? _implicitAnyReported;
+
+    /// <summary>
+    /// Reports TS7006 (TS7019 for rest parameters) for unannotated parameters of a DECLARED
+    /// function, method or constructor, when <c>noImplicitAny</c> is on.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately NOT called for arrow or function-expression parameters. SharpTS
+    /// contextually types an arrow argument only when the callee is a plain
+    /// <see cref="TypeInfo.Function"/>/<see cref="TypeInfo.GenericFunction"/> (see
+    /// <c>TypeChecker.Calls.cs</c>) — not for overloaded or callable-interface callees, not for
+    /// parameters typed as a union containing a function (so <c>p.then(v =&gt; …)</c> misses), and
+    /// not for <c>any</c>-typed callees, which covers <c>console</c>, <c>Math</c>, <c>JSON</c>,
+    /// <c>Promise</c> and <c>fetch</c>. Reporting there would fire on idiomatic code.</para>
+    /// <para>A declared function's parameters are never contextually typed in tsc either, so on
+    /// this population SharpTS and tsc agree exactly: no false positives by construction. The
+    /// cost is under-reporting on arrows, which is the safe direction.</para>
+    /// <para>Must NOT be called from <c>BuildFunctionSignature</c>: that runs during hoisting as
+    /// well as checking, which would double-report.</para>
+    /// </remarks>
+    private void ReportImplicitAnyParameters(List<Stmt.Parameter> parameters, bool isAmbient)
     {
-        _strictNullChecks = strictNullChecks;
-        _strictFunctionTypes = strictFunctionTypes;
-        _diagnostics.MaxErrors = maxErrors;
+        if (!_noImplicitAny || isAmbient) return;
+        // Speculative return-type inference re-checks bodies; RecordTypeError also guards this,
+        // but returning early keeps the dedupe set from being poisoned by a suppressed pass.
+        if (_suppressDiagnostics > 0) return;
+        // A CommonJS dependency's missing annotations are not actionable by the user, and the
+        // generic path would turn each into a warning — hundreds of them on --strict.
+        if (IsLenientModule()) return;
+
+        _implicitAnyReported ??= new HashSet<Stmt.Parameter>(ReferenceEqualityComparer.Instance);
+
+        foreach (var param in parameters)
+        {
+            if (param.Type is not null || param.TypeAnnotationNode is not null) continue;
+            // tsc infers the type from the initializer, so `function f(x = 0)` is not implicit any.
+            if (param.DefaultValue is not null) continue;
+            // Destructured parameters collapse to a synthetic `_paramN` binding at parse time, so
+            // the per-element names tsc reports TS7031 on do not exist here.
+            if (param.Name.Lexeme.StartsWith("_param", StringComparison.Ordinal)) continue;
+            if (!_implicitAnyReported.Add(param)) continue;
+
+            RecordTypeError(new TypeCheckException(
+                param.IsRest
+                    ? $" Rest parameter '{param.Name.Lexeme}' implicitly has an 'any[]' type."
+                    : $" Parameter '{param.Name.Lexeme}' implicitly has an 'any' type.",
+                line: param.Name.Line,
+                tsCode: param.IsRest ? "TS7019" : "TS7006"));
+        }
     }
+
+    /// <summary>The resolved strictness configuration this checker was constructed with.</summary>
+    public TypeCheckerOptions Options { get; }
+
+    /// <summary>
+    /// Creates a type checker from a resolved options object. This is the constructor the
+    /// CLI/tsconfig layer uses; the flags are mirrored into fields so the assignability read
+    /// sites stay untouched.
+    /// </summary>
+    public TypeChecker(TypeCheckerOptions options)
+    {
+        Options = options ?? TypeCheckerOptions.Default;
+        _strictNullChecks = Options.StrictNullChecks;
+        _strictFunctionTypes = Options.StrictFunctionTypes;
+        _noImplicitAny = Options.NoImplicitAny;
+        _diagnostics.MaxErrors = Options.MaxErrors;
+    }
+
+    /// <summary>
+    /// Creates a type checker. <paramref name="strictNullChecks"/> defaults to true.
+    /// </summary>
+    /// <remarks>
+    /// Kept permanently: <c>new TypeChecker()</c> is the idiomatic "product defaults" spelling
+    /// at ~58 sites, and the TS conformance runner drives this overload by name. It forwards to
+    /// the options constructor and leaves <see cref="TypeCheckerOptions.NoImplicitAny"/> off, so
+    /// existing callers keep exactly their current semantics.
+    /// <para><b>Do not change these defaults.</b> The Test262 and TS-conformance runners build
+    /// their checkers directly rather than through the CLI, so the committed baselines are pinned
+    /// to precisely these values.</para>
+    /// </remarks>
+    public TypeChecker(bool strictNullChecks = true, int maxErrors = 10, bool strictFunctionTypes = false)
+        : this(new TypeCheckerOptions
+        {
+            StrictNullChecks = strictNullChecks,
+            MaxErrors = maxErrors,
+            StrictFunctionTypes = strictFunctionTypes,
+        })
+    { }
 
     // We need to track the current function's expected return type to validate 'return' statements
     private TypeInfo? _currentFunctionReturnType = null;
@@ -829,6 +926,7 @@ public partial class TypeChecker
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
         _ts2741Reported = null;
+        _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
 
@@ -880,6 +978,7 @@ public partial class TypeChecker
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
         _ts2741Reported = null;
+        _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
 

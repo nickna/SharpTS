@@ -15,7 +15,9 @@
 
 using SharpTS.Compilation;
 using PEPacker.Bundling;
+using SharpTS.Configuration;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Cli;
 
@@ -28,14 +30,51 @@ namespace SharpTS.Cli;
 /// <param name="References">Assembly references from -r/--reference, applied in every mode
 /// (run, compile, --gen-decl, REPL) on top of any sharpts.json manifest. Paths resolve
 /// against the current working directory.</param>
+/// <param name="Strictness">
+/// Raw, per-flag record of the strictness flags the command line carried. Nullable per key so
+/// the tsconfig layer can tell "explicitly false" from "absent". Fold it with
+/// <see cref="Configuration.StrictnessOptions.Resolve"/> to get the checker's options.
+/// </param>
+/// <param name="NoEmit">
+/// tsc's <c>--noEmit</c>: type-check only, then stop. CLI-only — deliberately not read from
+/// tsconfig.json, where <c>"noEmit": true</c> is common in bundler setups and would silently
+/// stop <c>sharpts app.ts</c> from running the program.
+/// </param>
+/// <param name="ProjectPath">
+/// <c>-p</c>/<c>--project</c>: an explicit tsconfig.json file or a directory containing one.
+/// Suppresses the upward walk — an explicit project that resolves to nothing must never
+/// silently fall back to discovery.
+/// </param>
+/// <param name="NoTsConfig">
+/// <c>--no-tsconfig</c>: skip tsconfig.json discovery entirely. SharpTS-specific (hence
+/// kebab-case). The MSBuild SDK passes it so MSBuild stays the single source of truth for SDK
+/// builds, and it makes CI runs immune to an ambient tsconfig.json further up the tree.
+/// </param>
+/// <param name="ShowConfig">
+/// <c>--showConfig</c>: print the resolved configuration, with the source of each value, then
+/// exit 0.
+/// </param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
     bool CheckJs = false,
-    IReadOnlyList<string>? References = null
+    IReadOnlyList<string>? References = null,
+    StrictnessOptions? Strictness = null,
+    bool NoEmit = false,
+    string? ProjectPath = null,
+    bool NoTsConfig = false,
+    bool ShowConfig = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
+
+    public StrictnessOptions Strictness { get; init; } = Strictness ?? new StrictnessOptions();
+
+    /// <summary>
+    /// The checker options implied by the command line alone (no tsconfig layer). Program.cs
+    /// re-resolves with the discovered tsconfig; this keeps direct consumers correct meanwhile.
+    /// </summary>
+    public TypeCheckerOptions TypeCheckerOptions => StrictnessOptions.Resolve(Strictness, null);
 }
 
 /// <summary>
@@ -162,7 +201,9 @@ public class CommandLineParser
         }
 
         // Parse global options that apply to all modes
-        var (globalOptions, remainingArgs, scriptArgs) = ParseGlobalOptions(args);
+        var (globalOptions, remainingArgs, scriptArgs, globalError) = ParseGlobalOptions(args);
+        if (globalError is not null)
+            return globalError;
 
         if (remainingArgs.Length == 0)
         {
@@ -220,11 +261,41 @@ public class CommandLineParser
         );
     }
 
-    private static (GlobalOptions options, string[] remainingArgs, string[] scriptArgs) ParseGlobalOptions(string[] args)
+    /// <summary>
+    /// Splits <c>--flag=value</c> into its parts on the FIRST '='. <c>--flag</c> yields a null
+    /// value; the caller decides what an absent value means.
+    /// </summary>
+    private static (string Name, string? Value) SplitFlag(string arg)
+    {
+        int eq = arg.IndexOf('=');
+        return eq < 0 ? (arg, null) : (arg[..eq], arg[(eq + 1)..]);
+    }
+
+    /// <summary>
+    /// Interprets a boolean flag's value. Bare <c>--flag</c> means true; tsc's explicit
+    /// <c>--flag=false</c> / <c>--flag=true</c> are the only negation form (tsc has no
+    /// <c>--no*</c> prefixes, so SharpTS invents none).
+    /// </summary>
+    /// <returns>False when the value was present but not a boolean literal.</returns>
+    private static bool TryParseFlagBool(string? value, out bool result)
+    {
+        if (value is null) { result = true; return true; }
+        if (bool.TryParse(value, out result)) return true;
+        result = false;
+        return false;
+    }
+
+    private static (GlobalOptions options, string[] remainingArgs, string[] scriptArgs, ParsedCommand.Error? error)
+        ParseGlobalOptions(string[] args)
     {
         var decoratorMode = DecoratorMode.Stage3;  // Stage3 decorators enabled by default
         var emitDecoratorMetadata = false;
         var checkJs = false;  // Match tsc default: don't type-check .js files unless asked
+        var noEmit = false;
+        var noTsConfig = false;
+        var showConfig = false;
+        string? projectPath = null;
+        var strictness = new StrictnessOptions();
         List<string> references = [];
         List<string> remaining = [];
         List<string> scriptArgs = [];
@@ -243,12 +314,25 @@ public class CommandLineParser
             args = args[..doubleDashIndex];
         }
 
+        ParsedCommand.Error? BadBool(string name, string? value) => new(
+            $"Error: '{name}' expects 'true' or 'false', got '{value}'.\n\n" +
+            "Use 'sharpts --help' for usage information.",
+            64);
+
         for (int i = 0; i < args.Length; i++)
         {
-            switch (args[i])
+            var (name, value) = SplitFlag(args[i]);
+            bool flag;
+
+            switch (name)
             {
                 case "--experimentalDecorators":
                     decoratorMode = DecoratorMode.Legacy;
+                    break;
+                // Documented in --help and emitted by the MSBuild SDK (Sdk.targets), but until
+                // now unhandled here: run mode rejected it and compile mode silently dropped it.
+                case "--decorators":
+                    decoratorMode = DecoratorMode.Stage3;
                     break;
                 case "--noDecorators":
                     decoratorMode = DecoratorMode.None;
@@ -256,9 +340,51 @@ public class CommandLineParser
                 case "--emitDecoratorMetadata":
                     emitDecoratorMetadata = true;
                     break;
-                case "--check-js":
+                case "--check-js":  // legacy kebab alias; --checkJs is the documented spelling
                 case "--checkJs":
-                    checkJs = true;
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    checkJs = flag;
+                    break;
+                case "--noEmit":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    noEmit = flag;
+                    break;
+                case "--strict":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { Strict = flag };
+                    break;
+                case "--strictNullChecks":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { StrictNullChecks = flag };
+                    break;
+                case "--strictFunctionTypes":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { StrictFunctionTypes = flag };
+                    break;
+                case "--noImplicitAny":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { NoImplicitAny = flag };
+                    break;
+                case "--no-tsconfig":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    noTsConfig = flag;
+                    break;
+                case "--showConfig":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    showConfig = flag;
+                    break;
+                case "-p" or "--project" when value is not null:
+                    projectPath = value;
+                    break;
+                case "-p" or "--project" when i + 1 < args.Length:
+                    projectPath = args[++i];
+                    break;
+                case "-p" or "--project":
+                    return (default!, [], [], new ParsedCommand.Error(
+                        $"Error: {name} requires a path to a tsconfig.json file or a directory containing one.",
+                        64));
+                case "-r" or "--reference" when value is not null:
+                    references.Add(value);
                     break;
                 case "-r" or "--reference" when i + 1 < args.Length:
                     references.Add(args[++i]);
@@ -269,7 +395,10 @@ public class CommandLineParser
             }
         }
 
-        return (new GlobalOptions(decoratorMode, emitDecoratorMetadata, checkJs, references), remaining.ToArray(), scriptArgs.ToArray());
+        var options = new GlobalOptions(
+            decoratorMode, emitDecoratorMetadata, checkJs, references, strictness, noEmit,
+            projectPath, noTsConfig, showConfig);
+        return (options, remaining.ToArray(), scriptArgs.ToArray(), null);
     }
 
     private ParsedCommand ParseCompileCommand(string[] args, GlobalOptions globalOptions)
@@ -409,6 +538,30 @@ public class CommandLineParser
             {
                 versionOverride = args[++i];
             }
+            else if (args[i].StartsWith('-'))
+            {
+                // Previously this chain had no else, so a typo like `--verfiy` — or a real flag
+                // whose value was missing — was dropped in silence while the compile proceeded.
+                // Global flags are already stripped by ParseGlobalOptions, so anything reaching
+                // here is genuinely unrecognized by compile mode.
+                bool needsValue = args[i] is "-o" or "-t" or "--target" or "--bundler"
+                    or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version";
+
+                return new ParsedCommand.Error(
+                    needsValue
+                        ? $"Error: {args[i]} requires a value"
+                        : $"Error: Unknown option '{args[i]}'",
+                    64,
+                    ShowCompileUsage: true);
+            }
+        }
+
+        if (globalOptions.NoEmit && pack)
+        {
+            return new ParsedCommand.Error(
+                "Error: --noEmit cannot be combined with --pack/--push (there is no assembly to package).",
+                64,
+                ShowCompileUsage: true);
         }
 
         // Determine output file: use explicit output if provided, otherwise derive from input + target
