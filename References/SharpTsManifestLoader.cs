@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SharpTS.Configuration;
 
 namespace SharpTS.References;
 
@@ -9,63 +10,20 @@ public static class SharpTsManifestLoader
 {
     public const string FileName = "sharpts.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
+    private static JsonSerializerOptions JsonOptions => FileDiscovery.LenientJsonOptions;
 
     /// <summary>
     /// Finds and loads the nearest sharpts.json in <paramref name="startDirectory"/>
-    /// or its parents.
+    /// or its parents. Walk policy (temp/user-profile ceilings) is
+    /// <see cref="FileDiscovery.FindNearestFile"/>.
     /// </summary>
-    /// <remarks>
-    /// The upward walk stops (exclusive) at the system temp root and the user profile
-    /// root — a sharpts.json sitting in those directories is ambient noise from
-    /// unrelated tooling, not the manifest of the project being run. Each ceiling is
-    /// still searched when it IS the start directory. (Same policy as
-    /// <see cref="Packaging.PackageJsonLoader.FindAndLoad"/>.)
-    /// </remarks>
     /// <returns>The loaded manifest, or null when none exists.</returns>
     /// <exception cref="Exception">When a found manifest fails to parse — unlike
     /// discovery misses, a malformed manifest is a hard error naming the file.</exception>
     public static SharpTsManifest? FindAndLoad(string startDirectory)
     {
-        var dir = new DirectoryInfo(startDirectory);
-
-        var ceilings = new[]
-            {
-                Path.GetTempPath(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            }
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Select(p => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            .ToArray();
-
-        bool isStartDirectory = true;
-        while (dir != null)
-        {
-            var currentPath = dir.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            // Stop when the walk ASCENDS into a ceiling directory; only search
-            // a ceiling when the caller started there.
-            if (!isStartDirectory &&
-                ceilings.Any(c => string.Equals(currentPath, c, StringComparison.OrdinalIgnoreCase)))
-            {
-                return null;
-            }
-
-            var manifestPath = Path.Combine(dir.FullName, FileName);
-            if (File.Exists(manifestPath))
-            {
-                return Load(manifestPath);
-            }
-            isStartDirectory = false;
-            dir = dir.Parent;
-        }
-
-        return null;
+        var path = FileDiscovery.FindNearestFile(startDirectory, FileName);
+        return path is null ? null : Load(path);
     }
 
     /// <summary>

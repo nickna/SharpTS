@@ -18,12 +18,7 @@ public static class TsConfigLoader
 {
     public const string FileName = "tsconfig.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
+    private static JsonSerializerOptions JsonOptions => FileDiscovery.LenientJsonOptions;
 
     /// <summary>
     /// Finds the nearest tsconfig.json in <paramref name="startDirectory"/> or its parents and
@@ -42,40 +37,8 @@ public static class TsConfigLoader
     }
 
     /// <summary>Returns the path of the nearest tsconfig.json, or null.</summary>
-    public static string? Discover(string startDirectory)
-    {
-        var dir = new DirectoryInfo(startDirectory);
-
-        var ceilings = new[]
-            {
-                Path.GetTempPath(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            }
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Select(p => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            .ToArray();
-
-        bool isStartDirectory = true;
-        while (dir != null)
-        {
-            var currentPath = dir.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            if (!isStartDirectory &&
-                ceilings.Any(c => string.Equals(currentPath, c, StringComparison.OrdinalIgnoreCase)))
-            {
-                return null;
-            }
-
-            var candidate = Path.Combine(dir.FullName, FileName);
-            if (File.Exists(candidate))
-                return Path.GetFullPath(candidate);
-
-            isStartDirectory = false;
-            dir = dir.Parent;
-        }
-
-        return null;
-    }
+    public static string? Discover(string startDirectory) =>
+        FileDiscovery.FindNearestFile(startDirectory, FileName);
 
     /// <summary>
     /// Resolves a <c>-p</c>/<c>--project</c> argument, which tsc accepts as either a config file
