@@ -507,19 +507,8 @@ public partial class Parser
 
                 Token paramName = ConsumeIdentifierName("Expect parameter name.");
 
-                // Check for optional marker
-                bool isOptional = Match(TokenType.QUESTION);
-
-                // Parse type annotation
-                string? paramType = null;
-                TypeNode? paramTypeNode = null;
-                if (Match(TokenType.COLON))
-                {
-                    paramType = ParseTypeAnnotation();
-                    paramTypeNode = TakeTypeNode();
-                }
-
-                parameters.Add(new Stmt.Parameter(paramName, paramType, null, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
+                // Signatures have no bodies, so defaults are not parsed (`=` stays unconsumed).
+                parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest, allowDefault: false));
 
             } while (Match(TokenType.COMMA));
         }
