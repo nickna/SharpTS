@@ -73,6 +73,7 @@ public sealed class RuntimeFeatureDetector
             UsesProxy = false,
             UsesDynamicImport = false,
             UsesAsyncGenerator = false,
+            UsesForAwaitOf = false,
             UsesWeakRef = false,
             UsesWeakMap = false,
             UsesWeakSet = false,
@@ -670,6 +671,8 @@ public sealed class RuntimeFeatureDetector
                 VisitStmt(f.Body);
                 break;
             case Stmt.ForOf fo:
+                if (fo.IsAsync)
+                    _set.UsesForAwaitOf = true;
                 VisitExpr(fo.Iterable);
                 VisitStmt(fo.Body);
                 break;

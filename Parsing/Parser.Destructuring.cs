@@ -151,9 +151,9 @@ public partial class Parser
         // const _dest0 = __arrayDestructure(initializer);
         // JS array destructuring follows the iterator protocol, not positional
         // indexing. The wrapper normalizes non-indexable iterables (generators,
-        // Set, Map, objects with [Symbol.iterator]) into an array so the index
-        // access below is spec-correct (#685); arrays/tuples/strings pass through
-        // unchanged to keep the fast index path.
+        // Set, Map, typed arrays, Buffers, strings, objects with [Symbol.iterator])
+        // into an array so the index access below is spec-correct (#685/#1288);
+        // arrays/tuples pass through unchanged to keep the fast index path.
         Token temp = GenerateTempVar(pattern.Line);
         Expr normalizedInit = new Expr.Call(
             new Expr.Variable(new Token(TokenType.IDENTIFIER, "__arrayDestructure", null, pattern.Line)),

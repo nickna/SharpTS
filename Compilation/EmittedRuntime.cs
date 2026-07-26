@@ -1412,6 +1412,11 @@ public class EmittedRuntime
     public MethodBuilder AsyncGeneratorReturnMethod { get; set; } = null!;
     public MethodBuilder AsyncGeneratorThrowMethod { get; set; } = null!;
 
+    // Async-from-sync iterator adapter (for await...of over synchronous iterables)
+    public TypeBuilder AsyncFromSyncIteratorType { get; set; } = null!;
+    public ConstructorBuilder AsyncFromSyncIteratorCtor { get; set; } = null!;
+    public MethodBuilder AdaptSyncIterableToAsyncGenerator { get; set; } = null!;
+
     // Async Generator await continuation helper
     public MethodBuilder AsyncGeneratorAwaitContinue { get; set; } = null!;
 

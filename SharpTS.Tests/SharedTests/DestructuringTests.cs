@@ -651,24 +651,28 @@ public class DestructuringTests
 
     #endregion
 
-    #region Typed-array Rest (#781)
+    #region Typed-array and Buffer Sources (#781, #1288)
 
-    // #781: a rest element over a typed-array source must collect a fresh Array (Array.isArray === true),
-    // not a typed-array slice. Interpreter-only: compiled `new Uint8Array([...])` is blocked by #782.
+    // #781/#1288: typed arrays and Buffers are normalized to a fresh Array before destructuring.
+    // This keeps ordinary element bindings working and makes a rest binding a real Array rather
+    // than a typed-array/Buffer slice.
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void ArrayDestructuring_TypedArrayRest_BindsFreshArray(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ArrayDestructuring_TypedArrayAndBufferSources(ExecutionMode mode)
     {
         var source = """
-            const [a, ...rest] = new Uint8Array([1, 2, 3]);
-            console.log(a);
-            console.log(Array.isArray(rest));
-            console.log(rest.length);
-            console.log(rest[0], rest[1]);
+            const u8 = new Uint8Array([1, 2, 3]);
+            const [a, b] = u8;
+            const [, ...typedRest] = u8;
+            console.log(a, b, Array.isArray(typedRest), JSON.stringify(typedRest));
+
+            const buffer = Buffer.from([4, 5, 6]);
+            const [c, ...bufferRest] = buffer;
+            console.log(c, Array.isArray(bufferRest), JSON.stringify(bufferRest));
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("1\ntrue\n2\n2 3\n", output);
+        Assert.Equal("1 2 true [2,3]\n4 true [5,6]\n", output);
     }
 
     #endregion

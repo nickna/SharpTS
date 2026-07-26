@@ -81,13 +81,21 @@ public class TypedArrayIterationParityTests
             """, mode);
     }
 
-    // NOTE: for-await-of over a sync iterable is deliberately not covered here. The
-    // interpreter handles it (and now covers typed arrays/Buffers alongside arrays and
-    // Sets), but compiled output cannot iterate ANY sync iterable in a for-await-of —
-    // `for await (const x of ['a','b'])` throws
-    // `InvalidCastException: '$Array' to '$IAsyncGenerator'` because the emitter assumes an
-    // async generator. That is a pre-existing compiled gap far wider than typed arrays, so a
-    // dual-mode test here would assert a failure unrelated to this fix rather than pin it.
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ForAwaitOf_OverTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        Expect("""
+            async function main() {
+                const values: number[] = [];
+                for await (const x of new Uint8Array([1, 2])) values.push(x);
+                for await (const x of new Int16Array([-1, 300])) values.push(x);
+                for await (const x of Buffer.from([4, 5])) values.push(x);
+                console.log(JSON.stringify(values));
+            }
+            main();
+            """, "[1,2,-1,300,4,5]", mode);
+    }
 
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]

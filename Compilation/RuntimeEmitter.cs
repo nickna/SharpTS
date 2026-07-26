@@ -423,6 +423,12 @@ public partial class RuntimeEmitter
         // EmitRuntimeClass (depends on InvokeValue / WrapException).
         EmitPromiseCapabilitySupport(moduleBuilder, runtime);
 
+        // The async-from-sync adapter depends on iterator helpers plus
+        // CoerceAwaitableToTask, all of which are now defined. It is gated on
+        // for-await syntax because most programs never reference this type.
+        if (features.UsesForAwaitOf)
+            EmitAsyncFromSyncIteratorSupport(moduleBuilder, runtime);
+
         // AbortSignal / Intl value-position singletons (#224). Must follow
         // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers
         // emitted there.

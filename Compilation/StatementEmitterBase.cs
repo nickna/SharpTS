@@ -852,12 +852,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             il.Emit(OpCodes.Br, afterLoopLabel); // Skip the fallback path
         }
 
-        // ===== $IAsyncGenerator fallback path =====
+        // ===== $IAsyncGenerator / async-from-sync fallback path =====
         il.MarkLabel(asyncGenLabel);
         {
-            // Cast to $IAsyncGenerator interface
+            // Adapt synchronous iterables, then cast to the common interface.
+            // Non-iterables still fail here.
             var asyncGenInterface = runtime.AsyncGeneratorInterfaceType;
             il.Emit(OpCodes.Ldloc, iterableLocal);
+            il.Emit(OpCodes.Call, runtime.AdaptSyncIterableToAsyncGenerator);
             il.Emit(OpCodes.Castclass, asyncGenInterface);
 
             // Store the async generator in a local

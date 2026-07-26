@@ -105,8 +105,9 @@ public partial class Interpreter
         {
             foreach (var item in syncIterator)
             {
-                // For 'for await...of', unwrap promises from sync iterators
-                object? value = forOf.IsAsync && item is Task<object?> t ? await AwaitPreservingEnvironment(t) : item;
+                // CreateAsyncFromSyncIterator awaits each yielded value (including
+                // guest Promises and ordinary thenables), not just raw CLR Tasks.
+                object? value = forOf.IsAsync ? await AwaitAsyncIterationValue(item) : item;
 
                 var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
@@ -138,20 +139,53 @@ public partial class Interpreter
 
         foreach (var item in items)
         {
-            // For 'for await...of' with sync iterables, unwrap promises
-            object? value = forOf.IsAsync && item is Task<object?> t ? await t : item;
+            object? value = forOf.IsAsync ? await AwaitAsyncIterationValue(item) : item;
 
             var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldBreak)
+            {
+                CloseSyncGeneratorOnEarlyExit(iterable);
+                return ExecutionResult.Success();
+            }
             if (shouldContinue) continue;
-            if (abruptResult.HasValue) return abruptResult.Value;
+            if (abruptResult.HasValue)
+            {
+                CloseSyncGeneratorOnEarlyExit(iterable);
+                return abruptResult.Value;
+            }
 
             // Process any pending timer callbacks
             ProcessPendingCallbacks();
         }
 
         return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Applies the PromiseResolve-style value adoption required by
+    /// CreateAsyncFromSyncIterator.
+    /// </summary>
+    private async Task<object?> AwaitAsyncIterationValue(object? value)
+    {
+        if (value is SharpTSPromise promise)
+            return await AwaitPreservingEnvironment(promise.GetValueAsync());
+        if (value is Task<object?> task)
+            return await AwaitPreservingEnvironment(task);
+        if (TryGetThenable(value, out var thenFn))
+            return await AwaitPreservingEnvironment(AdoptThenable(value!, thenFn));
+        return value;
+    }
+
+    /// <summary>
+    /// A SharpTSGenerator's IEnumerable facade does not own the generator and
+    /// therefore cannot close it from IEnumerator.Dispose. Inject return() on an
+    /// abrupt for-await exit so active finally blocks run.
+    /// </summary>
+    private static void CloseSyncGeneratorOnEarlyExit(object? iterable)
+    {
+        if (iterable is SharpTSGenerator generator)
+            generator.Return(SharpTSUndefined.Instance);
     }
 
     private async Task<ExecutionResult> ExecuteLoopBodyAsync(string varName, object? value, Stmt body)

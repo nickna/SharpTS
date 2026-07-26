@@ -570,6 +570,31 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void Isolated_ForAwaitOfSyncIterable_ShouldExecuteWithoutSharpTsDll()
+    {
+        var source = """
+            async function main() {
+                const values: any[] = [];
+                for await (const x of [1, Promise.resolve(2)]) values.push(x);
+                for await (const x of "ok") values.push(x);
+                console.log(JSON.stringify(values));
+            }
+            main();
+            """;
+
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            Assert.Equal("[1,2,\"o\",\"k\"]\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// #1289: yield* over emitted typed arrays and Buffers must use only emitted runtime
     /// helpers and continue to execute without a SharpTS.dll dependency.
