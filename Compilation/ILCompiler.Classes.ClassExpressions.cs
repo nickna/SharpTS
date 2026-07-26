@@ -492,74 +492,37 @@ public partial class ILCompiler
     {
         string className = _classExprs.Names[classExpr];
 
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = fieldsField,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            CurrentClassBuilder = typeBuilder,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            PropertyBackingFields = _typedInterop.PropertyBackingFields,
-            ClassProperties = _typedInterop.ClassProperties,
-            DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames,
-            ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames,
-            PropertyTypes = _typedInterop.PropertyTypes,
-            ExtrasFields = _typedInterop.ExtrasFields,
-            UnionGenerator = _unionGenerator,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            ClassExprBackingFields = _classExprs.BackingFields,
-            ClassExprProperties = _classExprs.Properties,
-            ClassExprPropertyTypes = _classExprs.PropertyTypes,
-            ClassExprDeclaredProperties = _classExprs.DeclaredProperties,
-            ClassExprReadonlyProperties = _classExprs.ReadonlyProperties,
-            ClassExprStaticFields = _classExprs.StaticFields,
-            ClassExprStaticMethods = _classExprs.StaticMethods,
-            ClassExprInstanceMethods = _classExprs.InstanceMethods,
-            ClassExprGetters = _classExprs.Getters,
-            ClassExprSetters = _classExprs.Setters,
-            ClassExprConstructors = _classExprs.Constructors,
-            ClassExprGenericParams = _classExprs.GenericParams,
-            ClassExprSuperclass = _classExprs.Superclass,
-            CurrentClassExpr = classExpr,
-            VarToClassExpr = _classExprs.VarToClassExpr,
-            IsStrictMode = _isStrictMode,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level / captured top-level variable access — without these a
-            // class-expression method or accessor body referencing a top-level
-            // binding throws ReferenceError at runtime (same omission #300 fixed
-            // for class-declaration accessor bodies).
-            TopLevelStaticVars = BuildClassMethodTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = fieldsField;
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
+        ctx.ClassProperties = _typedInterop.ClassProperties;
+        ctx.DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames;
+        ctx.ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames;
+        ctx.PropertyTypes = _typedInterop.PropertyTypes;
+        ctx.ExtrasFields = _typedInterop.ExtrasFields;
+        ctx.UnionGenerator = _unionGenerator;
+        ctx.ClassExprBackingFields = _classExprs.BackingFields;
+        ctx.ClassExprProperties = _classExprs.Properties;
+        ctx.ClassExprPropertyTypes = _classExprs.PropertyTypes;
+        ctx.ClassExprDeclaredProperties = _classExprs.DeclaredProperties;
+        ctx.ClassExprReadonlyProperties = _classExprs.ReadonlyProperties;
+        ctx.ClassExprStaticFields = _classExprs.StaticFields;
+        ctx.ClassExprStaticMethods = _classExprs.StaticMethods;
+        ctx.ClassExprInstanceMethods = _classExprs.InstanceMethods;
+        ctx.ClassExprGetters = _classExprs.Getters;
+        ctx.ClassExprSetters = _classExprs.Setters;
+        ctx.ClassExprConstructors = _classExprs.Constructors;
+        ctx.ClassExprGenericParams = _classExprs.GenericParams;
+        ctx.ClassExprSuperclass = _classExprs.Superclass;
+        ctx.CurrentClassExpr = classExpr;
+        ctx.VarToClassExpr = _classExprs.VarToClassExpr;
+        // Module-level / captured top-level variable access — without these a
+        // class-expression method or accessor body referencing a top-level
+        // binding throws ReferenceError at runtime (same omission #300 fixed
+        // for class-declaration accessor bodies).
+        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
+        return ctx;
     }
 
     /// <summary>

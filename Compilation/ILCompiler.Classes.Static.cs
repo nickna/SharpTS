@@ -63,53 +63,12 @@ public partial class ILCompiler
         );
 
         var il = cctor.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            CurrentClassName = qualifiedClassName, // Required for static member access via 'this'
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            IsStaticConstructorContext = true,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level variable access
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        ctx.CurrentClassName = qualifiedClassName; // Required for static member access via 'this'
+        ctx.IsStaticConstructorContext = true;
+        ApplyCapturedTopLevelVariableAccess(ctx);
 
         // Add class generic type parameters to context (required for static blocks in generic classes)
         if (_classes.GenericParams.TryGetValue(qualifiedClassName, out var classGenericParams))
@@ -372,61 +331,13 @@ public partial class ILCompiler
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            IsInstanceMethod = false,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            // @lock decorator support
-            SyncLockFields = _locks.SyncLockFields,
-            AsyncLockFields = _locks.AsyncLockFields,
-            LockReentrancyFields = _locks.ReentrancyFields,
-            StaticSyncLockFields = _locks.StaticSyncLockFields,
-            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
-            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // ES2022 Private Class Elements support
-            CurrentClassName = className,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level variable access
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        ApplyLockDecoratorFields(ctx);
+        // ES2022 Private Class Elements support
+        ctx.CurrentClassName = className;
+        ApplyCapturedTopLevelVariableAccess(ctx);
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')
         var methodParams = methodBuilder.GetParameters();
@@ -620,59 +531,16 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            IsInstanceMethod = false,  // Static method!
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders,
-            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            // @lock decorator support
-            SyncLockFields = _locks.SyncLockFields,
-            AsyncLockFields = _locks.AsyncLockFields,
-            LockReentrancyFields = _locks.ReentrancyFields,
-            StaticSyncLockFields = _locks.StaticSyncLockFields,
-            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
-            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // ES2022 Private Class Elements support
-            CurrentClassName = className,
-            // Registry services
-            ClassRegistry = GetClassRegistry()
-        };
+        var ctx = CreateModuleMemberContext(il);
+        // Static method: IsInstanceMethod stays false (the default).
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders;
+        ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
+        ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
+        ApplyLockDecoratorFields(ctx);
+        // ES2022 Private Class Elements support
+        ctx.CurrentClassName = className;
 
         // #682: route promoted captures through the static method's function display class.
         WireAsyncMethodFunctionDC(ctx, smBuilder, methodDCKey);

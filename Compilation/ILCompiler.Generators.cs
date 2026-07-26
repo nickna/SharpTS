@@ -381,56 +381,17 @@ public partial class ILCompiler
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            // Check for function-level "use strict" directive
-            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body),
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Captured outer variables are read live (by reference) rather than snapshotted (#541).
-            // These mirror the async-generator MoveNext context so reads/writes of top-level
-            // variables go straight to their backing storage instead of a stale state-machine field.
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Per-arrow $entryPointDC field map so a capturing arrow nested in the generator body
-            // gets the entry-point display class threaded in (#732). Without this the arrow's
-            // $entryPointDC stays null and reading a captured top-level var NREs.
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath)
-        };
+        var ctx = CreateModuleMemberContext(il);
+        // Check for function-level "use strict" directive
+        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body);
+        // Captured outer variables are read live (by reference) rather than snapshotted (#541).
+        // These mirror the async-generator MoveNext context so reads/writes of top-level
+        // variables go straight to their backing storage instead of a stale state-machine field.
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        // Per-arrow $entryPointDC field map so a capturing arrow nested in the generator body
+        // gets the entry-point display class threaded in (#732). Without this the arrow's
+        // $entryPointDC stays null and reading a captured top-level var NREs.
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
 
         // Route reads/writes of captured-and-mutated locals through the shared function display
         // class (#674) and let capturing arrows thread it in. Only set when this generator has a
@@ -487,59 +448,20 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = fieldsField,
-            IsInstanceMethod = isInstanceMethod,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body),
-            // ES2022 Private Class Elements support for generator methods (a private generator threads
-            // its QUALIFIED class name so nested private member access resolves under modules — #720).
-            CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name,
-            CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Captured outer variables are read live (by reference), not snapshotted (#541).
-            // TopLevelStaticVars covers module-level vars that aren't in the entry-point display class.
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Per-arrow $entryPointDC field map so a capturing arrow nested in this instance
-            // generator method's body gets the entry-point display class threaded in (#732).
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath)
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = fieldsField;
+        ctx.IsInstanceMethod = isInstanceMethod;
+        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body);
+        // ES2022 Private Class Elements support for generator methods (a private generator threads
+        // its QUALIFIED class name so nested private member access resolves under modules — #720).
+        ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;
+        ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        // Captured outer variables are read live (by reference), not snapshotted (#541).
+        // TopLevelStaticVars covers module-level vars that aren't in the entry-point display class.
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        // Per-arrow $entryPointDC field map so a capturing arrow nested in this instance
+        // generator method's body gets the entry-point display class threaded in (#732).
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
 
         // #724: route reads/writes of captured-and-mutated method locals through the shared function
         // display class so the arrow's write and the generator body observe the same storage. Only set

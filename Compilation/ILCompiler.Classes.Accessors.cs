@@ -165,58 +165,18 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = fieldsField,
-            IsInstanceMethod = !accessor.IsStatic,
-            CurrentClassName = className,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level / captured top-level variable access. Without these an
-            // accessor body that references a top-level binding (a captured `let`,
-            // a same-module export, an import) throws ReferenceError at runtime —
-            // every other body-emission context (methods, ctors, functions, …)
-            // sets them; the accessor path was the lone omission. (#300)
-            TopLevelStaticVars = BuildClassMethodTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = fieldsField;
+        ctx.IsInstanceMethod = !accessor.IsStatic;
+        ctx.CurrentClassName = className;
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        // Module-level / captured top-level variable access. Without these an
+        // accessor body that references a top-level binding (a captured `let`,
+        // a same-module export, an import) throws ReferenceError at runtime —
+        // every other body-emission context (methods, ctors, functions, …)
+        // sets them; the accessor path was the lone omission. (#300)
+        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
 
         // Add class generic type parameters to context
         if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))

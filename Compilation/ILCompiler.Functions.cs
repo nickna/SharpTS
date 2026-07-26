@@ -345,83 +345,31 @@ public partial class ILCompiler
         // (state machines, class methods) gets it uniformly, not just this plain-function path.
         Dictionary<string, FieldBuilder>? topLevelVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
 
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionOverloads = _functions.Overloads,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            TopLevelStaticVars = topLevelVars,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            // CJS/ESM resolution — needed so require('./literal') and module.exports/exports
-            // work inside function bodies nested in a CJS module (e.g. debug's common.js
-            // setup() calls require('ms') from inside the exported function).
-            ModuleResolver = _modules.Resolver,
-            ModuleExportFields = _modules.ExportFields,
-            ModuleInitMethods = _modules.InitMethods,
-            ModuleImportFields = _modules.ImportFields,
-            ModuleTypes = _modules.Types,
-            CommonJsExportFields = _modules.CommonJsExportFields,
-            CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods,
-            CurrentCjsExportsField = _modules.CurrentPath != null
-                && _modules.CommonJsExportFields.TryGetValue(_modules.CurrentPath, out var cjsExports)
-                ? cjsExports
-                : null,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            UnionGenerator = _unionGenerator,
-            // Check for function-level "use strict" directive
-            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body),
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            // Function-level display class for captured function-local variables
-            FunctionDisplayClassFields = hasFunctionDC ? _closures.FunctionDisplayClassFields[qualifiedFunctionName] : null,
-            CapturedFunctionLocals = capturedLocals,
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-            ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null,
-            ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null,
-            // Inner function support
-            InnerFunctionMethods = _innerFunctionMethods,
-            InnerFunctionDisplayClasses = _innerFunctionDisplayClasses,
-            InnerFunctionDCFields = _innerFunctionDCFields,
-            InnerFunctionDCCtors = _innerFunctionDCCtors,
-            InnerFunctionEntryPointDCFields = _innerFunctionEntryPointDCFields,
-            InnerFunctionFunctionDCFields = _innerFunctionFunctionDCFields,
-            // Typed return type for unboxed return optimization
-            CurrentMethodReturnType = methodBuilder.ReturnType
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FunctionOverloads = _functions.Overloads;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
+        // CJS/ESM resolution — needed so require('./literal') and module.exports/exports
+        // work inside function bodies nested in a CJS module (e.g. debug's common.js
+        // setup() calls require('ms') from inside the exported function).
+        ApplyCommonJsModuleAccess(ctx);
+        ctx.UnionGenerator = _unionGenerator;
+        // Check for function-level "use strict" directive
+        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body);
+        // Entry-point display class for captured top-level variables. TopLevelStaticVars uses
+        // the pre-computed per-function map rather than the module-wide default.
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ctx.TopLevelStaticVars = topLevelVars;
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+        // Function-level display class for captured function-local variables
+        ctx.FunctionDisplayClassFields = hasFunctionDC ? _closures.FunctionDisplayClassFields[qualifiedFunctionName] : null;
+        ctx.CapturedFunctionLocals = capturedLocals;
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null;
+        ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null;
+        // Inner function support
+        ApplyInnerFunctionSupport(ctx);
+        // Typed return type for unboxed return optimization
+        ctx.CurrentMethodReturnType = methodBuilder.ReturnType;
 
         // Create function display class instance if needed
         LocalBuilder? displayLocal = null;
@@ -1002,62 +950,10 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            ClassExprBuilders = _classExprs.Builders,
-            FunctionRestParams = _functions.RestParams,
-            FunctionOverloads = _functions.Overloads,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            // Class expression support
-            VarToClassExpr = _classExprs.VarToClassExpr,
-            ClassExprStaticFields = _classExprs.StaticFields,
-            ClassExprStaticMethods = _classExprs.StaticMethods,
-            ClassExprConstructors = _classExprs.Constructors,
-            ClassExprGenericParams = _classExprs.GenericParams,
-            ClassExprSuperclass = _classExprs.Superclass,
-            UnionGenerator = _unionGenerator,
-            PropertyTypes = _typedInterop.PropertyTypes,
-            IsStrictMode = _isStrictMode,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClass = _closures.EntryPointDisplayClass,
-            EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor,
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Program type for GetMethodFromHandle resolution
-            ProgramType = _programType,
-            // Top-level statements run here: var/let/const are module-level bindings (#562).
-            IsModuleTopLevel = true
-        };
+        var ctx = CreateEntryPointTopLevelContext(il);
+        ctx.PropertyTypes = _typedInterop.PropertyTypes;
+        // Program type for GetMethodFromHandle resolution
+        ctx.ProgramType = _programType;
 
         // Create entry-point display class instance if there are captured top-level variables
         if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)
@@ -1183,58 +1079,7 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            ClassExprBuilders = _classExprs.Builders,
-            FunctionRestParams = _functions.RestParams,
-            FunctionOverloads = _functions.Overloads,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            VarToClassExpr = _classExprs.VarToClassExpr,
-            ClassExprStaticFields = _classExprs.StaticFields,
-            ClassExprStaticMethods = _classExprs.StaticMethods,
-            ClassExprConstructors = _classExprs.Constructors,
-            ClassExprGenericParams = _classExprs.GenericParams,
-            ClassExprSuperclass = _classExprs.Superclass,
-            UnionGenerator = _unionGenerator,
-            IsStrictMode = _isStrictMode,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClass = _closures.EntryPointDisplayClass,
-            EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor,
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Top-level statements run here: var/let/const are module-level bindings (#562).
-            IsModuleTopLevel = true
-        };
+        var ctx = CreateEntryPointTopLevelContext(il);
 
         // Create entry-point display class instance if there are captured top-level variables
         if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)
@@ -1457,14 +1302,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-            {
-                ClassRegistry = GetClassRegistry(),
-                Runtime = _runtime,
-                TypeMap = _typeMap,
-                // Check for function-level "use strict" directive
-                IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body)
-            };
+            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || CheckForUseStrict(funcStmt.Body));
             var emitter = new ILEmitter(ctx);
 
             // Make the provided parameters resolvable so a default value that references an

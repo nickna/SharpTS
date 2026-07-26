@@ -712,59 +712,21 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
-            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-            {
-                Runtime = _runtime,
-                ClosureAnalyzer = _closures.Analyzer,
-                ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-                DisplayClasses = _closures.DisplayClasses,
-                DisplayClassFields = _closures.DisplayClassFields,
-                DisplayClassConstructors = _closures.DisplayClassConstructors,
-                EnumMembers = _enums.Members,
-                EnumReverse = _enums.Reverse,
-                EnumKinds = _enums.Kinds,
-                TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-                FunctionRestParams = _functions.RestParams,
-                FunctionsCapturingArguments = _functions.CapturingArguments,
-                FunctionGenericParams = _functions.GenericParams,
-                IsGenericFunction = _functions.IsGeneric,
-                TypeMap = _typeMap,
-                DeadCode = _deadCodeInfo,
-                AsyncMethods = null,
-                AsyncArrowBuilders = _async.ArrowBuilders,
-                AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-                AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-                // Module support for multi-module compilation
-                CurrentModulePath = _modules.CurrentPath,
-                CurrentNamespacePath = _currentNamespacePath,
-                ModuleResolver = _modules.Resolver,
-                CommonJsExportFields = _modules.CommonJsExportFields,
-                CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods,
-                ClassToModule = _modules.ClassToModule,
-                FunctionToModule = _modules.FunctionToModule,
-                EnumToModule = _modules.EnumToModule,
-                DotNetNamespace = _modules.CurrentDotNetNamespace,
-                TypeEmitterRegistry = _typeEmitterRegistry,
-                BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-                BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-                ImportedNames = _importedNames,
-                ClassExprBuilders = _classExprs.Builders,
-                // Check for function-level "use strict" directive
-                IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body),
-                // Registry services
-                ClassRegistry = GetClassRegistry(),
-                // Entry-point display class for captured top-level variables
-                EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-                CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-                ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-                EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-                // Function display class for captured locals (closure mutation sharing with arrows)
-                ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-            };
+            var ctx = CreateModuleMemberContext(il);
+            ctx.AsyncArrowBuilders = _async.ArrowBuilders;
+            ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
+            ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
+            // CJS resolution (partial — this state-machine body only needs require()/exports reads)
+            ctx.ModuleResolver = _modules.Resolver;
+            ctx.CommonJsExportFields = _modules.CommonJsExportFields;
+            ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
+            // Check for function-level "use strict" directive
+            ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body);
+            // Entry-point display class for captured top-level variables
+            ApplyCapturedTopLevelVariableAccess(ctx);
+            ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+            // Function display class for captured locals (closure mutation sharing with arrows)
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
 
             // Set function DC info if this async function has captured locals.
             // funcName is already the module-qualified registry key (#418) — and the
@@ -839,56 +801,7 @@ public partial class ILCompiler
         );
 
         // Create a new context for arrow MoveNext emission
-        var ctx = new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.NamespaceFields, parentCtx.NamespaceVarFields, parentCtx.Types)
-        {
-            Runtime = parentCtx.Runtime,
-            ClosureAnalyzer = parentCtx.ClosureAnalyzer,
-            ArrowMethods = parentCtx.ArrowMethods,
-            ConstArrowBindings = parentCtx.ConstArrowBindings,
-            DirectCallArrowBindings = parentCtx.DirectCallArrowBindings,
-            DisplayClasses = parentCtx.DisplayClasses,
-            DisplayClassFields = parentCtx.DisplayClassFields,
-            DisplayClassConstructors = parentCtx.DisplayClassConstructors,
-            EnumMembers = parentCtx.EnumMembers,
-            EnumReverse = parentCtx.EnumReverse,
-            EnumKinds = parentCtx.EnumKinds,
-            TopLevelStaticVars = parentCtx.TopLevelStaticVars,
-            FunctionRestParams = parentCtx.FunctionRestParams,
-            FunctionGenericParams = parentCtx.FunctionGenericParams,
-            IsGenericFunction = parentCtx.IsGenericFunction,
-            TypeMap = parentCtx.TypeMap,
-            DeadCode = parentCtx.DeadCode,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders,
-            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-            // Inherit module support from parent context
-            CurrentModulePath = parentCtx.CurrentModulePath,
-            ClassToModule = parentCtx.ClassToModule,
-            FunctionToModule = parentCtx.FunctionToModule,
-            EnumToModule = parentCtx.EnumToModule,
-            TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
-            ClassExprBuilders = parentCtx.ClassExprBuilders,
-            IsStrictMode = parentCtx.IsStrictMode,
-            // ES2022 Private Class Elements support - inherit from parent context
-            CurrentClassName = parentCtx.CurrentClassName,
-            CurrentClassBuilder = parentCtx.CurrentClassBuilder,
-            // Registry services
-            ClassRegistry = parentCtx.ClassRegistry,
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClassFields = parentCtx.EntryPointDisplayClassFields,
-            CapturedTopLevelVars = parentCtx.CapturedTopLevelVars,
-            EntryPointDisplayClassStaticField = parentCtx.EntryPointDisplayClassStaticField,
-            // Captured locals promoted into the enclosing function's display class (#625): the
-            // arrow reads/writes them through `outer.functionDC.field` rather than mutating the
-            // boxed value-type state machine in place (unverifiable). Only fields the function
-            // actually placed in its DC are listed here, so a name present means "route via DC".
-            FunctionDisplayClassFields = parentCtx.FunctionDisplayClassFields,
-            OuterFunctionDCField = parentCtx.OuterFunctionDCField,
-            // Follow-up to #838: lets this nested async arrow's MoveNext populate a nested sync arrow's
-            // $functionDC from this arrow's OWN DC (EmitCapturingArrowInAsyncArrow).
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-        };
+        var ctx = CreateNestedAsyncArrowContext(il, parentCtx);
 
         // Create arrow-specific emitter
         var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
@@ -1129,67 +1042,21 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = fieldsField,
-            IsInstanceMethod = isInstanceMethod,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders,
-            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            // @lock decorator support
-            SyncLockFields = _locks.SyncLockFields,
-            AsyncLockFields = _locks.AsyncLockFields,
-            LockReentrancyFields = _locks.ReentrancyFields,
-            StaticSyncLockFields = _locks.StaticSyncLockFields,
-            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
-            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-                ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // ES2022 Private Class Elements support for async methods. currentClassName lets a private
-            // method pass its QUALIFIED class name (the ClassRegistry keys private members by it), so
-            // nested private member access inside the async body resolves under module compilation.
-            CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name,
-            CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = fieldsField;
+        ctx.IsInstanceMethod = isInstanceMethod;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders;
+        ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
+        ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
+        ApplyLockDecoratorFields(ctx);
+        // ES2022 Private Class Elements support for async methods. currentClassName lets a private
+        // method pass its QUALIFIED class name (the ClassRegistry keys private members by it), so
+        // nested private member access inside the async body resolves under module compilation.
+        ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;
+        ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        // Entry-point display class for captured top-level variables
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
 
         // #682: route promoted captures through the method's function display class (shared by the
         // method body and its nested async arrows via this ctx).
@@ -1364,60 +1231,22 @@ public partial class ILCompiler
             }
 
             // Create context for MoveNext emission
-            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-            {
-                Runtime = _runtime,
-                ClosureAnalyzer = _closures.Analyzer,
-                ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-                DisplayClasses = _closures.DisplayClasses,
-                DisplayClassFields = _closures.DisplayClassFields,
-                DisplayClassConstructors = _closures.DisplayClassConstructors,
-                EnumMembers = _enums.Members,
-                EnumReverse = _enums.Reverse,
-                EnumKinds = _enums.Kinds,
-                TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-                FunctionRestParams = _functions.RestParams,
-                FunctionsCapturingArguments = _functions.CapturingArguments,
-                FunctionGenericParams = _functions.GenericParams,
-                IsGenericFunction = _functions.IsGeneric,
-                TypeMap = _typeMap,
-                DeadCode = _deadCodeInfo,
-                AsyncMethods = null,
-                AsyncArrowBuilders = _async.ArrowBuilders,
-                AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-                AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-                CurrentModulePath = _modules.CurrentPath,
-                CurrentNamespacePath = _currentNamespacePath,
-                ClassToModule = _modules.ClassToModule,
-                FunctionToModule = _modules.FunctionToModule,
-                EnumToModule = _modules.EnumToModule,
-                DotNetNamespace = _modules.CurrentDotNetNamespace,
-                TypeEmitterRegistry = _typeEmitterRegistry,
-                BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-                BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-                ImportedNames = _importedNames,
-                ClassExprBuilders = _classExprs.Builders,
-                IsStrictMode = _isStrictMode,
-                // ES2022 Private Class Elements support
-                CurrentClassName = enclosingClassName,
-                CurrentClassBuilder = enclosingClassBuilder,
-                ClassRegistry = GetClassRegistry(),
-                EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-                CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-                // #1222: lets the shadow-capture check distinguish a #1201-lifted binding
-                // (home = entry-DC field, must stay live) from a block-scoped shadow
-                // (by-value standalone capture) — see TryGetShadowedTopLevelCaptureField.
-                LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
-                ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-                EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-                // Follow-up to #838: lets this standalone async arrow's MoveNext populate a nested sync
-                // arrow's $functionDC from this arrow's OWN DC (EmitCapturingArrowInAsyncArrow).
-                ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null
-            };
+            var ctx = CreateModuleMemberContext(il);
+            ctx.AsyncArrowBuilders = _async.ArrowBuilders;
+            ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
+            ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
+            // ES2022 Private Class Elements support
+            ctx.CurrentClassName = enclosingClassName;
+            ctx.CurrentClassBuilder = enclosingClassBuilder;
+            ApplyCapturedTopLevelVariableAccess(ctx);
+            // #1222: lets the shadow-capture check distinguish a #1201-lifted binding
+            // (home = entry-DC field, must stay live) from a block-scoped shadow
+            // (by-value standalone capture) — see TryGetShadowedTopLevelCaptureField.
+            ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
+            ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+            // Follow-up to #838: lets this standalone async arrow's MoveNext populate a nested sync
+            // arrow's $functionDC from this arrow's OWN DC (EmitCapturingArrowInAsyncArrow).
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
 
             // Create arrow-specific emitter
             var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
