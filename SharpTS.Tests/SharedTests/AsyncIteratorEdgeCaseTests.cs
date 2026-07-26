@@ -11,6 +11,95 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncIteratorEdgeCaseTests
 {
+    #region Async From Sync (#1287)
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ForAwaitOf_SyncBuiltins_AwaitsValues(ExecutionMode mode)
+    {
+        var source = """
+            async function main() {
+                const values: any[] = [];
+                const mixed: any[] = [1, Promise.resolve(2), 3];
+
+                for await (const x of mixed) values.push(x);
+                for await (const x of new Set([4, 5])) values.push(x);
+                for await (const x of "ok") values.push(x);
+                for await (const x of new Map([["a", 6]])) values.push(x);
+
+                console.log(JSON.stringify(values));
+            }
+            main();
+            """;
+
+        Assert.Equal("[1,2,3,4,5,\"o\",\"k\",[\"a\",6]]\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ForAwaitOf_SyncIterators_CloseOnBreak(ExecutionMode mode)
+    {
+        var source = """
+            let customClosed = false;
+            const iterable: any = {
+                [Symbol.iterator]() {
+                    let i = 0;
+                    return {
+                        next() { i++; return { value: i, done: i > 3 }; },
+                        return() {
+                            customClosed = true;
+                            return { value: undefined, done: true };
+                        }
+                    };
+                }
+            };
+
+            let generatorClosed = false;
+            function* values() {
+                try { yield 10; yield 20; }
+                finally { generatorClosed = true; }
+            }
+
+            async function main() {
+                for await (const x of iterable) break;
+                for await (const x of values()) break;
+                console.log(customClosed + " " + generatorClosed);
+            }
+            main();
+            """;
+
+        Assert.Equal("true true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ForAwaitOf_SyncIterable_WorksInAsyncArrowAndAsyncGenerator(ExecutionMode mode)
+    {
+        var source = """
+            const collect = async () => {
+                const out: number[] = [];
+                for await (const x of new Set([7, 8])) out.push(x);
+                return out;
+            };
+
+            async function* transform() {
+                for await (const x of [1, 2]) yield x * 10;
+            }
+
+            async function main() {
+                console.log(JSON.stringify(await collect()));
+                const out: number[] = [];
+                for await (const x of transform()) out.push(x);
+                console.log(JSON.stringify(out));
+            }
+            main();
+            """;
+
+        Assert.Equal("[7,8]\n[10,20]\n", TestHarness.Run(source, mode));
+    }
+
+    #endregion
+
     #region Error Handling
 
     [Theory]

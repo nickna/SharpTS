@@ -68,7 +68,7 @@ public partial class AsyncMoveNextEmitter
 
         // Synchronous prelude: evaluate the iterable and resolve the iterator + protocol kind:
         //   isCustom == true  → iterable[Symbol.asyncIterator]() ; step via InvokeIteratorNext / "return".
-        //   isCustom == false → the value is itself the iterator   ; step via the $IAsyncGenerator interface.
+        //   isCustom == false → an $IAsyncGenerator, including the emitted async-from-sync adapter.
         // Evaluating the iterable, or calling its [Symbol.asyncIterator], can throw synchronously (e.g. a
         // pre-aborted signal) — guarded below so that throw reaches an enclosing try's catch.
         void EmitPrelude()
@@ -87,9 +87,11 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
             _il.Emit(OpCodes.Brtrue, customSetup);
 
-            // iterator = iterable; isCustom = false
+            // No async iterator: adapt any synchronous iterable per
+            // CreateAsyncFromSyncIterator semantics (#1287).
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.AdaptSyncIterableToAsyncGenerator);
             _il.Emit(OpCodes.Stfld, iteratorField);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldc_I4_0);

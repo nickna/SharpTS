@@ -182,10 +182,9 @@ public partial class AsyncGeneratorMoveNextEmitter
     /// <c>AsyncGeneratorStateAnalyzer.VisitForOf</c>, consumed here in the same order.
     /// </summary>
     /// <remarks>
-    /// Scope matches the prior override: the iterator is driven through the <c>$IAsyncGenerator</c>
-    /// interface — the only async-iterator shape reachable as a CLR <c>IAsyncEnumerator&lt;object&gt;</c>
-    /// in compiled mode (custom <c>Symbol.asyncIterator</c> sources are guest objects, which this position
-    /// did not accept before either — a separate, pre-existing gap). <c>next()</c> returns a
+    /// The iterator is driven through the <c>$IAsyncGenerator</c> interface. Synchronous iterables are
+    /// first wrapped by the emitted async-from-sync adapter; custom <c>Symbol.asyncIterator</c> sources
+    /// remain a separate, pre-existing gap in this emitter. <c>next()</c> returns a
     /// <c>Task&lt;object&gt;</c> ({ value, done }) that maps directly onto the async-gen await mechanism
     /// (<see cref="EmitAwaitFromValueOnStack"/>), so rejected steps propagate / reach an enclosing try
     /// exactly as a normal <c>await</c> does.
@@ -204,10 +203,11 @@ public partial class AsyncGeneratorMoveNextEmitter
         var iteratorField = _builder.StateMachineType.DefineField(
             $"<>7__aiter{loopId}", _types.Object, FieldAttributes.Private);
 
-        // Evaluate the async iterable and store it as the iterator (the async generator IS its own
-        // iterator). Casting to $IAsyncGenerator validates the shape, matching the prior override.
+        // Evaluate the iterable, adapt synchronous sources, and store the
+        // resulting async iterator. Casting validates non-iterable inputs.
         EmitExpression(f.Iterable);
         EnsureBoxed();
+        _il.Emit(OpCodes.Call, _ctx.Runtime.AdaptSyncIterableToAsyncGenerator);
         _il.Emit(OpCodes.Castclass, asyncGenInterface);
         var iterTemp = _il.DeclareLocal(asyncGenInterface);
         _il.Emit(OpCodes.Stloc, iterTemp);
