@@ -24,24 +24,24 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         switch (methodName)
         {
             case "get":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapGet);
                 return true;
 
             case "set":
-                EmitSingleArgOrNull(emitter, arguments);
-                EmitSecondArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapSet);
                 return true;
 
             case "has":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapHas);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapDelete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
@@ -64,7 +64,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
                 return true;
 
             case "forEach":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
@@ -103,39 +103,4 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         return false;
     }
 
-    #region Helper Methods
-
-    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-    }
-
-    private static void EmitSecondArgOrNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 1)
-        {
-            emitter.EmitExpression(arguments[1]);
-            emitter.EmitBoxIfNeeded(arguments[1]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-    }
-
-    #endregion
 }

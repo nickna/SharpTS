@@ -20,14 +20,14 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
             case "map":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorMap);
                 return true;
 
             case "filter":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFilter);
                 return true;
 
@@ -48,7 +48,7 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
             case "flatMap":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFlatMap);
                 return true;
 
@@ -56,7 +56,7 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
                 // callback
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 // initial value (or null)
                 if (arguments.Count > 1)
                 {
@@ -81,28 +81,28 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
             case "forEach":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorForEach);
                 return true;
 
             case "some":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorSome);
                 return true;
 
             case "every":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorEvery);
                 return true;
 
             case "find":
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.IteratorFind);
                 return true;
 
@@ -137,19 +137,6 @@ public sealed class IteratorEmitter : ITypeEmitterStrategy
     public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
     {
         return false;
-    }
-
-    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            emitter.Context.IL.Emit(OpCodes.Ldnull);
-        }
     }
 
     private static void EmitIntArg(IEmitterContext emitter, List<Expr> arguments)
