@@ -215,6 +215,11 @@ public partial class GeneratorMoveNextEmitter
             _il.MarkLabel(afterMapSetLabel);
         }
 
+        // Emitted typed arrays and Buffers do not implement IEnumerable. Normalize only
+        // those operands through IterateToList before the Symbol.iterator/IEnumerable
+        // dispatch so yield* remains standalone-safe (#1289).
+        NormalizeYieldStarTypedArrayOrBuffer(iterableLocal);
+
         // Check for Symbol.iterator on the object (for custom iterables)
         _il.Emit(OpCodes.Ldloc, iterableLocal);
         _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);

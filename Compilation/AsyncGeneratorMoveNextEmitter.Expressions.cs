@@ -146,6 +146,9 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // Sync setup
         _il.MarkLabel(syncSetupLabel);
+        // Emitted typed arrays and Buffers are synchronous iterables but do not implement
+        // IEnumerable. Materialize them before the existing sync setup cast (#1289).
+        NormalizeYieldStarTypedArrayOrBuffer(iterableTemp);
         _il.Emit(OpCodes.Ldloc, iterableTemp);
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
         var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
@@ -301,8 +304,12 @@ public partial class AsyncGeneratorMoveNextEmitter
         var loopEnd = _il.DefineLabel();
 
         // Emit the iterable expression and get its enumerator
+        var iterableTemp = _il.DeclareLocal(typeof(object));
         EmitExpression(y.Value!);
         EnsureBoxed();
+        _il.Emit(OpCodes.Stloc, iterableTemp);
+        NormalizeYieldStarTypedArrayOrBuffer(iterableTemp);
+        _il.Emit(OpCodes.Ldloc, iterableTemp);
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
         _il.Emit(OpCodes.Callvirt, getEnumerator);
 

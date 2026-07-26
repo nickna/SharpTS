@@ -324,33 +324,18 @@ public partial class TypeChecker
     /// <summary>
     /// Gets the element type from an iterable type (for yield* delegation).
     /// </summary>
-    /// <remarks>
-    /// Deliberately NOT delegated to <see cref="TryGetSpreadElementType"/>, even though the two
-    /// lists overlap almost entirely. The spreadable set is now wider than what the compiled
-    /// <c>yield*</c> emitters can lower: their fallback arm casts the operand to
-    /// <c>IEnumerable</c> after a Map/Set/Symbol.iterator chain, so a typed array or Buffer
-    /// reaches it and throws <c>InvalidCastException</c> at runtime. Accepting those here would
-    /// trade a clean compile-time TS2488 for a compiled crash. Widen this only together with
-    /// typed-array arms in GeneratorMoveNextEmitter.Expressions.Yield and the two
-    /// AsyncGeneratorMoveNextEmitter sites. (#1282)
-    /// </remarks>
-    private TypeInfo GetIterableElementType(TypeInfo type) => type switch
+    private TypeInfo GetIterableElementType(TypeInfo type)
     {
-        TypeInfo.Array arr => arr.ElementType,
-        TypeInfo.Generator gen => gen.YieldType,
-        TypeInfo.AsyncGenerator asyncGen => asyncGen.YieldType,
-        TypeInfo.Iterator iter => iter.ElementType,
-        TypeInfo.Iterable iterable => iterable.ElementType,
-        TypeInfo.Set set => set.ElementType,
-        TypeInfo.Map map => TypeInfo.Tuple.FromTypes([map.KeyType, map.ValueType], 2),  // [K, V] tuples
-        TypeInfo.String => TypeInfo.String.Shared,  // String yields characters (as strings)
-        TypeInfo.StringLiteral => TypeInfo.String.Shared,  // String literal also yields characters
-        TypeInfo.Any => TypeInfo.Any.Shared,
-        // A hand-written object exposing [Symbol.iterator] is iterable structurally (#485); dedicated
-        // records are handled above, so only genuine structural objects reach here.
-        _ when TryGetStructuralIterableElement(type, out var structuralElem) => structuralElem,
-        _ => throw new TypeCheckException($" Type '{type}' is not iterable for yield*.", tsCode: "TS2488")
-    };
+        // Async generators are valid yield* delegates but are deliberately not spreadable by the
+        // synchronous spread helper.
+        if (type is TypeInfo.AsyncGenerator asyncGen)
+            return asyncGen.YieldType;
+
+        if (TryGetSpreadElementType(type, out var elementType))
+            return elementType;
+
+        throw new TypeCheckException($" Type '{type}' is not iterable for yield*.", tsCode: "TS2488");
+    }
 
     /// <summary>
     /// Tries to get the element type from a spreadable/iterable type.

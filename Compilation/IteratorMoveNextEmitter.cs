@@ -113,6 +113,50 @@ public abstract partial class IteratorMoveNextEmitter : StateMachineExitRoutingE
     }
 
     /// <summary>
+    /// Materializes an emitted typed array or Buffer into the runtime's standalone-safe
+    /// <c>List&lt;object&gt;</c> representation before a <c>yield*</c> setup casts its operand to
+    /// <see cref="System.Collections.IEnumerable"/>. The emitted <c>$TypedArray</c> and
+    /// <c>$Buffer</c> types deliberately do not implement that interface.
+    /// </summary>
+    protected void NormalizeYieldStarTypedArrayOrBuffer(LocalBuilder iterableLocal)
+    {
+        var runtime = Ctx.Runtime!;
+        var typedArrayType = runtime.TypedArrayBaseType;
+        var bufferType = runtime.TSBufferType;
+        if (typedArrayType is null && bufferType is null)
+            return;
+
+        var materializeLabel = IL.DefineLabel();
+        var doneLabel = IL.DefineLabel();
+
+        if (typedArrayType is not null)
+        {
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Isinst, typedArrayType);
+            IL.Emit(OpCodes.Brtrue, materializeLabel);
+        }
+
+        if (bufferType is not null)
+        {
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Isinst, bufferType);
+            IL.Emit(OpCodes.Brtrue, materializeLabel);
+        }
+
+        IL.Emit(OpCodes.Br, doneLabel);
+
+        IL.MarkLabel(materializeLabel);
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        IL.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Call, runtime.IterateToList);
+        IL.Emit(OpCodes.Stloc, iterableLocal);
+
+        IL.MarkLabel(doneLabel);
+    }
+
+    /// <summary>
     /// Binds the caught exception value (on the IL stack) to the catch parameter, honouring whether the
     /// parameter was hoisted to a state-machine field (because it is read across a yield/await in the
     /// catch body) or lives in an IL local. Storing to a fresh local unconditionally — the original
