@@ -571,6 +571,34 @@ public class StandaloneDllTests
     }
 
     /// <summary>
+    /// #1289: yield* over emitted typed arrays and Buffers must use only emitted runtime
+    /// helpers and continue to execute without a SharpTS.dll dependency.
+    /// </summary>
+    [Fact]
+    public void Isolated_YieldStarTypedArrayAndBuffer_ShouldExecuteWithoutSharpTsDll()
+    {
+        var source = """
+            function* values() {
+                yield* new Uint8Array([1, 2]);
+                yield* Buffer.from([3, 4]);
+            }
+            console.log(JSON.stringify([...values()]));
+            """;
+
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
+            Assert.Equal("[1,2,3,4]\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    /// <summary>
     /// Phase 23 guardrail: Verifies SharedArrayBuffer works standalone.
     /// </summary>
     [Fact]

@@ -89,28 +89,50 @@ public class TypedArrayIterationParityTests
     // async generator. That is a pre-existing compiled gap far wider than typed arrays, so a
     // dual-mode test here would assert a failure unrelated to this fix rather than pin it.
 
-    /// <summary>
-    /// <c>yield* typedArray</c> stays a compile-time TS2488 in both modes, on purpose: the
-    /// compiled generator emitters' fallback arm casts the operand to <c>IEnumerable</c>, which
-    /// a typed array does not implement, so accepting it would swap a clean diagnostic for an
-    /// <c>InvalidCastException</c> at runtime. Pinned so the rejection stays deliberate and
-    /// symmetric rather than drifting into a crash.
-    /// </summary>
     [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
-    public void YieldStar_OverTypedArray_RejectedInBothModes(ExecutionMode mode)
+    public void YieldStar_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
-        var files = new Dictionary<string, string>
-        {
-            ["main.ts"] = """
-                const u8 = new Uint8Array([1, 2]);
-                function* g(): Generator<any> { yield 0; yield* u8; }
-                console.log(JSON.stringify([...g()]));
-                """
-        };
+        Expect("""
+            const u8 = new Uint8Array([1, 2]);
+            const i16 = new Int16Array([-1, 300]);
+            const buf = Buffer.from([4, 5]);
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunModules(files, "main.ts", mode));
-        Assert.Contains("not iterable for yield*", ex.Message);
+            function* g() {
+                yield 0;
+                yield* u8;
+                yield* i16;
+                yield* buf;
+            }
+
+            const values: number[] = [...g()];
+            console.log(JSON.stringify(values));
+            """,
+            "[0,1,2,-1,300,4,5]", mode);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void AsyncGeneratorYieldStar_OverTypedArrayAndBuffer(ExecutionMode mode)
+    {
+        Expect("""
+            const u8 = new Uint8Array([1, 2]);
+            const buf = Buffer.from([3, 4]);
+
+            async function* g(): AsyncGenerator<number> {
+                yield 0;
+                yield* u8;
+                yield* buf;
+            }
+
+            async function main() {
+                const values: number[] = [];
+                for await (const value of g()) values.push(value);
+                console.log(JSON.stringify(values));
+            }
+            main();
+            """,
+            "[0,1,2,3,4]", mode);
     }
 
     /// <summary>
