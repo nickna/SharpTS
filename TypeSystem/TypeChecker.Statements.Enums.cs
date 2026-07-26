@@ -101,72 +101,18 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Evaluates a constant expression for const enum members.
-    /// Supports literals, references to other enum members, and arithmetic operations.
+    /// Evaluates a constant expression for const enum members via the shared
+    /// <see cref="ConstEnumExpressionEvaluator"/>, mapping failures onto TypeCheckExceptions
+    /// with the TS code each error kind has always carried here.
     /// </summary>
-    private object EvaluateConstEnumExpression(Expr expr, Dictionary<string, object> resolvedMembers, string enumName)
+    private static object EvaluateConstEnumExpression(Expr expr, Dictionary<string, object> resolvedMembers, string enumName)
     {
-        return expr switch
-        {
-            Expr.Literal lit => lit.Value ?? throw new TypeCheckException($" Const enum expression cannot be null.", tsCode: "TS2553"),
-
-            Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
-                resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
-                    ? val
-                    : throw new TypeCheckException($" Const enum member '{g.Name.Lexeme}' referenced before definition.", tsCode: "TS2474"),
-
-            Expr.Grouping gr => EvaluateConstEnumExpression(gr.Expression, resolvedMembers, enumName),
-
-            Expr.Unary u => EvaluateConstEnumUnary(u, resolvedMembers, enumName),
-
-            Expr.Binary b => EvaluateConstEnumBinary(b, resolvedMembers, enumName),
-
-            _ => throw new TypeCheckException($" Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.", tsCode: "TS2553")
-        };
-    }
-
-    private object EvaluateConstEnumUnary(Expr.Unary unary, Dictionary<string, object> resolvedMembers, string enumName)
-    {
-        var operand = EvaluateConstEnumExpression(unary.Right, resolvedMembers, enumName);
-
-        return unary.Operator.Type switch
-        {
-            TokenType.MINUS when operand is double d => -d,
-            TokenType.PLUS when operand is double d => d,
-            TokenType.TILDE when operand is double d => (double)(~(int)d),
-            _ => throw new TypeCheckException($" Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.", tsCode: "TS2553")
-        };
-    }
-
-    private object EvaluateConstEnumBinary(Expr.Binary binary, Dictionary<string, object> resolvedMembers, string enumName)
-    {
-        var left = EvaluateConstEnumExpression(binary.Left, resolvedMembers, enumName);
-        var right = EvaluateConstEnumExpression(binary.Right, resolvedMembers, enumName);
-
-        if (left is double l && right is double r)
-        {
-            return binary.Operator.Type switch
+        return ConstEnumExpressionEvaluator.Evaluate(expr, resolvedMembers, enumName, static e =>
+            new TypeCheckException($" {e.Message}", tsCode: e.Kind switch
             {
-                TokenType.PLUS => l + r,
-                TokenType.MINUS => l - r,
-                TokenType.STAR => l * r,
-                TokenType.SLASH => l / r,
-                TokenType.PERCENT => l % r,
-                TokenType.STAR_STAR => Math.Pow(l, r),
-                TokenType.AMPERSAND => (double)((int)l & (int)r),
-                TokenType.PIPE => (double)((int)l | (int)r),
-                TokenType.CARET => (double)((int)l ^ (int)r),
-                TokenType.LESS_LESS => (double)((int)l << (int)r),
-                TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
-                _ => throw new TypeCheckException($" Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.", tsCode: "TS2553")
-            };
-        }
-
-        if (left is string ls && right is string rs && binary.Operator.Type == TokenType.PLUS)
-        {
-            return ls + rs;
-        }
-
-        throw new TypeCheckException($" Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.", tsCode: "TS2362");
+                ConstEnumErrorKind.ForwardReference => "TS2474",
+                ConstEnumErrorKind.InvalidOperandTypes => "TS2362",
+                _ => "TS2553",
+            }));
     }
 }
