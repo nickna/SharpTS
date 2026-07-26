@@ -121,7 +121,7 @@ public class SharpTSResponse : ITypeCategorized
         var text = ReadBodyAsString();
         try
         {
-            return ParseJson(text);
+            return RuntimeJson.Parse(text);
         }
         catch (JsonException ex)
         {
@@ -161,31 +161,6 @@ public class SharpTSResponse : ITypeCategorized
             throw new Exception("Runtime Error: cannot clone Response after body has been consumed");
 
         return new SharpTSResponse(_status, _statusText, _headers, _bodyBytes, _type);
-    }
-
-    private static object? ParseJson(string text)
-    {
-        using var doc = JsonDocument.Parse(text);
-        return ConvertJsonElement(doc.RootElement);
-    }
-
-    private static object? ConvertJsonElement(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Number => element.GetDouble(),
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Array => new SharpTSArray(
-                element.EnumerateArray().Select(ConvertJsonElement).ToList()),
-            JsonValueKind.Object => new SharpTSObject(
-                element.EnumerateObject().ToDictionary(
-                    p => p.Name,
-                    p => ConvertJsonElement(p.Value))),
-            _ => null
-        };
     }
 
     public override string ToString() => $"Response {{ status: {Status}, ok: {Ok} }}";

@@ -105,44 +105,13 @@ public class SharpTSFetchResponse : ITypeCategorized
         var text = await ReadBodyAsStringAsync();
         try
         {
-            return ParseJson(text);
+            return RuntimeJson.Parse(text);
         }
         catch (JsonException ex)
         {
             throw new SharpTSPromiseRejectedException(
                 new SharpTSSyntaxError($"Unexpected token in JSON: {ex.Message}"));
         }
-    }
-
-    /// <summary>
-    /// Parses JSON text into SharpTS runtime values.
-    /// </summary>
-    private static object? ParseJson(string text)
-    {
-        using var doc = JsonDocument.Parse(text);
-        return ConvertJsonElement(doc.RootElement);
-    }
-
-    /// <summary>
-    /// Converts a JsonElement to SharpTS runtime values.
-    /// </summary>
-    private static object? ConvertJsonElement(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Number => element.GetDouble(),
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Array => new SharpTSArray(
-                element.EnumerateArray().Select(ConvertJsonElement).ToList()),
-            JsonValueKind.Object => new SharpTSObject(
-                element.EnumerateObject().ToDictionary(
-                    p => p.Name,
-                    p => ConvertJsonElement(p.Value))),
-            _ => null
-        };
     }
 
     /// <summary>
