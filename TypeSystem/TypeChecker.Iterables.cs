@@ -7,9 +7,10 @@ namespace SharpTS.TypeSystem;
 /// <summary>
 /// Structural typing of the sync iterable/iterator protocols (#485). SharpTS models
 /// iterables/iterators nominally (dedicated <see cref="TypeInfo"/> records: Array, Set, Map, Iterator,
-/// Generator, …); these helpers bridge to TypeScript's structural view so a hand-written object exposing
-/// <c>[Symbol.iterator]()</c> / <c>next()</c> is recognized as an iterable/iterator and its element type
-/// is derived from <c>next().value</c> rather than collapsing to <c>any</c>.
+/// Generator, TypedArray, Buffer, …); these helpers bridge to TypeScript's structural view so a
+/// hand-written object exposing <c>[Symbol.iterator]()</c> / <c>next()</c> is recognized as an
+/// iterable/iterator and its element type is derived from <c>next().value</c> rather than collapsing
+/// to <c>any</c>.
 /// </summary>
 public partial class TypeChecker
 {
@@ -218,6 +219,12 @@ public partial class TypeChecker
             case TypeInfo.Generator gen: elementType = gen.YieldType; return true;
             case TypeInfo.Iterable iterable: elementType = iterable.ElementType; return true;
             case TypeInfo.String or TypeInfo.StringLiteral: elementType = TypeInfo.String.Shared; return true;
+            case TypeInfo.TypedArray typed:
+                elementType = typed.ElementType.StartsWith("Big")
+                    ? TypeInfo.BigInt.Shared
+                    : TypeInfo.Primitive.Number;
+                return true;
+            case TypeInfo.Buffer: elementType = TypeInfo.Primitive.Number; return true;
             case TypeInfo.Any: elementType = TypeInfo.Any.Shared; return true;
             case TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance:
                 return TryGetStructuralIterableElement(type, out elementType);
@@ -232,13 +239,14 @@ public partial class TypeChecker
     /// normalizes an array binding-pattern source through the iterator protocol. Index-addressable
     /// sources (arrays, tuples, <c>any</c>) pass through with their precise type so the desugared
     /// positional index access stays accurate — notably tuples keep their per-position element types.
-    /// Any other iterable (Set, Map, generators, <c>[Symbol.iterator]</c> objects) becomes
-    /// <c>Array&lt;element&gt;</c>, so the subsequent <c>_dest0[i]</c> reads the element type instead of
-    /// erroring. A <b>string</b> is deliberately NOT passed through: it iterates to <c>string[]</c> so a
-    /// rest element binds a fresh array (<c>const [a, ...rest] = "hi"</c> → <c>rest: string[]</c>),
-    /// matching ECMA-262 instead of binding the trailing substring (#753); non-rest element types are
-    /// unchanged (<c>string</c> either way). A non-iterable, non-indexable source is returned unchanged
-    /// so the existing index-access diagnostic still fires.
+    /// Any other iterable (Set, Map, generators, typed arrays, Buffers, <c>[Symbol.iterator]</c> objects)
+    /// becomes <c>Array&lt;element&gt;</c>, so the subsequent <c>_dest0[i]</c> reads the element type
+    /// instead of dispatching through the source's original runtime representation. A <b>string</b> is
+    /// deliberately NOT passed through: it iterates to <c>string[]</c> so a rest element binds a fresh
+    /// array (<c>const [a, ...rest] = "hi"</c> → <c>rest: string[]</c>), matching ECMA-262 instead of
+    /// binding the trailing substring (#753); non-rest element types are unchanged (<c>string</c> either
+    /// way). A non-iterable, non-indexable source is returned unchanged so the existing index-access
+    /// diagnostic still fires.
     /// </summary>
     private TypeInfo NormalizeArrayDestructureSourceType(TypeInfo sourceType)
     {
