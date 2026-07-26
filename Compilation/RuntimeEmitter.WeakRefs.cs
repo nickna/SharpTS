@@ -7,90 +7,12 @@ public partial class RuntimeEmitter
 {
     private void EmitWeakRefMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitValidateWeakRefTarget(typeBuilder, runtime);
+        // Shared primitive probe: RuntimeEmitter.WeakValidation.cs
+        runtime.ValidateWeakRefTarget = EmitWeakTargetValidator(typeBuilder, "ValidateWeakRefTarget",
+            "Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object");
+
         EmitCreateWeakRef(typeBuilder, runtime);
         EmitWeakRefDeref(typeBuilder, runtime);
-    }
-
-    /// <summary>
-    /// Emits the ValidateWeakRefTarget helper that throws if target is a primitive type.
-    /// </summary>
-    private void EmitValidateWeakRefTarget(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ValidateWeakRefTarget",
-            MethodAttributes.Private | MethodAttributes.Static,
-            _types.Void,
-            [_types.Object]
-        );
-        runtime.ValidateWeakRefTarget = method;
-
-        var il = method.GetILGenerator();
-
-        var stringLabel = il.DefineLabel();
-        var numberLabel = il.DefineLabel();
-        var booleanLabel = il.DefineLabel();
-        var validLabel = il.DefineLabel();
-
-        // Check string
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, stringLabel);
-
-        // Check double (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check int (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Int32);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check long (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Int64);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check float (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Single);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check decimal (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Decimal);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check bool (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brtrue, booleanLabel);
-
-        // Value is valid (not a primitive)
-        il.Emit(OpCodes.Br, validLabel);
-
-        // Throw for string
-        il.MarkLabel(stringLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object, not 'string'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Throw for number
-        il.MarkLabel(numberLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object, not 'number'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Throw for boolean
-        il.MarkLabel(booleanLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object, not 'boolean'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Valid - just return
-        il.MarkLabel(validLabel);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

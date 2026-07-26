@@ -8,95 +8,15 @@ public partial class RuntimeEmitter
 {
     private void EmitWeakMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // Emit validation helper first (shared with WeakSets)
-        EmitValidateWeakMapKey(typeBuilder, runtime);
+        // Emit validation helper first (shared primitive probe: RuntimeEmitter.WeakValidation.cs)
+        runtime.ValidateWeakMapKey = EmitWeakTargetValidator(typeBuilder, "ValidateWeakMapKey",
+            "Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects");
 
         EmitCreateWeakMap(typeBuilder, runtime);
         EmitWeakMapGet(typeBuilder, runtime);
         EmitWeakMapSet(typeBuilder, runtime);
         EmitWeakMapHas(typeBuilder, runtime);
         EmitWeakMapDelete(typeBuilder, runtime);
-    }
-
-    /// <summary>
-    /// Emits the ValidateWeakMapKey helper that throws if key is a primitive type.
-    /// </summary>
-    private void EmitValidateWeakMapKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ValidateWeakMapKey",
-            MethodAttributes.Private | MethodAttributes.Static,
-            _types.Void,
-            [_types.Object]
-        );
-        runtime.ValidateWeakMapKey = method;
-
-        var il = method.GetILGenerator();
-
-        var stringLabel = il.DefineLabel();
-        var numberLabel = il.DefineLabel();
-        var booleanLabel = il.DefineLabel();
-        var validLabel = il.DefineLabel();
-
-        // Check string
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, stringLabel);
-
-        // Check double (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check int (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Int32);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check long (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Int64);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check float (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Single);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check decimal (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Decimal);
-        il.Emit(OpCodes.Brtrue, numberLabel);
-
-        // Check bool (boxed)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Boolean);
-        il.Emit(OpCodes.Brtrue, booleanLabel);
-
-        // Key is valid (not a primitive)
-        il.Emit(OpCodes.Br, validLabel);
-
-        // Throw for string
-        il.MarkLabel(stringLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects, not 'string'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Throw for number
-        il.MarkLabel(numberLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects, not 'number'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Throw for boolean
-        il.MarkLabel(booleanLabel);
-        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects, not 'boolean'.");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // Valid - just return
-        il.MarkLabel(validLabel);
-        il.Emit(OpCodes.Ret);
     }
 
     private void EmitCreateWeakMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
