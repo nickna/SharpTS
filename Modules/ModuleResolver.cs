@@ -843,7 +843,7 @@ public class ModuleResolver
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
                 .WithFilePath(absolutePath);
             if (isJsxSource)
-                parser.WithJsx(source, JsxOptions ?? JsxParseOptions.Default);
+                parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
 
             // For module loading, we throw on parse errors (backward compatible)

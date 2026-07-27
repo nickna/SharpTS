@@ -51,6 +51,13 @@ public class Lexer(string source)
     private readonly HashSet<int> _tsIgnoreLines = [];
     private readonly HashSet<int> _tsExpectErrorLines = [];
 
+    // JSX pragmas (/** @jsx h */, @jsxFrag, @jsxImportSource, @jsxRuntime), honored only
+    // before the first code token — same discipline as @ts-check.
+    private string? _jsxFactoryPragma;
+    private string? _jsxFragmentPragma;
+    private string? _jsxImportSourcePragma;
+    private string? _jsxRuntimePragma;
+
     /// <summary>
     /// Triple-slash directives parsed from the source file.
     /// Only populated for directives that appear before any code.
@@ -63,7 +70,8 @@ public class Lexer(string source)
     /// Line-level pragmas (`@ts-ignore`, `@ts-expect-error`) record the comment's line number.
     /// </summary>
     public TypeScriptPragmas Pragmas =>
-        new(_hasTsCheck, _hasTsNoCheck, _tsIgnoreLines, _tsExpectErrorLines);
+        new(_hasTsCheck, _hasTsNoCheck, _tsIgnoreLines, _tsExpectErrorLines,
+            _jsxFactoryPragma, _jsxFragmentPragma, _jsxImportSourcePragma, _jsxRuntimePragma);
 
     /// <summary>
     /// Every reserved word the lexer recognizes, for REPL autocomplete.
@@ -393,6 +401,7 @@ public class Lexer(string source)
                     int commentLine = _line;
                     while (Peek() != '\n' && !IsAtEnd()) Advance();
                     ScanForTsPragma(commentStart, _current, commentLine);
+                    ScanForJsxPragmas(commentStart, _current);
                 }
                 else if (Match('*'))
                 {
@@ -874,10 +883,12 @@ public class Lexer(string source)
 
     private void BlockComment()
     {
+        int bodyStart = _current;
         while (!IsAtEnd())
         {
             if (Peek() == '*' && PeekNext() == '/')
             {
+                ScanForJsxPragmas(bodyStart, _current);
                 Advance(); // consume *
                 Advance(); // consume /
                 return;
@@ -886,6 +897,58 @@ public class Lexer(string source)
             Advance();
         }
         throw new Exception($"Unterminated block comment at line {_line}");
+    }
+
+    /// <summary>
+    /// Scans a comment body for JSX pragmas (<c>@jsx</c>, <c>@jsxFrag</c>,
+    /// <c>@jsxImportSource</c>, <c>@jsxRuntime</c>), each of which takes a value. Honored only
+    /// before the first code token; tsc conventionally uses JSDoc block comments but line
+    /// comments are accepted too (matching tsc's lenient pragma regex).
+    /// </summary>
+    private void ScanForJsxPragmas(int bodyStart, int bodyEndExclusive)
+    {
+        if (_hasEmittedCodeToken) return;
+        for (int i = bodyStart; i < bodyEndExclusive; i++)
+        {
+            if (_source[i] != '@') continue;
+            int cursor = i + 1;
+            // Longest names first — "@jsx" is a prefix of the others.
+            if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxImportSource", out var value))
+                _jsxImportSourcePragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxRuntime", out value))
+                _jsxRuntimePragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxFrag", out value))
+                _jsxFragmentPragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsx", out value))
+                _jsxFactoryPragma = value;
+            else
+                continue;
+            i = cursor;
+        }
+    }
+
+    /// <summary>Matches a pragma name at <paramref name="cursor"/> and reads its whitespace-separated value.</summary>
+    private bool TryReadJsxPragma(ref int cursor, int endExclusive, string name, out string? value)
+    {
+        value = null;
+        if (cursor + name.Length > endExclusive) return false;
+        for (int k = 0; k < name.Length; k++)
+            if (_source[cursor + k] != name[k]) return false;
+
+        int position = cursor + name.Length;
+        // Name must end at whitespace ("@jsxes" is not "@jsx").
+        if (position < endExclusive && _source[position] is not (' ' or '\t' or '\r' or '\n'))
+            return false;
+        while (position < endExclusive && _source[position] is ' ' or '\t' or '\r' or '\n')
+            position++;
+        int valueStart = position;
+        while (position < endExclusive && !char.IsWhiteSpace(_source[position]) && _source[position] != '*')
+            position++;
+        if (position == valueStart) return false;
+
+        value = _source[valueStart..position];
+        cursor = position;
+        return true;
     }
 
     /// <summary>

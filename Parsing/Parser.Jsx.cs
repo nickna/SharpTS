@@ -432,6 +432,9 @@ public partial class Parser
         List<Expr> children)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
+        if (isFragment && _jsx!.FactoryFromPragma && !_jsx.FragmentFactoryFromPragma)
+            throw new ParseError(
+                "JSX fragment is not supported when using an inline JSX factory pragma.", "TS17017");
         Expr tag = isFragment ? BuildDottedExpr(_jsx!.FragmentFactory, open.Line) : tagExpression;
 
         Expr.ObjectLiteral? propsLiteral = null;

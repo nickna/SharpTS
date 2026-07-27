@@ -38,4 +38,36 @@ public sealed record JsxParseOptions(
     /// shim. Strict tsc parity is available via <c>--jsx none</c>.
     /// </summary>
     public static JsxParseOptions Default { get; } = new(JsxMode.ReactJsx);
+
+    /// <summary>True when Factory came from an inline <c>@jsx</c> pragma (gates TS17017).</summary>
+    public bool FactoryFromPragma { get; init; } = false;
+
+    /// <summary>True when FragmentFactory came from an inline <c>@jsxFrag</c> pragma.</summary>
+    public bool FragmentFactoryFromPragma { get; init; } = false;
+
+    /// <summary>
+    /// Applies per-file pragmas on top of the project settings, tsc semantics:
+    /// <c>@jsxRuntime classic|automatic</c> switches the mode; <c>@jsx</c> sets the factory
+    /// AND forces classic (an inline factory implies the classic transform); <c>@jsxFrag</c>
+    /// sets the fragment factory; <c>@jsxImportSource</c> sets the runtime package.
+    /// <c>--jsx none</c> stays none — pragmas configure the transform, they cannot enable JSX
+    /// (matching tsc, where no pragma cures a missing --jsx).
+    /// </summary>
+    public JsxParseOptions ApplyPragmas(TypeScriptPragmas pragmas)
+    {
+        var options = this;
+        if (string.Equals(pragmas.JsxRuntime, "classic", StringComparison.Ordinal))
+            options = options with { Mode = JsxMode.React };
+        else if (string.Equals(pragmas.JsxRuntime, "automatic", StringComparison.Ordinal))
+            options = options with { Mode = JsxMode.ReactJsx };
+        if (pragmas.JsxFactory is not null)
+            options = options with { Factory = pragmas.JsxFactory, Mode = JsxMode.React, FactoryFromPragma = true };
+        if (pragmas.JsxFragmentFactory is not null)
+            options = options with { FragmentFactory = pragmas.JsxFragmentFactory, FragmentFactoryFromPragma = true };
+        if (pragmas.JsxImportSource is not null)
+            options = options with { ImportSource = pragmas.JsxImportSource };
+        if (Mode == JsxMode.None)
+            options = options with { Mode = JsxMode.None };
+        return options;
+    }
 }

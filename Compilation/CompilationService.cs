@@ -130,7 +130,7 @@ public static class CompilationService
             var parser = new Parser(tokens, options.DecoratorMode)
                 .WithFilePath(options.FileName);
             if (isTsx)
-                parser.WithJsx(source, options.Jsx ?? JsxParseOptions.Default);
+                parser.WithJsx(source, (options.Jsx ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)
                 return Fail(parseResult.Diagnostics);
