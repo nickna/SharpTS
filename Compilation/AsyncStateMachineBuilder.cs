@@ -59,8 +59,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     public MethodBuilder MoveNextMethod { get; private set; } = null!;
     public MethodBuilder SetStateMachineMethod { get; private set; } = null!;
 
-    // Builder type (Task vs Task<T>). AwaiterType lives in AsyncBuilderBase (#1125).
-    public Type BuilderType { get; private set; } = null!;
+    // BuilderType (Task vs Task<T>) and AwaiterType live in AsyncBuilderBase (#1125).
 
     public AsyncStateMachineBuilder(ModuleBuilder moduleBuilder, TypeProvider types, int counter = 0)
     {
@@ -278,50 +277,15 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     /// </summary>
     public override FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
 
-    /// <summary>
-    /// Finalizes the type after MoveNext body has been emitted.
-    /// </summary>
-    public override Type CreateType()
-    {
-        // Validate labels on every method in this state-machine type before finalization —
-        // CreateType() clears the ILGenerator control-flow state, so a post-finalize sweep
-        // cannot see unmarked branched labels.
-        ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
-        ILLabelValidator.SweepConstructors(new[] { _stateMachineType });
-        return _stateMachineType.CreateType()!;
-    }
+    // CreateType and the common builder accessors (Create/Task/Start/SetException/
+    // AwaitUnsafeOnCompleted) live in AsyncBuilderBase; only SetResult differs per builder.
 
     #region Helper Methods for IL Emission
 
     /// <summary>
-    /// Gets the Create method for the specific builder type.
-    /// </summary>
-    public MethodInfo GetBuilderCreateMethod()
-    {
-        return BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
-    }
-
-    /// <summary>
-    /// Gets the Task property getter for the specific builder type.
-    /// </summary>
-    public MethodInfo GetBuilderTaskGetter()
-    {
-        return BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
-    }
-
-    /// <summary>
-    /// Gets the Start method for the specific builder type.
-    /// </summary>
-    public MethodInfo GetBuilderStartMethod()
-    {
-        // Start<TStateMachine>(ref TStateMachine)
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-        var startMethod = methods.First(m => m.Name == "Start" && m.IsGenericMethod);
-        return startMethod.MakeGenericMethod(_stateMachineType);
-    }
-
-    /// <summary>
-    /// Gets the SetResult method for the specific builder type.
+    /// Gets the SetResult method for the specific builder type. Specialized here (not in
+    /// AsyncBuilderBase): the non-generic AsyncTaskMethodBuilder has a parameterless SetResult,
+    /// the generic builder takes the result value.
     /// </summary>
     public MethodInfo GetBuilderSetResultMethod()
     {
@@ -334,25 +298,6 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
             var innerType = BuilderType.GetGenericArguments()[0];
             return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, [innerType], null)!;
         }
-    }
-
-    /// <summary>
-    /// Gets the SetException method for the specific builder type.
-    /// </summary>
-    public MethodInfo GetBuilderSetExceptionMethod()
-    {
-        return BuilderType.GetMethod("SetException", BindingFlags.Public | BindingFlags.Instance)!;
-    }
-
-    /// <summary>
-    /// Gets the AwaitUnsafeOnCompleted method for the specific builder type.
-    /// </summary>
-    public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethod()
-    {
-        // AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter, ref TStateMachine)
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-        var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
-        return awaitMethod.MakeGenericMethod(AwaiterType, _stateMachineType);
     }
 
     // GetAwaiterIsCompletedGetter / GetAwaiterGetResultMethod / GetTaskGetAwaiterMethod moved to the

@@ -113,7 +113,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 // live object (SetProperty handles the bool coercion).
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
                 il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
-                EmitBoxedArg(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
                 il.Emit(OpCodes.Ldnull);
                 return true;
@@ -314,25 +314,25 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
     /// <summary>Emits a call to a one-object-arg $Runtime helper (missing arg → null).</summary>
     private static void EmitOneArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
     {
-        EmitBoxedArg(emitter, arguments, 0);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
         emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
 
     /// <summary>Emits a call to a two-object-arg $Runtime helper (missing args → null).</summary>
     private static void EmitTwoArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
     {
-        EmitBoxedArg(emitter, arguments, 0);
-        EmitBoxedArg(emitter, arguments, 1);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
         emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
 
     /// <summary>Emits a call to a four-object-arg $Runtime helper (missing args → null).</summary>
     private static void EmitFourArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
     {
-        EmitBoxedArg(emitter, arguments, 0);
-        EmitBoxedArg(emitter, arguments, 1);
-        EmitBoxedArg(emitter, arguments, 2);
-        EmitBoxedArg(emitter, arguments, 3);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 2);
+        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
         emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
 
@@ -483,14 +483,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 // On(string eventName, object listener) -> $EventEmitter
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                EmitBoxedArg(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOn);
                 break;
 
             case "once":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                EmitBoxedArg(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOnce);
                 break;
 
@@ -498,7 +498,7 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "removeListener":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                EmitBoxedArg(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterOff);
                 break;
 
@@ -545,14 +545,14 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "prependListener":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                EmitBoxedArg(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterPrependListener);
                 break;
 
             case "prependOnceListener":
                 il.Emit(OpCodes.Call, runtime.GetProcessEventEmitter);
                 EmitStringArg(emitter, arguments, 0);
-                EmitBoxedArg(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterPrependOnceListener);
                 break;
 
@@ -589,20 +589,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         else
         {
             il.Emit(OpCodes.Ldstr, "");
-        }
-    }
-
-    private static void EmitBoxedArg(IEmitterContext emitter, List<Expr> arguments, int index)
-    {
-        var il = emitter.Context.IL;
-        if (index < arguments.Count)
-        {
-            emitter.EmitExpression(arguments[index]);
-            emitter.EmitBoxIfNeeded(arguments[index]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
         }
     }
 

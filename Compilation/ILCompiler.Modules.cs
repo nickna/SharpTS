@@ -533,11 +533,11 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stsfld, initializedField);
 
-        // Set _modules.CurrentPath before CreateCompilationContext so
+        // Set _modules.CurrentPath before CreateModuleTopLevelContext so
         // BuildTopLevelStaticVarsForModule can scope to this module.
         var savedPath = _modules.CurrentPath;
         _modules.CurrentPath = module.Path;
-        var ctx = CreateCompilationContext(il);
+        var ctx = CreateModuleTopLevelContext(il);
         _modules.CurrentPath = savedPath;
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
@@ -549,7 +549,7 @@ public partial class ILCompiler
         ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
 
         // Note: imports are already merged into ctx.TopLevelStaticVars via
-        // BuildTopLevelStaticVarsForModule in CreateCompilationContext.
+        // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
 
@@ -615,7 +615,7 @@ public partial class ILCompiler
         // returns the global dict (non-captured field is visible across script-merged files).
         var savedPath = _modules.CurrentPath;
         _modules.CurrentPath = null;
-        var ctx = CreateCompilationContext(il);
+        var ctx = CreateModuleTopLevelContext(il);
         _modules.CurrentPath = savedPath;
         ctx.CurrentModulePath = script.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
@@ -782,67 +782,6 @@ public partial class ILCompiler
 
         // Fall back to filename
         return "./" + Path.GetFileName(targetPath);
-    }
-
-    /// <summary>
-    /// Creates a CompilationContext with common settings.
-    /// </summary>
-    private CompilationContext CreateCompilationContext(ILGenerator il)
-    {
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            // Scope top-level static vars to the current module to prevent
-            // cross-module name collisions (e.g. `const foo` in main.ts
-            // shadowing `export function foo()` in lib.ts).
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            ExportAssignmentClasses = _modules.ExportAssignmentClasses,
-            ExportedClasses = _modules.ExportedClasses,
-            DefaultExportClasses = _modules.DefaultExportClasses,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Entry-point display class for captured top-level variables
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath),
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // This context emits the module/script top-level statements, so var/let/const
-            // declarations here are genuine module-level bindings (#562).
-            IsModuleTopLevel = true
-        };
     }
 
     /// <summary>

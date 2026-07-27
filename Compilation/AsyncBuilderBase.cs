@@ -18,6 +18,12 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     /// <summary>The <c>TaskAwaiter&lt;object&gt;</c> type stored at every await point.</summary>
     public Type AwaiterType { get; protected set; } = null!;
 
+    /// <summary>
+    /// The <c>AsyncTaskMethodBuilder</c> variant driving this state machine. Set by the subclass
+    /// (constructor or DefineStateMachine) before any builder accessor below is used.
+    /// </summary>
+    public Type BuilderType { get; protected set; } = null!;
+
     /// <summary>Gets the IsCompleted property getter for the awaiter.</summary>
     public MethodInfo GetAwaiterIsCompletedGetter()
     {
@@ -34,5 +40,57 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     public MethodInfo GetTaskGetAwaiterMethod()
     {
         return Types.GetMethodNoParams(Types.TaskOfObject, "GetAwaiter");
+    }
+
+    /// <summary>Gets the static Create method for the specific builder type.</summary>
+    public MethodInfo GetBuilderCreateMethod()
+    {
+        return BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
+    }
+
+    /// <summary>Gets the Task property getter for the specific builder type.</summary>
+    public MethodInfo GetBuilderTaskGetter()
+    {
+        return BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+    }
+
+    /// <summary>Gets Start&lt;TStateMachine&gt;(ref TStateMachine) instantiated for this state machine.</summary>
+    public MethodInfo GetBuilderStartMethod()
+    {
+        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var startMethod = methods.First(m => m.Name == "Start" && m.IsGenericMethod);
+        return startMethod.MakeGenericMethod(StateMachineType);
+    }
+
+    /// <summary>Gets the SetException method for the specific builder type.</summary>
+    public MethodInfo GetBuilderSetExceptionMethod()
+    {
+        return BuilderType.GetMethod("SetException", BindingFlags.Public | BindingFlags.Instance)!;
+    }
+
+    /// <summary>
+    /// Gets AwaitUnsafeOnCompleted&lt;TAwaiter, TStateMachine&gt;(ref TAwaiter, ref TStateMachine)
+    /// instantiated for this state machine's awaiter and struct.
+    /// </summary>
+    public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethod()
+    {
+        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
+        return awaitMethod.MakeGenericMethod(AwaiterType, StateMachineType);
+    }
+
+    // GetBuilderSetResultMethod stays specialized in each subclass: the non-generic
+    // AsyncTaskMethodBuilder has a parameterless SetResult, the generic builders take the value.
+
+    /// <summary>
+    /// Finalizes the type after the MoveNext body has been emitted. Validates labels on every
+    /// method in this state-machine type first — CreateType() clears the ILGenerator control-flow
+    /// state, so a post-finalize sweep cannot see unmarked branched labels.
+    /// </summary>
+    public override Type CreateType()
+    {
+        ILLabelValidator.SweepAllTypes(new[] { StateMachineType });
+        ILLabelValidator.SweepConstructors(new[] { StateMachineType });
+        return StateMachineType.CreateType()!;
     }
 }

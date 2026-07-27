@@ -1121,49 +1121,17 @@ public partial class Parser
             {
                 // Destructuring patterns in method parameters
                 // (e.g. yaml's `stringify({source, value}, ctx) {...}`).
-                if (Check(TokenType.LEFT_BRACKET))
+                if (Check(TokenType.LEFT_BRACKET) || Check(TokenType.LEFT_BRACE))
                 {
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACKET, "");
-                    var pattern = ParseArrayPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? pType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? pTypeNode = pType is not null ? TakeTypeNode() : null;
-                    Expr? pDefault = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault, TypeAnnotationNode: pTypeNode));
-                    destructuredParams.Add((synthName, pattern));
-                    continue;
-                }
-                if (Check(TokenType.LEFT_BRACE))
-                {
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACE, "");
-                    var pattern = ParseObjectPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? pType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? pTypeNode = pType is not null ? TakeTypeNode() : null;
-                    Expr? pDefault = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, pType, pDefault, TypeAnnotationNode: pTypeNode));
-                    destructuredParams.Add((synthName, pattern));
+                    var (parameter, pattern) = ParseDestructuredParameter(parameters.Count);
+                    parameters.Add(parameter);
+                    destructuredParams.Add((parameter.Name, pattern));
                     continue;
                 }
 
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
                 Token paramName = ConsumeIdentifierName("Expect parameter name.");
-                bool isOptional = Match(TokenType.QUESTION);
-                string? paramType = null;
-                TypeNode? paramTypeNode = null;
-                if (Match(TokenType.COLON))
-                {
-                    paramType = ParseTypeAnnotation();
-                    paramTypeNode = TakeTypeNode();
-                }
-                Expr? defaultValue = null;
-                if (Match(TokenType.EQUAL))
-                {
-                    defaultValue = Expression();
-                }
-                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
+                parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest));
 
                 if (isRest && Check(TokenType.COMMA))
                 {
@@ -1184,23 +1152,7 @@ public partial class Parser
         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
         List<Stmt> body = Block();
 
-        if (destructuredParams.Count > 0)
-        {
-            var prologue = new List<Stmt>();
-            foreach (var (synthName, pattern) in destructuredParams)
-            {
-                var paramVar = new Expr.Variable(synthName);
-                Stmt desugar = pattern switch
-                {
-                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
-                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
-                    _ => throw new Exception("Unknown pattern type")
-                };
-                prologue.Add(desugar);
-            }
-            body = prologue.Concat(body).ToList();
-        }
-
+        body = PrependDestructuringPrologue(destructuredParams, body);
         body = VarHoister.Hoist(body);
 
         return new Expr.ArrowFunction(
@@ -1318,46 +1270,20 @@ public partial class Parser
 
             do
             {
-                if (Check(TokenType.LEFT_BRACKET))
+                if (Check(TokenType.LEFT_BRACKET) || Check(TokenType.LEFT_BRACE))
                 {
-                    // Array destructure parameter: ([a, b]) => ...
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACKET, "");
+                    // Destructure parameter: ([a, b]) => ... / ({ x, y }) => ...
+                    // Speculative: an invalid pattern (e.g. it's really an array/object literal
+                    // in a grouping) must BACKTRACK, not throw — the shared component parses,
+                    // this candidate parse owns the failure policy.
                     try
                     {
-                        var pattern = ParseArrayPattern();
-                        Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                        string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                        TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                        Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
-                        destructuredParams.Add((synthName, pattern));
+                        var (parameter, pattern) = ParseDestructuredParameter(parameters.Count);
+                        parameters.Add(parameter);
+                        destructuredParams.Add((parameter.Name, pattern));
                     }
                     catch
                     {
-                        // Not a valid destructuring pattern, backtrack
-                        _current = savedPosition;
-                        return null;
-                    }
-                }
-                else if (Check(TokenType.LEFT_BRACE))
-                {
-                    // Object destructure parameter: ({ x, y }) => ...
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACE, "");
-                    try
-                    {
-                        var pattern = ParseObjectPattern();
-                        Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                        string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                        TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                        Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
-                        destructuredParams.Add((synthName, pattern));
-                    }
-                    catch
-                    {
-                        // Not a valid destructuring pattern (e.g., it's an object literal), backtrack
                         _current = savedPosition;
                         return null;
                     }
@@ -1377,22 +1303,10 @@ public partial class Parser
                     Token paramName = paramTok.Type == TokenType.IDENTIFIER
                         ? paramTok
                         : new Token(TokenType.IDENTIFIER, paramTok.Lexeme, null, paramTok.Line);
-                    // Optional parameter marker: (x?: T) => ...  (if this isn't an arrow, the
-                    // outer speculative parse backtracks, so consuming '?' here is safe).
-                    bool isOptional = Match(TokenType.QUESTION);
-                    string? paramType = null;
-                    TypeNode? paramTypeNode = null;
-                    if (Match(TokenType.COLON))
-                    {
-                        paramType = ParseTypeAnnotation();
-                        paramTypeNode = TakeTypeNode();
-                    }
-                    Expr? defaultValue = null;
-                    if (Match(TokenType.EQUAL))
-                    {
-                        defaultValue = Expression();
-                    }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
+                    // The shared tail consumes '?'/type/default: (x?: T = v) => ...  (if this
+                    // isn't an arrow, the outer speculative parse backtracks, so consuming here
+                    // is safe).
+                    parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -1452,27 +1366,15 @@ public partial class Parser
         // If we have destructured parameters, prepend desugaring to body
         if (destructuredParams.Count > 0)
         {
-            List<Stmt> prologue = [];
-            foreach (var (synthName, pattern) in destructuredParams)
-            {
-                var paramVar = new Expr.Variable(synthName);
-                Stmt desugar = pattern switch
-                {
-                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
-                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
-                    _ => throw new Exception("Unknown pattern type")
-                };
-                prologue.Add(desugar);
-            }
-
             if (body != null)
             {
-                body = prologue.Concat(body).ToList();
+                body = PrependDestructuringPrologue(destructuredParams, body);
             }
             else if (exprBody != null)
             {
                 // For expression body, wrap in a block with prologue + return
-                body = prologue.Concat([new Stmt.Return(new Token(TokenType.RETURN, "return", null, 0), exprBody)]).ToList();
+                body = PrependDestructuringPrologue(destructuredParams,
+                    [new Stmt.Return(new Token(TokenType.RETURN, "return", null, 0), exprBody)]);
                 exprBody = null;
             }
         }
@@ -1576,31 +1478,12 @@ public partial class Parser
                 if (Check(TokenType.RIGHT_PAREN)) break;
 
                 // Check for destructuring pattern parameter
-                if (Check(TokenType.LEFT_BRACKET))
+                if (Check(TokenType.LEFT_BRACKET) || Check(TokenType.LEFT_BRACE))
                 {
-                    // Array destructure: function([a, b]) {}
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACKET, "");
-                    var pattern = ParseArrayPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
-                    destructuredParams.Add((synthName, pattern));
-                }
-                else if (Check(TokenType.LEFT_BRACE))
-                {
-                    // Object destructure: function({ x, y }) {}
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACE, "");
-                    var pattern = ParseObjectPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, TypeAnnotationNode: paramTypeNode));
-                    destructuredParams.Add((synthName, pattern));
+                    // function([a, b]) {} / function({ x, y }) {}
+                    var (parameter, pattern) = ParseDestructuredParameter(parameters.Count);
+                    parameters.Add(parameter);
+                    destructuredParams.Add((parameter.Name, pattern));
                 }
                 else
                 {
@@ -1608,23 +1491,7 @@ public partial class Parser
                     bool isRest = Match(TokenType.DOT_DOT_DOT);
 
                     Token paramName = ConsumeIdentifierName("Expect parameter name.");
-
-                    // Check for optional parameter marker (?)
-                    bool isOptional = Match(TokenType.QUESTION);
-
-                    string? paramType = null;
-                    TypeNode? paramTypeNode = null;
-                    if (Match(TokenType.COLON))
-                    {
-                        paramType = ParseTypeAnnotation();
-                        paramTypeNode = TakeTypeNode();
-                    }
-                    Expr? defaultValue = null;
-                    if (Match(TokenType.EQUAL))
-                    {
-                        defaultValue = Expression();
-                    }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
+                    parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -1648,22 +1515,7 @@ public partial class Parser
         List<Stmt> body = Block();
 
         // Prepend destructuring statements for patterned parameters
-        if (destructuredParams.Count > 0)
-        {
-            List<Stmt> prologue = [];
-            foreach (var (synthName, pattern) in destructuredParams)
-            {
-                var paramVar = new Expr.Variable(synthName);
-                Stmt desugar = pattern switch
-                {
-                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
-                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
-                    _ => throw new Exception("Unknown pattern type")
-                };
-                prologue.Add(desugar);
-            }
-            body = prologue.Concat(body).ToList();
-        }
+        body = PrependDestructuringPrologue(destructuredParams, body);
 
         body = VarHoister.Hoist(body);
 

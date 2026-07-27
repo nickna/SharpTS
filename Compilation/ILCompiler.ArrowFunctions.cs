@@ -1307,102 +1307,47 @@ public partial class ILCompiler
         _closures.ArrowReturnTypes.TryGetValue(arrow, out var arrowReturnType);
         arrowReturnType ??= _types.Object;
 
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            // Top-level variables for module-level access
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            // A function expression / arrow with its own "use strict" prologue is
-            // strict even when the enclosing code is sloppy. Detect it here (not
-            // just inherit the parent) so `this` resolution honors it — otherwise a
-            // strict `function(){ "use strict"; … }` callback is misclassified
-            // sloppy and LoadThis's undefined→globalThis coercion wrongly fires
-            // (Test262 String/prototype/replace/S15.5.4.11_A12: a strict replace
-            // callback must see `this === undefined`). Function-expression/arrow
-            // bodies are parsed with Block() and no directive prologue, so their
-            // "use strict" is an ordinary string expression statement rather than a
-            // Stmt.Directive — BodyDeclaresUseStrict handles both forms (plain
-            // CheckForUseStrict only matches Directive).
-            IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(arrow.BlockBody),
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Propagate the enclosing class name so private-member dispatch (#field / #method
-            // access, `super` lookups) works inside arrow bodies nested in class methods.
-            // Without this, `this.#parseGlob()` inside an arrow throws "class context not
-            // available" at runtime.
-            CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
-                ? enclosingClassName
-                : null,
-            // Entry-point display class for accessing captured top-level variables
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Function-level display class for nested arrow functions
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-            // Arrow scope display class for nested arrow functions
-            ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null,
-            ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null,
-            // Inner function metadata — required for any `function X() {}` declared INSIDE this
-            // arrow body to be reachable from sibling statements. Without this, IIFE-style
-            // wrappers that declare nested functions (lodash's `(function() { function basePropertyOf() {...} }())`)
-            // crash at runtime with "Undefined variable" when earlier statements reference them.
-            InnerFunctionMethods = _innerFunctionMethods,
-            InnerFunctionDisplayClasses = _innerFunctionDisplayClasses,
-            InnerFunctionDCFields = _innerFunctionDCFields,
-            InnerFunctionDCCtors = _innerFunctionDCCtors,
-            InnerFunctionEntryPointDCFields = _innerFunctionEntryPointDCFields,
-            InnerFunctionFunctionDCFields = _innerFunctionFunctionDCFields,
-            // CJS-context propagation — arrow bodies nested in a CJS module must see the
-            // same `exports` binding and require() resolution as the enclosing module init.
-            // Without this, bare `exports` inside an IIFE resolves to null and the lodash-
-            // style feature detection `typeof exports == 'object' && exports && ...` fails.
-            CurrentCjsExportsField = _modules.CurrentPath != null
-                && _modules.CommonJsExportFields.TryGetValue(_modules.CurrentPath, out var cjsArrowExports)
-                ? cjsArrowExports
-                : null,
-            ModuleResolver = _modules.Resolver,
-            ModuleExportFields = _modules.ExportFields,
-            ModuleInitMethods = _modules.InitMethods,
-            ModuleImportFields = _modules.ImportFields,
-            ModuleTypes = _modules.Types,
-            CommonJsExportFields = _modules.CommonJsExportFields,
-            CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods,
-            // Typed return optimization - set return type so EmitReturn knows whether to box
-            CurrentMethodReturnType = arrowReturnType
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
+        // A function expression / arrow with its own "use strict" prologue is
+        // strict even when the enclosing code is sloppy. Detect it here (not
+        // just inherit the parent) so `this` resolution honors it — otherwise a
+        // strict `function(){ "use strict"; … }` callback is misclassified
+        // sloppy and LoadThis's undefined→globalThis coercion wrongly fires
+        // (Test262 String/prototype/replace/S15.5.4.11_A12: a strict replace
+        // callback must see `this === undefined`). Function-expression/arrow
+        // bodies are parsed with Block() and no directive prologue, so their
+        // "use strict" is an ordinary string expression statement rather than a
+        // Stmt.Directive — BodyDeclaresUseStrict handles both forms (plain
+        // CheckForUseStrict only matches Directive).
+        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(arrow.BlockBody);
+        // Propagate the enclosing class name so private-member dispatch (#field / #method
+        // access, `super` lookups) works inside arrow bodies nested in class methods.
+        // Without this, `this.#parseGlob()` inside an arrow throws "class context not
+        // available" at runtime.
+        ctx.CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
+            ? enclosingClassName
+            : null;
+        // Entry-point display class for accessing captured top-level variables
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+        // Function-level display class for nested arrow functions
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        // Arrow scope display class for nested arrow functions
+        ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null;
+        ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null;
+        // Inner function metadata — required for any `function X() {}` declared INSIDE this
+        // arrow body to be reachable from sibling statements. Without this, IIFE-style
+        // wrappers that declare nested functions (lodash's `(function() { function basePropertyOf() {...} }())`)
+        // crash at runtime with "Undefined variable" when earlier statements reference them.
+        ApplyInnerFunctionSupport(ctx);
+        // CJS-context propagation — arrow bodies nested in a CJS module must see the
+        // same `exports` binding and require() resolution as the enclosing module init.
+        // Without this, bare `exports` inside an IIFE resolves to null and the lodash-
+        // style feature detection `typeof exports == 'object' && exports && ...` fails.
+        ApplyCommonJsModuleAccess(ctx);
+        // Typed return optimization - set return type so EmitReturn knows whether to box
+        ctx.CurrentMethodReturnType = arrowReturnType;
 
         if (displayClass != null)
         {

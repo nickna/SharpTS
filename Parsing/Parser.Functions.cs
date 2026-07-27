@@ -65,31 +65,12 @@ public partial class Parser
                 List<Decorator>? paramDecorators = ParseDecorators();
 
                 // Check for destructuring pattern parameter
-                if (Check(TokenType.LEFT_BRACKET))
+                if (Check(TokenType.LEFT_BRACKET) || Check(TokenType.LEFT_BRACE))
                 {
-                    // Array destructure: function f([a, b]) {}
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACKET, "");
-                    var pattern = ParseArrayPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators, TypeAnnotationNode: paramTypeNode));
-                    destructuredParams.Add((synthName, pattern));
-                }
-                else if (Check(TokenType.LEFT_BRACE))
-                {
-                    // Object destructure: function f({ x, y }) {}
-                    int line = Peek().Line;
-                    Consume(TokenType.LEFT_BRACE, "");
-                    var pattern = ParseObjectPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators, TypeAnnotationNode: paramTypeNode));
-                    destructuredParams.Add((synthName, pattern));
+                    // function f([a, b]) {} / function f({ x, y }) {}
+                    var (parameter, pattern) = ParseDestructuredParameter(parameters.Count, paramDecorators);
+                    parameters.Add(parameter);
+                    destructuredParams.Add((parameter.Name, pattern));
                 }
                 else
                 {
@@ -134,23 +115,9 @@ public partial class Parser
                     }
 
                     Token paramName = ConsumeIdentifierName("Expect parameter name.");
-
-                    // Check for optional parameter marker (?)
-                    bool isOptional = Match(TokenType.QUESTION);
-
-                    string? paramType = null;
-                    TypeNode? paramTypeNode = null;
-                    if (Match(TokenType.COLON))
-                    {
-                        paramType = ParseTypeAnnotation();
-                        paramTypeNode = TakeTypeNode();
-                    }
-                    Expr? defaultValue = null;
-                    if (Match(TokenType.EQUAL))
-                    {
-                        defaultValue = Expression();
-                    }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional, paramDecorators, paramTypeNode));
+                    parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest,
+                        isParameterProperty: isParameterProperty, access: access,
+                        isReadonly: isReadonly, decorators: paramDecorators));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -195,22 +162,7 @@ public partial class Parser
         _isStrictMode = previousStrictMode;
 
         // Prepend destructuring statements for patterned parameters
-        if (destructuredParams.Count > 0)
-        {
-            List<Stmt> prologue = [];
-            foreach (var (synthName, pattern) in destructuredParams)
-            {
-                var paramVar = new Expr.Variable(synthName);
-                Stmt desugar = pattern switch
-                {
-                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
-                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
-                    _ => throw new Exception("Unknown pattern type")
-                };
-                prologue.Add(desugar);
-            }
-            body = prologue.Concat(body).ToList();
-        }
+        body = PrependDestructuringPrologue(destructuredParams, body);
 
         // Prepend parameter property assignments for constructor: this.x = x
         if (kind == "constructor")
@@ -285,25 +237,9 @@ public partial class Parser
 
                 Token paramName = ConsumeIdentifierName("Expect parameter name.");
 
-                // Check for optional parameter marker (?) — mirrors the main
-                // function-parameter parser so private/abstract methods accept `x?: T`.
-                bool isOptional = Match(TokenType.QUESTION);
-
-                string? paramType = null;
-                TypeNode? paramTypeNode = null;
-                if (Match(TokenType.COLON))
-                {
-                    paramType = ParseTypeAnnotation();
-                    paramTypeNode = TakeTypeNode();
-                }
-                // Abstract methods don't have a body, so no default values make sense
-                // But TypeScript does allow them in the signature, so let's parse them
-                Expr? defaultValue = null;
-                if (Match(TokenType.EQUAL))
-                {
-                    defaultValue = Expression();
-                }
-                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional, TypeAnnotationNode: paramTypeNode));
+                // Abstract methods don't have a body, so no default values make sense,
+                // but TypeScript does allow them in the signature — the shared tail parses them.
+                parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest));
 
                 // Rest parameter must be last
                 if (isRest && Check(TokenType.COMMA))

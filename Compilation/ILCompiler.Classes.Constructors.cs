@@ -45,76 +45,34 @@ public partial class ILCompiler
         }
 
         var il = ctorBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            CurrentSuperclassName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr),
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Typed interop support
-            PropertyBackingFields = _typedInterop.PropertyBackingFields,
-            ClassProperties = _typedInterop.ClassProperties,
-            DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames,
-            ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames,
-            PropertyTypes = _typedInterop.PropertyTypes,
-            ExtrasFields = _typedInterop.ExtrasFields,
-            UnionGenerator = _unionGenerator,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            // .NET namespace support
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // ES2022 Private Class Elements support
-            CurrentClassName = className,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level variable access
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Arrow-closure DC field maps — without these, arrow closures created inside
-            // the constructor (e.g. `arr.map(v => v < MAX)` referencing a module-level
-            // captured var) won't populate their `$entryPointDC`/`$functionDC`/`$arrowDC`
-            // fields on the newobj'd display class, and the arrow body's `ldfld $entryPointDC`
-            // dereferences null at runtime.
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-            ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null,
-            ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null,
-            // Constructors have a void signature; without this the `return;`
-            // inside a ctor body defaults to object and emits `ldnull` before
-            // the `ret`, producing an invalid method.
-            CurrentMethodReturnType = typeof(void),
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.CurrentSuperclassName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr);
+        // Typed interop support
+        ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
+        ctx.ClassProperties = _typedInterop.ClassProperties;
+        ctx.DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames;
+        ctx.ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames;
+        ctx.PropertyTypes = _typedInterop.PropertyTypes;
+        ctx.ExtrasFields = _typedInterop.ExtrasFields;
+        ctx.UnionGenerator = _unionGenerator;
+        // ES2022 Private Class Elements support
+        ctx.CurrentClassName = className;
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        // Arrow-closure DC field maps — without these, arrow closures created inside
+        // the constructor (e.g. `arr.map(v => v < MAX)` referencing a module-level
+        // captured var) won't populate their `$entryPointDC`/`$functionDC`/`$arrowDC`
+        // fields on the newobj'd display class, and the arrow body's `ldfld $entryPointDC`
+        // dereferences null at runtime.
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null;
+        ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null;
+        // Constructors have a void signature; without this the `return;`
+        // inside a ctor body defaults to object and emits `ldnull` before
+        // the `ret`, producing an invalid method.
+        ctx.CurrentMethodReturnType = typeof(void);
 
         // Add class generic type parameters to context
         if (_classes.GenericParams.TryGetValue(className, out var classGenericParams))

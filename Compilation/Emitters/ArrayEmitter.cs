@@ -232,7 +232,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "join":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayJoin);
                 break;
 
@@ -264,24 +264,24 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "flat":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlat);
                 break;
 
             case "flatMap":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlatMap);
                 break;
 
             case "includes":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayIncludes);
                 break;
 
             case "indexOf":
             case "lastIndexOf":
                 // searchElement (arg 0) + optional fromIndex (arg 1).
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 if (arguments.Count >= 2)
                 {
                     if (argLocals != null)
@@ -303,12 +303,12 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "sort":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArraySort);
                 break;
 
             case "toSorted":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSorted);
                 break;
 
@@ -355,7 +355,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "at":
-                EmitSingleArgOrNull(emitter, arguments, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayAt);
                 break;
 
@@ -730,7 +730,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
     /// <summary>
     /// Array methods that evaluate plain-expression arguments (via <see cref="EmitVariadicListMutation"/>,
-    /// <see cref="IEmitterContext.EmitArgsArray"/>, <see cref="EmitSingleArgOrNull"/>, or inline) rather than dispatching
+    /// <see cref="IEmitterContext.EmitArgsArray"/>, <see cref="EmitterArgumentHelpers.EmitBoxedArgumentOrNull"/>, or inline) rather than dispatching
     /// a callback arrow from the AST. Only these can hit the #850 stack-spill bug when an argument
     /// contains <c>await</c>/<c>yield</c>, so only these get await-safe argument pre-spilling. The
     /// callback methods (map/filter/forEach/find/findIndex/some/every/findLast/findLastIndex) are
@@ -741,34 +741,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         "push" or "unshift" or "slice" or "reduce" or "reduceRight" or "join" or "concat" or
         "flat" or "flatMap" or "includes" or "indexOf" or "lastIndexOf" or "sort" or "toSorted" or
         "splice" or "toSpliced" or "with" or "at" or "fill" or "copyWithin";
-
-    /// <summary>
-    /// Emits a single argument or null if no arguments provided. When <paramref name="argLocals"/> is
-    /// supplied (await-safe pre-spilled args, #850) the value is loaded from the local rather than
-    /// re-evaluated.
-    /// </summary>
-    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments, LocalBuilder[]? argLocals = null)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            if (argLocals != null)
-            {
-                il.Emit(OpCodes.Ldloc, argLocals[0]);
-            }
-            else
-            {
-                emitter.EmitExpression(arguments[0]);
-                emitter.EmitBoxIfNeeded(arguments[0]);
-            }
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-    }
 
     /// <summary>
     /// Emits the callback (arg 0) and stashes optional thisArg (arg 1) into

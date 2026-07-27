@@ -1659,8 +1659,9 @@ public partial class RuntimeEmitter
         EmitVariadicElementCase("unshift", runtime.ArrayUnshift, reverse: true);
 
         // Single-arg methods (runtime helper takes `object`, not `object[]`).
-        // Aligns with Emitters/ArrayEmitter.cs which also uses EmitSingleArgOrNull
-        // for these methods, so dynamic bound dispatch matches the direct-call path.
+        // Aligns with Emitters/ArrayEmitter.cs which also uses the shared
+        // EmitterArgumentHelpers.EmitBoxedArgumentOrNull for these methods, so
+        // dynamic bound dispatch matches the direct-call path.
         // indexOf/lastIndexOf take searchElement + optional fromIndex.
         EmitSearchCase("indexOf", runtime.ArrayIndexOf);
         EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf);

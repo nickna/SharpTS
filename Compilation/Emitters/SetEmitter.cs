@@ -24,18 +24,18 @@ public sealed class SetEmitter : ITypeEmitterStrategy
         switch (methodName)
         {
             case "add":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetAdd);
                 return true;
 
             case "has":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetHas);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetDelete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
@@ -58,46 +58,46 @@ public sealed class SetEmitter : ITypeEmitterStrategy
                 return true;
 
             case "forEach":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;
 
             // ES2025 Set Operations
             case "union":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetUnion);
                 return true;
 
             case "intersection":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetIntersection);
                 return true;
 
             case "difference":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetDifference);
                 return true;
 
             case "symmetricDifference":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetSymmetricDifference);
                 return true;
 
             case "isSubsetOf":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetIsSubsetOf);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "isSupersetOf":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetIsSupersetOf);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "isDisjointFrom":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetIsDisjointFrom);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
@@ -136,23 +136,4 @@ public sealed class SetEmitter : ITypeEmitterStrategy
         return false;
     }
 
-    #region Helper Methods
-
-    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-    }
-
-    #endregion
 }

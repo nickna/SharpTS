@@ -443,64 +443,22 @@ public partial class ILCompiler
             // Get resolved parameter types for this inner function
             _innerFunctionParamTypes.TryGetValue(func, out var innerParamTypes);
 
-            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
+            var ctx = CreateModuleMemberContext(il);
+            ApplyCapturedTopLevelVariableAccess(ctx);
+            ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+            ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null;
+            ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null;
+            ApplyInnerFunctionSupport(ctx);
+            ctx.CurrentMethodReturnType = _types.Object;
+            // Enable self-reference: the function can call itself by name
+            ctx.InnerFunctionMethodsByName = new Dictionary<string, MethodBuilder>
             {
-                ClosureAnalyzer = _closures.Analyzer,
-                ArrowMethods = _closures.ArrowMethods,
-                ConstArrowBindings = _closures.ConstArrowBindings,
-                DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-                ObjectShapes = _closures.ObjectShapes,
-                DisplayClasses = _closures.DisplayClasses,
-                DisplayClassFields = _closures.DisplayClassFields,
-                DisplayClassConstructors = _closures.DisplayClassConstructors,
-                FunctionRestParams = _functions.RestParams,
-                FunctionsCapturingArguments = _functions.CapturingArguments,
-                EnumMembers = _enums.Members,
-                EnumReverse = _enums.Reverse,
-                EnumKinds = _enums.Kinds,
-                Runtime = _runtime,
-                FunctionGenericParams = _functions.GenericParams,
-                IsGenericFunction = _functions.IsGeneric,
-                TypeMap = _typeMap,
-                DeadCode = _deadCodeInfo,
-                TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-                CurrentModulePath = _modules.CurrentPath,
-                CurrentNamespacePath = _currentNamespacePath,
-                ClassToModule = _modules.ClassToModule,
-                FunctionToModule = _modules.FunctionToModule,
-                EnumToModule = _modules.EnumToModule,
-                DotNetNamespace = _modules.CurrentDotNetNamespace,
-                TypeEmitterRegistry = _typeEmitterRegistry,
-                BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-                BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-                ImportedNames = _importedNames,
-                ClassExprBuilders = _classExprs.Builders,
-                IsStrictMode = _isStrictMode,
-                ClassRegistry = GetClassRegistry(),
-                EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-                CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-                ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-                EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-                ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-                ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null,
-            ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null,
-                InnerFunctionMethods = _innerFunctionMethods,
-                InnerFunctionDisplayClasses = _innerFunctionDisplayClasses,
-                InnerFunctionDCFields = _innerFunctionDCFields,
-                InnerFunctionDCCtors = _innerFunctionDCCtors,
-                InnerFunctionEntryPointDCFields = _innerFunctionEntryPointDCFields,
-                InnerFunctionFunctionDCFields = _innerFunctionFunctionDCFields,
-                CurrentMethodReturnType = _types.Object,
-                // Enable self-reference: the function can call itself by name
-                InnerFunctionMethodsByName = new Dictionary<string, MethodBuilder>
-                {
-                    [func.Name.Lexeme] = method
-                },
-                InnerFunctionDisplayClassesByName = hasDisplayClass
-                    ? new Dictionary<string, TypeBuilder> { [func.Name.Lexeme] = displayClass! }
-                    : []
+                [func.Name.Lexeme] = method
             };
+            ctx.InnerFunctionDisplayClassesByName = hasDisplayClass
+                ? new Dictionary<string, TypeBuilder> { [func.Name.Lexeme] = displayClass! }
+                : [];
 
             if (hasDisplayClass)
             {

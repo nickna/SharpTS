@@ -50,8 +50,8 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             case "nextTick": return EmitNextTick(emitter, arguments);
 
             case "kill":
-                EmitBoxedArgument(emitter, arguments, 0);
-                EmitBoxedArgument(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessKill);
                 return true;
 
@@ -62,12 +62,12 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 return true;
 
             case "umask":
-                EmitBoxedArgument(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUmask);
                 return true;
 
             case "cpuUsage":
-                EmitBoxedArgument(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessCpuUsage);
                 return true;
 
@@ -89,17 +89,17 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 return true;
 
             case "emitWarning":
-                EmitBoxedArgument(emitter, arguments, 0);
-                EmitBoxedArgument(emitter, arguments, 1);
-                EmitBoxedArgument(emitter, arguments, 2);
-                EmitBoxedArgument(emitter, arguments, 3);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 2);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessEmitWarning);
                 return true;
 
             case "setSourceMapsEnabled":
                 il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
                 il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
-                EmitBoxedArgument(emitter, arguments, 0);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
                 il.Emit(OpCodes.Ldnull);
                 return true;
@@ -235,23 +235,6 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
             default:
                 return false;
-        }
-    }
-
-    /// <summary>
-    /// Emits arguments[index] boxed, or null when absent — the object-arg
-    /// convention of the $Runtime process helpers.
-    /// </summary>
-    private static void EmitBoxedArgument(IEmitterContext emitter, List<Expr> arguments, int index)
-    {
-        if (index < arguments.Count)
-        {
-            emitter.EmitExpression(arguments[index]);
-            emitter.EmitBoxIfNeeded(arguments[index]);
-        }
-        else
-        {
-            emitter.Context.IL.Emit(OpCodes.Ldnull);
         }
     }
 

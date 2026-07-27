@@ -717,73 +717,23 @@ public partial class ILCompiler
         // "Yield not supported" (the public static async-generator gap, #761), not invalid IL.
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = isStatic ? null : fieldsField,
-            IsInstanceMethod = !isStatic,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode,
-            // ES2022 Private Class Elements support
-            CurrentClassName = qualifiedClassName,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level variable access
-            TopLevelStaticVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // Arrow-closure DC field maps — required so arrow closures created inside
-            // this method populate their captured-DC fields at newobj time.
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
-            ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null,
-            ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null,
-            // CJS resolution — needed so `exports`, `module.exports`, and `require(...)`
-            // work inside class method bodies nested in a CJS module.
-            ModuleResolver = _modules.Resolver,
-            ModuleExportFields = _modules.ExportFields,
-            ModuleInitMethods = _modules.InitMethods,
-            ModuleImportFields = _modules.ImportFields,
-            ModuleTypes = _modules.Types,
-            CommonJsExportFields = _modules.CommonJsExportFields,
-            CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods,
-            CurrentCjsExportsField = _modules.CurrentPath != null
-                && _modules.CommonJsExportFields.TryGetValue(_modules.CurrentPath, out var cjsExportsStatic)
-                ? cjsExportsStatic
-                : null,
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = isStatic ? null : fieldsField;
+        ctx.IsInstanceMethod = !isStatic;
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        // ES2022 Private Class Elements support
+        ctx.CurrentClassName = qualifiedClassName;
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        // Arrow-closure DC field maps — required so arrow closures created inside
+        // this method populate their captured-DC fields at newobj time.
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
+        ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0 ? _closures.ArrowScopeDCFields : null;
+        ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0 ? _arrowScopeDCExtraFields : null;
+        // CJS resolution — needed so `exports`, `module.exports`, and `require(...)`
+        // work inside class method bodies nested in a CJS module.
+        ApplyCommonJsModuleAccess(ctx);
 
         // Define parameters with typed parameter types from method signature
         var methodParams = methodBuilder.GetParameters();
@@ -1014,84 +964,29 @@ public partial class ILCompiler
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            FieldsField = fieldsField,
-            IsInstanceMethod = true,
-            ClosureAnalyzer = _closures.Analyzer,
-            ArrowMethods = _closures.ArrowMethods,
-            ConstArrowBindings = _closures.ConstArrowBindings,
-            DirectCallArrowBindings = _closures.DirectCallArrowBindings,
-            ObjectShapes = _closures.ObjectShapes,
-            DisplayClasses = _closures.DisplayClasses,
-            DisplayClassFields = _closures.DisplayClassFields,
-            DisplayClassConstructors = _closures.DisplayClassConstructors,
-            FunctionRestParams = _functions.RestParams,
-            FunctionsCapturingArguments = _functions.CapturingArguments,
-            EnumMembers = _enums.Members,
-            EnumReverse = _enums.Reverse,
-            EnumKinds = _enums.Kinds,
-            Runtime = _runtime,
-            FunctionGenericParams = _functions.GenericParams,
-            IsGenericFunction = _functions.IsGeneric,
-            TypeMap = _typeMap,
-            DeadCode = _deadCodeInfo,
-            AsyncMethods = null,
-            // Async arrow support (for async arrows inside non-async methods)
-            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
-            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
-            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
-            // Module support for multi-module compilation
-            CurrentModulePath = _modules.CurrentPath,
-            CurrentNamespacePath = _currentNamespacePath,
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            DotNetNamespace = _modules.CurrentDotNetNamespace,
-            // @lock decorator support
-            SyncLockFields = _locks.SyncLockFields,
-            AsyncLockFields = _locks.AsyncLockFields,
-            LockReentrancyFields = _locks.ReentrancyFields,
-            StaticSyncLockFields = _locks.StaticSyncLockFields,
-            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
-            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
-            TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
-            ImportedNames = _importedNames,
-            ClassExprBuilders = _classExprs.Builders,
-            // Check for method-level "use strict" directive
-            IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body),
-            // ES2022 Private Class Elements support
-            CurrentClassName = typeBuilder.Name,
-            CurrentClassBuilder = typeBuilder,
-            EmittingTypeBuilder = typeBuilder,
-            // Registry services
-            ClassRegistry = GetClassRegistry(),
-            // Module-level variable access. For class method bodies we augment
-            // TopLevelStaticVars with this module's ESM export fields so bare
-            // identifiers like `braceExpand` inside a class method resolve to
-            // the module-level `export const braceExpand = ...`. Scoped to the
-            // class-method context to avoid perturbing imports/module-init paths.
-            TopLevelStaticVars = BuildClassMethodTopLevelStaticVarsForModule(_modules.CurrentPath),
-            CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath),
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
-            // CJS resolution — needed so `exports`, `module.exports`, and `require(...)`
-            // work inside class method bodies nested in a CJS module.
-            ModuleResolver = _modules.Resolver,
-            ModuleExportFields = _modules.ExportFields,
-            ModuleInitMethods = _modules.InitMethods,
-            ModuleImportFields = _modules.ImportFields,
-            ModuleTypes = _modules.Types,
-            CommonJsExportFields = _modules.CommonJsExportFields,
-            CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods,
-            CurrentCjsExportsField = _modules.CurrentPath != null
-                && _modules.CommonJsExportFields.TryGetValue(_modules.CurrentPath, out var cjsExportsInst)
-                ? cjsExportsInst
-                : null,
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ctx.FieldsField = fieldsField;
+        ctx.IsInstanceMethod = true;
+        // Async arrow support (for async arrows inside non-async methods)
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
+        ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
+        ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
+        ApplyLockDecoratorFields(ctx);
+        // Check for method-level "use strict" directive
+        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body);
+        // ES2022 Private Class Elements support
+        ctx.CurrentClassName = typeBuilder.Name;
+        ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        // Module-level variable access. For class method bodies we augment
+        // TopLevelStaticVars with this module's ESM export fields so bare
+        // identifiers like `braceExpand` inside a class method resolve to
+        // the module-level `export const braceExpand = ...`. Scoped to the
+        // class-method context to avoid perturbing imports/module-init paths.
+        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
+        // CJS resolution — needed so `exports`, `module.exports`, and `require(...)`
+        // work inside class method bodies nested in a CJS module.
+        ApplyCommonJsModuleAccess(ctx);
         // Add class generic type parameters to context
         if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
         {

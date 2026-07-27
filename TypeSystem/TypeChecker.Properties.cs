@@ -816,38 +816,19 @@ public partial class TypeChecker
         // Handle TypeParameter recursively - delegate to constraint
         if (objType is TypeInfo.TypeParameter tp)
         {
-            if (tp.Constraint != null)
-            {
-                return CheckGetOnType(tp.Constraint, memberName);
-            }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.", tsCode: "TS2339");
+            return CheckGetOnTypeParameter(tp, memberName);
         }
 
         // Handle Interface - check own and inherited members
         if (objType is TypeInfo.Interface itf)
         {
-            foreach (var member in itf.GetAllMembers())
-            {
-                if (member.Key == memberName.Lexeme)
-                {
-                    return member.Value;
-                }
-            }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", line: memberName.Line, tsCode: "TS2339");
+            return CheckGetOnInterface(itf, memberName);
         }
 
         // Handle Record type - check fields and index signatures
         if (objType is TypeInfo.Record record)
         {
-            if (record.Fields.TryGetValue(memberName.Lexeme, out var fieldType))
-            {
-                return fieldType;
-            }
-            if (record.StringIndexType != null)
-            {
-                return record.StringIndexType;
-            }
-            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{record}'.", tsCode: "TS2339");
+            return CheckGetOnRecord(record, memberName);
         }
 
         // Handle built-in types via category-based dispatch
@@ -868,73 +849,13 @@ public partial class TypeChecker
         // Handle Class type - check static members
         if (objType is TypeInfo.Class classType)
         {
-            TypeInfo? current = classType;
-            while (current != null)
-            {
-                var staticMethods = GetStaticMethods(current);
-                var staticProps = GetStaticProperties(current);
-                if (staticMethods != null && staticMethods.TryGetValue(memberName.Lexeme, out var staticMethodType))
-                {
-                    EnforceStaticMemberAccess(current, memberName);
-                    return staticMethodType;
-                }
-                if (staticProps != null && staticProps.TryGetValue(memberName.Lexeme, out var staticPropType))
-                {
-                    EnforceStaticMemberAccess(current, memberName);
-                    return staticPropType;
-                }
-                current = GetSuperclass(current);
-            }
-            return TypeInfo.Any.Shared;
+            return CheckGetOnClass(classType, memberName);
         }
 
         // Handle Instance type - check instance members
         if (objType is TypeInfo.Instance instance)
         {
-            if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
-                ig.GenericDefinition is TypeInfo.GenericClass gc)
-            {
-                Dictionary<string, TypeInfo> subs = [];
-                for (int i = 0; i < gc.TypeParams.Count; i++)
-                    subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                if (gc.Getters?.TryGetValue(memberName.Lexeme, out var getterType) == true)
-                    return Substitute(getterType, subs);
-                if (gc.FieldTypes?.TryGetValue(memberName.Lexeme, out var fieldType) == true)
-                    return Substitute(fieldType, subs);
-                if (gc.Methods.TryGetValue(memberName.Lexeme, out var methodType))
-                {
-                    if (methodType is TypeInfo.Function funcType)
-                    {
-                        var substitutedParams = funcType.ParamTypes.Select(pt => Substitute(pt, subs)).ToList();
-                        var substitutedReturn = Substitute(funcType.ReturnType, subs);
-                        return new TypeInfo.Function(substitutedParams, substitutedReturn, funcType.RequiredParams, funcType.HasRestParam);
-                    }
-                    return methodType;
-                }
-            }
-
-            // ResolvedClassType unwraps MutableClass to its frozen Class when signature
-            // collection created the Instance before the class was frozen (common for
-            // @DotNetType shims referenced from their own method return types).
-            if (instance.ResolvedClassType is TypeInfo.Class instanceClassType)
-            {
-                TypeInfo? current = instanceClassType;
-                while (current != null)
-                {
-                    var getters = GetGetters(current);
-                    if (getters != null && getters.TryGetValue(memberName.Lexeme, out var getterType))
-                        return getterType;
-                    var methods = GetMethods(current);
-                    if (methods != null && methods.TryGetValue(memberName.Lexeme, out var methodType))
-                        return methodType;
-                    var fieldTypes = GetFieldTypes(current);
-                    if (fieldTypes != null && fieldTypes.TryGetValue(memberName.Lexeme, out var fieldType))
-                        return fieldType;
-                    current = GetSuperclass(current);
-                }
-            }
-            return TypeInfo.Any.Shared;
+            return CheckGetOnInstance(instance, memberName);
         }
 
         // Handle Union type - check if all members have the property

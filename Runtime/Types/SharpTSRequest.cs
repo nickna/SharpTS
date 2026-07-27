@@ -113,7 +113,7 @@ public class SharpTSRequest : ITypeCategorized
         var text = ReadBodyAsString();
         try
         {
-            return ParseJson(text);
+            return RuntimeJson.Parse(text);
         }
         catch (JsonException ex)
         {
@@ -162,31 +162,6 @@ public class SharpTSRequest : ITypeCategorized
             throw new Exception("Runtime Error: cannot clone Request after body has been consumed");
 
         return new SharpTSRequest(_url, _method, _headers, _body, _credentials, _bodyBytes);
-    }
-
-    private static object? ParseJson(string text)
-    {
-        using var doc = JsonDocument.Parse(text);
-        return ConvertJsonElement(doc.RootElement);
-    }
-
-    private static object? ConvertJsonElement(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Number => element.GetDouble(),
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Array => new SharpTSArray(
-                element.EnumerateArray().Select(ConvertJsonElement).ToList()),
-            JsonValueKind.Object => new SharpTSObject(
-                element.EnumerateObject().ToDictionary(
-                    p => p.Name,
-                    p => ConvertJsonElement(p.Value))),
-            _ => null
-        };
     }
 
     public override string ToString() => $"Request {{ method: {Method}, url: {Url} }}";

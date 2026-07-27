@@ -24,18 +24,18 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
         switch (methodName)
         {
             case "add":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetAdd);
                 return true;
 
             case "has":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetHas);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
 
             case "delete":
-                EmitSingleArgOrNull(emitter, arguments);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
                 il.Emit(OpCodes.Call, ctx.Runtime!.WeakSetDelete);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
@@ -64,23 +64,4 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
         return false;
     }
 
-    #region Helper Methods
-
-    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-    }
-
-    #endregion
 }

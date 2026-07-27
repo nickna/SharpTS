@@ -330,14 +330,7 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext GetDefinitionContext()
     {
-        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClassToModule = _modules.ClassToModule,
-            FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule,
-            IsStrictMode = _isStrictMode
-            // Note: ClassRegistry intentionally not set here - definition context uses raw dictionaries
-        };
+        _definitionContext ??= CreateDefinitionPhaseContext();
         _definitionContext.CurrentModulePath = _modules.CurrentPath;
         // Keep the definition context's namespace in sync so GetQualifiedFunctionName produces
         // namespace-qualified keys while a namespace's members are being defined/collected (#657).

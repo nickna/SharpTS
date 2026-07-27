@@ -92,8 +92,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     // The stub method that returns Task<object>
     public MethodBuilder StubMethod { get; private set; } = null!;
 
-    // Builder type. AwaiterType lives in AsyncBuilderBase (#1125).
-    public Type BuilderType { get; private set; } = null!;
+    // BuilderType and AwaiterType live in AsyncBuilderBase (#1125).
 
     public AsyncArrowStateMachineBuilder(
         ModuleBuilder moduleBuilder,
@@ -563,51 +562,20 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         return CapturedFieldMap.ContainsKey(name) || (name == "this" && Captures.Contains("this"));
     }
 
-    /// <summary>
-    /// Finalizes the type after MoveNext body has been emitted.
-    /// </summary>
-    public override Type CreateType()
-    {
-        ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
-        ILLabelValidator.SweepConstructors(new[] { _stateMachineType });
-        return _stateMachineType.CreateType()!;
-    }
+    // CreateType and the common builder accessors (Create/Task/Start/SetException/
+    // AwaitUnsafeOnCompleted) live in AsyncBuilderBase; only SetResult differs per builder.
 
     #region Helper Methods for IL Emission
 
-    public MethodInfo GetBuilderCreateMethod()
-    {
-        return BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
-    }
-
-    public MethodInfo GetBuilderTaskGetter()
-    {
-        return BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
-    }
-
-    public MethodInfo GetBuilderStartMethod()
-    {
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-        var startMethod = methods.First(m => m.Name == "Start" && m.IsGenericMethod);
-        return startMethod.MakeGenericMethod(_stateMachineType);
-    }
-
+    /// <summary>
+    /// Gets the SetResult method for the specific builder type. Specialized here (not in
+    /// AsyncBuilderBase): the arrow builder is always the generic AsyncTaskMethodBuilder&lt;object&gt;,
+    /// whose SetResult takes the result value.
+    /// </summary>
     public MethodInfo GetBuilderSetResultMethod()
     {
         var innerType = BuilderType.GetGenericArguments()[0];
         return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, [innerType], null)!;
-    }
-
-    public MethodInfo GetBuilderSetExceptionMethod()
-    {
-        return BuilderType.GetMethod("SetException", BindingFlags.Public | BindingFlags.Instance)!;
-    }
-
-    public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethod()
-    {
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
-        var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
-        return awaitMethod.MakeGenericMethod(AwaiterType, _stateMachineType);
     }
 
     // GetAwaiterIsCompletedGetter / GetAwaiterGetResultMethod / GetTaskGetAwaiterMethod moved to the

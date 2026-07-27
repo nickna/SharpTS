@@ -22,8 +22,7 @@ public static class IpcSerializer
     public static object? Deserialize(string json)
     {
         if (string.IsNullOrEmpty(json)) return null;
-        var doc = JsonDocument.Parse(json);
-        return FromJsonElement(doc.RootElement);
+        return RuntimeJson.Parse(json);
     }
 
     private static object? ToJsonElement(object? value)
@@ -42,19 +41,4 @@ public static class IpcSerializer
         };
     }
 
-    private static object? FromJsonElement(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Number => element.GetDouble(),
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Array => new SharpTSArray(element.EnumerateArray().Select(FromJsonElement).ToList()),
-            JsonValueKind.Object => new SharpTSObject(
-                element.EnumerateObject().ToDictionary(p => p.Name, p => FromJsonElement(p.Value))),
-            _ => null
-        };
-    }
 }
