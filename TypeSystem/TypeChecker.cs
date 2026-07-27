@@ -86,6 +86,10 @@ public partial class TypeChecker
     /// compatibility-cache guard.
     /// </summary>
     private readonly bool _noImplicitAny;
+    private readonly bool _noImplicitThis;
+    private readonly bool _strictPropertyInitialization;
+    private readonly bool _exactOptionalPropertyTypes;
+    private readonly bool _noUncheckedIndexedAccess;
 
     /// <summary>
     /// Non-zero while comparing members declared with method syntax — within such a comparison,
@@ -185,6 +189,10 @@ public partial class TypeChecker
         _strictNullChecks = Options.StrictNullChecks;
         _strictFunctionTypes = Options.StrictFunctionTypes;
         _noImplicitAny = Options.NoImplicitAny;
+        _noImplicitThis = Options.NoImplicitThis;
+        _strictPropertyInitialization = Options.StrictPropertyInitialization;
+        _exactOptionalPropertyTypes = Options.ExactOptionalPropertyTypes;
+        _noUncheckedIndexedAccess = Options.NoUncheckedIndexedAccess;
         _diagnostics.MaxErrors = Options.MaxErrors;
     }
 
@@ -678,7 +686,10 @@ public partial class TypeChecker
     /// <summary>
     /// Maximum depth for recursive type alias expansion.
     /// </summary>
-    private const int MaxTypeAliasExpansionDepth = 100;
+    // Type-node expansion carries substantially larger CLR frames than the
+    // old string parser. Twenty-four nested instantiations are ample for real
+    // declarations and leave enough stack to report TS2589 recoverably.
+    private const int MaxTypeAliasExpansionDepth = 24;
 
     /// <summary>
     /// Tracks type aliases currently being expanded to detect circular references.
@@ -1179,12 +1190,14 @@ public partial class TypeChecker
             members[member.Name.Lexeme] = value++;
         }
 
-        _environment.Define(enumStmt.Name.Lexeme, new TypeInfo.Enum(
+        var enumType = new TypeInfo.Enum(
             enumStmt.Name.Lexeme,
             members.ToFrozenDictionary(),
             EnumKind.Numeric,
             enumStmt.IsConst
-        ));
+        );
+        _environment.Define(enumStmt.Name.Lexeme, enumType);
+        _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
 
     /// <summary>
@@ -1218,10 +1231,13 @@ public partial class TypeChecker
         // Create a shared script environment for script files (they share global scope)
         var scriptEnv = new TypeEnvironment(_environment);
 
-        // First pass: collect all exports from each module. This preparatory pass type-checks
-        // bodies too (suppressed), so it runs in its own declared-type frame: its records are
-        // discarded rather than leaking into the base frame the authoritative second pass — which
-        // re-checks and re-records everything — reads through (#1218).
+        // First pass: collect all exports from each module. Declaration files are trusted
+        // compiler inputs: this pass consumes every surface SharpTS understands, then marks
+        // them complete so checker-parity gaps inside third-party @types packages are not
+        // reported as errors in the user's program. For source modules this preparatory pass
+        // type-checks bodies too (suppressed), so it runs in its own declared-type frame: its
+        // records are discarded rather than leaking into the base frame the authoritative
+        // second pass — which re-checks and re-records everything — reads through (#1218).
         PushDeclaredVariableScope();
         try
         {
@@ -1233,20 +1249,48 @@ public partial class TypeChecker
                 // module declarations like events.ts) render as bare
                 // "at line N" with no file context (#216).
                 _filePath = module.Path;
-                if (module.IsScript)
+                if (module.IsDefaultLibrary)
+                {
+                    CollectDefaultLibraryDeclarations(module, scriptEnv);
+                    module.IsTypeChecked = true;
+                }
+                else if (module.IsScript)
                 {
                     // Scripts use shared environment and don't export
                     CollectScriptDeclarations(module, scriptEnv);
+                    if (module.IsDeclarationFile)
+                        module.IsTypeChecked = true;
                 }
                 else
                 {
                     CollectModuleExports(module);
+                    if (module.IsDeclarationFile)
+                        module.IsTypeChecked = true;
                 }
             }
         }
         finally
         {
             PopDeclaredVariableScope();
+        }
+
+        // External declaration modules (notably @types packages) commonly use
+        // `declare global { ... }`. Their bodies are collected during the export
+        // pass, then merged before any user module is checked.
+        using (new EnvironmentScope(this, scriptEnv))
+        {
+            foreach (var module in modules)
+            {
+                foreach (var augmentation in module.GlobalAugmentations)
+                {
+                    try { CheckAndMergeGlobalMember(augmentation); }
+                    catch (TypeCheckException ex)
+                    {
+                        if (!module.IsDeclarationFile)
+                            RecordTypeError(ex);
+                    }
+                }
+            }
         }
 
         // Second pass: type-check each module with imports resolved
@@ -1302,7 +1346,9 @@ public partial class TypeChecker
             else
             {
                 // Module files get isolated scope
-                var moduleEnv = new TypeEnvironment(_environment);
+                // Global script declarations (including lib.*.d.ts and global
+                // augmentations) are visible inside external modules too.
+                var moduleEnv = new TypeEnvironment(scriptEnv);
 
                 // CJS modules have module, exports, and global in scope
                 if (module.IsCommonJs)
@@ -1313,7 +1359,7 @@ public partial class TypeChecker
                 }
 
                 // Bind imports from dependencies
-                BindModuleImports(module, moduleEnv);
+                BindModuleImports(module, moduleEnv, reportErrors: true);
 
                 // Per-module declared-type frame: the module's top-level bindings (and class-method
                 // locals, which record into the innermost frame) are tracked like function locals
@@ -1373,6 +1419,53 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Binds a compiler-supplied lib.*.d.ts into the shared global environment.
+    /// The pinned files are trusted inputs: unsupported declaration constructs
+    /// are skipped locally rather than surfaced as errors in every user program.
+    /// Successfully understood declarations still retain their full types.
+    /// </summary>
+    private void CollectDefaultLibraryDeclarations(ParsedModule library, TypeEnvironment scriptEnv)
+    {
+        using (new EnvironmentScope(this, scriptEnv))
+        {
+            try { PreRegisterTypeDeclarations(library.Statements); }
+            catch { /* keep binding the remaining declarations below */ }
+            try { HoistClassDeclarations(library.Statements); }
+            catch { }
+            try { HoistFunctionDeclarations(library.Statements); }
+            catch { }
+            try { HoistVarDeclarations(library.Statements); }
+            catch { }
+            try { HoistLexicalDeclarations(library.Statements); }
+            catch { }
+
+            _suppressDiagnostics++;
+            bool previousRecoveryMode = _recoveryMode;
+            _recoveryMode = true;
+            try
+            {
+                foreach (var statement in library.Statements)
+                {
+                    try
+                    {
+                        CheckStmt(statement);
+                    }
+                    catch (Exception)
+                    {
+                        // A single declaration must not prevent later globals in
+                        // the same standard library from being available.
+                    }
+                }
+            }
+            finally
+            {
+                _recoveryMode = previousRecoveryMode;
+                _suppressDiagnostics--;
+            }
+        }
+    }
+
+    /// <summary>
     /// Collects declarations from a script file into the shared script environment.
     /// Scripts share global scope, so all declarations are visible to other scripts.
     /// </summary>
@@ -1392,27 +1485,40 @@ public partial class TypeChecker
             // Hoist let/const declarations (pre-define as any for forward reference support — #533)
             HoistLexicalDeclarations(script.Statements);
 
-            // Process all declarations to populate the environment
-            foreach (var stmt in script.Statements)
+            // Process declarations to populate the shared environment. This is
+            // only a preparatory pass; diagnostics and bodies are handled by the
+            // authoritative recovery-enabled second pass below.
+            _suppressDiagnostics++;
+            try
             {
-                // For scripts, just check the statements to register types
-                // Skip actual runtime statements during collection phase
-                switch (stmt)
+                foreach (var stmt in script.Statements)
                 {
-                    case Stmt.Function func when func.Body != null:
-                    case Stmt.Class:
-                    case Stmt.Interface:
-                    case Stmt.TypeAlias:
-                    case Stmt.Enum:
-                    case Stmt.Namespace:
-                        CheckStmt(stmt);
-                        break;
-                    case Stmt.Var:
-                    case Stmt.Const:
-                        // Register variable types
-                        CheckStmt(stmt);
-                        break;
+                    try
+                    {
+                        switch (stmt)
+                        {
+                            case Stmt.Function:
+                            case Stmt.Class:
+                            case Stmt.Interface:
+                            case Stmt.TypeAlias:
+                            case Stmt.Enum:
+                            case Stmt.Namespace:
+                            case Stmt.Var:
+                            case Stmt.Const:
+                                CheckStmt(stmt);
+                                break;
+                        }
+                    }
+                    catch (TypeCheckException)
+                    {
+                        // A bad declaration must not prevent later globals from
+                        // being collected; it is reported in the second pass.
+                    }
                 }
+            }
+            finally
+            {
+                _suppressDiagnostics--;
             }
         }
     }
@@ -1474,7 +1580,11 @@ public partial class TypeChecker
                         // For exports, process the underlying declaration
                         if (stmt is Stmt.Export export)
                         {
-                            if (export.ExportAssignment != null)
+                            if (export.GlobalNamespaceName != null)
+                            {
+                                // Applied after all exports have been collected.
+                            }
+                            else if (export.ExportAssignment != null)
                             {
                                 // CommonJS-style export = value
                                 var type = CheckExpr(export.ExportAssignment);
@@ -1536,7 +1646,8 @@ public partial class TypeChecker
                 {
                     foreach (var spec in export.NamedExports)
                     {
-                        var type = _environment.Get(spec.LocalName.Lexeme);
+                        var type = _environment.Get(spec.LocalName.Lexeme)
+                            ?? _environment.GetTypeBinding(spec.LocalName.Lexeme);
                         if (type != null)
                         {
                             string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
@@ -1547,12 +1658,36 @@ public partial class TypeChecker
                 else if (export.FromModulePath != null)
                 {
                     // Re-export - resolve from the source module
-                    string sourcePath = _moduleResolver!.ResolveModulePath(export.FromModulePath, module.Path);
+                    string sourcePath;
+                    try
+                    {
+                        sourcePath = _moduleResolver!.ResolveModulePath(
+                            export.FromModulePath, module.Path);
+                    }
+                    catch
+                    {
+                        // The authoritative statement pass reports TS2307.
+                        continue;
+                    }
                     var sourceModule = _moduleResolver.GetCachedModule(sourcePath);
 
                     if (sourceModule != null)
                     {
-                        if (export.NamedExports != null)
+                        if (export.NamespaceExportName != null)
+                        {
+                            var namespaceType = CreateModuleNamespaceType(
+                                export.NamespaceExportName.Lexeme, sourceModule);
+                            if (export.NamespaceExportName.Type == TokenType.DEFAULT
+                                || export.NamespaceExportName.Lexeme == "default")
+                            {
+                                module.DefaultExportType = namespaceType;
+                            }
+                            else
+                            {
+                                module.ExportedTypes[export.NamespaceExportName.Lexeme] = namespaceType;
+                            }
+                        }
+                        else if (export.NamedExports != null)
                         {
                             // Re-export specific names. For CJS sources we don't know at type-check
                             // time which names the module's runtime body will define on `exports`
@@ -1584,84 +1719,136 @@ public partial class TypeChecker
                 }
             }
         }
+
+        // UMD declarations commonly pair `export = value` with
+        // `export as namespace GlobalName`. Prefer the assignment type; for an
+        // ESM-shaped declaration expose the complete module namespace.
+        foreach (var globalExport in module.Statements
+                     .OfType<Stmt.Export>()
+                     .Where(export => export.GlobalNamespaceName != null))
+        {
+            string globalName = globalExport.GlobalNamespaceName!.Lexeme;
+            TypeInfo globalType = module.ExportAssignmentType
+                ?? CreateModuleNamespaceType(globalName, module);
+            if (globalType is TypeInfo.Namespace globalNamespace)
+                moduleEnv.Enclosing?.DefineNamespace(globalName, globalNamespace with { Name = globalName });
+            else
+                moduleEnv.Enclosing?.DefineImportAlias(globalName, globalType, isValue: true);
         }
+        }
+    }
+
+    private static TypeInfo.Namespace CreateModuleNamespaceType(
+        string name, ParsedModule module)
+    {
+        var members = module.ExportedTypes.ToFrozenDictionary();
+        return new TypeInfo.Namespace(name, members, members);
     }
 
     /// <summary>
     /// Binds imported symbols from dependencies into the module's environment.
     /// </summary>
-    private void BindModuleImports(ParsedModule module, TypeEnvironment env)
+    private void BindModuleImports(
+        ParsedModule module, TypeEnvironment env, bool reportErrors = false)
     {
         foreach (var stmt in module.Statements)
         {
             if (stmt is Stmt.Import import)
             {
-                string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
-                var importedModule = _moduleResolver.GetCachedModule(importedPath);
-
-                if (importedModule == null)
+                try
                 {
-                    throw new TypeCheckException($"Cannot find module '{import.ModulePath}'", import.Keyword.Line, tsCode: "TS2307");
-                }
+                    string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
+                    var importedModule = _moduleResolver.GetCachedModule(importedPath);
 
-                // CommonJS modules carry no static type info — treat all imports as `any`.
-                // The actual values come from `module.exports` at runtime via the CJS interop path.
-                bool isCjsImport = importedModule.IsCommonJs;
-
-                // Default import
-                if (import.DefaultImport != null)
-                {
-                    if (isCjsImport)
+                    if (importedModule == null)
                     {
-                        env.Define(import.DefaultImport.Lexeme, TypeInfo.Any.Shared);
+                        throw new TypeCheckException($"Cannot find module '{import.ModulePath}'", import.Keyword.Line, tsCode: "TS2307");
                     }
-                    else
-                    {
-                        if (importedModule.DefaultExportType == null)
-                        {
-                            throw new TypeCheckException($"Module '{import.ModulePath}' has no default export", import.Keyword.Line, tsCode: "TS1192");
-                        }
-                        env.Define(import.DefaultImport.Lexeme, importedModule.DefaultExportType);
-                    }
-                }
 
-                // Namespace import: import * as Module from './file'
-                if (import.NamespaceImport != null)
-                {
-                    if (isCjsImport)
-                    {
-                        env.Define(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared);
-                    }
-                    else
-                    {
-                        // Create a record type with all exports
-                        var namespaceType = new TypeInfo.Record(
-                            importedModule.ExportedTypes.ToFrozenDictionary()
-                        );
-                        env.Define(import.NamespaceImport.Lexeme, namespaceType);
-                    }
-                }
+                    // CommonJS modules carry no static type info — treat all imports as `any`.
+                    // The actual values come from `module.exports` at runtime via the CJS interop path.
+                    bool isCjsImport = importedModule.IsCommonJs;
 
-                // Named imports: import { x, y as z } from './file'
-                if (import.NamedImports != null)
-                {
-                    foreach (var spec in import.NamedImports)
+                    // Default import
+                    if (import.DefaultImport != null)
                     {
-                        string importedName = spec.Imported.Lexeme;
-                        string localName = spec.LocalName?.Lexeme ?? importedName;
-
                         if (isCjsImport)
                         {
-                            env.Define(localName, TypeInfo.Any.Shared);
-                            continue;
+                            env.Define(import.DefaultImport.Lexeme, TypeInfo.Any.Shared);
                         }
-
-                        if (!importedModule.ExportedTypes.TryGetValue(importedName, out var type))
+                        else
                         {
-                            throw new TypeCheckException($"Module '{import.ModulePath}' has no export named '{importedName}'", import.Keyword.Line, tsCode: "TS2305");
+                            if (importedModule.DefaultExportType == null)
+                            {
+                                throw new TypeCheckException($"Module '{import.ModulePath}' has no default export", import.Keyword.Line, tsCode: "TS1192");
+                            }
+                            if (importedModule.DefaultExportType is TypeInfo.Namespace defaultNamespace)
+                            {
+                                env.DefineNamespace(
+                                    import.DefaultImport.Lexeme,
+                                    defaultNamespace with { Name = import.DefaultImport.Lexeme });
+                            }
+                            else
+                            {
+                                env.DefineImportAlias(
+                                    import.DefaultImport.Lexeme,
+                                    importedModule.DefaultExportType,
+                                    isValue: !import.IsTypeOnly);
+                            }
                         }
+                    }
 
-                        env.Define(localName, type);
+                    // Namespace import: import * as Module from './file'
+                    if (import.NamespaceImport != null)
+                    {
+                        if (isCjsImport)
+                        {
+                            env.Define(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared);
+                        }
+                        else
+                        {
+                            var namespaceType = CreateModuleNamespaceType(
+                                import.NamespaceImport.Lexeme, importedModule);
+                            env.DefineNamespace(import.NamespaceImport.Lexeme, namespaceType);
+                        }
+                    }
+
+                    // Named imports: import { x, y as z } from './file'
+                    if (import.NamedImports != null)
+                    {
+                        foreach (var spec in import.NamedImports)
+                        {
+                            string importedName = spec.Imported.Lexeme;
+                            string localName = spec.LocalName?.Lexeme ?? importedName;
+
+                            if (isCjsImport)
+                            {
+                                env.Define(localName, TypeInfo.Any.Shared);
+                                continue;
+                            }
+
+                            if (!importedModule.ExportedTypes.TryGetValue(importedName, out var type))
+                            {
+                                throw new TypeCheckException($"Module '{import.ModulePath}' has no export named '{importedName}'", import.Keyword.Line, tsCode: "TS2305");
+                            }
+
+                            env.DefineImportAlias(
+                                localName, type,
+                                isValue: !import.IsTypeOnly && !spec.IsTypeOnly);
+                        }
+                    }
+                }
+                catch (TypeCheckException ex)
+                {
+                    if (reportErrors) RecordTypeError(ex);
+                }
+                catch (Exception)
+                {
+                    if (reportErrors)
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $"Cannot find module '{import.ModulePath}'",
+                            import.Keyword.Line, tsCode: "TS2307"));
                     }
                 }
             }
@@ -1683,6 +1870,7 @@ public partial class TypeChecker
             Stmt.Interface i => i.Name.Lexeme,
             Stmt.TypeAlias t => t.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
+            Stmt.Namespace n => n.Name.Lexeme,
             // SharpTS-only: internal invariant
             _ => throw new TypeCheckException($" Cannot get name of declaration type {decl.GetType().Name}")
         };
@@ -1696,14 +1884,17 @@ public partial class TypeChecker
         return decl switch
         {
             Stmt.Function f => _environment.Get(f.Name.Lexeme) ?? TypeInfo.Any.Shared,
-            Stmt.Class c => _environment.Get(c.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Class c => _environment.GetTypeBinding(c.Name.Lexeme) ?? TypeInfo.Any.Shared,
             Stmt.Var v => _environment.Get(v.Name.Lexeme) ?? TypeInfo.Any.Shared,
             // `export const x = …` now parses as Stmt.Const (was Stmt.Var before #428). The
             // environment holds the narrowed literal type recorded by VisitConst.
             Stmt.Const c => _environment.Get(c.Name.Lexeme) ?? TypeInfo.Any.Shared,
-            Stmt.Interface i => _environment.Get(i.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Interface i => _environment.GetTypeBinding(i.Name.Lexeme) ?? TypeInfo.Any.Shared,
             Stmt.TypeAlias t => ResolveAnnotation(t.TypeDefinition, t.TypeDefinitionNode)!,
-            Stmt.Enum e => _environment.Get(e.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Enum e => _environment.GetTypeBinding(e.Name.Lexeme) ?? TypeInfo.Any.Shared,
+            Stmt.Namespace n => _environment.GetNamespace(n.Name.Lexeme) is { } ns
+                ? ns
+                : TypeInfo.Any.Shared,
             _ => TypeInfo.Any.Shared
         };
     }

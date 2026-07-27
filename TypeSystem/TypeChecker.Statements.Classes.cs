@@ -535,6 +535,7 @@ public partial class TypeChecker
         {
             var genericClassType = mutableClass.FreezeGeneric(classTypeParams);
             _environment.Define(classStmt.Name.Lexeme, genericClassType);
+            _environment.DefineType(classStmt.Name.Lexeme, genericClassType);
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();
             _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
@@ -544,6 +545,7 @@ public partial class TypeChecker
             // Freeze the mutable class into an immutable class type
             TypeInfo.Class classType = mutableClass.Freeze();
             _environment.Define(classStmt.Name.Lexeme, classType);
+            _environment.DefineType(classStmt.Name.Lexeme, classType);
             _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
             classTypeForBody = classType;
         }
@@ -554,7 +556,7 @@ public partial class TypeChecker
             for (int i = 0; i < classStmt.Interfaces.Count; i++)
             {
                 var interfaceToken = classStmt.Interfaces[i];
-                TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
+                TypeInfo? itfTypeInfo = _environment.GetTypeBinding(interfaceToken.Lexeme);
 
                 // Get type arguments for this interface if provided
                 List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
@@ -661,7 +663,7 @@ public partial class TypeChecker
                 for (int i = 0; i < classStmt.Interfaces.Count; i++)
                 {
                     var interfaceToken = classStmt.Interfaces[i];
-                    TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
+                    TypeInfo? itfTypeInfo = _environment.GetTypeBinding(interfaceToken.Lexeme);
                     List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
                         ? classStmt.InterfaceTypeArgs[i]
                         : null;
@@ -1082,6 +1084,8 @@ public partial class TypeChecker
             _currentClass = prevClass;
         }
 
+        CheckStrictPropertyInitialization(classStmt, mutableClass);
+
         // Publish method return types inferred during the body pass. The class was frozen with
         // <inferred> placeholders before the body could be checked, so the frozen Class/GenericClass
         // that call sites read (and the TypeMap the compiler reads) still hold the placeholder for
@@ -1095,13 +1099,16 @@ public partial class TypeChecker
             mutableClass.ResetFrozenCache();
             if (classTypeParams != null && classTypeParams.Count > 0)
             {
-                _environment.Define(classStmt.Name.Lexeme, mutableClass.FreezeGeneric(classTypeParams));
+                var frozen = mutableClass.FreezeGeneric(classTypeParams);
+                _environment.Define(classStmt.Name.Lexeme, frozen);
+                _environment.DefineType(classStmt.Name.Lexeme, frozen);
                 _typeMap.SetClassType(classStmt.Name.Lexeme, mutableClass.Freeze());
             }
             else
             {
                 var refrozen = mutableClass.Freeze();
                 _environment.Define(classStmt.Name.Lexeme, refrozen);
+                _environment.DefineType(classStmt.Name.Lexeme, refrozen);
                 _typeMap.SetClassType(classStmt.Name.Lexeme, refrozen);
             }
             // Structural compatibility results cache on CacheKey() (carries the stable DeclarationId),

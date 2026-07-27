@@ -4,8 +4,8 @@ using Xunit;
 namespace SharpTS.Tests.TypeCheckerTests;
 
 /// <summary>
-/// Tests for nominal type checking (class inheritance) in TypeChecker.
-/// Classes use nominal typing (name-based), unlike interfaces which use structural typing.
+/// Tests for TypeScript class compatibility. Public class surfaces are structural;
+/// private/protected members carry declaration-origin brands.
 /// </summary>
 public class NominalTypingTests
 {
@@ -92,6 +92,21 @@ public class NominalTypingTests
 
         var result = TestHarness.RunInterpreted(source);
         Assert.Equal("Whiskers\n", result);
+    }
+
+    [Fact]
+    public void UnrelatedEmptyClasses_AreStructurallyCompatible()
+    {
+        var source = """
+            class A {}
+            class B {}
+            let a: A = new B();
+            let b: B = new A();
+            console.log("ok");
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("ok\n", result);
     }
 
     [Fact]

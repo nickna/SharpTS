@@ -156,14 +156,16 @@ The tsc-compatible strictness flags apply in every mode (run, compile, REPL), an
 `=false` negation form:
 
 ```bash
-sharpts --strict script.ts                  # strictNullChecks + strictFunctionTypes + noImplicitAny
+sharpts --strict script.ts                  # also noImplicitThis + strictPropertyInitialization
 sharpts --strictNullChecks=false script.ts  # individual flags override the umbrella
 sharpts --noImplicitAny script.ts
+sharpts --exactOptionalPropertyTypes script.ts
+sharpts --noUncheckedIndexedAccess script.ts
 sharpts --noEmit script.ts                  # type-check only; exit 1 on errors
 ```
 
 SharpTS's defaults are `strictNullChecks: true`, `strictFunctionTypes: false`,
-`noImplicitAny: false` — unchanged unless you ask.
+and the other strictness flags off — unchanged unless you ask.
 
 > `noImplicitAny` reports unannotated parameters of **declared** functions, methods and
 > constructors. Arrow and function-expression parameters are exempt: SharpTS contextually types
@@ -198,8 +200,12 @@ The project model also supports:
 - `baseUrl` and `paths`, including exact mappings, longest-prefix wildcard matching, and target
   fallbacks;
 - `moduleResolution` values `classic`, `node`/`node10`, `node16`, `nodenext`, and `bundler`;
-- `lib`, `types`, and `typeRoots`, loaded as type-only declaration inputs. Named `lib` entries
-  come from an installed `typescript` package under `node_modules/typescript/lib`.
+- `lib`, `noLib`, `types`, and `typeRoots`, loaded as type-only declaration inputs.
+
+The program resolver loads a pinned TypeScript 5.5.4 `lib.*.d.ts` graph, reachable `.d.ts`,
+`.d.mts`, and `.d.cts` modules, package `types`/`typings` and `"types"` exports, `typesVersions`,
+and visible `node_modules/@types` packages. TSX syntax is accepted and JSX intrinsic attributes
+are checked against `JSX.IntrinsicElements`; the `jsx` setting remains an emit-only no-op.
 
 **TypeScript declaration output:**
 

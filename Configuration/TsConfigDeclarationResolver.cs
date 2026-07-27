@@ -16,17 +16,20 @@ internal static class TsConfigDeclarationResolver
             : StringComparer.Ordinal;
         var result = new HashSet<string>(comparer);
 
-        if (libs is not null)
-        {
-            foreach (string lib in libs)
-                result.Add(ResolveLib(configDirectory, lib));
-        }
+        // lib.*.d.ts inputs are provided by ModuleResolver's pinned compiler
+        // library graph. Keeping them out of this physical-file list means a
+        // project does not need an npm-installed copy of TypeScript.
 
         var roots = typeRoots?.ToArray() ?? FindVisibleTypeRoots(configDirectory).ToArray();
         if (types is not null)
         {
             foreach (string type in types)
-                result.Add(ResolveTypePackage(type, roots));
+            {
+                // Configuration loading records the selection even when packages
+                // are not installed yet. Program loading produces the diagnostic.
+                try { result.Add(ResolveTypePackage(type, roots)); }
+                catch (Exception) { }
+            }
         }
         else
         {

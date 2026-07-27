@@ -34,6 +34,13 @@ public class ParsedModule
     public List<ParsedModule> Dependencies { get; } = [];
 
     /// <summary>
+    /// Executable counterparts of declaration dependencies. TypeScript resolves a package
+    /// import through its <c>types</c> entry for checking while Node resolves the same
+    /// specifier through <c>import</c>/<c>require</c> for execution.
+    /// </summary>
+    public List<ParsedModule> RuntimeDependencies { get; } = [];
+
+    /// <summary>
     /// Named exports from this module (name -> type).
     /// Populated during type checking.
     /// </summary>
@@ -90,6 +97,18 @@ public class ParsedModule
     /// Built-in modules are not loaded from files.
     /// </summary>
     public bool IsBuiltIn { get; set; }
+
+    /// <summary>True for a <c>.d.ts</c>/<c>.d.mts</c>/<c>.d.cts</c> input.</summary>
+    public bool IsDeclarationFile { get; set; }
+
+    /// <summary>
+    /// True for an embedded TypeScript <c>lib.*.d.ts</c>. These files are trusted
+    /// compiler inputs and never emitted or executed.
+    /// </summary>
+    public bool IsDefaultLibrary { get; set; }
+
+    /// <summary>Whether this file carries <c>/// &lt;reference no-default-lib="true"/&gt;</c>.</summary>
+    public bool NoDefaultLib { get; set; }
 
     /// <summary>
     /// For <c>dotnet:</c>-scheme modules only: exported names mapped to their resolved CLR

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns.Modules;
 
@@ -31,7 +32,8 @@ public partial class ILEmitter
         string? builtInModuleName = ResolveBuiltInOrPrimitiveKey(import.ModulePath);
         if (builtInModuleName == null && _ctx.ModuleResolver != null && _ctx.CurrentModulePath != null)
         {
-            string resolvedPath = _ctx.ModuleResolver.ResolveModulePath(import.ModulePath, _ctx.CurrentModulePath);
+            string resolvedPath = _ctx.ModuleResolver.ResolveRuntimeModulePath(
+                import.ModulePath, _ctx.CurrentModulePath);
             builtInModuleName = ResolveBuiltInOrPrimitiveKey(resolvedPath);
         }
 
@@ -48,7 +50,8 @@ public partial class ILEmitter
             return;
         }
 
-        string importedPath = _ctx.ModuleResolver.ResolveModulePath(import.ModulePath, _ctx.CurrentModulePath);
+        string importedPath = _ctx.ModuleResolver.ResolveRuntimeModulePath(
+            import.ModulePath, _ctx.CurrentModulePath);
 
         // CommonJS target: route through the CJS-specific import lowering. CJS modules don't
         // have per-export fields — they have a single $exports dictionary accessed via $GetExports.
@@ -197,7 +200,8 @@ public partial class ILEmitter
         string? builtInModuleName = BuiltInModuleRegistry.GetModuleName(importReq.ModulePath);
         if (builtInModuleName == null && _ctx.ModuleResolver != null && _ctx.CurrentModulePath != null)
         {
-            string resolvedPath = _ctx.ModuleResolver.ResolveModulePath(importReq.ModulePath, _ctx.CurrentModulePath);
+            string resolvedPath = _ctx.ModuleResolver.ResolveRuntimeModulePath(
+                importReq.ModulePath, _ctx.CurrentModulePath, ResolutionKind.Cjs);
             builtInModuleName = BuiltInModuleRegistry.GetModuleName(resolvedPath);
         }
 
@@ -218,7 +222,8 @@ public partial class ILEmitter
             return;
         }
 
-        string importedPath = _ctx.ModuleResolver.ResolveModulePath(importReq.ModulePath, _ctx.CurrentModulePath);
+        string importedPath = _ctx.ModuleResolver.ResolveRuntimeModulePath(
+            importReq.ModulePath, _ctx.CurrentModulePath, ResolutionKind.Cjs);
 
         if (!_ctx.ModuleExportFields.TryGetValue(importedPath, out var exportFields) ||
             !_ctx.ModuleTypes.TryGetValue(importedPath, out var moduleType))
@@ -553,7 +558,8 @@ public partial class ILEmitter
         else if (export.FromModulePath != null && _ctx.ModuleResolver != null)
         {
             // Re-export: export { x } from './module' or export * from './module'
-            string sourcePath = _ctx.ModuleResolver.ResolveModulePath(export.FromModulePath, _ctx.CurrentModulePath);
+            string sourcePath = _ctx.ModuleResolver.ResolveRuntimeModulePath(
+                export.FromModulePath, _ctx.CurrentModulePath);
 
             // Ensure the source module is initialized before reading its exports
             if (_ctx.ModuleInitMethods?.TryGetValue(sourcePath, out var sourceInitMethod) == true)

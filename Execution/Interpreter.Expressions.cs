@@ -1371,7 +1371,7 @@ public partial class Interpreter
             _currentModule?.Path ?? Directory.GetCurrentDirectory());
 
         string currentPath = _currentModule?.Path ?? Directory.GetCurrentDirectory();
-        string absolutePath = _moduleResolver.ResolveModulePath(specifier, currentPath);
+        string absolutePath = _moduleResolver.ResolveRuntimeModulePath(specifier, currentPath);
 
         // dotnet: modules have no enumerable namespace object — their export surface is
         // defined by static named imports. Reject instead of returning a partial view.

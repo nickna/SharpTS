@@ -446,7 +446,7 @@ public partial class TypeChecker
         if (!IsCompatible(constraintType, inferredType))
         {
             throw new TypeCheckException(
-                $"Type '{inferredType}' does not satisfy constraint '{constraintType}'.", tsCode: "TS2344");
+                $"Type '{inferredType}' does not satisfy constraint '{constraintType}'.", tsCode: "TS1360");
         }
 
         // Key difference from 'as': return the inferred type, not the constraint type
@@ -1780,6 +1780,16 @@ public partial class TypeChecker
 
     private TypeInfo LookupVariable(Token name)
     {
+        // Program declarations and local bindings take precedence over built-in
+        // compatibility fallbacks. This both honors normal shadowing and lets
+        // loaded lib.*.d.ts constructor/function declarations supply their
+        // structural signatures.
+        if (_environment.Get(name.Lexeme) is { } declared)
+        {
+            var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
+            return GetNarrowing(declaredPath) ?? declared;
+        }
+
         if (name.Lexeme == "console") return TypeInfo.Any.Shared;
         if (name.Lexeme == "Math") return TypeInfo.Any.Shared; // Math is a special global object
         if (name.Lexeme == "Object") return TypeInfo.Any.Shared; // Object is a special global object
@@ -1797,7 +1807,7 @@ public partial class TypeChecker
             // otherwise fall back to the built-in shape. Not a full merge (a file combining both a
             // custom member AND a built-in one like Symbol.for would only see the custom interface),
             // but covers the real declaration-merging tests, which never mix the two.
-            if (_environment.Get("SymbolConstructor") is TypeInfo.Interface userSymbolCtor)
+            if (_environment.GetTypeBinding("SymbolConstructor") is TypeInfo.Interface userSymbolCtor)
                 return userSymbolCtor;
             return WellKnownSymbolTypes.SymbolConstructor; // tsc's SymbolConstructor shape
         }
@@ -2161,7 +2171,7 @@ public partial class TypeChecker
             for (int i = 0; i < classExpr.Interfaces.Count; i++)
             {
                 var interfaceToken = classExpr.Interfaces[i];
-                TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
+                TypeInfo? itfTypeInfo = _environment.GetTypeBinding(interfaceToken.Lexeme);
                 if (itfTypeInfo is TypeInfo.Interface interfaceType)
                 {
                     ValidateInterfaceImplementation(classTypeForBody, interfaceType, className, classExpr.Name?.Line);

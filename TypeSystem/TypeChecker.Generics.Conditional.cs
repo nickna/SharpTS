@@ -592,33 +592,62 @@ public partial class TypeChecker
     /// deferred conditionals) anywhere instantiation could reach — tsc's isGenericType, used to
     /// decide whether a conditional's check type can be decided now or must defer.
     /// </summary>
-    private static bool IsGenericTypeShape(TypeInfo type) => type switch
+    private static bool IsGenericTypeShape(TypeInfo type)
     {
-        TypeInfo.TypeParameter or TypeInfo.InferredTypeParameter => true,
-        // A conditional that reaches this point is deferred (concrete ones evaluate away).
-        TypeInfo.ConditionalType => true,
-        TypeInfo.KeyOf k => IsGenericTypeShape(k.SourceType),
-        TypeInfo.IndexedAccess ia => IsGenericTypeShape(ia.ObjectType) || IsGenericTypeShape(ia.IndexType),
-        TypeInfo.Intersection i => i.Types.Any(IsGenericTypeShape),
-        TypeInfo.Union u => u.Types.Any(IsGenericTypeShape),
-        TypeInfo.Array arr => IsGenericTypeShape(arr.ElementType),
-        TypeInfo.Promise p => IsGenericTypeShape(p.ValueType),
-        TypeInfo.Tuple t => t.Elements.Any(e => IsGenericTypeShape(e.Type))
-            || (t.RestElementType is { } rest && IsGenericTypeShape(rest)),
-        TypeInfo.Function f => f.ParamTypes.Any(IsGenericTypeShape) || IsGenericTypeShape(f.ReturnType),
-        TypeInfo.InstantiatedGeneric ig => ig.TypeArguments.Any(IsGenericTypeShape),
-        // A generic class instance (Box<infer V>) is wrapped in Instance; look through it so a
-        // type variable inside its arguments still defers the conditional / blocks eager resolution (#347).
-        TypeInfo.Instance inst => IsGenericTypeShape(inst.ResolvedClassType),
-        TypeInfo.RecursiveTypeAlias rta => rta.TypeArguments is { } args && args.Any(IsGenericTypeShape),
-        TypeInfo.Record r => r.Fields.Values.Any(IsGenericTypeShape),
-        TypeInfo.MappedType => true,
-        TypeInfo.IntrinsicStringType ist => IsGenericTypeShape(ist.Inner),
-        TypeInfo.TemplateLiteralType tl => tl.InterpolatedTypes.Any(IsGenericTypeShape),
-        // Built-in containers (Map/Set/weak variants/iterators/generators) carry type variables in
-        // their arguments just like a generic instantiation (#347).
-        _ => DecomposeBuiltInContainer(type) is { } containerArgs && containerArgs.Any(IsGenericTypeShape)
-    };
+        var visiting = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
+
+        bool Visit(TypeInfo current, int depth = 0)
+        {
+            // Some recursive aliases expand to a fresh record on every edge, so
+            // reference-cycle detection alone cannot bound the walk. Treat an
+            // exceptionally deep shape as generic/deferred.
+            if (depth >= 24)
+                return true;
+            // Declaration libraries contain recursive object/tuple aliases. A
+            // cycle by itself is not evidence of an open type variable.
+            if (!visiting.Add(current))
+                return false;
+            try
+            {
+                return current switch
+                {
+                    TypeInfo.TypeParameter or TypeInfo.InferredTypeParameter => true,
+                    // A conditional that reaches this point is deferred (concrete ones evaluate away).
+                    TypeInfo.ConditionalType => true,
+                    TypeInfo.KeyOf k => Visit(k.SourceType, depth + 1),
+                    TypeInfo.IndexedAccess ia => Visit(ia.ObjectType, depth + 1) || Visit(ia.IndexType, depth + 1),
+                    TypeInfo.Intersection i => i.Types.Any(t => Visit(t, depth + 1)),
+                    TypeInfo.Union u => u.Types.Any(t => Visit(t, depth + 1)),
+                    TypeInfo.Array arr => Visit(arr.ElementType, depth + 1),
+                    TypeInfo.Promise p => Visit(p.ValueType, depth + 1),
+                    TypeInfo.Tuple t => t.Elements.Any(e => Visit(e.Type, depth + 1))
+                        || (t.RestElementType is { } rest && Visit(rest, depth + 1)),
+                    TypeInfo.Function f => f.ParamTypes.Any(t => Visit(t, depth + 1))
+                        || Visit(f.ReturnType, depth + 1),
+                    TypeInfo.InstantiatedGeneric ig => ig.TypeArguments.Any(t => Visit(t, depth + 1)),
+                    // A generic class instance (Box<infer V>) is wrapped in Instance; look through it so a
+                    // type variable inside its arguments still defers the conditional / blocks eager resolution (#347).
+                    TypeInfo.Instance inst => Visit(inst.ResolvedClassType, depth + 1),
+                    TypeInfo.RecursiveTypeAlias rta => rta.TypeArguments is { } args
+                        && args.Any(t => Visit(t, depth + 1)),
+                    TypeInfo.Record r => r.Fields.Values.Any(t => Visit(t, depth + 1)),
+                    TypeInfo.MappedType => true,
+                    TypeInfo.IntrinsicStringType ist => Visit(ist.Inner, depth + 1),
+                    TypeInfo.TemplateLiteralType tl => tl.InterpolatedTypes.Any(t => Visit(t, depth + 1)),
+                    // Built-in containers (Map/Set/weak variants/iterators/generators) carry type variables in
+                    // their arguments just like a generic instantiation (#347).
+                    _ => DecomposeBuiltInContainer(current) is { } containerArgs
+                        && containerArgs.Any(t => Visit(t, depth + 1))
+                };
+            }
+            finally
+            {
+                visiting.Remove(current);
+            }
+        }
+
+        return Visit(type);
+    }
 
     /// <summary>
     /// In-progress guard for <see cref="GetConditionalConstraint"/> — self-referential

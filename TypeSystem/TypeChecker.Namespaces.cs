@@ -78,7 +78,16 @@ public partial class TypeChecker
             // First pass: collect all type declarations (classes, interfaces, enums, nested namespaces)
             foreach (var member in ns.Members)
             {
-                CollectNamespaceMemberType(member, types);
+                if (_recoveryMode)
+                {
+                    try { CollectNamespaceMemberType(member, types); }
+                    catch (TypeMismatchException ex) { RecordTypeError(ex); }
+                    catch (TypeCheckException ex) { RecordTypeError(ex); }
+                }
+                else
+                {
+                    CollectNamespaceMemberType(member, types);
+                }
                 // Self-bind THIS namespace's own name into its own body scope from the members
                 // collected so far, so a later nested-namespace member body checked in this same
                 // pass can reference the enclosing namespace by its own dotted name (`O.A.g()`
@@ -151,7 +160,7 @@ public partial class TypeChecker
 
             case Stmt.Interface interfaceStmt:
                 CheckStmt(interfaceStmt);
-                var ifaceType = _environment.Get(interfaceStmt.Name.Lexeme);
+                var ifaceType = _environment.GetTypeBinding(interfaceStmt.Name.Lexeme);
                 if (ifaceType != null)
                 {
                     types[interfaceStmt.Name.Lexeme] = ifaceType;
@@ -160,7 +169,7 @@ public partial class TypeChecker
 
             case Stmt.Enum enumStmt:
                 CheckStmt(enumStmt);
-                var enumType = _environment.Get(enumStmt.Name.Lexeme);
+                var enumType = _environment.GetTypeBinding(enumStmt.Name.Lexeme);
                 if (enumType != null)
                 {
                     types[enumStmt.Name.Lexeme] = enumType;
@@ -195,7 +204,7 @@ public partial class TypeChecker
     {
         // Full class check (will define the class type)
         CheckStmt(classStmt);
-        var classType = _environment.Get(classStmt.Name.Lexeme);
+        var classType = _environment.GetTypeBinding(classStmt.Name.Lexeme);
         if (classType != null)
         {
             types[classStmt.Name.Lexeme] = classType;
@@ -321,7 +330,8 @@ public partial class TypeChecker
 
         // Get the final member
         Token finalMember = path[^1];
-        TypeInfo? resolvedType = currentNs.GetMember(finalMember.Lexeme);
+        TypeInfo? resolvedType = currentNs.Values.GetValueOrDefault(finalMember.Lexeme)
+            ?? currentNs.Types.GetValueOrDefault(finalMember.Lexeme);
 
         if (resolvedType == null)
         {

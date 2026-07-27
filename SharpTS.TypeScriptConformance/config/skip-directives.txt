@@ -11,9 +11,6 @@ usedefineforclassfields
 # Per-file isolation mode; not relevant to type-only conformance.
 isolatedmodules
 
-# JSX/TSX paths aren't in scope today.
-jsx
-
 # allowJs / checkJs — JS-in-TS testing surface, not what we're testing here.
 allowjs
 checkjs

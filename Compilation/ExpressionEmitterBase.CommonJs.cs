@@ -147,7 +147,8 @@ public abstract partial class ExpressionEmitterBase
         string resolvedPath;
         try
         {
-            resolvedPath = Ctx.ModuleResolver.ResolveModulePath(specifier, Ctx.CurrentModulePath, ResolutionKind.Cjs);
+            resolvedPath = Ctx.ModuleResolver.ResolveRuntimeModulePath(
+                specifier, Ctx.CurrentModulePath, ResolutionKind.Cjs);
         }
         catch (Exception ex)
         {

@@ -35,6 +35,9 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private readonly DecoratorMode _decoratorMode = decoratorMode;
     private int _current = 0;
     private int _tempVarCounter = 0;
+    private int _ambientNamespaceDepth = 0;
+    private int _ambientClassDepth = 0;
+    private bool _isDeclarationFile = false;
 
     // Strict mode tracking - tracks whether we're in a strict mode context
     private bool _isStrictMode = false;
@@ -49,6 +52,12 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     public Parser WithFilePath(string? filePath)
     {
         _filePath = filePath;
+        return this;
+    }
+
+    public Parser AsDeclarationFile(bool isDeclarationFile = true)
+    {
+        _isDeclarationFile = isDeclarationFile;
         return this;
     }
 
@@ -240,7 +249,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private static bool IsContextualKeyword(TokenType type) => type switch
     {
         // TypeScript-only keywords that are valid identifiers in JavaScript
-        TokenType.TYPE or TokenType.MODULE or TokenType.NAMESPACE or
+        TokenType.TYPE or TokenType.MODULE or TokenType.NAMESPACE or TokenType.ASYNC or
         TokenType.DECLARE or TokenType.ABSTRACT or TokenType.READONLY or
         TokenType.OVERRIDE or TokenType.GLOBAL or TokenType.OF or
         TokenType.FROM or TokenType.SATISFIES or TokenType.ACCESSOR or

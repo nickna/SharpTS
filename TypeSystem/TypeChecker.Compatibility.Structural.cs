@@ -28,14 +28,23 @@ public partial class TypeChecker
                 continue;
             }
 
-            if (actualMemberType == null || !IsCompatible(member.Value, actualMemberType))
+            TypeInfo expectedMemberType = member.Value;
+            bool targetOptional = optionalMembers?.Contains(member.Key) == true;
+            if (targetOptional && !_exactOptionalPropertyTypes)
+            {
+                // Without exactOptionalPropertyTypes, `p?: T` accepts both an absent
+                // property and a present property whose value is undefined.
+                expectedMemberType = CreateUnion(expectedMemberType, TypeInfo.Undefined.Shared);
+            }
+
+            if (actualMemberType == null || !IsCompatible(expectedMemberType, actualMemberType))
             {
                 return false;
             }
 
             // A source-OPTIONAL member never satisfies a target-REQUIRED one (presence, not
             // type — tsc errors regardless of strictNullChecks).
-            if (optionalMembers?.Contains(member.Key) != true && IsMemberOptionalOn(actual, member.Key))
+            if (!targetOptional && IsMemberOptionalOn(actual, member.Key))
             {
                 return false;
             }

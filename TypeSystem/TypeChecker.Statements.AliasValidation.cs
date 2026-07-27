@@ -254,7 +254,7 @@ public partial class TypeChecker
                 try { return ResolveAnnotation(c.Constraint, c.ConstraintNode); }
                 catch (TypeCheckException) { return null; }
             }).ToList();
-        return _environment.Get(name) switch
+        return _environment.GetTypeBinding(name) switch
         {
             TypeInfo.GenericClass gc => gc.TypeParams.Select(tp => tp.Constraint).ToList(),
             TypeInfo.GenericInterface gi => gi.TypeParams.Select(tp => tp.Constraint).ToList(),

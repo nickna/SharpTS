@@ -41,7 +41,23 @@ public static class TypeScriptConformanceBaseline
             sb.Append(bucket);
             sb.Append('\n');
         }
-        File.WriteAllText(path, sb.ToString());
+        string content = sb.ToString();
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(path, content);
+                break;
+            }
+            catch (Exception ex) when (
+                attempt < 5
+                && ex is IOException or UnauthorizedAccessException)
+            {
+                // Windows indexers/AV can briefly hold a just-read baseline.
+                // A bounded retry keeps regeneration deterministic.
+                Thread.Sleep(50 * (attempt + 1));
+            }
+        }
     }
 
     /// <summary>

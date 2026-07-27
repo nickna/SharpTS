@@ -113,6 +113,11 @@ public partial class TypeChecker
             return ResolveGenericOverloadedCall(call, genericOverloadedFunc);
         }
 
+        if (calleeType is TypeInfo.OverloadSet overloadSet)
+        {
+            return ResolveMixedOverloadedCall(call, overloadSet);
+        }
+
         if (calleeType is TypeInfo.Function funcType)
         {
             // Count non-spread arguments and check for spreads
@@ -904,7 +909,11 @@ public partial class TypeChecker
                 if (tp.Default != null)
                     inferred[tp.Name] = tp.Default;
                 else
-                    return null; // Cannot infer
+                    // TypeScript permits calls where a type parameter has no inference
+                    // candidate (for example `<T>(value?: T)` invoked with no arguments).
+                    // The unresolved parameter is instantiated as unknown rather than making
+                    // an otherwise arity-compatible signature inapplicable.
+                    inferred[tp.Name] = TypeInfo.Unknown.Shared;
             }
         }
 
@@ -1100,6 +1109,47 @@ public partial class TypeChecker
         TypeInfo.Function bestMatch = matchingSignatures[0];
 
         return bestMatch.ReturnType;
+    }
+
+    private TypeInfo ResolveMixedOverloadedCall(Expr.Call call, TypeInfo.OverloadSet overloadSet)
+    {
+        List<TypeInfo> argTypes = call.Arguments.Select(arg =>
+            arg is Expr.Spread spread ? CheckExpr(spread.Expression) : CheckExpr(arg)).ToList();
+        List<TypeInfo.Function> matches = [];
+
+        foreach (TypeInfo candidate in overloadSet.Signatures)
+        {
+            TypeInfo.Function? signature = candidate switch
+            {
+                TypeInfo.Function function => function,
+                TypeInfo.GenericFunction generic => InstantiateMixedOverload(generic, call, argTypes),
+                _ => null,
+            };
+
+            if (signature is not null && TryMatchSignature(signature, argTypes))
+                matches.Add(signature);
+        }
+
+        if (matches.Count == 0)
+        {
+            string rendered = string.Join(", ", argTypes);
+            throw new TypeCheckException(
+                $"No overload matches call with arguments ({rendered}).", tsCode: "TS2769");
+        }
+
+        var subtypeMatches = matches.Where(sig => ArgsSubtypeMatch(sig, argTypes)).ToList();
+        return (subtypeMatches.Count > 0 ? subtypeMatches[0] : matches[0]).ReturnType;
+    }
+
+    private TypeInfo.Function InstantiateMixedOverload(
+        TypeInfo.GenericFunction generic,
+        Expr.Call call,
+        List<TypeInfo> argTypes)
+    {
+        List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
+            ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
+            : InferTypeArguments(generic, argTypes);
+        return (TypeInfo.Function)InstantiateGenericFunction(generic, typeArgs);
     }
 
     /// <summary>

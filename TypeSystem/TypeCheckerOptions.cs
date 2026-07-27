@@ -41,6 +41,14 @@ public sealed record TypeCheckerOptions
     /// </summary>
     public bool NoImplicitAny { get; init; } = false;
 
+    public bool NoImplicitThis { get; init; } = false;
+
+    public bool StrictPropertyInitialization { get; init; } = false;
+
+    public bool ExactOptionalPropertyTypes { get; init; } = false;
+
+    public bool NoUncheckedIndexedAccess { get; init; } = false;
+
     /// <summary>
     /// Diagnostics collected before <c>CheckWithRecovery</c> stops. Default 10 — an ergonomics
     /// knob rather than a strictness one, and pinned by the user-visible "Too many errors,
@@ -58,5 +66,7 @@ public sealed record TypeCheckerOptions
         StrictNullChecks = true,
         StrictFunctionTypes = true,
         NoImplicitAny = true,
+        NoImplicitThis = true,
+        StrictPropertyInitialization = true,
     };
 }

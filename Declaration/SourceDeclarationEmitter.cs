@@ -549,9 +549,16 @@ public static class SourceDeclarationEmitter
                     string readOnly = member.IsReadonly ? "readonly " : "";
                     string optional = member.IsOptional ? "?" : "";
                     TypeInfo? resolvedMember = GetInterfaceMemberType(resolvedType, member.Name.Lexeme);
-                    string functionType = resolvedMember is null
-                        ? member.Type
-                        : TypeInfoDeclarationRenderer.Render(resolvedMember);
+                    string functionType = resolvedMember switch
+                    {
+                        TypeInfo.OverloadSet { Signatures.Count: > 0 } overload =>
+                            // The checker merges the preparatory interface surface
+                            // before the authoritative one; the latter is last and
+                            // carries resolved recursive generic return types.
+                            TypeInfoDeclarationRenderer.Render(overload.Signatures[^1]),
+                        null => member.Type,
+                        _ => TypeInfoDeclarationRenderer.Render(resolvedMember),
+                    };
                     if (member.IsMethod && TrySplitFunctionType(functionType, out string? parameters, out string? result))
                         WriteLine($"{member.Name.Lexeme}{optional}{parameters}: {result};");
                     else

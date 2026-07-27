@@ -9,6 +9,134 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private static void AddCallableSignature(List<TypeInfo> signatures, TypeInfo candidate)
+    {
+        switch (candidate)
+        {
+            case TypeInfo.Function:
+            case TypeInfo.GenericFunction:
+                signatures.Add(candidate);
+                break;
+            case TypeInfo.OverloadedFunction overloaded:
+                signatures.AddRange(overloaded.Signatures);
+                break;
+            case TypeInfo.OverloadSet mixed:
+                signatures.AddRange(mixed.Signatures);
+                break;
+        }
+    }
+
+    private static TypeInfo CreateInterfaceOverload(List<TypeInfo> signatures)
+    {
+        var distinct = signatures
+            .DistinctBy(signature => signature.ToString(), StringComparer.Ordinal)
+            .ToList();
+        if (distinct.Count == 1)
+            return distinct[0];
+        if (distinct.All(signature => signature is TypeInfo.Function))
+        {
+            var functions = distinct.Cast<TypeInfo.Function>().ToList();
+            return new TypeInfo.OverloadedFunction(functions, functions[0]);
+        }
+        return new TypeInfo.OverloadSet(distinct);
+    }
+
+    private void DefineOrMergeInterface(string name, TypeInfo incoming)
+    {
+        TypeInfo? existing = _environment.GetLocalTypeBinding(name);
+        _environment.DefineType(name, (existing, incoming) switch
+        {
+            (TypeInfo.Interface left, TypeInfo.Interface right) => MergeInterfaces(left, right),
+            (TypeInfo.GenericInterface left, TypeInfo.GenericInterface right)
+                when left.TypeParams.Count == right.TypeParams.Count => MergeGenericInterfaces(left, right),
+            _ => incoming,
+        });
+    }
+
+    private static FrozenDictionary<string, TypeInfo> MergeInterfaceMembers(
+        IReadOnlyDictionary<string, TypeInfo> left,
+        IReadOnlyDictionary<string, TypeInfo> right)
+    {
+        var merged = new Dictionary<string, TypeInfo>(left);
+        foreach (var (name, type) in right)
+        {
+            if (!merged.TryGetValue(name, out TypeInfo? prior))
+            {
+                merged[name] = type;
+                continue;
+            }
+
+            List<TypeInfo> callables = [];
+            AddCallableSignature(callables, prior);
+            AddCallableSignature(callables, type);
+            merged[name] = callables.Count > 0 ? CreateInterfaceOverload(callables) : type;
+        }
+        return merged.ToFrozenDictionary();
+    }
+
+    private static FrozenSet<string>? MergeSet(FrozenSet<string>? left, FrozenSet<string>? right)
+    {
+        if (left is null) return right;
+        if (right is null) return left;
+        return left.Concat(right).ToFrozenSet(StringComparer.Ordinal);
+    }
+
+    private static List<T>? MergeSignatures<T>(List<T>? left, List<T>? right)
+    {
+        if (left is null) return right;
+        if (right is null) return left;
+        return left.Concat(right).Distinct().ToList();
+    }
+
+    private static FrozenSet<TypeInfo.Interface>? MergeExtends(
+        FrozenSet<TypeInfo.Interface>? left,
+        FrozenSet<TypeInfo.Interface>? right)
+    {
+        if (left is null) return right;
+        if (right is null) return left;
+        return left.Concat(right)
+            .GroupBy(type => type.Name, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToFrozenSet();
+    }
+
+    private static TypeInfo.Interface MergeInterfaces(TypeInfo.Interface left, TypeInfo.Interface right) =>
+        right with
+        {
+            Members = MergeInterfaceMembers(left.Members, right.Members),
+            OptionalMembers = left.OptionalMembers.Concat(right.OptionalMembers)
+                .ToFrozenSet(StringComparer.Ordinal),
+            StringIndexType = right.StringIndexType ?? left.StringIndexType,
+            NumberIndexType = right.NumberIndexType ?? left.NumberIndexType,
+            SymbolIndexType = right.SymbolIndexType ?? left.SymbolIndexType,
+            Extends = MergeExtends(left.Extends, right.Extends),
+            CallSignatures = MergeSignatures(left.CallSignatures, right.CallSignatures),
+            ConstructorSignatures = MergeSignatures(left.ConstructorSignatures, right.ConstructorSignatures),
+            ReadonlyMembers = MergeSet(left.ReadonlyMembers, right.ReadonlyMembers),
+            MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
+            MemberBrands = left.MemberBrands ?? right.MemberBrands,
+            ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+        };
+
+    private static TypeInfo.GenericInterface MergeGenericInterfaces(
+        TypeInfo.GenericInterface left,
+        TypeInfo.GenericInterface right) =>
+        right with
+        {
+            Members = MergeInterfaceMembers(left.Members, right.Members),
+            OptionalMembers = left.OptionalMembers.Concat(right.OptionalMembers)
+                .ToFrozenSet(StringComparer.Ordinal),
+            StringIndexType = right.StringIndexType ?? left.StringIndexType,
+            NumberIndexType = right.NumberIndexType ?? left.NumberIndexType,
+            SymbolIndexType = right.SymbolIndexType ?? left.SymbolIndexType,
+            Extends = MergeExtends(left.Extends, right.Extends),
+            CallSignatures = MergeSignatures(left.CallSignatures, right.CallSignatures),
+            ConstructorSignatures = MergeSignatures(left.ConstructorSignatures, right.ConstructorSignatures),
+            ReadonlyMembers = MergeSet(left.ReadonlyMembers, right.ReadonlyMembers),
+            MethodMembers = MergeSet(left.MethodMembers, right.MethodMembers),
+            ReadonlyNumberIndex = left.ReadonlyNumberIndex || right.ReadonlyNumberIndex,
+        };
+
     /// <summary>
     /// Pre-registers an interface declaration before function hoisting.
     /// This creates a basic interface type without full validation so that
@@ -18,7 +146,7 @@ public partial class TypeChecker
     private void PreRegisterInterface(Stmt.Interface interfaceStmt)
     {
         // Skip if already registered
-        if (_environment.IsDefinedLocally(interfaceStmt.Name.Lexeme))
+        if (_environment.IsTypeDefinedLocally(interfaceStmt.Name.Lexeme))
             return;
 
         // Handle generic type parameters with two-pass approach to support recursive constraints
@@ -63,7 +191,7 @@ public partial class TypeChecker
 
         // Parse member types (may have forward references that resolve to Any, which is OK)
         Dictionary<string, TypeInfo> members = [];
-        Dictionary<string, List<TypeInfo.Function>> pendingOverloads = [];
+        Dictionary<string, List<TypeInfo>> pendingOverloads = [];
         HashSet<string> optionalMembers = [];
         HashSet<string> readonlyMembers = [];
         HashSet<string> methodMembers = [];
@@ -84,11 +212,9 @@ public partial class TypeChecker
                         {
                             overloadList = [];
                             pendingOverloads[member.Name.Lexeme] = overloadList;
-                            if (existingType is TypeInfo.Function existingFunc)
-                                overloadList.Add(existingFunc);
+                            AddCallableSignature(overloadList, existingType);
                         }
-                        if (memberType is TypeInfo.Function newFunc)
-                            overloadList.Add(newFunc);
+                        AddCallableSignature(overloadList, memberType);
                     }
                     else
                     {
@@ -117,7 +243,12 @@ public partial class TypeChecker
             // Convert collected overloads to OverloadedFunction types
             foreach (var (name, signatures) in pendingOverloads)
             {
-                members[name] = new TypeInfo.OverloadedFunction(signatures, signatures[0]);
+                // Duplicate non-callable properties are validated during the full
+                // interface pass.  They do not form an overload set, so keep the
+                // first preregistered property type instead of indexing an empty
+                // signature list (common in declaration libraries).
+                if (signatures.Count > 0)
+                    members[name] = CreateInterfaceOverload(signatures);
             }
         }
 
@@ -166,7 +297,7 @@ public partial class TypeChecker
                 ReadonlyMembers: readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null,
                 MethodMembers: methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null
             );
-            _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
+            _environment.DefineType(interfaceStmt.Name.Lexeme, genericItfType);
         }
         else
         {
@@ -180,7 +311,7 @@ public partial class TypeChecker
                 ReadonlyMembers: readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null,
                 MethodMembers: methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null
             );
-            _environment.Define(interfaceStmt.Name.Lexeme, itfType);
+            _environment.DefineType(interfaceStmt.Name.Lexeme, itfType);
         }
     }
 
@@ -228,7 +359,7 @@ public partial class TypeChecker
         // diagnostics (TS2411) can be reported at the offending property rather than
         // aggregated onto the interface declaration line (matches tsc).
         Dictionary<string, int> memberLines = [];
-        Dictionary<string, List<TypeInfo.Function>> pendingOverloads = []; // Track overloaded methods
+        Dictionary<string, List<TypeInfo>> pendingOverloads = []; // Track overloaded methods
         HashSet<string> optionalMembers = [];
         HashSet<string> readonlyMembers = [];
         HashSet<string> methodMembers = [];
@@ -253,13 +384,11 @@ public partial class TypeChecker
                     pendingOverloads[member.Name.Lexeme] = overloadList;
 
                     // Add the first signature to the overload list
-                    if (existingType is TypeInfo.Function existingFunc)
-                        overloadList.Add(existingFunc);
+                    AddCallableSignature(overloadList, existingType);
                 }
 
                 // Add the new signature
-                if (memberType is TypeInfo.Function newFunc)
-                    overloadList.Add(newFunc);
+                AddCallableSignature(overloadList, memberType);
             }
             else
             {
@@ -291,7 +420,8 @@ public partial class TypeChecker
         {
             // Use the first signature as the "implementation" for the overloaded function
             // In interfaces, there's no true implementation, so we just need the signatures
-            members[name] = new TypeInfo.OverloadedFunction(signatures, signatures[0]);
+            if (signatures.Count > 0)
+                members[name] = CreateInterfaceOverload(signatures);
         }
 
         // Process index signatures
@@ -523,7 +653,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 readonlyNumberIndex
             );
-            _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
+            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, genericItfType);
         }
         else
         {
@@ -541,7 +671,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 ReadonlyNumberIndex: readonlyNumberIndex
             );
-            _environment.Define(interfaceStmt.Name.Lexeme, itfType);
+            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, itfType);
         }
 
         ValidateInterfaceExtends(interfaceStmt, members, optionalMembers, extends);

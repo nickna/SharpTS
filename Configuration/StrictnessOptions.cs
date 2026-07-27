@@ -23,9 +23,19 @@ public sealed record StrictnessOptions
 
     public bool? NoImplicitAny { get; init; }
 
+    public bool? NoImplicitThis { get; init; }
+
+    public bool? StrictPropertyInitialization { get; init; }
+
+    public bool? ExactOptionalPropertyTypes { get; init; }
+
+    public bool? NoUncheckedIndexedAccess { get; init; }
+
     /// <summary>True when this layer said nothing at all.</summary>
     public bool IsEmpty =>
-        Strict is null && StrictNullChecks is null && StrictFunctionTypes is null && NoImplicitAny is null;
+        Strict is null && StrictNullChecks is null && StrictFunctionTypes is null && NoImplicitAny is null
+        && NoImplicitThis is null && StrictPropertyInitialization is null
+        && ExactOptionalPropertyTypes is null && NoUncheckedIndexedAccess is null;
 
     /// <summary>
     /// Folds the layers into the checker's resolved options, following tsc's model:
@@ -57,6 +67,18 @@ public sealed record StrictnessOptions
                 cli?.StrictFunctionTypes ?? tsConfig?.StrictFunctionTypes ?? umbrella ?? d.StrictFunctionTypes,
             NoImplicitAny =
                 cli?.NoImplicitAny ?? tsConfig?.NoImplicitAny ?? umbrella ?? d.NoImplicitAny,
+            NoImplicitThis =
+                cli?.NoImplicitThis ?? tsConfig?.NoImplicitThis ?? umbrella ?? d.NoImplicitThis,
+            StrictPropertyInitialization =
+                cli?.StrictPropertyInitialization ?? tsConfig?.StrictPropertyInitialization
+                ?? umbrella ?? d.StrictPropertyInitialization,
+            // These flags are not members of the strict umbrella in tsc.
+            ExactOptionalPropertyTypes =
+                cli?.ExactOptionalPropertyTypes ?? tsConfig?.ExactOptionalPropertyTypes
+                ?? d.ExactOptionalPropertyTypes,
+            NoUncheckedIndexedAccess =
+                cli?.NoUncheckedIndexedAccess ?? tsConfig?.NoUncheckedIndexedAccess
+                ?? d.NoUncheckedIndexedAccess,
             MaxErrors = d.MaxErrors,
         };
     }

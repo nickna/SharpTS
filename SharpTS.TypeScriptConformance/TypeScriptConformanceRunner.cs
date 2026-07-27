@@ -1,4 +1,5 @@
 using SharpTS.Diagnostics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -87,31 +88,67 @@ public sealed class TypeScriptConformanceRunner
             }
         }
 
-        // Multi-file tests need cross-file resolution (imports, declaration
-        // merging across virtual files). #84 is single-file scope; defer
-        // multi-file as a clean Skipped bucket so subset baselines are stable.
-        if (metadata.Files.Count > 1)
+        // Build an in-memory program so virtual @filename files, imports,
+        // triple-slash references, declaration files, lib.*.d.ts and @types all
+        // flow through the same resolver used by the product CLI.
+        string virtualRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SharpTS.TypeScriptConformance",
+            Path.GetFileNameWithoutExtension(testFilePath));
+        var virtualFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var rootFiles = new List<string>();
+        foreach (var file in metadata.Files)
         {
-            return new TypeScriptConformanceResult(
-                TypeScriptConformanceOutcome.Skipped,
-                null,
-                "multi-file-deferred");
+            string relativeName = file.Name
+                .Replace(':', '_')
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string path = Path.GetFullPath(Path.Combine(
+                virtualRoot,
+                relativeName.Replace('/', Path.DirectorySeparatorChar)));
+            virtualFiles[path] = file.Body;
+            rootFiles.Add(path);
         }
 
-        var virtualFile = metadata.Files[0];
+        if (rootFiles.Count == 0)
+        {
+            return new TypeScriptConformanceResult(
+                TypeScriptConformanceOutcome.HarnessError,
+                "Test did not contain any source files.",
+                null);
+        }
 
-        // Parse — failures here are a Pass IFF the baseline expected a parse
-        // error. Otherwise ParseError. Today we don't yet distinguish parse
-        // from type errors in the baseline match; treat any parse failure as
-        // ParseError. (Refining this is on the same level as proper multi-file
-        // handling — a follow-up.)
-        ParseDiagnosticResult parseResult;
+        TypeScriptProgramOptions programOptions = new()
+        {
+            LoadDefaultLib = true,
+            NoLib = DirectiveBool(metadata, "nolib") ?? false,
+            Lib = metadata.Lib.Count > 0
+                ? metadata.Lib
+                : [DefaultLibraryForTarget(metadata.Target)],
+            Types = DirectiveList(metadata, "types"),
+            TypeRoots = null,
+            PreferDeclarationFiles = true,
+        };
+
+        ModuleResolver resolver;
+        List<ParsedModule> modules;
         try
         {
-            var lexer = new Lexer(virtualFile.Body);
-            var tokens = lexer.ScanTokens();
-            var parser = new Parser(tokens);
-            parseResult = parser.Parse();
+            resolver = new ModuleResolver(rootFiles[0], virtualFiles, programOptions);
+            var entry = resolver.LoadProgram(rootFiles[0]);
+            modules = resolver.GetModulesInOrder(entry);
+
+            // TypeScript treats every @filename section as a root file, even if
+            // it is not reachable through an import from the first section.
+            var seen = modules.Select(m => m.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (string rootFile in rootFiles.Skip(1))
+            {
+                var root = resolver.LoadModule(rootFile);
+                foreach (var module in resolver.GetModulesInOrder(root))
+                {
+                    if (seen.Add(module.Path))
+                        modules.Add(module);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -120,17 +157,10 @@ public sealed class TypeScriptConformanceRunner
                 ex.Message,
                 null);
         }
-        if (!parseResult.IsSuccess)
-        {
-            return new TypeScriptConformanceResult(
-                TypeScriptConformanceOutcome.ParseError,
-                parseResult.Diagnostics.FirstOrDefault()?.ToString(),
-                null);
-        }
 
         // Type-check with recovery so we collect every diagnostic, not just
-        // the first one. CheckWithRecovery is the API designed for this.
-        TypeCheckDiagnosticResult checkResult;
+        // the first one.
+        IReadOnlyList<Diagnostic> diagnostics;
         try
         {
             // Each strictness knob follows the test's directives, with the specific directive
@@ -143,11 +173,19 @@ public sealed class TypeScriptConformanceRunner
             var checker = new TypeChecker(new TypeCheckerOptions
             {
                 StrictNullChecks = strictNullChecks,
-                StrictFunctionTypes = metadata.Strict,
+                StrictFunctionTypes = DirectiveBool(metadata, "strictfunctiontypes") ?? metadata.Strict,
                 NoImplicitAny = noImplicitAny,
+                NoImplicitThis = DirectiveBool(metadata, "noimplicitthis") ?? metadata.Strict,
+                StrictPropertyInitialization =
+                    DirectiveBool(metadata, "strictpropertyinitialization") ?? metadata.Strict,
+                ExactOptionalPropertyTypes =
+                    DirectiveBool(metadata, "exactoptionalpropertytypes") ?? false,
+                NoUncheckedIndexedAccess =
+                    DirectiveBool(metadata, "nouncheckedindexedaccess") ?? false,
                 MaxErrors = 1000,
             });
-            checkResult = checker.CheckWithRecovery(parseResult.Statements);
+            checker.CheckModules(modules, resolver);
+            diagnostics = checker.GetDiagnostics();
         }
         catch (Exception ex)
         {
@@ -159,7 +197,7 @@ public sealed class TypeScriptConformanceRunner
                 null);
         }
 
-        var actual = ToBaselineDiagnostics(checkResult.Diagnostics);
+        var actual = ToBaselineDiagnostics(diagnostics);
 
         var baselinePath = ResolveBaselinePath(testFilePath);
         IReadOnlyList<BaselineDiagnostic> expected;
@@ -201,6 +239,47 @@ public sealed class TypeScriptConformanceRunner
             null,
             expected,
             actual);
+    }
+
+    private static bool? DirectiveBool(
+        TypeScriptConformanceMetadata metadata,
+        string name)
+    {
+        if (!metadata.RawDirectives.TryGetValue(name, out string? value))
+            return null;
+        if (bool.TryParse(value, out bool parsed))
+            return parsed;
+        return null;
+    }
+
+    private static IReadOnlyList<string>? DirectiveList(
+        TypeScriptConformanceMetadata metadata,
+        string name)
+    {
+        if (!metadata.RawDirectives.TryGetValue(name, out string? value))
+            return null;
+        return value.Split(
+            ',',
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static string DefaultLibraryForTarget(string? target)
+    {
+        string selected = target?
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault()?
+            .ToLowerInvariant() ?? "es5";
+
+        return selected switch
+        {
+            "es3" or "es5" => "lib.d.ts",
+            "es6" or "es2015" => "lib.es6.d.ts",
+            "es2016" or "es2017" or "es2018" or "es2019" or
+            "es2020" or "es2021" or "es2022" or "es2023" =>
+                $"lib.{selected}.full.d.ts",
+            "esnext" or "latest" => "lib.esnext.full.d.ts",
+            _ => "lib.d.ts",
+        };
     }
 
     /// <summary>

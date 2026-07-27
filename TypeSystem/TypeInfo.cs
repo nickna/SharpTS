@@ -276,6 +276,17 @@ public abstract record TypeInfo
             $"<{string.Join(", ", TypeParams.Select(tp => tp.Name))}> overloaded ({Signatures.Count} signatures) => {Implementation.ReturnType}";
     }
 
+    /// <summary>
+    /// An overload group whose signatures may each declare different type
+    /// parameters. Declaration-file interface methods commonly use this shape,
+    /// which cannot be represented by <see cref="GenericOverloadedFunction"/>
+    /// (that record has one shared type-parameter list).
+    /// </summary>
+    public record OverloadSet(List<TypeInfo> Signatures) : TypeInfo
+    {
+        public override string ToString() => $"overloaded ({Signatures.Count} mixed signatures)";
+    }
+
     public record Class(ClassMetadataCore Core) : TypeInfo
     {
         // Delegating properties for backward compatibility

@@ -97,7 +97,9 @@ public partial class TypeChecker
             _ => EnumKind.Numeric  // Empty enum defaults to numeric
         };
 
-        _environment.Define(enumStmt.Name.Lexeme, new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst));
+        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst);
+        _environment.Define(enumStmt.Name.Lexeme, enumType);
+        _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
 
     /// <summary>

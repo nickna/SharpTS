@@ -4,6 +4,8 @@ public partial class Parser
 {
     private Stmt FunctionDeclaration(string kind, bool isAsync = false, bool isGenerator = false, bool isDeclare = false, (Token Name, Expr? ComputedKey)? computedMethod = null)
     {
+        isDeclare |= _isDeclarationFile;
+
         Token name;
         Expr? computedKey = null;
         if (computedMethod is { } cm)
@@ -30,6 +32,9 @@ public partial class Parser
         {
             name = ConsumeIdentifierName($"Expect {kind} name.");
         }
+
+        if (kind == "method" && isDeclare)
+            Match(TokenType.QUESTION);
 
         // Parse type parameters (e.g., <T, U extends Base>)
         List<TypeParam>? typeParams = ParseTypeParameters();
@@ -137,8 +142,11 @@ public partial class Parser
             returnTypeNode = TakeTypeNode();
         }
 
-        // Check for overload signature (semicolon instead of body)
-        if (Match(TokenType.SEMICOLON))
+        // Check for an overload/ambient signature. Ambient declarations follow
+        // normal automatic-semicolon-insertion rules, so declaration packages
+        // commonly omit the semicolon before the next line.
+        bool hasSignatureTerminator = Match(TokenType.SEMICOLON);
+        if (hasSignatureTerminator || (isDeclare && !Check(TokenType.LEFT_BRACE)))
         {
             // Overload signature - no body, just declaration
             return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator, IsDeclare: isDeclare, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);

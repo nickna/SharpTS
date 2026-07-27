@@ -155,6 +155,42 @@ public partial class TypeChecker
             }
         }
 
+        // Qualified type-space lookup (`JSX.IntrinsicElements`, `Intl.Locale`,
+        // nested declaration namespaces). Namespace value facets must not win
+        // here when a same-named constructor/value also exists.
+        if (typeName.Contains('.', StringComparison.Ordinal))
+        {
+            string[] parts = typeName.Split('.');
+            TypeInfo? current = _environment.GetNamespace(parts[0])
+                ?? _environment.GetTypeBinding(parts[0]);
+            for (int i = 1; current is TypeInfo.Namespace ns && i < parts.Length; i++)
+                current = ns.Types.GetValueOrDefault(parts[i]);
+
+            if (current is not null)
+            {
+                return current switch
+                {
+                    TypeInfo.Class cls => new TypeInfo.Instance(cls),
+                    TypeInfo.MutableClass mutable => new TypeInfo.Instance(mutable),
+                    _ => current,
+                };
+            }
+        }
+
+        // A program-loaded declaration wins over SharpTS's compatibility fallbacks.
+        // This is what lets lib.*.d.ts describe globals such as Function, Object,
+        // Error, Date, and the primitive wrappers without changing runtime
+        // implementations.
+        if (_environment.GetTypeBinding(typeName) is { } declaredType)
+        {
+            return declaredType switch
+            {
+                TypeInfo.MutableClass loadedMutableClass => new TypeInfo.Instance(loadedMutableClass),
+                TypeInfo.Class loadedClass => new TypeInfo.Instance(loadedClass),
+                _ => declaredType,
+            };
+        }
+
         if (typeName == "string") return TypeInfo.String.Shared;
         if (typeName == "number") return TypeInfo.Primitive.Number;
         if (typeName == "boolean") return TypeInfo.Primitive.Boolean;
@@ -507,6 +543,9 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo EvaluateTypeOf(string path)
     {
+        if (path.StartsWith("import(", StringComparison.Ordinal))
+            return EvaluateImportTypeOf(path);
+
         // Parse path into segments, handling both dot access and bracket access
         // Examples: "obj.prop", "arr[0]", "obj[\"key\"]", "obj.nested[0].value"
         var accessors = ParseTypeOfPath(path);
@@ -520,7 +559,7 @@ public partial class TypeChecker
         // `typeof undefined` — the global undefined has no environment binding.
         if (firstName == "undefined" && accessors.Count == 1)
             return TypeInfo.Undefined.Shared;
-        TypeInfo? currentType = _environment.Get(firstName);
+        TypeInfo? currentType = _environment.GetTypeBinding(firstName) ?? _environment.Get(firstName);
 
         // `typeof globalThis` — the global object has no environment binding.
         // SharpTS models globals as `any`, so it (and any member access off it)
@@ -549,6 +588,62 @@ public partial class TypeChecker
 
             if (currentType == null)
                 throw new TypeCheckException($"Cannot access '{accessor.Name}' on type in typeof.", tsCode: "TS2339");
+        }
+
+        return currentType;
+    }
+
+    private TypeInfo EvaluateImportTypeOf(string path)
+    {
+        int closeParen = path.IndexOf(')');
+        if (closeParen < 0)
+            return TypeInfo.Any.Shared;
+
+        string specifier = path["import(".Length..closeParen].Trim();
+        if (specifier.Length >= 2
+            && (specifier[0] == '"' || specifier[0] == '\'')
+            && specifier[^1] == specifier[0])
+        {
+            specifier = specifier[1..^1];
+        }
+
+        TypeInfo currentType = TypeInfo.Any.Shared;
+        if (_moduleResolver != null && _currentModule != null)
+        {
+            try
+            {
+                string resolvedPath = _moduleResolver.ResolveModulePath(
+                    specifier, _currentModule.Path);
+                if (_moduleResolver.GetCachedModule(resolvedPath) is { } targetModule)
+                {
+                    currentType = new TypeInfo.Module(
+                        resolvedPath,
+                        targetModule.ExportedTypes.ToFrozenDictionary(),
+                        targetModule.DefaultExportType);
+                }
+            }
+            catch
+            {
+                // The authoritative import diagnostic is emitted by module checking.
+                // Keep declaration consumption resilient when a type query is unresolved.
+            }
+        }
+
+        string remainder = path[(closeParen + 1)..].TrimStart();
+        if (remainder.StartsWith('.'))
+            remainder = remainder[1..];
+
+        foreach (var accessor in ParseTypeOfPath(remainder))
+        {
+            currentType = accessor.Kind switch
+            {
+                TypeOfAccessorKind.Property => GetPropertyTypeForTypeOf(currentType, accessor.Name),
+                TypeOfAccessorKind.NumericIndex => GetIndexedTypeForTypeOf(
+                    currentType, int.Parse(accessor.Name)),
+                TypeOfAccessorKind.StringIndex => GetPropertyTypeForTypeOf(
+                    currentType, accessor.Name),
+                _ => null,
+            } ?? TypeInfo.Any.Shared;
         }
 
         return currentType;
@@ -675,7 +770,11 @@ public partial class TypeChecker
         TypeInfo.InstantiatedGeneric ig => GetPropertyTypeFromInstantiatedGeneric(ig, propName),
         TypeInfo.GenericClass gc => gc.StaticMethods.GetValueOrDefault(propName)
                                  ?? gc.StaticProperties.GetValueOrDefault(propName),
-        TypeInfo.Namespace ns => ns.GetMember(propName),
+        TypeInfo.Namespace ns => ns.Values.GetValueOrDefault(propName)
+                              ?? ns.Types.GetValueOrDefault(propName),
+        TypeInfo.Module module => propName == "default"
+            ? module.DefaultExport
+            : module.Exports.GetValueOrDefault(propName),
         // Property access on `any` stays `any` (e.g. `(typeof globalThis)["x"]`).
         TypeInfo.Any => TypeInfo.Any.Shared,
         _ => null

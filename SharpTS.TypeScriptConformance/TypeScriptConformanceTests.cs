@@ -17,7 +17,7 @@ public class TypeScriptConformanceBaselineCollection { }
 /// #85: subset coverage with a committed baseline.
 ///
 /// Flow:
-///   1. Enumerate every <c>.ts</c> under the configured subset folders.
+///   1. Enumerate every <c>.ts</c>/<c>.tsx</c> under the configured subset folders.
 ///   2. Run each through <see cref="TypeScriptConformanceRunner"/>.
 ///   3. Compare outcomes to <c>baselines/interpreted.txt</c>.
 ///   4. Fail the fact on regression (good→bad) or new pass (bad→good);
@@ -35,7 +35,7 @@ public class TypeScriptConformanceTests
     public TypeScriptConformanceTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
-    public void InterpretedBaseline()
+    public async Task InterpretedBaseline()
     {
         var root = TypeScriptConformancePaths.TryFindRoot();
         var projectDir = TypeScriptConformancePaths.TryFindProjectDir();
@@ -61,7 +61,26 @@ public class TypeScriptConformanceTests
         var started = DateTime.UtcNow;
         foreach (var (relPath, absPath) in files)
         {
-            var result = runner.RunOne(absPath);
+            // A checker hang must not pin the entire corpus job. The config
+            // has always carried a per-test timeout; enforce it here and keep
+            // classifying subsequent files. The worker is a background
+            // ThreadPool task, so the test host can still terminate cleanly.
+            var runTask = Task.Run(() => runner.RunOne(absPath));
+            TypeScriptConformanceResult result;
+            var completed = await Task.WhenAny(
+                runTask, Task.Delay(TimeSpan.FromSeconds(config.TimeoutSeconds)));
+            if (completed != runTask)
+            {
+                result = new TypeScriptConformanceResult(
+                    TypeScriptConformanceOutcome.TypeCheckError,
+                    $"Timed out after {config.TimeoutSeconds}s.",
+                    "timeout");
+                _output.WriteLine($"timeout: {relPath}");
+            }
+            else
+            {
+                result = await runTask;
+            }
             current[relPath] = TypeScriptConformanceBaseline.EncodeBucket(result);
             counts.TryGetValue(result.Outcome, out var c);
             counts[result.Outcome] = c + 1;
@@ -75,8 +94,24 @@ public class TypeScriptConformanceTests
 
         if (updateBaseline || !File.Exists(baselinePath))
         {
-            TypeScriptConformanceBaseline.Write(baselinePath, current.Select(kv => (kv.Key, kv.Value)));
-            _output.WriteLine($"wrote baseline → {baselinePath}");
+            // Sandboxed test hosts may be allowed to write only to an
+            // artifact directory. Let CI/agents redirect the mechanical
+            // output and copy it into the source tree afterward.
+            string baselineOutputPath =
+                Environment.GetEnvironmentVariable("SHARPTS_TSCONFORMANCE_BASELINE_OUTPUT")
+                ?? baselinePath;
+            if (baselineOutputPath == "-")
+            {
+                foreach (var (path, bucket) in current)
+                    _output.WriteLine($"baseline-entry:{path} {bucket}");
+                _output.WriteLine("wrote baseline → stdout");
+            }
+            else
+            {
+                TypeScriptConformanceBaseline.Write(
+                    baselineOutputPath, current.Select(kv => (kv.Key, kv.Value)));
+                _output.WriteLine($"wrote baseline → {baselineOutputPath}");
+            }
             return;
         }
 
@@ -101,7 +136,7 @@ public class TypeScriptConformanceTests
     }
 
     /// <summary>
-    /// Walks each configured folder for <c>*.ts</c> files. Sorted by relative
+    /// Walks each configured folder for TypeScript source files. Sorted by relative
     /// path so baselines don't flap between runs.
     /// </summary>
     private static List<(string RelPath, string AbsPath)> EnumerateTestFiles(
@@ -112,7 +147,8 @@ public class TypeScriptConformanceTests
         {
             var absFolder = Path.Combine(typescriptRoot, folder.Replace('/', Path.DirectorySeparatorChar));
             if (!Directory.Exists(absFolder)) continue;
-            foreach (var file in Directory.EnumerateFiles(absFolder, "*.ts", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(absFolder, "*", SearchOption.AllDirectories)
+                         .Where(path => Path.GetExtension(path) is ".ts" or ".tsx"))
             {
                 var rel = Path.GetRelativePath(typescriptRoot, file).Replace('\\', '/');
                 results.Add((rel, file));

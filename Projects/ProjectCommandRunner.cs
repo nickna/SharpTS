@@ -148,7 +148,11 @@ public static class ProjectCommandRunner
         DotNetReferences.Load(projectDirectory, cliOptions.References);
 
         var options = MergeOptions(cliOptions, project);
-        var resolver = new ModuleResolver(project.ConfigPath, project.ModuleResolution);
+        var resolver = new ModuleResolver(
+            project.ConfigPath,
+            project.ModuleResolution,
+            virtualFiles: null,
+            options.TypeScriptProgramOptions);
         var declarationRoots = project.DeclarationFiles
             .Select(path => resolver.LoadModule(path, options.DecoratorMode))
             .ToArray();
@@ -156,7 +160,7 @@ public static class ProjectCommandRunner
 
         var sourceRoots = project.RootFiles
             .Where(path => !project.DeclarationFiles.Contains(path, PathComparer))
-            .Select(path => resolver.LoadModule(path, options.DecoratorMode))
+            .Select(path => resolver.LoadProgram(path, options.DecoratorMode))
             .ToArray();
         var modules = resolver.GetModulesInOrder(declarationRoots.Concat(sourceRoots));
 
@@ -201,6 +205,13 @@ public static class ProjectCommandRunner
                 StrictNullChecks = cli.Strictness.StrictNullChecks ?? project.Strictness.StrictNullChecks,
                 StrictFunctionTypes = cli.Strictness.StrictFunctionTypes ?? project.Strictness.StrictFunctionTypes,
                 NoImplicitAny = cli.Strictness.NoImplicitAny ?? project.Strictness.NoImplicitAny,
+                NoImplicitThis = cli.Strictness.NoImplicitThis ?? project.Strictness.NoImplicitThis,
+                StrictPropertyInitialization = cli.Strictness.StrictPropertyInitialization
+                    ?? project.Strictness.StrictPropertyInitialization,
+                ExactOptionalPropertyTypes = cli.Strictness.ExactOptionalPropertyTypes
+                    ?? project.Strictness.ExactOptionalPropertyTypes,
+                NoUncheckedIndexedAccess = cli.Strictness.NoUncheckedIndexedAccess
+                    ?? project.Strictness.NoUncheckedIndexedAccess,
             },
             CheckJs = cli.CheckJs || project.CheckJs == true,
             EmitDecoratorMetadata = cli.EmitDecoratorMetadata || project.EmitDecoratorMetadata == true,
@@ -213,6 +224,10 @@ public static class ProjectCommandRunner
             DecoratorMode = cli.DecoratorMode == DecoratorMode.Stage3 && project.DecoratorMode is { } configured
                 ? configured
                 : cli.DecoratorMode,
+            Lib = cli.Lib ?? project.Lib,
+            NoLib = cli.NoLib ?? project.NoLib,
+            Types = cli.Types ?? project.Types,
+            TypeRoots = cli.TypeRoots ?? project.TypeRoots,
         };
 
     private static IReadOnlyList<string> CollapseWatchDirectories(IEnumerable<string> directories)
@@ -290,12 +305,22 @@ public static class ProjectCommandRunner
             options.Strictness.StrictNullChecks?.ToString() ?? "",
             options.Strictness.StrictFunctionTypes?.ToString() ?? "",
             options.Strictness.NoImplicitAny?.ToString() ?? "",
+            options.Strictness.NoImplicitThis?.ToString() ?? "",
+            options.Strictness.StrictPropertyInitialization?.ToString() ?? "",
+            options.Strictness.ExactOptionalPropertyTypes?.ToString() ?? "",
+            options.Strictness.NoUncheckedIndexedAccess?.ToString() ?? "",
             options.CheckJs.ToString(),
             options.DecoratorMode.ToString(),
             options.EmitDecoratorMetadata.ToString(),
             options.Declaration.ToString(),
             options.EmitDeclarationOnly.ToString(),
             options.DeclarationDir is null ? "" : Path.GetFullPath(options.DeclarationDir),
+            options.NoLib?.ToString() ?? "",
+            string.Join(",", options.Lib ?? []),
+            string.Join(",", options.Types ?? []),
+            .. (options.TypeRoots ?? [])
+                .Select(Path.GetFullPath)
+                .OrderBy(path => path, PathComparer),
             .. options.References
                 .Select(Path.GetFullPath)
                 .OrderBy(path => path, PathComparer),

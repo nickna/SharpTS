@@ -15,6 +15,11 @@ public partial class TypeChecker
     /// </summary>
     private void CheckExportStatement(Stmt.Export exportStmt)
     {
+        // `export as namespace Foo` is a declaration-only UMD directive. Its
+        // binding is installed after the module's export surface is collected.
+        if (exportStmt.GlobalNamespaceName != null)
+            return;
+
         // Handle export assignment: export = expr
         if (exportStmt.ExportAssignment != null)
         {
@@ -96,7 +101,14 @@ public partial class TypeChecker
             // export { x, y } - verify each exported name exists
             foreach (var spec in exportStmt.NamedExports)
             {
-                var type = LookupVariable(spec.LocalName);
+                bool typeOnly = exportStmt.IsTypeOnly || spec.IsTypeOnly;
+                var type = typeOnly
+                    ? _environment.GetTypeBinding(spec.LocalName.Lexeme)
+                        ?? throw new TypeCheckException(
+                            $"Cannot find name '{spec.LocalName.Lexeme}'.",
+                            spec.LocalName.Line,
+                            tsCode: "TS2304")
+                    : LookupVariable(spec.LocalName);
                 if (_currentModule != null)
                 {
                     string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
@@ -107,8 +119,23 @@ public partial class TypeChecker
         else if (exportStmt.FromModulePath != null)
         {
             // Re-export: export { x } from './module' or export * from './module'
-            // The actual binding happens during module resolution
-            // Here we just need to validate the syntax is correct
+            // The actual binding happens during module resolution. Resolve once
+            // here as well so a missing target is a recoverable TS2307 instead
+            // of aborting program graph construction.
+            if (_currentModule != null && _moduleResolver != null)
+            {
+                try
+                {
+                    _moduleResolver.ResolveModulePath(
+                        exportStmt.FromModulePath, _currentModule.Path);
+                }
+                catch
+                {
+                    throw new TypeCheckException(
+                        $"Cannot find module '{exportStmt.FromModulePath}'",
+                        exportStmt.Keyword.Line, tsCode: "TS2307");
+                }
+            }
         }
     }
 
@@ -284,7 +311,7 @@ public partial class TypeChecker
         string name = interfaceStmt.Name.Lexeme;
 
         // Check if there's an existing type with this name
-        TypeInfo? existingType = _environment.Get(name);
+        TypeInfo? existingType = _environment.GetTypeBinding(name);
         if (existingType != null)
         {
             if (existingType is TypeInfo.Interface existingInterface)
@@ -311,7 +338,7 @@ public partial class TypeChecker
                 };
 
                 // Re-define the merged interface (replaces existing definition)
-                _environment.Define(name, mergedInterface);
+                _environment.DefineType(name, mergedInterface);
             }
             else
             {

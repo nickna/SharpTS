@@ -2,10 +2,22 @@ namespace SharpTS.Parsing;
 
 public partial class Parser
 {
+    private Token ParseQualifiedImplementedTypeName()
+    {
+        Token first = ConsumeIdentifierName("Expect interface name.");
+        string name = first.Lexeme;
+        while (Match(TokenType.DOT))
+            name += "." + ConsumeIdentifierName(
+                "Expect identifier after '.' in implemented type.").Lexeme;
+        return new Token(TokenType.IDENTIFIER, name, null, first.Line);
+    }
+
     // ============== CLASS DECLARATION ==============
 
     private Stmt ClassDeclaration(bool isAbstract, List<Decorator>? classDecorators = null, bool isDeclare = false)
     {
+        isDeclare |= _isDeclarationFile;
+
         Token name = Consume(TokenType.IDENTIFIER, "Expect class name.");
         List<TypeParam>? typeParams = ParseTypeParameters();
 
@@ -29,7 +41,7 @@ public partial class Parser
             interfaceTypeArgNodes = [];
             do
             {
-                interfaces.Add(Consume(TokenType.IDENTIFIER, "Expect interface name."));
+                interfaces.Add(ParseQualifiedImplementedTypeName());
                 interfaceTypeArgs.Add(TryParseTypeArguments(out var implArgNodes) ?? []);
                 // Empty inner list pairs with the empty string list, keeping indices aligned.
                 interfaceTypeArgNodes.Add(implArgNodes ?? []);
@@ -37,6 +49,7 @@ public partial class Parser
         }
 
         Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+        if (isDeclare) _ambientClassDepth++;
 
         List<Stmt.Function> methods = [];
         List<Stmt.Field> fields = [];
@@ -235,10 +248,14 @@ public partial class Parser
                 }
 
                 List<Stmt> body;
-                if (isMemberAbstract)
+                if (isMemberAbstract || isDeclare)
                 {
-                    // Abstract accessor: no body, just semicolon
-                    ConsumeSemicolon("Expect ';' after abstract accessor declaration.");
+                    // Abstract/ambient accessor: no body. Declaration files commonly
+                    // omit member semicolons, including after nested generic types.
+                    if (isDeclare)
+                        Match(TokenType.SEMICOLON);
+                    else
+                        ConsumeSemicolon("Expect ';' after abstract accessor declaration.");
                     body = [];
                 }
                 else
@@ -307,7 +324,10 @@ public partial class Parser
                         initializer = Expression();
                     }
 
-                    ConsumeSemicolon("Expect ';' after private field declaration.");
+                    if (isDeclare)
+                        Match(TokenType.SEMICOLON);
+                    else
+                        ConsumeSemicolon("Expect ';' after private field declaration.");
                     var privateField = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true);
                     fields.Add(privateField);
                     if (isStatic)
@@ -337,11 +357,16 @@ public partial class Parser
                 }
 
                 // Computed-name method ([Symbol.iterator]() {}) or field ([expr]: T = v).
-                ParseComputedClassMember(isStatic, isMemberAsync, isMemberGenerator, isOverride, isReadonly, access, memberDecorators, methods, fields, staticInitializers);
+                ParseComputedClassMember(
+                    isStatic, isMemberAsync, isMemberGenerator, isOverride, isReadonly,
+                    access, memberDecorators, methods, fields, staticInitializers, isDeclare);
             }
-            else if ((Peek().Type == TokenType.IDENTIFIER || IsContextualKeyword(Peek().Type)
+            else if ((Peek().Type == TokenType.IDENTIFIER || IsKeyword(Peek().Type)
+                      || IsContextualKeyword(Peek().Type)
                       || Peek().Type == TokenType.STRING || Peek().Type == TokenType.NUMBER) &&
-                     IsFieldDeclarationOpener(PeekNext().Type))
+                     IsFieldDeclarationOpener(PeekNext().Type)
+                     && !(PeekNext().Type == TokenType.QUESTION
+                          && PeekAt(2).Type is TokenType.LEFT_PAREN or TokenType.LESS))
             {
                 // Field declaration. Supports TS (`name: T`, `name?: T`,
                 // `name!: T`, `name: T = value`) and ES (`name`, `name = value`,
@@ -384,7 +409,10 @@ public partial class Parser
                     throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
                 }
 
-                ConsumeSemicolon("Expect ';' after field declaration.");
+                if (isDeclare)
+                    Match(TokenType.SEMICOLON);
+                else
+                    ConsumeSemicolon("Expect ';' after field declaration.");
                 var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare, TypeAnnotationNode: typeAnnotationNode);
                 fields.Add(field);
                 if (isStatic)
@@ -456,7 +484,8 @@ public partial class Parser
 
                     string kind = "method";
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
-                    var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync, isMemberGenerator);
+                    var func = (Stmt.Function)FunctionDeclaration(
+                        kind, isMemberAsync, isMemberGenerator, isDeclare: isDeclare);
                     func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
                     methods.Add(func);
 
@@ -497,6 +526,7 @@ public partial class Parser
             }
         }
 
+        if (isDeclare) _ambientClassDepth--;
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         return new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null, superclassTypeArgNodes, interfaceTypeArgNodes);
     }
@@ -511,7 +541,8 @@ public partial class Parser
     private void ParseComputedClassMember(
         bool isStatic, bool isMemberAsync, bool isMemberGenerator, bool isOverride, bool isReadonly,
         AccessModifier access, List<Decorator>? memberDecorators,
-        List<Stmt.Function> methods, List<Stmt.Field> fields, List<Stmt> staticInitializers)
+        List<Stmt.Function> methods, List<Stmt.Field> fields, List<Stmt> staticInitializers,
+        bool isDeclare = false)
     {
         Advance(); // consume '['
         Expr computedKey = Expression();
@@ -524,7 +555,9 @@ public partial class Parser
         // anything else is a computed-name field ([expr]: T = v).
         if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
         {
-            var func = (Stmt.Function)FunctionDeclaration("method", isMemberAsync, isMemberGenerator, computedMethod: (syntheticName, computedKey));
+            var func = (Stmt.Function)FunctionDeclaration(
+                "method", isMemberAsync, isMemberGenerator, isDeclare: isDeclare,
+                computedMethod: (syntheticName, computedKey));
             func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
             methods.Add(func);
             return;
@@ -549,8 +582,11 @@ public partial class Parser
             initializer = Expression();
         }
 
-        ConsumeSemicolon("Expect ';' after computed property field declaration.");
-        var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: false, ComputedKey: computedKey);
+        if (isDeclare)
+            Match(TokenType.SEMICOLON);
+        else
+            ConsumeSemicolon("Expect ';' after computed property field declaration.");
+        var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: isDeclare, ComputedKey: computedKey);
         fields.Add(field);
         if (isStatic)
         {
@@ -663,7 +699,7 @@ public partial class Parser
             interfaceTypeArgNodes = [];
             do
             {
-                interfaces.Add(Consume(TokenType.IDENTIFIER, "Expect interface name."));
+                interfaces.Add(ParseQualifiedImplementedTypeName());
                 interfaceTypeArgs.Add(TryParseTypeArguments(out var implArgNodes) ?? []);
                 // Empty inner list pairs with the empty string list, keeping indices aligned.
                 interfaceTypeArgNodes.Add(implArgNodes ?? []);
@@ -884,14 +920,13 @@ public partial class Parser
                     }
                 }
             }
-            else if ((Peek().Type == TokenType.IDENTIFIER || IsContextualKeyword(Peek().Type)) &&
+            else if ((Peek().Type == TokenType.IDENTIFIER || IsKeyword(Peek().Type)
+                      || IsContextualKeyword(Peek().Type)) &&
                      IsFieldDeclarationOpener(PeekNext().Type))
             {
                 // Field declaration. Supports TS and ES class-field forms,
                 // including bare `name;` and `name = value;`.
-                Token fieldName = Peek().Type == TokenType.IDENTIFIER
-                    ? Consume(TokenType.IDENTIFIER, "Expect field name.")
-                    : ConsumeIdentifierName("Expect field name.");
+                Token fieldName = ConsumePropertyName("Expect field name.");
                 bool isOptional = Match(TokenType.QUESTION);
                 bool hasDefiniteAssignment = Match(TokenType.BANG);
 

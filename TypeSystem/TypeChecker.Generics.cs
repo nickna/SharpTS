@@ -308,7 +308,7 @@ public partial class TypeChecker
             else
             {
                 // Look up the generic definition
-                TypeInfo? genericDef = _environment.Get(baseName);
+                TypeInfo? genericDef = _environment.GetTypeBinding(baseName) ?? _environment.Get(baseName);
 
                 result = genericDef switch
                 {

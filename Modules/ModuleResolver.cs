@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Configuration;
+using System.Text.Json;
 using SharpTS.Modules.Stdlib;
 using SharpTS.Modules.Stdlib.Providers;
 using SharpTS.Parsing;
@@ -42,6 +43,7 @@ public class ModuleResolver
     private readonly Dictionary<string, ModulePackageJson?> _packageJsonCache = [];
     private readonly Dictionary<string, string> _ambientModulePaths = new(StringComparer.Ordinal);
     private readonly StdlibProviderChain _stdlibChain;
+    private readonly TypeScriptProgramOptions _programOptions;
     /// <summary>
     /// Optional in-memory virtual file system. When non-null, all file existence checks and
     /// reads consult this map instead of touching the disk. Tests use this to bypass the
@@ -56,7 +58,11 @@ public class ModuleResolver
     /// Creates a new module resolver rooted at the given path.
     /// </summary>
     /// <param name="basePath">Entry point file path or base directory</param>
-    public ModuleResolver(string basePath) : this(basePath, ModuleResolutionOptions.Default, virtualFiles: null) { }
+    public ModuleResolver(string basePath)
+        : this(basePath, ModuleResolutionOptions.Default, virtualFiles: null, TypeScriptProgramOptions.Disabled) { }
+
+    public ModuleResolver(string basePath, TypeScriptProgramOptions programOptions)
+        : this(basePath, ModuleResolutionOptions.Default, virtualFiles: null, programOptions) { }
 
     /// <summary>
     /// Creates a new module resolver with an optional in-memory virtual file system.
@@ -69,18 +75,33 @@ public class ModuleResolver
     /// <param name="virtualFiles">If non-null, an in-memory file system. Keys must be
     /// absolute paths; normalization happens internally.</param>
     public ModuleResolver(string basePath, IReadOnlyDictionary<string, string>? virtualFiles)
-        : this(basePath, ModuleResolutionOptions.Default, virtualFiles)
-    {
-    }
+        : this(basePath, ModuleResolutionOptions.Default, virtualFiles, TypeScriptProgramOptions.Disabled) { }
+
+    public ModuleResolver(
+        string basePath,
+        IReadOnlyDictionary<string, string>? virtualFiles,
+        TypeScriptProgramOptions programOptions)
+        : this(basePath, ModuleResolutionOptions.Default, virtualFiles, programOptions) { }
 
     /// <summary>Creates a resolver using project-selected module resolution behavior.</summary>
     public ModuleResolver(
         string basePath,
         ModuleResolutionOptions resolutionOptions,
         IReadOnlyDictionary<string, string>? virtualFiles = null)
+        : this(basePath, resolutionOptions, virtualFiles, TypeScriptProgramOptions.Disabled) { }
+
+    /// <summary>
+    /// Creates a resolver using project-selected module resolution and declaration-program behavior.
+    /// </summary>
+    public ModuleResolver(
+        string basePath,
+        ModuleResolutionOptions resolutionOptions,
+        IReadOnlyDictionary<string, string>? virtualFiles,
+        TypeScriptProgramOptions programOptions)
     {
         _basePath = Path.GetDirectoryName(Path.GetFullPath(basePath)) ?? ".";
         _resolutionOptions = resolutionOptions;
+        _programOptions = programOptions;
         _stdlibChain = new StdlibProviderChain(
         [
             new PrimitiveProvider(),
@@ -138,6 +159,25 @@ public class ModuleResolver
     /// <returns>Absolute path to the resolved module</returns>
     /// <exception cref="Exception">If the module cannot be found</exception>
     public string ResolveModulePath(string specifier, string currentModulePath, ResolutionKind kind = ResolutionKind.Esm)
+        => ResolveModulePathCore(
+            specifier, currentModulePath, kind, _programOptions.PreferDeclarationFiles);
+
+    /// <summary>
+    /// Resolves the executable target for an import. Unlike <see cref="ResolveModulePath"/>,
+    /// package <c>types</c>/<c>typings</c> entries and <c>types</c> export conditions are
+    /// ignored.
+    /// </summary>
+    public string ResolveRuntimeModulePath(
+        string specifier,
+        string currentModulePath,
+        ResolutionKind kind = ResolutionKind.Esm)
+        => ResolveModulePathCore(specifier, currentModulePath, kind, preferDeclarations: false);
+
+    private string ResolveModulePathCore(
+        string specifier,
+        string currentModulePath,
+        ResolutionKind kind,
+        bool preferDeclarations)
     {
         string currentDir = Path.GetDirectoryName(currentModulePath) ?? _basePath;
 
@@ -154,7 +194,8 @@ public class ModuleResolver
             return specifier;
         }
 
-        if (_ambientModulePaths.TryGetValue(specifier, out string? ambientPath))
+        if (preferDeclarations &&
+            _ambientModulePaths.TryGetValue(specifier, out string? ambientPath))
             return ambientPath;
 
         if (specifier.StartsWith("./") || specifier.StartsWith("../") ||
@@ -179,7 +220,8 @@ public class ModuleResolver
                 throw new Exception(
                     $"Module Error: '{specifier}' requires node16, nodenext, or bundler module resolution.");
             // Subpath imports (#-prefixed) — resolve through nearest package.json "imports" field
-            string? result = TryResolveSubpathImport(specifier, currentDir, kind);
+            string? result = TryResolveSubpathImport(
+                specifier, currentDir, kind, preferDeclarations);
             if (result != null)
                 return result;
             throw new Exception($"Module Error: Cannot resolve subpath import '{specifier}'. " +
@@ -229,14 +271,15 @@ public class ModuleResolver
 
             // Try self-referencing: if nearest package.json has "name" matching the specifier
             string? selfRef = _resolutionOptions.UsesPackageMaps
-                ? TryResolveSelfReference(specifier, currentDir, kind)
+                ? TryResolveSelfReference(specifier, currentDir, kind, preferDeclarations)
                 : null;
             if (selfRef != null)
                 return selfRef;
 
             // Bare specifier (e.g., 'lodash')
             // Look in node_modules directories
-            string? resolvedPath = TryResolveNodeModule(specifier, currentDir, kind);
+            string? resolvedPath = TryResolveNodeModule(
+                specifier, currentDir, kind, preferDeclarations);
             if (resolvedPath != null)
             {
                 return resolvedPath;
@@ -296,7 +339,11 @@ public class ModuleResolver
     /// Tries to resolve a bare specifier by looking in node_modules directories.
     /// Supports package.json "exports" field, "main"/"types" fallback, and legacy index.ts.
     /// </summary>
-    private string? TryResolveNodeModule(string specifier, string startDir, ResolutionKind kind)
+    private string? TryResolveNodeModule(
+        string specifier,
+        string startDir,
+        ResolutionKind kind,
+        bool preferDeclarations)
     {
         var (packageName, subpath) = ParsePackageSpecifier(specifier);
         string? currentDir = startDir;
@@ -307,7 +354,8 @@ public class ModuleResolver
 
             if (ResolverDirectoryExists(packageDir))
             {
-                var result = TryResolveInPackageDir(packageDir, subpath, kind);
+                var result = TryResolveInPackageDir(
+                    packageDir, subpath, kind, preferDeclarations);
                 if (result != null)
                     return result;
             }
@@ -333,7 +381,11 @@ public class ModuleResolver
     /// <summary>
     /// Attempts to resolve a subpath within a specific package directory.
     /// </summary>
-    private string? TryResolveInPackageDir(string packageDir, string subpath, ResolutionKind kind)
+    private string? TryResolveInPackageDir(
+        string packageDir,
+        string subpath,
+        ResolutionKind kind,
+        bool preferDeclarations)
     {
         string packageJsonPath = Path.Combine(packageDir, "package.json");
         var pkg = LoadPackageJson(packageJsonPath);
@@ -342,7 +394,7 @@ public class ModuleResolver
         {
             // Use exports field
             var resolved = ExportsResolver.ResolvePackageExports(
-                pkg.Exports.Value, subpath, ConditionsFor(kind));
+                pkg.Exports.Value, subpath, ConditionsFor(kind, preferDeclarations));
             if (resolved != null)
                 return ResolveExportsPath(resolved, packageDir);
             // Exports field exists but no match — per spec, this blocks resolution
@@ -351,8 +403,10 @@ public class ModuleResolver
 
         if (pkg != null && subpath == ".")
         {
-            // No exports field — try types/typings, then main, then module
-            string? entryPath = pkg.Types ?? pkg.Typings ?? pkg.Main ?? pkg.Module;
+            // Type checking follows types/typings; execution follows the JavaScript entry.
+            string? entryPath = preferDeclarations
+                ? pkg.Types ?? pkg.Typings ?? pkg.Main ?? pkg.Module
+                : pkg.Main ?? pkg.Module;
             if (entryPath != null)
             {
                 var mapped = ResolveExportsPath(
@@ -471,7 +525,11 @@ public class ModuleResolver
     /// <summary>
     /// Resolves #-prefixed subpath imports through the nearest package.json "imports" field.
     /// </summary>
-    private string? TryResolveSubpathImport(string specifier, string startDir, ResolutionKind kind)
+    private string? TryResolveSubpathImport(
+        string specifier,
+        string startDir,
+        ResolutionKind kind,
+        bool preferDeclarations)
     {
         string? dir = startDir;
         while (dir != null)
@@ -483,7 +541,7 @@ public class ModuleResolver
                 if (pkg.Imports != null)
                 {
                     var resolved = ExportsResolver.ResolvePackageImports(
-                        pkg.Imports.Value, specifier, ConditionsFor(kind));
+                        pkg.Imports.Value, specifier, ConditionsFor(kind, preferDeclarations));
                     if (resolved != null)
                         return ResolveExportsPath(resolved, dir);
                 }
@@ -498,7 +556,11 @@ public class ModuleResolver
     /// <summary>
     /// Resolves self-referencing imports (when a package imports itself by name through its own exports).
     /// </summary>
-    private string? TryResolveSelfReference(string specifier, string startDir, ResolutionKind kind)
+    private string? TryResolveSelfReference(
+        string specifier,
+        string startDir,
+        ResolutionKind kind,
+        bool preferDeclarations)
     {
         var (packageName, subpath) = ParsePackageSpecifier(specifier);
 
@@ -510,7 +572,7 @@ public class ModuleResolver
             if (pkg?.Name == packageName && pkg.Exports != null)
             {
                 var resolved = ExportsResolver.ResolvePackageExports(
-                    pkg.Exports.Value, subpath, ConditionsFor(kind));
+                    pkg.Exports.Value, subpath, ConditionsFor(kind, preferDeclarations));
                 if (resolved != null)
                     return ResolveExportsPath(resolved, dir);
                 return null;
@@ -520,16 +582,22 @@ public class ModuleResolver
         return null;
     }
 
-    private string[] ConditionsFor(ResolutionKind kind)
+    private string[] ConditionsFor(ResolutionKind kind, bool preferDeclarations)
     {
         if (_resolutionOptions.Mode == ModuleResolutionMode.Bundler)
-            return kind == ResolutionKind.Cjs
-                ? ["require", "default"]
-                : ["import", "default"];
-
-        return kind switch
         {
-            ResolutionKind.Cjs => ExportsResolver.CjsConditions,
+            if (preferDeclarations)
+                return kind == ResolutionKind.Cjs
+                    ? ["types", "require", "default"]
+                    : ["types", "import", "default"];
+            return kind == ResolutionKind.Cjs ? ["require", "default"] : ["import", "default"];
+        }
+
+        return (kind, preferDeclarations) switch
+        {
+            (ResolutionKind.Cjs, true) => ExportsResolver.TypeCjsConditions,
+            (_, true) => ExportsResolver.TypeEsmConditions,
+            (ResolutionKind.Cjs, false) => ExportsResolver.CjsConditions,
             _ => ExportsResolver.EsmConditions,
         };
     }
@@ -642,6 +710,9 @@ public class ModuleResolver
                 : throw new Exception($"Module Error: Unknown ambient module '{absolutePath}'.");
         }
 
+        if (absolutePath.StartsWith(TypeScriptLibProvider.VirtualPathPrefix, StringComparison.Ordinal))
+            return LoadTypeScriptLibModule(absolutePath, decoratorMode);
+
         // Embedded stdlib TypeScript module — compile from resource instead of filesystem.
         if (absolutePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal))
         {
@@ -733,17 +804,26 @@ public class ModuleResolver
 
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
-            var parser = new Parser(tokens, decoratorMode);
+            var parser = new Parser(tokens, decoratorMode)
+                .AsDeclarationFile(IsDeclarationFilePath(absolutePath));
             var parseResult = parser.Parse();
 
             // For module loading, we throw on parse errors (backward compatible)
             if (!parseResult.IsSuccess)
             {
-                throw new Exception(parseResult.Diagnostics.First().ToString());
+                string? parentName = Path.GetFileName(Path.GetDirectoryName(absolutePath));
+                string displayName = string.IsNullOrEmpty(parentName)
+                    ? Path.GetFileName(absolutePath)
+                    : $"{parentName}/{Path.GetFileName(absolutePath)}";
+                throw new Exception(
+                    $"{parseResult.Diagnostics.First()} in '{displayName}' ({absolutePath})");
             }
 
             var statements = parseResult.Statements;
-            var module = new ParsedModule(absolutePath, statements);
+            var module = new ParsedModule(absolutePath, statements)
+            {
+                IsDeclarationFile = IsDeclarationFilePath(absolutePath),
+            };
 
             // Determine if this is a script or module file
             module.IsScript = ScriptDetector.IsScriptFile(statements);
@@ -758,15 +838,24 @@ public class ModuleResolver
                 module.IsScript = false;
             }
 
-            // Process triple-slash path references (only valid for scripts)
+            // Declaration graphs are routinely cyclic (including @types/node).
+            // Publish the parsed shell before following references/imports so a
+            // back-edge can reuse it. Runtime modules retain the historical
+            // circular-dependency diagnostic.
+            if (module.IsDeclarationFile)
+                _moduleCache[absolutePath] = module;
+
+            // Process triple-slash path references. Runtime modules retain the
+            // historical script-only restriction, but declaration modules commonly
+            // use path references to compose packages such as @types/node.
             // NOTE: Process BEFORE caching to properly detect circular references
             var directives = lexer.TripleSlashDirectives;
             var pathRefs = directives.Where(d => d.Type == TripleSlashReferenceType.Path).ToList();
-            bool isDeclarationFile = absolutePath.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase);
+            module.NoDefaultLib = directives.Any(d => d.Type == TripleSlashReferenceType.NoDefaultLib);
 
             if (pathRefs.Count > 0)
             {
-                if (!module.IsScript && !isDeclarationFile)
+                if (!module.IsScript && !module.IsDeclarationFile)
                 {
                     throw new Exception($"Type Error: /// <reference path=\"...\"> is only valid in script files (files without import/export). File '{absolutePath}' is a module.");
                 }
@@ -777,38 +866,38 @@ public class ModuleResolver
                     string refPath = ResolveReferencePath(pathRef.Value, absolutePath);
                     var refModule = LoadScriptReference(refPath, decoratorMode, absolutePath);
 
-                    bool referencedDeclaration =
-                        refPath.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase);
-                    if (!refModule.IsScript && !referencedDeclaration)
+                    if (!refModule.IsScript && !refModule.IsDeclarationFile)
                     {
                         throw new Exception($"Type Error: /// <reference path=\"{pathRef.Value}\"> cannot reference a module file. Referenced file '{refPath}' contains import/export statements.");
                     }
 
                     module.PathReferences.Add(pathRef);
-                    if (module.IsScript && refModule.IsScript)
-                        module.ReferencedScripts.Add(refModule);
-                    else if (!module.Dependencies.Contains(refModule))
-                        module.Dependencies.Add(refModule);
+                    AddTypeDependency(module, refModule);
                 }
             }
 
-            // Type/lib references are declaration dependencies. Unlike `path`, they are valid
-            // in both scripts and modules and never participate in runtime execution.
-            foreach (var directive in directives.Where(
-                         d => d.Type is TripleSlashReferenceType.Types or TripleSlashReferenceType.Lib))
+            // Runtime scripts are cached only after path-reference processing so
+            // their existing circular triple-slash diagnostic remains intact.
+            if (!module.IsDeclarationFile)
+                _moduleCache[absolutePath] = module;
+
+            foreach (var libRef in directives.Where(d => d.Type == TripleSlashReferenceType.Lib))
             {
-                string declarationPath = directive.Type == TripleSlashReferenceType.Lib
-                    ? TsConfigDeclarationResolver.ResolveLibReference(absolutePath, directive.Value)
-                    : TsConfigDeclarationResolver.ResolveTypeReference(
-                        absolutePath, directive.Value, _resolutionOptions.TypeRoots);
-                var declarationModule = LoadModule(declarationPath, decoratorMode);
-                RegisterAmbientModuleDeclarations([declarationModule]);
-                if (!module.Dependencies.Contains(declarationModule))
-                    module.Dependencies.Add(declarationModule);
+                var library = LoadTypeScriptLibModule(
+                    TypeScriptLibProvider.GetVirtualPath(libRef.Value), decoratorMode);
+                if (!module.ReferencedScripts.Contains(library))
+                    module.ReferencedScripts.Add(library);
             }
 
-            // Cache AFTER processing path references to properly detect circular references
-            _moduleCache[absolutePath] = module;
+            foreach (var typeRef in directives.Where(d => d.Type == TripleSlashReferenceType.Types))
+            {
+                string declarationPath = ResolveTypeReferenceDirective(typeRef.Value, absolutePath)
+                    ?? throw new Exception(
+                        $"Type Error: Cannot find type definition file for '{typeRef.Value}'.");
+                var declarationModule = LoadModule(declarationPath, decoratorMode);
+                RegisterAmbientModuleDeclarations([declarationModule]);
+                AddTypeDependency(module, declarationModule);
+            }
 
             // CommonJS modules use runtime require() instead of static imports. We still walk
             // their bodies for literal `require('./literal')` calls so the compiler can pre-load
@@ -825,8 +914,30 @@ public class ModuleResolver
             {
                 if (stmt is Stmt.Import import)
                 {
-                    string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
-                    var importedModule = LoadModule(importedPath, decoratorMode);
+                    if (module.IsDeclarationFile
+                        && IsRuntimeFacadeSpecifier(import.ModulePath))
+                    {
+                        // A declaration package's `node:*` imports refer to its
+                        // ambient module declarations, not SharpTS's executable
+                        // stdlib facade with the same specifier.
+                        continue;
+                    }
+
+                    ParsedModule importedModule;
+                    try
+                    {
+                        string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
+                        importedModule = LoadModule(importedPath, decoratorMode);
+                    }
+                    catch (Exception ex) when (
+                        _programOptions.PreferDeclarationFiles
+                        && ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+                    {
+                        // Program loading must keep the rest of the graph alive
+                        // so the checker can report canonical TS2307 at the
+                        // import site. Runtime-only resolution remains eager.
+                        continue;
+                    }
                     // dotnet: modules resolve their export surface from the importing
                     // statements — each named import is resolved (and validated) here.
                     if (importedModule.IsDotNetModule)
@@ -840,11 +951,35 @@ public class ModuleResolver
                     {
                         module.Dependencies.Add(importedModule);
                     }
+                    if (!module.IsDeclarationFile &&
+                        ImportHasRuntimeBinding(import) &&
+                        importedModule.IsDeclarationFile)
+                    {
+                        TryAddRuntimeDependency(
+                            module, import.ModulePath, absolutePath,
+                            ResolutionKind.Esm, decoratorMode);
+                    }
                 }
                 else if (stmt is Stmt.Export export && export.FromModulePath != null)
                 {
+                    if (module.IsDeclarationFile
+                        && IsRuntimeFacadeSpecifier(export.FromModulePath))
+                    {
+                        continue;
+                    }
+
                     // Re-export: export { x } from './foo' or export * from './foo'
-                    string reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
+                    string reexportPath;
+                    try
+                    {
+                        reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
+                    }
+                    catch (Exception ex) when (
+                        _programOptions.PreferDeclarationFiles
+                        && ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
                     if (DotNetImports.IsDotNetSpecifier(reexportPath))
                     {
                         throw new Exception(
@@ -858,9 +993,23 @@ public class ModuleResolver
                     {
                         module.Dependencies.Add(reexportedModule);
                     }
+                    if (!module.IsDeclarationFile &&
+                        ExportHasRuntimeBinding(export) &&
+                        reexportedModule.IsDeclarationFile)
+                    {
+                        TryAddRuntimeDependency(
+                            module, export.FromModulePath, absolutePath,
+                            ResolutionKind.Esm, decoratorMode);
+                    }
                 }
                 else if (stmt is Stmt.ImportRequire importReq)
                 {
+                    if (module.IsDeclarationFile
+                        && IsRuntimeFacadeSpecifier(importReq.ModulePath))
+                    {
+                        continue;
+                    }
+
                     // CommonJS-style import: import x = require('./foo')
                     // Skip built-in modules (fs, path, etc.)
                     if (BuiltInModuleRegistry.GetModuleName(importReq.ModulePath) != null)
@@ -883,6 +1032,12 @@ public class ModuleResolver
                     {
                         module.Dependencies.Add(importedModule);
                     }
+                    if (!module.IsDeclarationFile && importedModule.IsDeclarationFile)
+                    {
+                        TryAddRuntimeDependency(
+                            module, importReq.ModulePath, absolutePath,
+                            ResolutionKind.Cjs, decoratorMode);
+                    }
                 }
             }
 
@@ -901,6 +1056,58 @@ public class ModuleResolver
         finally
         {
             _loadingModules.Remove(absolutePath);
+        }
+    }
+
+    private bool IsRuntimeFacadeSpecifier(string specifier)
+    {
+        string bareSpecifier = specifier.StartsWith("node:", StringComparison.Ordinal)
+            ? specifier[5..]
+            : specifier;
+        return _stdlibChain.TryResolve(bareSpecifier, out var resolved)
+            && resolved is not null;
+    }
+
+    private static bool ImportHasRuntimeBinding(Stmt.Import import)
+    {
+        if (import.IsTypeOnly)
+            return false;
+        if (import.DefaultImport is not null || import.NamespaceImport is not null)
+            return true;
+        if (import.NamedImports is null)
+            return true; // Side-effect import.
+        return import.NamedImports.Any(specifier => !specifier.IsTypeOnly);
+    }
+
+    private static bool ExportHasRuntimeBinding(Stmt.Export export)
+    {
+        if (export.IsTypeOnly)
+            return false;
+        return export.NamedExports is null ||
+               export.NamedExports.Any(specifier => !specifier.IsTypeOnly);
+    }
+
+    private void TryAddRuntimeDependency(
+        ParsedModule owner,
+        string specifier,
+        string containingPath,
+        ResolutionKind kind,
+        DecoratorMode decoratorMode)
+    {
+        try
+        {
+            string runtimePath = ResolveRuntimeModulePath(specifier, containingPath, kind);
+            var runtimeModule = LoadModule(runtimePath, decoratorMode);
+            runtimeModule.IsScript = false;
+            if (!owner.RuntimeDependencies.Contains(runtimeModule))
+                owner.RuntimeDependencies.Add(runtimeModule);
+        }
+        catch (Exception ex) when (
+            _programOptions.PreferDeclarationFiles &&
+            ex.Message.StartsWith("Module Error: Cannot resolve", StringComparison.Ordinal))
+        {
+            // A declaration-only package remains valid for type-only consumers. A value
+            // consumer receives the normal runtime module-not-found diagnostic if executed.
         }
     }
 
@@ -1010,7 +1217,8 @@ public class ModuleResolver
             {
                 // Literal require() — pass Cjs so dual-export packages route to the
                 // "require" entry, not "import" (matches Node semantics).
-                requiredPath = ResolveModulePath(specifier, absolutePath, ResolutionKind.Cjs);
+                requiredPath = ResolveRuntimeModulePath(
+                    specifier, absolutePath, ResolutionKind.Cjs);
             }
             catch
             {
@@ -1070,6 +1278,34 @@ public class ModuleResolver
     /// <returns>List of modules in dependency order</returns>
     public List<ParsedModule> GetModulesInOrder(ParsedModule entryPoint)
         => GetModulesInOrder([entryPoint]);
+
+    /// <summary>
+    /// Returns executable modules in dependency order, substituting package JavaScript
+    /// entries for the declaration entries used by the type-check graph.
+    /// </summary>
+    public List<ParsedModule> GetRuntimeModulesInOrder(ParsedModule entryPoint)
+    {
+        List<ParsedModule> result = [];
+        HashSet<string> visited = [];
+
+        void Visit(ParsedModule module)
+        {
+            if (!visited.Add(module.Path))
+                return;
+
+            foreach (var dependency in module.Dependencies.Where(
+                         dependency => !dependency.IsDeclarationFile))
+                Visit(dependency);
+            foreach (var dependency in module.RuntimeDependencies)
+                Visit(dependency);
+
+            if (!module.IsDeclarationFile)
+                result.Add(module);
+        }
+
+        Visit(entryPoint);
+        return result;
+    }
 
     /// <summary>
     /// Registers <c>declare module "name"</c> blocks from declaration roots as synthetic
@@ -1156,12 +1392,342 @@ public class ModuleResolver
             && !absolutePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal)
             && !absolutePath.StartsWith(AmbientModulePrefix, StringComparison.Ordinal)
             && !DotNetImports.IsDotNetSpecifier(absolutePath)
+            && !absolutePath.StartsWith(TypeScriptLibProvider.VirtualPathPrefix, StringComparison.Ordinal)
             && !absolutePath.StartsWith(PrimitiveRegistry.Prefix, StringComparison.Ordinal))
         {
             absolutePath = Path.GetFullPath(absolutePath);
         }
         return _moduleCache.GetValueOrDefault(absolutePath);
     }
+
+    /// <summary>
+    /// Loads a complete TypeScript program: the entry graph plus standard declaration
+    /// libraries selected by <see cref="TypeScriptProgramOptions"/>.
+    /// </summary>
+    public ParsedModule LoadProgram(string absolutePath, DecoratorMode decoratorMode = DecoratorMode.None)
+    {
+        var entry = LoadModule(absolutePath, decoratorMode);
+        if (!_programOptions.NoLib && !entry.NoDefaultLib)
+        {
+            IReadOnlyList<string> requested = _programOptions.Lib is not null
+                ? _programOptions.Lib
+                : _programOptions.LoadDefaultLib ? ["lib.d.ts"] : [];
+
+            foreach (string name in requested)
+            {
+                ParsedModule library;
+                if (TypeScriptLibProvider.TryGetParsed(name, out _))
+                {
+                    library = LoadTypeScriptLibModule(
+                        TypeScriptLibProvider.GetVirtualPath(name), decoratorMode);
+                }
+                else if (_virtualFiles is null)
+                {
+                    // Preserve support for project-local custom library files while
+                    // using embedded declarations for the standard TypeScript set.
+                    string physicalPath =
+                        TsConfigDeclarationResolver.ResolveLibReference(absolutePath, name);
+                    library = LoadModule(physicalPath, decoratorMode);
+                }
+                else
+                {
+                    // Produce the same actionable embedded-library diagnostic in VFS
+                    // and conformance runs, where physical fallback is unavailable.
+                    library = LoadTypeScriptLibModule(
+                        TypeScriptLibProvider.GetVirtualPath(name), decoratorMode);
+                }
+                AddTypeDependency(entry, library);
+            }
+        }
+
+        foreach (string typeName in GetAutomaticTypeDirectiveNames(absolutePath))
+        {
+            string? declarationPath = ResolveTypeReferenceDirective(typeName, absolutePath);
+            if (declarationPath is null)
+            {
+                if (_programOptions.Types is not null)
+                    throw new Exception(
+                        $"Type Error: Cannot find type definition file for '{typeName}'.");
+            }
+            else
+            {
+                var declaration = LoadModule(declarationPath, decoratorMode);
+                RegisterAmbientModuleDeclarations([declaration]);
+                AddTypeDependency(entry, declaration);
+            }
+        }
+
+        return entry;
+    }
+
+    private static void AddTypeDependency(ParsedModule owner, ParsedModule declaration)
+    {
+        if (declaration.IsScript)
+        {
+            if (!owner.ReferencedScripts.Contains(declaration))
+                owner.ReferencedScripts.Add(declaration);
+        }
+        else if (!owner.Dependencies.Contains(declaration))
+        {
+            owner.Dependencies.Add(declaration);
+        }
+    }
+
+    private IEnumerable<string> GetAutomaticTypeDirectiveNames(string containingFile)
+    {
+        if (_programOptions.Types is not null)
+            return _programOptions.Types.Distinct(StringComparer.OrdinalIgnoreCase);
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string root in GetEffectiveTypeRoots(containingFile))
+        {
+            if (_virtualFiles is not null)
+            {
+                string prefix = NormalizePath(root).TrimEnd(Path.DirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+                foreach (string path in _virtualFiles.Keys)
+                {
+                    if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string relative = path[prefix.Length..];
+                    int separator = relative.IndexOf(Path.DirectorySeparatorChar);
+                    if (separator > 0)
+                    {
+                        string package = relative[..separator];
+                        names.Add(package.Contains("__", StringComparison.Ordinal)
+                            ? "@" + package.Replace("__", "/", StringComparison.Ordinal)
+                            : package);
+                    }
+                }
+                continue;
+            }
+
+            if (!Directory.Exists(root))
+                continue;
+            try
+            {
+                foreach (string directory in Directory.EnumerateDirectories(root))
+                {
+                    string package = Path.GetFileName(directory);
+                    names.Add(package.Contains("__", StringComparison.Ordinal)
+                        ? "@" + package.Replace("__", "/", StringComparison.Ordinal)
+                        : package);
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return names;
+    }
+
+    private string? ResolveTypeReferenceDirective(string typeName, string containingFile)
+    {
+        string packageDirectoryName = typeName.StartsWith('@')
+            ? typeName[1..].Replace("/", "__", StringComparison.Ordinal)
+            : typeName;
+
+        foreach (string root in GetEffectiveTypeRoots(containingFile))
+        {
+            string packageDir = Path.Combine(root, packageDirectoryName);
+            if (!ResolverDirectoryExists(packageDir))
+                continue;
+
+            var package = LoadPackageJson(Path.Combine(packageDir, "package.json"));
+            string? entry = package?.Types ?? package?.Typings;
+            string defaultEntry = string.IsNullOrWhiteSpace(entry) ? "index.d.ts" : entry;
+            string? versionedEntry = TryResolveTypesVersionEntry(
+                package, packageDir, defaultEntry);
+            if (versionedEntry is not null)
+                return versionedEntry;
+
+            if (!string.IsNullOrWhiteSpace(entry))
+            {
+                string? resolved = TryAddExtension(Path.GetFullPath(Path.Combine(packageDir, entry)));
+                if (resolved is not null)
+                    return resolved;
+            }
+
+            string index = Path.Combine(packageDir, "index.d.ts");
+            if (ResolverFileExists(index))
+                return index;
+        }
+        return null;
+    }
+
+    private string? TryResolveTypesVersionEntry(
+        ModulePackageJson? package,
+        string packageDir,
+        string requestedPath)
+    {
+        if (package?.TypesVersions is not { ValueKind: JsonValueKind.Object } versions)
+            return null;
+
+        foreach (var rangeProperty in versions.EnumerateObject())
+        {
+            if (!MatchesCompilerVersionRange(rangeProperty.Name)
+                || rangeProperty.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            string request = requestedPath
+                .Replace('\\', '/')
+                .TrimStart('.', '/');
+            foreach (var mapping in rangeProperty.Value.EnumerateObject())
+            {
+                if (!TryMatchTypesVersionPattern(
+                        mapping.Name, request, out string wildcard))
+                {
+                    continue;
+                }
+
+                if (mapping.Value.ValueKind != JsonValueKind.Array)
+                    continue;
+                foreach (var target in mapping.Value.EnumerateArray())
+                {
+                    if (target.ValueKind != JsonValueKind.String)
+                        continue;
+                    string mapped = target.GetString()!.Replace(
+                        "*", wildcard, StringComparison.Ordinal);
+                    string? resolved = TryAddExtension(
+                        Path.GetFullPath(Path.Combine(
+                            packageDir, mapped.Replace('/', Path.DirectorySeparatorChar))));
+                    if (resolved is not null)
+                        return resolved;
+                }
+            }
+
+            // TypeScript selects the first matching version range.
+            return null;
+        }
+
+        return null;
+    }
+
+    private static bool TryMatchTypesVersionPattern(
+        string pattern,
+        string request,
+        out string wildcard)
+    {
+        int star = pattern.IndexOf('*');
+        if (star < 0)
+        {
+            wildcard = "";
+            return string.Equals(pattern, request, StringComparison.Ordinal);
+        }
+
+        string prefix = pattern[..star];
+        string suffix = pattern[(star + 1)..];
+        if (!request.StartsWith(prefix, StringComparison.Ordinal)
+            || !request.EndsWith(suffix, StringComparison.Ordinal)
+            || request.Length < prefix.Length + suffix.Length)
+        {
+            wildcard = "";
+            return false;
+        }
+
+        wildcard = request[prefix.Length..(request.Length - suffix.Length)];
+        return true;
+    }
+
+    private static bool MatchesCompilerVersionRange(string range)
+    {
+        foreach (string alternative in range.Split(
+                     "||", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            bool matches = true;
+            foreach (string clause in alternative.Split(
+                         ' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                string op = clause.StartsWith("<=", StringComparison.Ordinal) ? "<="
+                    : clause.StartsWith(">=", StringComparison.Ordinal) ? ">="
+                    : clause.StartsWith('<') ? "<"
+                    : clause.StartsWith('>') ? ">"
+                    : clause.StartsWith('=') ? "="
+                    : "";
+                string versionText = clause[op.Length..];
+                if (!Version.TryParse(versionText, out Version? version))
+                {
+                    matches = false;
+                    break;
+                }
+
+                int comparison = TypeScriptLibProvider.CompilerVersion.CompareTo(version);
+                matches &= op switch
+                {
+                    "<=" => comparison <= 0,
+                    ">=" => comparison >= 0,
+                    "<" => comparison < 0,
+                    ">" => comparison > 0,
+                    _ => comparison == 0,
+                };
+                if (!matches)
+                    break;
+            }
+            if (matches)
+                return true;
+        }
+        return false;
+    }
+
+    private IEnumerable<string> GetEffectiveTypeRoots(string containingFile)
+    {
+        if (_programOptions.TypeRoots is not null)
+            return _programOptions.TypeRoots.Select(Path.GetFullPath);
+        if (_resolutionOptions.TypeRoots is { Count: > 0 })
+            return _resolutionOptions.TypeRoots.Select(Path.GetFullPath);
+
+        var roots = new List<string>();
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(containingFile));
+        while (directory is not null)
+        {
+            roots.Add(Path.Combine(directory, "node_modules", "@types"));
+            directory = Path.GetDirectoryName(directory);
+        }
+        return roots;
+    }
+
+    private ParsedModule LoadTypeScriptLibModule(string virtualPath, DecoratorMode decoratorMode)
+    {
+        virtualPath = TypeScriptLibProvider.GetVirtualPath(virtualPath);
+        if (_moduleCache.TryGetValue(virtualPath, out var cached))
+            return cached;
+
+        if (!TypeScriptLibProvider.TryGetParsed(virtualPath, out var parsedLibrary)
+            || parsedLibrary is null)
+        {
+            string available = string.Join(", ", TypeScriptLibProvider.AvailableLibraries
+                .Select(TypeScriptLibProvider.GetDisplayName));
+            throw new Exception(
+                $"Type Error: Cannot resolve library '{virtualPath[TypeScriptLibProvider.VirtualPathPrefix.Length..]}'. " +
+                $"Available libraries: {available}");
+        }
+
+        var module = new ParsedModule(virtualPath, parsedLibrary.Statements)
+        {
+            IsScript = true,
+            IsDeclarationFile = true,
+            IsDefaultLibrary = true,
+            NoDefaultLib = true,
+        };
+        _moduleCache[virtualPath] = module;
+
+        foreach (var directive in parsedLibrary.Directives.Where(
+                     d => d.Type == TripleSlashReferenceType.Lib))
+        {
+            var dependency = LoadTypeScriptLibModule(
+                TypeScriptLibProvider.GetVirtualPath(directive.Value), decoratorMode);
+            if (!module.ReferencedScripts.Contains(dependency))
+                module.ReferencedScripts.Add(dependency);
+        }
+
+        return module;
+    }
+
+    private static bool IsDeclarationFilePath(string path) =>
+        path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Clears all cached modules.
@@ -1192,7 +1758,7 @@ public class ModuleResolver
         {
             try
             {
-                string resolvedPath = ResolveModulePath(path, basePath);
+                string resolvedPath = ResolveRuntimeModulePath(path, basePath);
 
                 // Skip if already loaded
                 if (_moduleCache.ContainsKey(resolvedPath))
