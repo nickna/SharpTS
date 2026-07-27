@@ -111,11 +111,14 @@ public static class CompilationService
             // Lex. The Lexer reports errors by throwing raw Exceptions with the line
             // embedded in the message ("... at line N") — convert to a ParseError
             // diagnostic instead of letting it escape.
+            bool isTsx = options.FileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase)
+                || options.FileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase)
+                || options.Jsx is not null;
             Lexer lexer;
             List<Token> tokens;
             try
             {
-                lexer = new Lexer(source);
+                lexer = new Lexer(source) { JsxTolerant = isTsx };
                 tokens = lexer.ScanTokens();
             }
             catch (Exception ex)
@@ -126,9 +129,7 @@ public static class CompilationService
             // Parse, with recovery — surfaces all parse errors, not just the first.
             var parser = new Parser(tokens, options.DecoratorMode)
                 .WithFilePath(options.FileName);
-            bool isTsx = options.FileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase)
-                || options.FileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
-            if (isTsx || options.Jsx is not null)
+            if (isTsx)
                 parser.WithJsx(source, options.Jsx ?? JsxParseOptions.Default);
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)

@@ -9,7 +9,7 @@ public class JsxParserTests
 {
     /// <summary>Parses in the TSX dialect, the way ModuleResolver does for .tsx files.</summary>
     private static ParseDiagnosticResult ParseTsx(string source, JsxParseOptions? options = null) =>
-        new Parser(new Lexer(source).ScanTokens())
+        new Parser(new Lexer(source) { JsxTolerant = true }.ScanTokens())
             .WithJsx(source, options ?? JsxParseOptions.Default)
             .Parse();
 

@@ -814,12 +814,13 @@ public class ModuleResolver
         {
             string source = ResolverReadAllText(absolutePath);
 
-            var lexer = new Lexer(source);
+            bool isJsxSource = IsJsxSourcePath(absolutePath);
+            var lexer = new Lexer(source) { JsxTolerant = isJsxSource };
             var tokens = lexer.ScanTokens();
             var parser = new Parser(tokens, decoratorMode)
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
                 .WithFilePath(absolutePath);
-            if (IsJsxSourcePath(absolutePath))
+            if (isJsxSource)
                 parser.WithJsx(source, JsxOptions ?? JsxParseOptions.Default);
             var parseResult = parser.Parse();
 

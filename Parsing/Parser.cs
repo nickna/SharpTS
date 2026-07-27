@@ -66,9 +66,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     // The source text is required so JSX text runs and attribute strings can be scanned
     // faithfully (the upfront lexer applies TS string/comment rules that corrupt them).
     private JsxParseOptions? _jsx = null;
-#pragma warning disable IDE0052 // read by the JSX text rescanning work that builds on this dialect gate
     private string? _source = null;
-#pragma warning restore IDE0052
 
     /// <summary>
     /// Enables the TSX dialect for this parse. Call only for .tsx/.jsx sources.

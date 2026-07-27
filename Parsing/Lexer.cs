@@ -33,6 +33,13 @@ public class Lexer(string source)
     // Used to disambiguate regex literals from division operator
     private bool _expectExpr = true;
 
+    /// <summary>
+    /// Lenient mode for .tsx sources (and JSX suffix re-lexing): characters that are invalid
+    /// in TypeScript but legal inside JSX text (a bare '#') are dropped instead of throwing,
+    /// so the upfront pass survives to reach the parser's source-driven JSX text scanning.
+    /// </summary>
+    public bool JsxTolerant { get; init; } = false;
+
     // Triple-slash directive support
     private readonly List<TripleSlashDirective> _tripleSlashDirectives = [];
     // Track when we've emitted a code token (directives only valid before code)
@@ -161,6 +168,54 @@ public class Lexer(string source)
         return _tokens;
     }
 
+    /// <summary>Suffix lexer for JSX token-stream repair. See <see cref="Relex"/>.</summary>
+    private Lexer(string source, int startOffset, int startLine, int templateInterpolationDepth) : this(source)
+    {
+        _start = startOffset;
+        _current = startOffset;
+        _line = startLine;
+        _tokenStartLine = startLine;
+        // A suffix re-lex is never at the top of the file: keep triple-slash directive and
+        // file-level pragma collection off.
+        _hasEmittedCodeToken = true;
+        // Every JSX repair point follows a completed value (closing quote, '>', '}'), so a
+        // '/' as the first re-lexed character is JSX punctuation (`/>`), never a regex start.
+        _expectExpr = false;
+        // When the re-lex starts inside template interpolations, seed the brace stack so a
+        // closing '}' resumes template scanning (TEMPLATE_MIDDLE/TAIL) instead of lexing
+        // the template tail as ordinary code.
+        for (int i = 0; i < templateInterpolationDepth; i++)
+            _templateBraceDepth.Push(0);
+    }
+
+    /// <summary>
+    /// Re-lexes <paramref name="source"/> from <paramref name="fromOffset"/> with fresh default
+    /// lexer state, for the parser's JSX token-stream repair (the upfront pass applies TS
+    /// string/comment rules inside JSX text and can mis-lex everything after it).
+    /// Tokens carry absolute <see cref="Token.Start"/> offsets. Each token is paired with
+    /// whether the lexer was in neutral state after producing it (no open template
+    /// interpolation) — the parser only treats a token as a safe splice convergence point when
+    /// the original stream could agree with a fresh-state lex from there onward.
+    /// </summary>
+    internal static List<(Token Token, bool NeutralAfter)> Relex(
+        string source, int fromOffset, int startLine, int templateInterpolationDepth = 0)
+    {
+        var lexer = new Lexer(source, fromOffset, startLine, templateInterpolationDepth) { JsxTolerant = true };
+        var result = new List<(Token, bool)>();
+        while (!lexer.IsAtEnd())
+        {
+            lexer._start = lexer._current;
+            lexer._tokenStartLine = lexer._line;
+            int before = lexer._tokens.Count;
+            lexer.ScanToken();
+            bool neutral = lexer._templateBraceDepth.Count == 0;
+            for (int i = before; i < lexer._tokens.Count; i++)
+                result.Add((lexer._tokens[i], neutral));
+        }
+        result.Add((new Token(TokenType.EOF, "", null, lexer._line, source.Length), true));
+        return result;
+    }
+
     private void ScanToken()
     {
         char c = Advance();
@@ -270,6 +325,12 @@ public class Lexer(string source)
                 if (char.IsLetter(Peek()) || Peek() == '_' || Peek() == '$')
                 {
                     PrivateIdentifier();
+                }
+                else if (JsxTolerant)
+                {
+                    // A stray '#' in a .tsx file usually sits inside JSX text, which the
+                    // parser rescans from source; dropping it here (like other unknown
+                    // characters) lets the upfront pass survive to reach the parser.
                 }
                 else
                 {

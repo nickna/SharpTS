@@ -20,11 +20,12 @@ public sealed class DiagnosticsService
     public List<LspDiagnostic> Analyze(string text, DiagnosticPublishMode mode = DiagnosticPublishMode.SharpTsOnly, string? fileName = null)
     {
         // Stage3 decorators are the run-mode default and are required for @DotNetType to parse.
-        var tokens = new Lexer(text).ScanTokens();
-        var parser = new Parser(tokens, DecoratorMode.Stage3);
-        if (fileName is not null &&
+        bool isTsx = fileName is not null &&
             (fileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
-             fileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase)))
+             fileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase));
+        var tokens = new Lexer(text) { JsxTolerant = isTsx }.ScanTokens();
+        var parser = new Parser(tokens, DecoratorMode.Stage3);
+        if (isTsx)
         {
             parser.WithJsx(text, JsxParseOptions.Default);
         }
