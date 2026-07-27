@@ -52,6 +52,9 @@ internal sealed class GeneratorArrowLifter
 {
     /// <summary>Generator expressions that close over no enclosing-function local — appended to the module body.</summary>
     private readonly List<Stmt.Function> _moduleLifted = new();
+
+    // Source positions of the AST being rewritten, when the caller is tracking them.
+    private SpanTable? _spans;
     private int _counter;
 
     /// <summary>
@@ -154,7 +157,12 @@ internal sealed class GeneratorArrowLifter
         return false;
     }
 
-    public static List<Stmt> Lift(List<Stmt> body)
+    /// <param name="spans">
+    /// When supplied, statements rebuilt around a lifted generator inherit the position of the
+    /// statements they replace, and the synthesized top-level function declarations are marked
+    /// compiler-generated.
+    /// </param>
+    public static List<Stmt> Lift(List<Stmt> body, SpanTable? spans = null)
     {
         // Cheap pre-scan: if there are no generator function expressions anywhere, return the
         // input unchanged. This avoids walking the whole AST for every module — almost no
@@ -162,7 +170,7 @@ internal sealed class GeneratorArrowLifter
         // unchanged when no lifting is needed.
         if (!ContainsGeneratorArrow(body)) return body;
 
-        var lifter = new GeneratorArrowLifter();
+        var lifter = new GeneratorArrowLifter { _spans = spans };
         var rewritten = new List<Stmt>(body.Count);
         foreach (var stmt in body)
         {
@@ -212,7 +220,22 @@ internal sealed class GeneratorArrowLifter
     // Statement rewriting
     // ---------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Rewrites a statement, carrying its source position onto whatever replaces it.
+    /// </summary>
+    /// <remarks>
+    /// Lifting a generator arrow rebuilds every statement enclosing it. Those rebuilt statements are
+    /// still the user's code, so provenance is copied here — the one place all of them pass through
+    /// — rather than at each of the two dozen productions below.
+    /// </remarks>
     private Stmt RewriteStmt(Stmt stmt)
+    {
+        Stmt rewritten = RewriteStmtCore(stmt);
+        _spans?.CopySpan(stmt, rewritten);
+        return rewritten;
+    }
+
+    private Stmt RewriteStmtCore(Stmt stmt)
     {
         return stmt switch
         {
@@ -825,6 +848,10 @@ internal sealed class GeneratorArrowLifter
             // exactly like the original expression would have.
             ThisTypeNode: af.ThisTypeNode,
             ReturnTypeNode: af.ReturnTypeNode);
+
+        // The declaration itself is scaffolding — the user wrote an expression, not a declaration —
+        // but its body statements keep the spans they were parsed with.
+        _spans?.MarkHidden(funcStmt);
 
         // Lift into the nearest enclosing function if the body closes over one of the enclosing
         // functions' locals (#534); otherwise to the module body (#522). Lifting into the enclosing

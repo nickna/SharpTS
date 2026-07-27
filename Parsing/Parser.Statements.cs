@@ -2,7 +2,19 @@ namespace SharpTS.Parsing;
 
 public partial class Parser
 {
+    /// <summary>
+    /// Parses one statement, recording its source extent. See <see cref="Declaration"/> for why
+    /// span capture is centralized here.
+    /// </summary>
     private Stmt Statement()
+    {
+        int first = _current;
+        Stmt statement = StatementCore();
+        RecordSpanFrom(statement, first);
+        return statement;
+    }
+
+    private Stmt StatementCore()
     {
         // Handle empty statements (just semicolons)
         if (Match(TokenType.SEMICOLON)) return new Stmt.Expression(new Expr.Literal(null));

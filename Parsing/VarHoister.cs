@@ -46,7 +46,12 @@ public static class VarHoister
     /// assignments. If no <c>var</c> declarations exist, returns the input list unchanged
     /// (a fast-path that avoids allocations for the common case).
     /// </summary>
-    public static List<Stmt> Hoist(List<Stmt> body)
+    /// <param name="spans">
+    /// When supplied, rewritten statements inherit the source position of the statements they
+    /// replace, and the synthetic declarations prepended to the body are marked compiler-generated
+    /// so a debugger steps over them instead of jumping back to the original <c>var</c>.
+    /// </param>
+    public static List<Stmt> Hoist(List<Stmt> body, SpanTable? spans = null)
     {
         var collected = new List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -55,7 +60,7 @@ public static class VarHoister
 
         foreach (var stmt in body)
         {
-            var newStmt = RewriteAndCollect(stmt, collected, seen, isTopLevel: true, ref changed);
+            var newStmt = RewriteAndCollect(stmt, collected, seen, spans, isTopLevel: true, ref changed);
             rewritten.Add(newStmt);
         }
 
@@ -73,7 +78,11 @@ public static class VarHoister
         var result = new List<Stmt>(collected.Count + rewritten.Count);
         foreach (var (nameToken, typeAnnotation, typeAnnotationNode, initializerForInference) in collected)
         {
-            result.Add(new Stmt.Var(nameToken, TypeAnnotation: typeAnnotation, TypeAnnotationNode: typeAnnotationNode, Initializer: null, HasDefiniteAssignmentAssertion: false, IsVar: true, HoistTypeInferenceInitializer: initializerForInference));
+            var hoisted = new Stmt.Var(nameToken, TypeAnnotation: typeAnnotation, TypeAnnotationNode: typeAnnotationNode, Initializer: null, HasDefiniteAssignmentAssertion: false, IsVar: true, HoistTypeInferenceInitializer: initializerForInference);
+            // The binding is declared at the top of the body, not where the user wrote `var`.
+            // Pointing it back at the original text would make stepping jump backwards.
+            spans?.MarkHidden(hoisted);
+            result.Add(hoisted);
         }
         result.AddRange(rewritten);
         return result;
@@ -86,7 +95,18 @@ public static class VarHoister
     /// <param name="isTopLevel">True if this statement is directly inside the function/module
     /// body. Top-level vars are still rewritten to assignments (so the synthetic declarations
     /// at the top can hold the binding) but they appear in the same source-order position.</param>
-    private static Stmt RewriteAndCollect(Stmt stmt, List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)> collected, HashSet<string> seen, bool isTopLevel, ref bool changed)
+    private static Stmt RewriteAndCollect(Stmt stmt, List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)> collected, HashSet<string> seen, SpanTable? spans, bool isTopLevel, ref bool changed)
+    {
+        Stmt result = RewriteAndCollectCore(stmt, collected, seen, spans, isTopLevel, ref changed);
+
+        // Hoisting rebuilds every enclosing statement it walks through. Each rebuilt node stands for
+        // the same source the user wrote, so it inherits that position — otherwise a `var` anywhere
+        // in a function would strip spans from every statement around it.
+        spans?.CopySpan(stmt, result);
+        return result;
+    }
+
+    private static Stmt RewriteAndCollectCore(Stmt stmt, List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)> collected, HashSet<string> seen, SpanTable? spans, bool isTopLevel, ref bool changed)
     {
         switch (stmt)
         {
@@ -134,7 +154,7 @@ public static class VarHoister
                 bool seqChanged = false;
                 foreach (var inner in seq.Statements)
                 {
-                    var rewritten = RewriteAndCollect(inner, collected, seen, isTopLevel, ref seqChanged);
+                    var rewritten = RewriteAndCollect(inner, collected, seen, spans, isTopLevel, ref seqChanged);
                     newStmts.Add(rewritten);
                 }
                 if (seqChanged)
@@ -151,7 +171,7 @@ public static class VarHoister
                 bool blockChanged = false;
                 foreach (var inner in block.Statements)
                 {
-                    var rewritten = RewriteAndCollect(inner, collected, seen, isTopLevel: false, ref blockChanged);
+                    var rewritten = RewriteAndCollect(inner, collected, seen, spans, isTopLevel: false, ref blockChanged);
                     newStmts.Add(rewritten);
                 }
                 if (blockChanged)
@@ -165,9 +185,9 @@ public static class VarHoister
             case Stmt.If ifStmt:
             {
                 bool ifChanged = false;
-                var newThen = RewriteAndCollect(ifStmt.ThenBranch, collected, seen, isTopLevel: false, ref ifChanged);
+                var newThen = RewriteAndCollect(ifStmt.ThenBranch, collected, seen, spans, isTopLevel: false, ref ifChanged);
                 Stmt? newElse = ifStmt.ElseBranch != null
-                    ? RewriteAndCollect(ifStmt.ElseBranch, collected, seen, isTopLevel: false, ref ifChanged)
+                    ? RewriteAndCollect(ifStmt.ElseBranch, collected, seen, spans, isTopLevel: false, ref ifChanged)
                     : null;
                 if (ifChanged)
                 {
@@ -180,7 +200,7 @@ public static class VarHoister
             case Stmt.While whileStmt:
             {
                 bool whileChanged = false;
-                var newBody = RewriteAndCollect(whileStmt.Body, collected, seen, isTopLevel: false, ref whileChanged);
+                var newBody = RewriteAndCollect(whileStmt.Body, collected, seen, spans, isTopLevel: false, ref whileChanged);
                 if (whileChanged)
                 {
                     changed = true;
@@ -192,7 +212,7 @@ public static class VarHoister
             case Stmt.DoWhile doWhile:
             {
                 bool dwChanged = false;
-                var newBody = RewriteAndCollect(doWhile.Body, collected, seen, isTopLevel: false, ref dwChanged);
+                var newBody = RewriteAndCollect(doWhile.Body, collected, seen, spans, isTopLevel: false, ref dwChanged);
                 if (dwChanged)
                 {
                     changed = true;
@@ -205,9 +225,9 @@ public static class VarHoister
             {
                 bool forChanged = false;
                 Stmt? newInit = forStmt.Initializer != null
-                    ? RewriteAndCollect(forStmt.Initializer, collected, seen, isTopLevel: false, ref forChanged)
+                    ? RewriteAndCollect(forStmt.Initializer, collected, seen, spans, isTopLevel: false, ref forChanged)
                     : null;
-                var newBody = RewriteAndCollect(forStmt.Body, collected, seen, isTopLevel: false, ref forChanged);
+                var newBody = RewriteAndCollect(forStmt.Body, collected, seen, spans, isTopLevel: false, ref forChanged);
                 if (forChanged)
                 {
                     changed = true;
@@ -219,7 +239,7 @@ public static class VarHoister
             case Stmt.ForOf forOf:
             {
                 bool fofChanged = false;
-                var newBody = RewriteAndCollect(forOf.Body, collected, seen, isTopLevel: false, ref fofChanged);
+                var newBody = RewriteAndCollect(forOf.Body, collected, seen, spans, isTopLevel: false, ref fofChanged);
                 if (fofChanged)
                 {
                     changed = true;
@@ -231,7 +251,7 @@ public static class VarHoister
             case Stmt.ForIn forIn:
             {
                 bool finChanged = false;
-                var newBody = RewriteAndCollect(forIn.Body, collected, seen, isTopLevel: false, ref finChanged);
+                var newBody = RewriteAndCollect(forIn.Body, collected, seen, spans, isTopLevel: false, ref finChanged);
                 if (finChanged)
                 {
                     changed = true;
@@ -243,7 +263,7 @@ public static class VarHoister
             case Stmt.LabeledStatement labeled:
             {
                 bool lblChanged = false;
-                var newInner = RewriteAndCollect(labeled.Statement, collected, seen, isTopLevel: false, ref lblChanged);
+                var newInner = RewriteAndCollect(labeled.Statement, collected, seen, spans, isTopLevel: false, ref lblChanged);
                 if (lblChanged)
                 {
                     changed = true;
@@ -255,12 +275,12 @@ public static class VarHoister
             case Stmt.TryCatch tryCatch:
             {
                 bool tcChanged = false;
-                var newTry = RewriteList(tryCatch.TryBlock, collected, seen, ref tcChanged);
+                var newTry = RewriteList(tryCatch.TryBlock, collected, seen, spans, ref tcChanged);
                 List<Stmt>? newCatch = tryCatch.CatchBlock != null
-                    ? RewriteList(tryCatch.CatchBlock, collected, seen, ref tcChanged)
+                    ? RewriteList(tryCatch.CatchBlock, collected, seen, spans, ref tcChanged)
                     : null;
                 List<Stmt>? newFinally = tryCatch.FinallyBlock != null
-                    ? RewriteList(tryCatch.FinallyBlock, collected, seen, ref tcChanged)
+                    ? RewriteList(tryCatch.FinallyBlock, collected, seen, spans, ref tcChanged)
                     : null;
                 if (tcChanged)
                 {
@@ -276,11 +296,11 @@ public static class VarHoister
                 var newCases = new List<Stmt.SwitchCase>(switchStmt.Cases.Count);
                 foreach (var c in switchStmt.Cases)
                 {
-                    var newCaseStmts = RewriteList(c.Body, collected, seen, ref swChanged);
+                    var newCaseStmts = RewriteList(c.Body, collected, seen, spans, ref swChanged);
                     newCases.Add(new Stmt.SwitchCase(c.Value, newCaseStmts));
                 }
                 List<Stmt>? newDefault = switchStmt.DefaultBody != null
-                    ? RewriteList(switchStmt.DefaultBody, collected, seen, ref swChanged)
+                    ? RewriteList(switchStmt.DefaultBody, collected, seen, spans, ref swChanged)
                     : null;
                 if (swChanged)
                 {
@@ -325,12 +345,12 @@ public static class VarHoister
     /// Helper for rewriting a list of statements (used by TryCatch/Switch which carry
     /// <c>List&lt;Stmt&gt;</c> directly rather than wrapping in a Block).
     /// </summary>
-    private static List<Stmt> RewriteList(List<Stmt> list, List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)> collected, HashSet<string> seen, ref bool changed)
+    private static List<Stmt> RewriteList(List<Stmt> list, List<(Token Name, string? TypeAnnotation, TypeNode? TypeAnnotationNode, Expr? InitializerForInference)> collected, HashSet<string> seen, SpanTable? spans, ref bool changed)
     {
         var result = new List<Stmt>(list.Count);
         foreach (var s in list)
         {
-            result.Add(RewriteAndCollect(s, collected, seen, isTopLevel: false, ref changed));
+            result.Add(RewriteAndCollect(s, collected, seen, spans, isTopLevel: false, ref changed));
         }
         return result;
     }

@@ -195,7 +195,7 @@ public partial class Parser
 
         // Apply var hoisting: rewrite `var x` declarations in nested blocks to function-scope
         // declarations + assignments. Cheap no-op if no `var` keywords are present.
-        body = VarHoister.Hoist(body);
+        body = VarHoister.Hoist(body, _spans);
 
         return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator, ComputedKey: computedKey, ThisTypeNode: thisTypeNode, ReturnTypeNode: returnTypeNode);
     }

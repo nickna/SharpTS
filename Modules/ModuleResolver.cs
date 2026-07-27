@@ -804,7 +804,11 @@ public class ModuleResolver
 
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
+            // Parse into a document so the module keeps its text, checksum and statement spans —
+            // what debug symbols and editor navigation both resolve positions against.
+            var document = new SourceDocument(absolutePath, source);
             var parser = new Parser(tokens, decoratorMode)
+                .WithSourceDocument(document)
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath));
             var parseResult = parser.Parse();
 
@@ -823,6 +827,7 @@ public class ModuleResolver
             var module = new ParsedModule(absolutePath, statements)
             {
                 IsDeclarationFile = IsDeclarationFilePath(absolutePath),
+                Document = document,
             };
 
             // Determine if this is a script or module file
@@ -1139,7 +1144,10 @@ public class ModuleResolver
         {
             var lexer = new Lexer(tsSource.Text);
             var tokens = lexer.ScanTokens();
-            var parser = new Parser(tokens, decoratorMode);
+            // Marked virtual: the stdlib is embedded in the compiler, so there is no file on disk a
+            // debugger could open — its text has to travel with the symbols instead.
+            var document = new SourceDocument(virtualPath, tsSource.Text, isVirtual: true);
+            var parser = new Parser(tokens, decoratorMode).WithSourceDocument(document);
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)
                 throw new Exception(parseResult.Diagnostics.First().ToString());
@@ -1148,6 +1156,7 @@ public class ModuleResolver
             {
                 IsScript = false,
                 IsCommonJs = false,
+                Document = document,
             };
 
             _moduleCache[virtualPath] = module;

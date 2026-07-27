@@ -99,5 +99,19 @@ public class Token(TokenType type, string lexeme, object? literal, int line, int
     /// </summary>
     public int Start { get; } = start;
 
+    /// <summary>
+    /// Exclusive character offset where this token ends, or -1 when <see cref="Start"/> is unset.
+    /// </summary>
+    /// <remarks>
+    /// The lexer builds every lexeme as the exact source slice it consumed, so the end is always
+    /// <see cref="Start"/> plus the lexeme's length — including the quotes on a string literal and
+    /// the delimiters on a template or regex. Tokens the parser synthesizes must keep that
+    /// relationship to stay locatable.
+    /// </remarks>
+    public int End => Start < 0 ? -1 : Start + Lexeme.Length;
+
+    /// <summary>The token's extent, or <see cref="SourceSpan.Hidden"/> when it has no source position.</summary>
+    public SourceSpan Span => Start < 0 ? SourceSpan.Hidden : new SourceSpan(Start, End);
+
     public override string ToString() => $"{Type} {Lexeme} {Literal}";
 }

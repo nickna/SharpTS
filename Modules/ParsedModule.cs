@@ -29,6 +29,17 @@ public class ParsedModule
     public List<Stmt> Statements { get; }
 
     /// <summary>
+    /// The text this module was parsed from, together with its line index, content checksum, and
+    /// the source spans of <see cref="Statements"/>.
+    /// </summary>
+    /// <remarks>
+    /// Null for modules that have no text of their own — built-in and <c>dotnet:</c> interop
+    /// modules — and for callers that parsed without retaining the source. Consumers that need a
+    /// position must handle its absence rather than assume every module is source-backed.
+    /// </remarks>
+    public SourceDocument? Document { get; set; }
+
+    /// <summary>
     /// Direct dependencies of this module (modules it imports).
     /// </summary>
     public List<ParsedModule> Dependencies { get; } = [];
