@@ -629,17 +629,23 @@ export function styleText(format: any, text: string, options?: any): string {
     if (typeof text !== 'string') {
         throw new TypeError('The "text" argument must be of type string');
     }
-    const validate = options != null && options.validateStream === true;
-    void validate;
+    // Node: options.validateStream (default true) gates the can-this-stream-color
+    // check (approximated here by the NO_COLOR/FORCE_COLOR env probe);
+    // validateStream: false applies the styling unconditionally.
+    const validate = options == null || options.validateStream !== false;
 
     const formats: any[] = Array.isArray(format) ? format : [format];
     for (let i = 0; i < formats.length; i++) {
-        if (STYLE_CODES[formats[i]] === undefined) {
+        // `== null`, not `=== undefined`: the compiled dynamic-index path yields null
+        // for a missing key (RuntimeEmitter.Objects.Index.cs EmitDictLookup — the
+        // prototype-walk/undefined refactor is explicitly deferred there), while the
+        // interpreter yields undefined. Loose null covers both modes.
+        if (STYLE_CODES[formats[i]] == null) {
             throw new TypeError("The value '" + String(formats[i]) + "' is invalid for argument 'format'");
         }
     }
 
-    if (__colorsDisabled()) return text;
+    if (validate && __colorsDisabled()) return text;
 
     let open = '';
     let close = '';
