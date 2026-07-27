@@ -88,6 +88,33 @@ public partial class ILCompiler
         if (ctx.DebugScope is null || ctx.CurrentMethod is null || ctx.IL is null) return;
 
         ctx.Locals.SymbolSink = _debugInfo.BeginMethodLocals(ctx.CurrentMethod, ctx.IL);
+        MarkNonUserCodeIfLibrary(ctx);
+    }
+
+    /// <summary>
+    /// Marks a body compiled from the bundled stdlib as non-user code, so Just My Code steps over
+    /// it and lands on the next line the user actually wrote.
+    /// </summary>
+    /// <remarks>
+    /// Emitted runtime helpers need no such marking: they carry no debug information at all, which
+    /// already makes them non-user code. Stdlib modules are different — they are real TypeScript
+    /// compiled alongside the program, so without this they would be as steppable as the user's own
+    /// files. The line information is still emitted, so a stack trace through the stdlib remains
+    /// readable and stepping in is still possible with Just My Code turned off.
+    /// </remarks>
+    private void MarkNonUserCodeIfLibrary(CompilationContext ctx)
+    {
+        if (ctx.DebugScope is not { IsLibrary: true }) return;
+        if (!_nonUserCodeMethods.Add(ctx.CurrentMethod!)) return;
+
+        var attribute = new CustomAttributeBuilder(
+            typeof(System.Diagnostics.DebuggerNonUserCodeAttribute).GetConstructor(Type.EmptyTypes)!, []);
+
+        switch (ctx.CurrentMethod)
+        {
+            case MethodBuilder method: method.SetCustomAttribute(attribute); break;
+            case ConstructorBuilder constructor: constructor.SetCustomAttribute(attribute); break;
+        }
     }
 
     /// <summary>

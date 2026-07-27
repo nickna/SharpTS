@@ -16,12 +16,20 @@ internal sealed class DebugEmitScope(
     DebugInfoCollector collector,
     DebugInfoCollector.SourceFile document,
     SpanTable spans,
-    LineIndex lines)
+    LineIndex lines,
+    bool isLibrary)
 {
     internal DebugInfoCollector Collector { get; } = collector;
     internal DebugInfoCollector.SourceFile Document { get; } = document;
     internal SpanTable Spans { get; } = spans;
     internal LineIndex Lines { get; } = lines;
+
+    /// <summary>
+    /// True for the bundled stdlib and other documents the user did not write. Their methods are
+    /// still described in the PDB — a stack trace should name the line inside them — but they are
+    /// marked non-user code so stepping runs through them instead of into them.
+    /// </summary>
+    internal bool IsLibrary { get; } = isLibrary;
 
     /// <summary>
     /// Marks <paramref name="ilOffset"/> in <paramref name="method"/> as the start of

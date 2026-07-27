@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using PEPacker;
 using SharpTS.Compilation;
 using SharpTS.Compilation.Symbols;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -330,6 +331,53 @@ public class DebugSymbolsTests
         Assert.Equal(expected, scopes);
     }
 
+    // ---------------------------------------------------------------- just my code
+
+    /// <summary>
+    /// The bundled stdlib is real TypeScript compiled alongside the program, so without marking it
+    /// would be as steppable as the user's own files. Its line information is still emitted — a
+    /// stack trace through it should stay readable — but Just My Code steps over it.
+    /// </summary>
+    [Fact]
+    public void StdlibMethodsAreNonUserCodeAndUserMethodsAreNot()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"sharpts_jmc_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string entry = Path.Combine(directory, "app.ts");
+            File.WriteAllText(entry, """
+                import * as path from "path";
+                const joined = path.join("a", "b");
+                console.log(joined);
+                """);
+
+            var resolver = new ModuleResolver(entry);
+            var modules = resolver.GetRuntimeModulesInOrder(resolver.LoadProgram(entry));
+            var typeMap = new TypeChecker().CheckModules(resolver.GetModulesInOrder(modules), resolver);
+            var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler(
+                "app", preserveConstEnums: false, useReferenceAssemblies: true,
+                sdkPath: SdkResolver.FindReferenceAssembliesPath())
+            {
+                EmitDebugSymbols = true,
+            };
+            compiler.CompileModules(modules, resolver, typeMap, deadCode);
+
+            var nonUserCode = NonUserCodeMethods(compiler.SaveArtifacts("app.pdb").Assembly);
+
+            // The stdlib module SharpTS compiled in is skipped...
+            Assert.Contains(nonUserCode, entry => entry.Method.Contains("path", StringComparison.Ordinal) && entry.IsNonUserCode);
+            // ...while nothing from the user's own file is.
+            Assert.DoesNotContain(nonUserCode, entry => entry.Method.Contains("app", StringComparison.Ordinal) && entry.IsNonUserCode);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
     [Fact]
     public void DebugBuildsAreMarkedDebuggableAndOthersAreNot()
     {
@@ -578,6 +626,36 @@ public class DebugSymbolsTests
             }
         }
         return locals;
+    }
+
+    /// <summary>Every method that declares a body, with whether it is marked non-user code.</summary>
+    private static List<(string Method, bool IsNonUserCode)> NonUserCodeMethods(byte[] image)
+    {
+        using var reader = new PEReader(new MemoryStream(image, writable: false));
+        var metadata = reader.GetMetadataReader();
+
+        return metadata.MethodDefinitions
+            .Select(metadata.GetMethodDefinition)
+            .Select(method =>
+            {
+                var declaringType = metadata.GetTypeDefinition(method.GetDeclaringType());
+                string name = $"{metadata.GetString(declaringType.Name)}::{metadata.GetString(method.Name)}";
+                bool marked = method.GetCustomAttributes()
+                    .Select(metadata.GetCustomAttribute)
+                    .Any(attribute => AttributeTypeName(metadata, attribute) == "DebuggerNonUserCodeAttribute");
+                return (name, marked);
+            })
+            .ToList();
+    }
+
+    private static string? AttributeTypeName(MetadataReader metadata, CustomAttribute attribute)
+    {
+        if (attribute.Constructor.Kind != HandleKind.MemberReference) return null;
+
+        var constructor = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
+        if (constructor.Parent.Kind != HandleKind.TypeReference) return null;
+
+        return metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)constructor.Parent).Name);
     }
 
     private static bool HasDebuggableAttribute(byte[] image)

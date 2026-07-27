@@ -47,8 +47,24 @@ survive suspension, so they appear as fields of the `<name>d__N` frame instead o
 `MoveNext`. Presenting them as locals again needs the portable-PDB custom debug information that
 describes a state machine's hoisted-variable mapping, which is a follow-up.
 
-Not yet done: Just My Code, and the "SharpTS: Debug Current File" VS Code command. Interpreter
-debugging is out of scope.
+### Stepping and the bundled stdlib
+
+Importing a Node-compatible module (`path`, `fs`, …) compiles that module's TypeScript into your
+program, so it would otherwise be exactly as steppable as your own files. Those methods are marked
+non-user code: with Just My Code on — the default in VS Code and Visual Studio — stepping runs
+through them and stops on your next line. Their line information is still emitted, so a stack trace
+through the stdlib stays readable, and turning Just My Code off lets you step in.
+
+The emitted runtime helpers need no such marking: they carry no debug information at all, which
+already puts them outside user code.
+
+One consequence worth knowing: because the stdlib travels in the PDB with its source embedded,
+importing a large module makes the `.pdb` noticeably bigger. It costs nothing at run time and
+nothing in the assembly; only the symbol file grows.
+
+Not yet done: async and generator stepping fidelity — the state machines carry line information,
+but not the custom debug information that makes a debugger present an `await` as a single step.
+Interpreter debugging is out of scope.
 
 ## Editor setup
 

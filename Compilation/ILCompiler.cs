@@ -226,6 +226,10 @@ public partial class ILCompiler
     private Dictionary<string, DebugEmitScope>? _debugScopesByModule;
     private DebugEmitScope? _entryPointDebugScope;
 
+    // Methods already marked non-user code; a body can be handed several emission contexts and the
+    // attribute must not be applied twice.
+    private readonly HashSet<MethodBase> _nonUserCodeMethods = new(ReferenceEqualityComparer.Instance);
+
     /// <summary>
     /// The document whose statements are being emitted right now.
     /// </summary>
@@ -325,7 +329,8 @@ public partial class ILCompiler
             // their text travels inside the PDB instead of being referenced by path.
             _debugInfo.AddDocument(document.Path, document.Text, embedSource: document.IsVirtual),
             document.Spans,
-            document.Lines);
+            document.Lines,
+            isLibrary: document.IsVirtual);
     }
 
     /// <summary>
