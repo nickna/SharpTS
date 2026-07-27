@@ -57,6 +57,9 @@ namespace SharpTS.Cli;
 /// <param name="Watch">Recheck a project when its inputs change.</param>
 /// <param name="Incremental">Reuse SharpTS project build state when inputs are unchanged.</param>
 /// <param name="Force">Ignore build state and check every project.</param>
+/// <param name="Declaration">Emit TypeScript declaration files for project-owned sources.</param>
+/// <param name="EmitDeclarationOnly">Emit declarations without running or producing a .NET assembly.</param>
+/// <param name="DeclarationDir">Optional root directory for generated declaration files.</param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
@@ -69,7 +72,10 @@ public record GlobalOptions(
     bool ShowConfig = false,
     bool Watch = false,
     bool Incremental = false,
-    bool Force = false
+    bool Force = false,
+    bool Declaration = false,
+    bool EmitDeclarationOnly = false,
+    string? DeclarationDir = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -222,11 +228,24 @@ public class CommandLineParser
                 "Error: --project cannot be combined with --no-tsconfig.",
                 64);
         }
+        if (globalOptions.NoEmit && globalOptions.EmitDeclarationOnly)
+        {
+            return new ParsedCommand.Error(
+                "Error: --noEmit cannot be combined with --emitDeclarationOnly.",
+                64);
+        }
 
         if (remainingArgs.Length == 0)
         {
             if (globalOptions.ProjectPath is not null)
                 return new ParsedCommand.Project(globalOptions);
+            if (globalOptions.Declaration || globalOptions.EmitDeclarationOnly ||
+                globalOptions.DeclarationDir is not null)
+            {
+                return new ParsedCommand.Error(
+                    "Error: declaration options require --compile or -p/--project.",
+                    64);
+            }
             if (globalOptions.Watch || globalOptions.Incremental || globalOptions.Force)
             {
                 return new ParsedCommand.Error(
@@ -266,6 +285,13 @@ public class CommandLineParser
             return ParseGenDeclCommand(remainingArgs, globalOptions);
         }
 
+        if (globalOptions.Declaration || globalOptions.EmitDeclarationOnly ||
+            globalOptions.DeclarationDir is not null)
+        {
+            return new ParsedCommand.Error(
+                "Error: declaration options require --compile or -p/--project.",
+                64);
+        }
 
         // Handle script execution
         if (remainingArgs.Length >= 1)
@@ -341,6 +367,9 @@ public class CommandLineParser
         var watch = false;
         var incremental = false;
         var force = false;
+        var declaration = false;
+        var emitDeclarationOnly = false;
+        string? declarationDir = null;
         string? projectPath = null;
         var strictness = new StrictnessOptions();
         List<string> references = [];
@@ -396,6 +425,25 @@ public class CommandLineParser
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     noEmit = flag;
                     break;
+                case "--declaration":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    declaration = flag;
+                    break;
+                case "--emitDeclarationOnly":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    emitDeclarationOnly = flag;
+                    if (flag) declaration = true;
+                    break;
+                case "--declarationDir" when value is not null:
+                    declarationDir = value;
+                    break;
+                case "--declarationDir" when i + 1 < args.Length:
+                    declarationDir = args[++i];
+                    break;
+                case "--declarationDir":
+                    return (default!, [], [], new ParsedCommand.Error(
+                        "Error: --declarationDir requires a path.",
+                        64));
                 case "--strict":
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     strictness = strictness with { Strict = flag };
@@ -457,7 +505,8 @@ public class CommandLineParser
 
         var options = new GlobalOptions(
             decoratorMode, emitDecoratorMetadata, checkJs, references, strictness, noEmit,
-            projectPath, noTsConfig, showConfig, watch, incremental, force);
+            projectPath, noTsConfig, showConfig, watch, incremental, force,
+            declaration, emitDeclarationOnly, declarationDir);
         return (options, remaining.ToArray(), scriptArgs.ToArray(), null);
     }
 
@@ -616,10 +665,12 @@ public class CommandLineParser
             }
         }
 
-        if (globalOptions.NoEmit && pack)
+        if ((globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) && pack)
         {
             return new ParsedCommand.Error(
-                "Error: --noEmit cannot be combined with --pack/--push (there is no assembly to package).",
+                globalOptions.NoEmit
+                    ? "Error: --noEmit cannot be combined with --pack/--push (there is no assembly to package)."
+                    : "Error: --emitDeclarationOnly cannot be combined with --pack/--push (there is no assembly to package).",
                 64,
                 ShowCompileUsage: true);
         }

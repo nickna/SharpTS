@@ -120,6 +120,9 @@ Then use the SDK without a version number:
 | `SharpTSExperimentalDecorators` | `false` | `--experimentalDecorators` | Use Legacy (Stage 2) decorators instead of default Stage 3 |
 | `SharpTSNoDecorators` | `false` | `--noDecorators` | Disable decorator support |
 | `SharpTSEmitDecoratorMetadata` | `false` | `--emitDecoratorMetadata` | Emit design-time type metadata |
+| `SharpTSGenerateDeclarations` | `false` | `--declaration` | Emit TypeScript `.d.ts` declarations |
+| `SharpTSEmitDeclarationOnly` | `false` | `--emitDeclarationOnly` | Emit declarations without a .NET assembly |
+| `SharpTSDeclarationDir` | _(empty)_ | `--declarationDir` | Declaration output directory |
 | `SharpTSVerifyIL` | `false` | `--verify` | Verify generated IL after compilation |
 | `SharpTSUseReferenceAssemblies` | `false` | `--ref-asm` | Emit reference-assembly-compatible output |
 
@@ -143,6 +146,9 @@ The SDK automatically reads `tsconfig.json` if present in the project directory.
 | `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` | Use Legacy (Stage 2) decorators |
 | `compilerOptions.decorators` | `SharpTSDecorators` | Use TC39 Stage 3 decorators |
 | `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` | |
+| `compilerOptions.declaration` | `SharpTSGenerateDeclarations` | |
+| `compilerOptions.emitDeclarationOnly` | `SharpTSEmitDeclarationOnly` | Implies declaration output |
+| `compilerOptions.declarationDir` | `SharpTSDeclarationDir` | |
 | `files[0]` | `SharpTSEntryPoint` | First file used as runtime entry point |
 
 > **The CLI is the project-system authority.** `Sdk.targets` passes

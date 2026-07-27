@@ -26,6 +26,7 @@ dotnet build
 - Compiles TypeScript directly to .NET IL (no JavaScript intermediate)
 - Automatic import discovery via ModuleResolver
 - tsconfig.json integration
+- Optional TypeScript `.d.ts` declaration output
 - Standard MSBuild commands (`dotnet build`, `dotnet clean`)
 - MSBuild-compatible error output for IDE integration
 
@@ -41,6 +42,9 @@ dotnet build
 | `SharpTSExperimentalDecorators` | Enable legacy (Stage 2) decorators | `false` |
 | `SharpTSDecorators` | Enable TC39 Stage 3 decorators | `false` |
 | `SharpTSEmitDecoratorMetadata` | Emit decorator metadata | `false` |
+| `SharpTSGenerateDeclarations` | Emit TypeScript declarations | `false` |
+| `SharpTSEmitDeclarationOnly` | Emit declarations without a .NET assembly | `false` |
+| `SharpTSDeclarationDir` | Declaration output directory | _(source/outDir default)_ |
 | `SharpTSVerifyIL` | Verify generated IL | `false` |
 | `SharpTSUseReferenceAssemblies` | Use reference assembly mode | `false` |
 
@@ -54,6 +58,9 @@ The SDK automatically reads `tsconfig.json` if present. The MSBuild task extract
 | `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` |
 | `compilerOptions.decorators` | `SharpTSDecorators` |
 | `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` |
+| `compilerOptions.declaration` | `SharpTSGenerateDeclarations` |
+| `compilerOptions.emitDeclarationOnly` | `SharpTSEmitDeclarationOnly` |
+| `compilerOptions.declarationDir` | `SharpTSDeclarationDir` |
 | `files[0]` | `SharpTSEntryPoint` (if not set) |
 
 MSBuild properties take precedence over tsconfig.json values.

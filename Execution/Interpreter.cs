@@ -1729,6 +1729,9 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private ExecutionResult ExecuteExport(Stmt.Export export)
     {
+        if (export.IsTypeOnly)
+            return ExecutionResult.Success();
+
         // Handle export = assignment (CommonJS-style)
         if (export.ExportAssignment != null)
         {
@@ -1779,6 +1782,8 @@ public partial class Interpreter : IDisposable
             // export { x, y }
             foreach (var spec in export.NamedExports)
             {
+                if (spec.IsTypeOnly)
+                    continue;
                 string localName = spec.LocalName.Lexeme;
                 string exportedName = spec.ExportedName?.Lexeme ?? localName;
                 var value = _environment.Get(spec.LocalName).ToObject();
@@ -1820,6 +1825,8 @@ public partial class Interpreter : IDisposable
                     // Re-export specific names
                     foreach (var spec in export.NamedExports)
                     {
+                        if (spec.IsTypeOnly)
+                            continue;
                         string importedName = spec.LocalName.Lexeme;
                         string exportedName = spec.ExportedName?.Lexeme ?? importedName;
                         object? value = cjsExports != null

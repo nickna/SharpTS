@@ -5,7 +5,7 @@ namespace SharpTS.Configuration;
 
 // =============================================================================
 // CLI-only continuations of the tsconfig.json model. Deliberately NOT source-linked
-// into SharpTS.Sdk.Tasks: the MSBuild task reads a frozen six-key subset and has no
+// into SharpTS.Sdk.Tasks: the MSBuild task reads a frozen shared subset and has no
 // use for extends chains, strictness, or unknown-key capture — and keeping
 // [JsonExtensionData] out of its source-generated serializer avoids a known
 // System.Text.Json source-generator friction point.

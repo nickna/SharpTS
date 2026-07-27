@@ -61,4 +61,13 @@ internal sealed partial class TsConfigCompilerOptions
 
     [JsonPropertyName("outDir")]
     public string? OutDir { get; set; }
+
+    [JsonPropertyName("declaration")]
+    public bool? Declaration { get; set; }
+
+    [JsonPropertyName("emitDeclarationOnly")]
+    public bool? EmitDeclarationOnly { get; set; }
+
+    [JsonPropertyName("declarationDir")]
+    public string? DeclarationDir { get; set; }
 }

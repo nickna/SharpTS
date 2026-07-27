@@ -85,6 +85,9 @@ public partial class ILCompiler
         {
             if (stmt is Stmt.Export export)
             {
+                if (export.IsTypeOnly)
+                    continue;
+
                 if (export.IsDefaultExport)
                 {
                     // Default export field
@@ -114,6 +117,8 @@ public partial class ILCompiler
                     // Named exports like export { x, y as z }
                     foreach (var spec in export.NamedExports)
                     {
+                        if (spec.IsTypeOnly)
+                            continue;
                         string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                         if (!exportFields.ContainsKey(exportedName))
                         {
@@ -136,6 +141,8 @@ public partial class ILCompiler
                         // export { x, y as z } from './module'
                         foreach (var spec in export.NamedExports)
                         {
+                            if (spec.IsTypeOnly)
+                                continue;
                             string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                             if (!exportFields.ContainsKey(exportedName))
                             {
@@ -828,6 +835,8 @@ public partial class ILCompiler
         {
             if (stmt is not Stmt.Export export)
                 continue;
+            if (export.IsTypeOnly)
+                continue;
 
             // Default export of a class declaration
             if (export.IsDefaultExport && export.Declaration is Stmt.Class defaultClass)
@@ -849,6 +858,8 @@ public partial class ILCompiler
             {
                 foreach (var spec in export.NamedExports)
                 {
+                    if (spec.IsTypeOnly)
+                        continue;
                     string localName = spec.LocalName.Lexeme;
                     string exportedName = spec.ExportedName?.Lexeme ?? localName;
 
@@ -873,6 +884,8 @@ public partial class ILCompiler
                         // Re-export specific names
                         foreach (var spec in export.NamedExports)
                         {
+                            if (spec.IsTypeOnly)
+                                continue;
                             string importedName = spec.LocalName.Lexeme;
                             string exportedName = spec.ExportedName?.Lexeme ?? importedName;
 

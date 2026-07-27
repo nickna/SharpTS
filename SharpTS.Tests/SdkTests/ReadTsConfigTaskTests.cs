@@ -189,6 +189,33 @@ public class ReadTsConfigTaskTests : IDisposable
     }
 
     [Fact]
+    public void Execute_DeclarationOptions_SetProperties()
+    {
+        var path = CreateTsConfig("""
+            {
+                "compilerOptions": {
+                    "declaration": true,
+                    "emitDeclarationOnly": true,
+                    "declarationDir": "./types"
+                }
+            }
+            """);
+
+        var task = new ReadTsConfigTask
+        {
+            BuildEngine = _buildEngine,
+            TsConfigPath = path
+        };
+
+        var result = task.Execute();
+
+        Assert.True(result);
+        Assert.True(task.Declaration);
+        Assert.True(task.EmitDeclarationOnly);
+        Assert.Equal("./types", task.DeclarationDir);
+    }
+
+    [Fact]
     public void Execute_AllCompilerOptions_SetsAllProperties()
     {
         var path = CreateTsConfig("""

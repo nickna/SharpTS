@@ -376,6 +376,9 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExport(Stmt.Export export)
     {
+        if (export.IsTypeOnly)
+            return;
+
         if (_ctx.CurrentModulePath == null || _ctx.ModuleExportFields == null)
         {
             // Single-file (script) mode: there is no module to export into, so the
@@ -509,6 +512,8 @@ public partial class ILEmitter
             // export { x, y as z }
             foreach (var spec in export.NamedExports)
             {
+                if (spec.IsTypeOnly)
+                    continue;
                 string localName = spec.LocalName.Lexeme;
                 string exportedName = spec.ExportedName?.Lexeme ?? localName;
 
@@ -563,6 +568,8 @@ public partial class ILEmitter
                     // Re-export specific names
                     foreach (var spec in export.NamedExports)
                     {
+                        if (spec.IsTypeOnly)
+                            continue;
                         string importedName = spec.LocalName.Lexeme;
                         string exportedName = spec.ExportedName?.Lexeme ?? importedName;
 
