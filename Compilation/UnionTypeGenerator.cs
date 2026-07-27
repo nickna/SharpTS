@@ -436,38 +436,6 @@ public class UnionTypeGenerator
         return method;
     }
 
-    private void EmitDefaultValue(ILGenerator il, Type type)
-    {
-        if (!type.IsValueType)
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-        else if (type == typeof(int) || type == typeof(byte) || type == typeof(bool))
-        {
-            il.Emit(OpCodes.Ldc_I4_0);
-        }
-        else if (type == typeof(long))
-        {
-            il.Emit(OpCodes.Ldc_I8, 0L);
-        }
-        else if (type == typeof(float))
-        {
-            il.Emit(OpCodes.Ldc_R4, 0f);
-        }
-        else if (type == typeof(double))
-        {
-            il.Emit(OpCodes.Ldc_R8, 0.0);
-        }
-        else
-        {
-            // For other value types, use a local
-            var local = il.DeclareLocal(type);
-            il.Emit(OpCodes.Ldloca_S, local);
-            il.Emit(OpCodes.Initobj, type);
-            il.Emit(OpCodes.Ldloc, local);
-        }
-    }
-
     private void EmitToString(TypeBuilder typeBuilder, FieldBuilder tagField,
         List<FieldBuilder> valueFields, List<Type> mappedTypes, List<TSTypeInfo> types)
     {

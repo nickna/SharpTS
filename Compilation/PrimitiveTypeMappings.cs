@@ -72,14 +72,6 @@ public static class PrimitiveTypeMappings
         type.IsValueType && Nullable.GetUnderlyingType(type) != null;
 
     /// <summary>
-    /// Gets the underlying type if nullable, otherwise returns the type itself.
-    /// </summary>
-    /// <param name="type">The type to unwrap.</param>
-    /// <returns>The underlying type for Nullable&lt;T&gt;, or the original type.</returns>
-    public static Type GetUnderlyingTypeOrSelf(Type type) =>
-        Nullable.GetUnderlyingType(type) ?? type;
-
-    /// <summary>
     /// Creates a Nullable&lt;T&gt; type from a value type.
     /// </summary>
     /// <param name="valueType">The value type to wrap.</param>

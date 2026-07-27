@@ -3344,7 +3344,6 @@ public partial class RuntimeEmitter
     private FieldBuilder _requestUrlField = null!;
     private FieldBuilder _requestHeadersField = null!;
     private FieldBuilder _requestBodyField = null!;
-    private FieldBuilder _requestBodyBytesField = null!;
     private FieldBuilder _requestBodyConsumedField = null!;
 
     /// <summary>
@@ -3364,7 +3363,7 @@ public partial class RuntimeEmitter
         _requestUrlField = typeBuilder.DefineField("_url", _types.String, FieldAttributes.Private);
         _requestHeadersField = typeBuilder.DefineField("_headers", _types.Object, FieldAttributes.Private);
         _requestBodyField = typeBuilder.DefineField("_body", _types.Object, FieldAttributes.Private);
-        _requestBodyBytesField = typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Private);
+        typeBuilder.DefineField("_bodyBytes", _types.ByteArray, FieldAttributes.Private);
         _requestBodyConsumedField = typeBuilder.DefineField("_bodyConsumed", _types.Boolean, FieldAttributes.Private);
 
         // Constructor: (object url, object? init)

@@ -20,7 +20,6 @@ public partial class RuntimeEmitter
     private FieldBuilder _tsReadableFlowingField = null!; // int: -1=initial, 0=paused, 1=flowing
     private FieldBuilder _tsReadableObjectModeField = null!;
     private FieldBuilder _tsReadableHighWaterMarkField = null!;
-    private FieldBuilder _tsReadableBufferSizeField = null!;
     // Async iteration support (#1024)
     private FieldBuilder _tsReadableErroredField = null!;
     private FieldBuilder _tsReadableErrorField = null!;
@@ -54,7 +53,7 @@ public partial class RuntimeEmitter
         _tsReadableFlowingField = typeBuilder.DefineField("_flowing", _types.Int32, FieldAttributes.Family);
         _tsReadableObjectModeField = typeBuilder.DefineField("_objectMode", _types.Boolean, FieldAttributes.Family);
         _tsReadableHighWaterMarkField = typeBuilder.DefineField("_highWaterMark", _types.Int32, FieldAttributes.Family);
-        _tsReadableBufferSizeField = typeBuilder.DefineField("_bufferSize", _types.Int32, FieldAttributes.Family);
+        typeBuilder.DefineField("_bufferSize", _types.Int32, FieldAttributes.Family);
         // Async iteration support (#1024): error state + parked async-iterator pull.
         _tsReadableErroredField = typeBuilder.DefineField("_errored", _types.Boolean, FieldAttributes.Family);
         _tsReadableErrorField = typeBuilder.DefineField("_error", _types.Object, FieldAttributes.Family);

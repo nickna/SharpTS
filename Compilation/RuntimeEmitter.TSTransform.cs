@@ -15,7 +15,6 @@ public partial class RuntimeEmitter
     private MethodBuilder _tsTransformWriteMethod = null!;
 
     // $TransformDoneCallback fields
-    private TypeBuilder _tsTransformDoneCallbackType = null!;
     private ConstructorBuilder _tsTransformDoneCallbackCtor = null!;
     private FieldBuilder _tsTransformDoneCallbackStreamField = null!;
     private FieldBuilder _tsTransformDoneCallbackUserCallbackField = null!;
@@ -34,7 +33,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object  // Standalone class, not extending $TSFunction
         );
-        _tsTransformDoneCallbackType = typeBuilder;
         runtime.TransformDoneCallbackType = typeBuilder;
 
         // Fields

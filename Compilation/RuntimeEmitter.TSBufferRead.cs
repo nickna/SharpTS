@@ -8,54 +8,6 @@ public partial class RuntimeEmitter
     #region Multi-byte Read Methods
 
     /// <summary>
-    /// Helper to emit bounds validation for multi-byte reads.
-    /// </summary>
-    private void EmitBoundsCheck(ILGenerator il, int byteCount)
-    {
-        // Calculate maxOffset = _data.Length - byteCount
-        // if (offset < 0 || offset > maxOffset) throw
-
-        var okLabel = il.DefineLabel();
-        var lenLocal = il.DeclareLocal(_types.Int32);
-        var maxOffsetLocal = il.DeclareLocal(_types.Int32);
-
-        // lenLocal = _data.Length
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, lenLocal);
-
-        // maxOffset = len - byteCount
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4, byteCount);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, maxOffsetLocal);
-
-        // if (offset >= 0 && offset <= maxOffset) goto ok
-        il.Emit(OpCodes.Ldarg_1);  // offset
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, throwLabel(il, byteCount, maxOffsetLocal));
-
-        il.Emit(OpCodes.Ldarg_1);  // offset
-        il.Emit(OpCodes.Ldloc, maxOffsetLocal);
-        il.Emit(OpCodes.Ble, okLabel);
-
-        // throw
-        il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(okLabel);
-
-        Label throwLabel(ILGenerator ilGen, int bytes, LocalBuilder maxOff)
-        {
-            var lbl = ilGen.DefineLabel();
-            return lbl;
-        }
-    }
-
-    /// <summary>
     /// Emits: public double ReadInt8(int offset)
     /// </summary>
     private void EmitTSBufferReadInt8(TypeBuilder typeBuilder, EmittedRuntime runtime)

@@ -18,9 +18,7 @@ public partial class RuntimeEmitter
     private FieldBuilder _tsDuplexWriteCallbackField = null!;
     private FieldBuilder _tsDuplexFinalCallbackField = null!;
     private FieldBuilder _tsDuplexWritableObjectModeField = null!;
-    private FieldBuilder _tsDuplexWritableLengthField = null!;
     private FieldBuilder _tsDuplexWritableHighWaterMarkField = null!;
-    private FieldBuilder _tsDuplexWritableNeedDrainField = null!;
 
     /// <summary>
     /// Phase 1: Define the $Duplex type, fields, and methods.
@@ -45,9 +43,9 @@ public partial class RuntimeEmitter
         _tsDuplexWriteCallbackField = typeBuilder.DefineField("_writeCallback", _types.Object, FieldAttributes.Family);
         _tsDuplexFinalCallbackField = typeBuilder.DefineField("_finalCallback", _types.Object, FieldAttributes.Family);
         _tsDuplexWritableObjectModeField = typeBuilder.DefineField("_writableObjectMode", _types.Boolean, FieldAttributes.Family);
-        _tsDuplexWritableLengthField = typeBuilder.DefineField("_duplexWritableLength", _types.Int32, FieldAttributes.Family);
+        typeBuilder.DefineField("_duplexWritableLength", _types.Int32, FieldAttributes.Family);
         _tsDuplexWritableHighWaterMarkField = typeBuilder.DefineField("_duplexWritableHwm", _types.Int32, FieldAttributes.Family);
-        _tsDuplexWritableNeedDrainField = typeBuilder.DefineField("_duplexNeedDrain", _types.Boolean, FieldAttributes.Family);
+        typeBuilder.DefineField("_duplexNeedDrain", _types.Boolean, FieldAttributes.Family);
 
         // Constructor
         EmitTSDuplexCtor(typeBuilder, runtime);

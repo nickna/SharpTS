@@ -36,54 +36,6 @@ public partial class CompilationContext
     public Dictionary<string, FieldBuilder>? ExtrasFields { get; set; }
 
     /// <summary>
-    /// Resolve a property backing field by walking up the inheritance chain.
-    /// </summary>
-    public FieldBuilder? ResolvePropertyBackingField(string className, string propertyName)
-    {
-        string? current = className;
-        while (current != null)
-        {
-            if (PropertyBackingFields?.TryGetValue(current, out var fields) == true &&
-                fields.TryGetValue(propertyName, out var field))
-                return field;
-            current = ClassRegistry?.GetSuperclass(current);
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Resolve a property type by walking up the inheritance chain.
-    /// </summary>
-    public Type? ResolvePropertyType(string className, string propertyName)
-    {
-        string? current = className;
-        while (current != null)
-        {
-            if (PropertyTypes?.TryGetValue(current, out var types) == true &&
-                types.TryGetValue(propertyName, out var type))
-                return type;
-            current = ClassRegistry?.GetSuperclass(current);
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Check if a property is declared (has a backing field) vs dynamic.
-    /// </summary>
-    public bool IsDeclaredProperty(string className, string propertyName)
-    {
-        string? current = className;
-        while (current != null)
-        {
-            if (DeclaredPropertyNames?.TryGetValue(current, out var names) == true &&
-                names.Contains(propertyName))
-                return true;
-            current = ClassRegistry?.GetSuperclass(current);
-        }
-        return false;
-    }
-
-    /// <summary>
     /// Check if a property is readonly (can only be set in constructor).
     /// </summary>
     public bool IsReadonlyProperty(string className, string propertyName)
@@ -97,20 +49,5 @@ public partial class CompilationContext
             current = ClassRegistry?.GetSuperclass(current);
         }
         return false;
-    }
-
-    /// <summary>
-    /// Get the _extras field for dynamic property storage for a class.
-    /// </summary>
-    public FieldBuilder? ResolveExtrasField(string className)
-    {
-        string? current = className;
-        while (current != null)
-        {
-            if (ExtrasFields?.TryGetValue(current, out var field) == true)
-                return field;
-            current = ClassRegistry?.GetSuperclass(current);
-        }
-        return null;
     }
 }

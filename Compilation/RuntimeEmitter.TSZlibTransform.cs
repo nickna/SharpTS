@@ -27,7 +27,6 @@ public partial class RuntimeEmitter
     private const int KindDeflateRaw = 4;
     private const int KindInflateRaw = 5;
     private const int KindBrotliCompress = 6;
-    private const int KindBrotliDecompress = 7;
     private const int KindUnzip = 8;
     private const int KindZstdCompress = 9;
     private const int KindZstdDecompress = 10;

@@ -100,25 +100,6 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Applies decorators to a parameter definition.
-    /// Maps known decorators to .NET attributes.
-    /// </summary>
-    private void ApplyParameterDecorators(Stmt.Parameter param, ParameterBuilder paramBuilder)
-    {
-        if (param.Decorators == null || param.Decorators.Count == 0)
-            return;
-
-        foreach (var decorator in param.Decorators)
-        {
-            var attribute = AttributeMapper.MapToAttribute(decorator);
-            if (attribute != null)
-            {
-                paramBuilder.SetCustomAttribute(attribute);
-            }
-        }
-    }
-
-    /// <summary>
     /// Gets the name of a decorator from its expression.
     /// </summary>
     private static string? GetDecoratorName(Decorator decorator)

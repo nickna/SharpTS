@@ -10,7 +10,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // $WriteCallbackWrapper fields
-    private TypeBuilder _tsWriteCallbackWrapperType = null!;
     private ConstructorBuilder _tsWriteCallbackWrapperCtor = null!;
     private FieldBuilder _tsWriteCallbackWrapperUserCallbackField = null!;
     private FieldBuilder _tsWriteCallbackWrapperStreamField = null!;
@@ -45,7 +44,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _tsWriteCallbackWrapperType = typeBuilder;
         runtime.WriteCallbackWrapperType = typeBuilder;
 
         // Field: _userCallback (object, may be null)

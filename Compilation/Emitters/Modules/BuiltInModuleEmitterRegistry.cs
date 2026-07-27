@@ -36,20 +36,4 @@ public sealed class BuiltInModuleEmitterRegistry
     {
         return _emitters.GetValueOrDefault(moduleName);
     }
-
-    /// <summary>
-    /// Checks if an emitter is registered for the given module.
-    /// </summary>
-    public bool HasEmitter(string moduleName)
-    {
-        return _emitters.ContainsKey(moduleName);
-    }
-
-    /// <summary>
-    /// Gets all registered module names.
-    /// </summary>
-    public IEnumerable<string> GetRegisteredModules()
-    {
-        return _emitters.Keys;
-    }
 }

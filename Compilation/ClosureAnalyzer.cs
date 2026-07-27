@@ -186,14 +186,6 @@ public class ClosureAnalyzer : AstVisitorBase
     }
 
     /// <summary>
-    /// Checks if a function has any local variables that are captured by inner closures.
-    /// </summary>
-    public bool HasCapturedLocals(object functionNode)
-    {
-        return _functionCapturedLocals.TryGetValue(functionNode, out var locals) && locals.Count > 0;
-    }
-
-    /// <summary>
     /// Returns the names that <paramref name="functionNode"/> declares EXCLUSIVELY as
     /// per-iteration loop bindings (never also as an ordinary local/param):
     /// <c>for (let/const …)</c> initializer bindings (#649), plus loop-BODY block-scoped

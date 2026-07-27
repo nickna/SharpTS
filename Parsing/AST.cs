@@ -273,15 +273,6 @@ public abstract record Expr
         _ => null
     };
 
-    /// <summary>
-    /// Extracts the Token from a superclass expression for line number reporting.
-    /// </summary>
-    public static Token? GetSuperclassToken(Expr? superclassExpr) => superclassExpr switch
-    {
-        Variable v => v.Name,
-        Get g => g.Name,
-        _ => null
-    };
 }
 
 /// <summary>

@@ -38,14 +38,4 @@ public static class CompoundOperatorHelper
         TokenType.CARET_EQUAL or
         TokenType.LESS_LESS_EQUAL or
         TokenType.GREATER_GREATER_EQUAL;
-
-    /// <summary>
-    /// Checks if the operator is an arithmetic compound assignment.
-    /// </summary>
-    public static bool IsArithmetic(TokenType op) => op is
-        TokenType.PLUS_EQUAL or
-        TokenType.MINUS_EQUAL or
-        TokenType.STAR_EQUAL or
-        TokenType.SLASH_EQUAL or
-        TokenType.PERCENT_EQUAL;
 }

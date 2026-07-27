@@ -6,28 +6,17 @@ public static partial class RuntimeTypes
 {
     #region Console
 
-    // Thread-static group level for compiled mode
+    // Thread-static group level for compiled mode. Currently always 0: the
+    // increment/decrement helpers were removed as dead code (the emitted runtime
+    // tracks its own group level).
     [ThreadStatic]
-    private static int _consoleGroupLevel;
+    private static int _consoleGroupLevel = 0;
 
     /// <summary>
     /// Gets the current indentation string based on group level (2 spaces per level).
     /// </summary>
     public static string GetConsoleIndent()
         => _consoleGroupLevel > 0 ? new string(' ', _consoleGroupLevel * 2) : "";
-
-    /// <summary>
-    /// Increments the console group level.
-    /// </summary>
-    public static void IncrementConsoleGroup() => _consoleGroupLevel++;
-
-    /// <summary>
-    /// Decrements the console group level if positive.
-    /// </summary>
-    public static void DecrementConsoleGroup()
-    {
-        if (_consoleGroupLevel > 0) _consoleGroupLevel--;
-    }
 
     public static void ConsoleLog(object? value)
     {

@@ -181,50 +181,6 @@ public sealed class ClassRegistry
         return false;
     }
 
-    /// <summary>
-    /// Tries to get a class TypeBuilder by its already-resolved qualified name.
-    /// </summary>
-    public bool TryGetClassByQualifiedName(string qualifiedName, out TypeBuilder? builder)
-    {
-        if (_builders.TryGetValue(qualifiedName, out var tb))
-        {
-            builder = tb;
-            return true;
-        }
-
-        builder = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if a class exists with the given simple name.
-    /// </summary>
-    public bool HasClass(string simpleName)
-    {
-        var resolvedName = ResolveClassName(simpleName);
-        return _builders.ContainsKey(resolvedName);
-    }
-
-    /// <summary>
-    /// Gets all class builders (for enumeration during finalization).
-    /// </summary>
-    public IReadOnlyDictionary<string, TypeBuilder> GetAllClasses() => _builders;
-
-    /// <summary>
-    /// Gets external .NET types registered for classes (for @DotNetType support).
-    /// </summary>
-    public bool TryGetExternalType(string className, out Type? type)
-    {
-        if (_externalTypes.TryGetValue(className, out var t))
-        {
-            type = t;
-            return true;
-        }
-
-        type = null;
-        return false;
-    }
-
     #endregion
 
     #region Superclass Resolution
@@ -235,14 +191,6 @@ public sealed class ClassRegistry
     public string? GetSuperclass(string className)
     {
         return _superclass.GetValueOrDefault(className);
-    }
-
-    /// <summary>
-    /// Checks if a class has a superclass.
-    /// </summary>
-    public bool HasSuperclass(string className)
-    {
-        return _superclass.TryGetValue(className, out var super) && super != null;
     }
 
     #endregion
@@ -264,14 +212,6 @@ public sealed class ClassRegistry
     public ConstructorBuilder? GetConstructorByQualifiedName(string qualifiedName)
     {
         return _constructors.GetValueOrDefault(qualifiedName);
-    }
-
-    /// <summary>
-    /// Gets constructor overloads for a class (for default parameter support).
-    /// </summary>
-    public List<ConstructorBuilder>? GetConstructorOverloads(string qualifiedName)
-    {
-        return _constructorOverloads.GetValueOrDefault(qualifiedName);
     }
 
     #endregion
@@ -387,22 +327,6 @@ public sealed class ClassRegistry
     }
 
     /// <summary>
-    /// Tries to get a static field for a class, walking the superclass chain so inherited
-    /// statics resolve (the FieldBuilder references the declaring class's token).
-    /// </summary>
-    public bool TryGetStaticField(string qualifiedClassName, string fieldName, out FieldBuilder? field)
-    {
-        if (TryResolveStaticMember(_staticFields, qualifiedClassName, fieldName, out _, out var f))
-        {
-            field = f;
-            return true;
-        }
-
-        field = null;
-        return false;
-    }
-
-    /// <summary>
     /// Tries to get a static field declared directly on the class (no superclass walk). Used by
     /// write/read-modify-write sites that must bind only to a field the class itself declares.
     /// </summary>
@@ -416,22 +340,6 @@ public sealed class ClassRegistry
         }
 
         field = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Tries to get a static method for a class, walking the superclass chain so inherited
-    /// statics resolve (the MethodBuilder references the declaring class's token).
-    /// </summary>
-    public bool TryGetStaticMethod(string qualifiedClassName, string methodName, out MethodBuilder? method)
-    {
-        if (TryResolveStaticMember(_staticMethods, qualifiedClassName, methodName, out _, out var m))
-        {
-            method = m;
-            return true;
-        }
-
-        method = null;
         return false;
     }
 
@@ -467,21 +375,6 @@ public sealed class ClassRegistry
         }
 
         getter = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Tries to get a static setter for a class, walking the superclass chain.
-    /// </summary>
-    public bool TryGetStaticSetter(string qualifiedClassName, string propertyName, out MethodBuilder? setter)
-    {
-        if (TryResolveStaticMember(_staticSetters, qualifiedClassName, propertyName, out _, out var s))
-        {
-            setter = s;
-            return true;
-        }
-
-        setter = null;
         return false;
     }
 
@@ -562,28 +455,6 @@ public sealed class ClassRegistry
         }
 
         method = null;
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if a class has generic type parameters.
-    /// </summary>
-    public bool IsGenericClass(string qualifiedClassName)
-    {
-        return _genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0;
-    }
-
-    /// <summary>
-    /// Gets the generic type parameters for a class.
-    /// </summary>
-    public bool TryGetGenericParams(string qualifiedClassName, out GenericTypeParameterBuilder[]? genericParams)
-    {
-        if (_genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0)
-        {
-            genericParams = gps;
-            return true;
-        }
-        genericParams = null;
         return false;
     }
 

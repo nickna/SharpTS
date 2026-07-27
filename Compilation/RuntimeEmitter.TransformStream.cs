@@ -33,7 +33,6 @@ public partial class RuntimeEmitter
     // and the readable side. Its Write/Close/Abort methods translate
     // writable-sink operations into transformer.transform/flush calls and
     // readable.Enqueue/CloseStream/ErrorStream side effects.
-    private TypeBuilder _transformSinkHolderType = null!;
     private FieldBuilder _transformHolderTransformerField = null!;
     private FieldBuilder _transformHolderReadableField = null!;
     private ConstructorBuilder _transformHolderCtor = null!;
@@ -75,8 +74,6 @@ public partial class RuntimeEmitter
             "$TransformSinkHolder",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
-
-        _transformSinkHolderType = holder;
 
         _transformHolderTransformerField = holder.DefineField(
             "_transformer", _types.Object, FieldAttributes.Private);

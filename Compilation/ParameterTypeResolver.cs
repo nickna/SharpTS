@@ -603,42 +603,6 @@ public static class ParameterTypeResolver
     }
 
     /// <summary>
-    /// Resolves return type for a class method.
-    /// </summary>
-    public static Type ResolveMethodReturnType(
-        string className,
-        string methodName,
-        bool isAsync,
-        TypeMapper typeMapper,
-        TypeMap? typeMap)
-    {
-        if (typeMap == null)
-            return isAsync ? typeof(Task<object>) : typeof(object);
-
-        var classType = typeMap.GetClassType(className);
-        if (classType == null)
-            return isAsync ? typeof(Task<object>) : typeof(object);
-
-        TSTypeInfo.Function? funcType = null;
-
-        // Check instance methods
-        if (classType.Methods.TryGetValue(methodName, out var methodType))
-        {
-            funcType = ExtractFunctionType(methodType);
-        }
-        // Check static methods
-        else if (classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
-        {
-            funcType = ExtractFunctionType(staticMethodType);
-        }
-
-        if (funcType == null)
-            return isAsync ? typeof(Task<object>) : typeof(object);
-
-        return ResolveReturnType(funcType.ReturnType, isAsync, typeMapper);
-    }
-
-    /// <summary>
     /// Resolves constructor parameter types for a class, widening value-type-defaulted params to
     /// <c>object</c> so the entry prologue can fire their defaults (#705).
     /// </summary>
@@ -710,20 +674,6 @@ public static class ParameterTypeResolver
                     ? CoerceParamSlotType(WidenIfUndefinedReachableParam(mappedType, parameters[i], typeMap), pt, typeMapper)
                     : CoerceParamSlotType(mappedType, pt, typeMapper);
             })
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Extracts parameter types from a method TypeInfo.
-    /// </summary>
-    private static Type[] ExtractParameterTypes(TSTypeInfo methodType, int paramCount, TypeMapper typeMapper)
-    {
-        var funcType = ExtractFunctionType(methodType);
-        if (funcType == null || funcType.ParamTypes.Count != paramCount)
-            return Enumerable.Repeat(typeof(object), paramCount).ToArray();
-
-        return funcType.ParamTypes
-            .Select(pt => typeMapper.MapTypeInfoStrict(pt))
             .ToArray();
     }
 

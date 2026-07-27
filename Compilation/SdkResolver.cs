@@ -197,28 +197,4 @@ public static class SdkResolver
         }
         return Environment.Version.Major;
     }
-
-    /// <summary>
-    /// Gets detailed information about the SDK resolution process (for diagnostics).
-    /// </summary>
-    public static string GetDiagnosticInfo()
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("SDK Resolution Diagnostic Info:");
-        sb.AppendLine($"  Runtime Directory: {RuntimeEnvironment.GetRuntimeDirectory()}");
-        sb.AppendLine($"  DOTNET_ROOT: {Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "(not set)"}");
-        sb.AppendLine($"  Current Runtime Version: {Environment.Version}");
-        sb.AppendLine($"  OS Platform: {RuntimeInformation.OSDescription}");
-
-        var foundPath = FindReferenceAssembliesPath();
-        sb.AppendLine($"  Found Reference Assemblies: {foundPath ?? "(not found)"}");
-
-        if (foundPath != null && Directory.Exists(foundPath))
-        {
-            var dllCount = Directory.GetFiles(foundPath, "*.dll").Length;
-            sb.AppendLine($"  Reference Assembly Count: {dllCount}");
-        }
-
-        return sb.ToString();
-    }
 }

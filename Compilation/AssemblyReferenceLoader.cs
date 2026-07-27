@@ -134,32 +134,6 @@ public sealed class AssemblyReferenceLoader : IDisposable
         }
     }
 
-    /// <summary>
-    /// Checks if a type with the given name exists in any loaded assembly.
-    /// </summary>
-    public bool TypeExists(string fullName)
-    {
-        return TryResolve(fullName) != null;
-    }
-
-    /// <summary>
-    /// Gets type metadata for validation purposes (methods, properties, etc.).
-    /// </summary>
-    public TypeMetadata? GetTypeMetadata(string fullName)
-    {
-        var type = TryResolve(fullName);
-        if (type == null) return null;
-
-        return new TypeMetadata(
-            type,
-            type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).ToList(),
-            type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .Where(m => !m.IsSpecialName)
-                .ToList(),
-            type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).ToList()
-        );
-    }
-
     public void Dispose()
     {
         if (!_disposed)

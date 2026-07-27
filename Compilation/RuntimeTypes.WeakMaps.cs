@@ -6,8 +6,6 @@ public static partial class RuntimeTypes
 {
     #region WeakMap Support
 
-    private static readonly ConditionalWeakTable<object, object?>.CreateValueCallback DefaultFactory = _ => null;
-
     /// <summary>
     /// Creates an empty WeakMap using ConditionalWeakTable.
     /// </summary>

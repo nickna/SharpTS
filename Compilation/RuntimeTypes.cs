@@ -178,11 +178,6 @@ public static partial class RuntimeTypes
         return [];
     }
 
-    public static void RegisterType(string name, Type type)
-    {
-        _compiledTypes[name] = type;
-    }
-
     #region Type Emission
 
     public static void EmitAll(ModuleBuilder moduleBuilder)

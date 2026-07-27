@@ -250,47 +250,6 @@ public static class ConstantFolder
         return false;
     }
 
-    /// <summary>
-    /// Attempts to fold a nullish coalescing expression (??) with literal operands.
-    /// </summary>
-    public static bool TryFoldNullishCoalescing(Expr.NullishCoalescing nc, out object? result)
-    {
-        result = null;
-
-        if (nc.Left is not Expr.Literal left)
-            return false;
-
-        // ?? returns left if not nullish, otherwise right
-        if (!IsNullish(left.Value))
-        {
-            result = left.Value;
-            return true;
-        }
-
-        if (nc.Right is Expr.Literal right)
-        {
-            result = right.Value;
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Attempts to fold a ternary expression with a literal condition.
-    /// </summary>
-    public static bool TryFoldTernary(Expr.Ternary ternary, out Expr? result)
-    {
-        result = null;
-
-        if (ternary.Condition is not Expr.Literal condition)
-            return false;
-
-        // Select branch based on condition truthiness
-        result = IsTruthy(condition.Value) ? ternary.ThenBranch : ternary.ElseBranch;
-        return true;
-    }
-
     private static bool IsTruthy(object? value) => RuntimeTypes.IsTruthy(value);
 
     private static bool IsNullish(object? value) =>

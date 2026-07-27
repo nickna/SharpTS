@@ -200,9 +200,6 @@ public partial class ILCompiler
     private readonly bool _useReferenceAssemblies;
     private readonly string? _sdkPath;
 
-    // Assembly metadata for version and attributes
-    private readonly AssemblyMetadata? _metadata;
-
     // External assembly references for @DotNetType support
     private AssemblyReferenceLoader? _referenceLoader;
 
@@ -289,7 +286,6 @@ public partial class ILCompiler
     {
         _useReferenceAssemblies = useReferenceAssemblies;
         _sdkPath = sdkPath;
-        _metadata = metadata;
         _outputTarget = target;
         _inMemoryOnly = inMemoryOnly;
 

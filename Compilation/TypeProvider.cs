@@ -1260,29 +1260,6 @@ public class TypeProvider
     }
 
     /// <summary>
-    /// Gets a static method from a type by name (no parameters).
-    /// </summary>
-    public MethodInfo GetMethodStatic(Type type, string name)
-    {
-        var method = type.GetMethod(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-        if (method == null)
-            throw new CompileException($"Could not find static method {type.FullName}.{name}");
-        return method;
-    }
-
-    /// <summary>
-    /// Gets a generic instance method from a type by name.
-    /// </summary>
-    public MethodInfo GetGenericMethod(Type type, string name)
-    {
-        var method = type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-            .FirstOrDefault(m => m.Name == name && m.IsGenericMethod);
-        if (method == null)
-            throw new CompileException($"Could not find generic method {type.FullName}.{name}");
-        return method;
-    }
-
-    /// <summary>
     /// Gets a constructor from a type with the specified parameter types.
     /// </summary>
     public ConstructorInfo GetConstructor(Type type, params Type[] parameterTypes)
