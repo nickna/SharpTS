@@ -1528,7 +1528,8 @@ public partial class ILCompiler
         pdbPath ??= _assemblyName + ".pdb";
         var pdbMetadata = _debugInfo.BuildPdbMetadata(
             metadataBuilder.GetRowCounts()[(int)TableIndex.MethodDef],
-            PdbEmitter.ReadLocalSignatureRids(image));
+            PdbEmitter.ReadLocalSignatureRids(image),
+            PdbEmitter.ReadMethodIlSizes(image));
         var pdb = PdbEmitter.Serialize(
             pdbMetadata,
             PdbEmitter.ReadTypeSystemRowCounts(image),

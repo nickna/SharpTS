@@ -28,8 +28,27 @@ A brace never takes a stop on its own. `{ … }` blocks, the sequences a lowerin
 emit no instructions of their own, so the first real statement inside them owns that position.
 Conditions do execute, so `if`, `while`, `for`, and `switch` headers keep their own points.
 
-Not yet done: named locals and lexical scopes (variables show as slot numbers), Just My Code, and
-the "SharpTS: Debug Current File" VS Code command. Interpreter debugging is out of scope.
+Locals show under the names you wrote, over the range they are actually in scope — a `for` binding
+is offered inside its loop and not outside it, and a shadowing inner `let` resolves ahead of the
+outer one. Temporaries the compiler introduces (destructuring scratch slots and similar) are marked
+hidden and stay out of the locals window.
+
+### Where variables do not appear as locals
+
+Two categories are visible to a debugger, but not as ordinary locals. This is accepted behavior for
+now, not an oversight.
+
+*Module and script top-level bindings* are emitted as static fields of `$Program`, because they
+outlive the initializer that assigns them and may be captured by other modules. Inspect them under
+the static fields of `$Program` rather than in the locals window.
+
+*Locals of `async` functions and generators* are hoisted into the state machine's fields so they
+survive suspension, so they appear as fields of the `<name>d__N` frame instead of as locals of
+`MoveNext`. Presenting them as locals again needs the portable-PDB custom debug information that
+describes a state machine's hoisted-variable mapping, which is a follow-up.
+
+Not yet done: Just My Code, and the "SharpTS: Debug Current File" VS Code command. Interpreter
+debugging is out of scope.
 
 ## Editor setup
 

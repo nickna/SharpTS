@@ -34,6 +34,23 @@ internal sealed class DebugInfoCollector
 
     private readonly Dictionary<string, SourceFile> _documents = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<MethodBase, List<Point>> _methods = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, MethodLocalSymbols> _locals = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Starts collecting named locals and lexical scopes for a method body, returning the sink to
+    /// hand to its <see cref="LocalsManager"/>.
+    /// </summary>
+    internal MethodLocalSymbols BeginMethodLocals(MethodBase method, System.Reflection.Emit.ILGenerator il)
+    {
+        // A method body can be handed more than one emission context; all of them must report into
+        // the same record or the scopes would be split across duplicate rows.
+        if (_locals.TryGetValue(method, out var existing)) return existing;
+
+        var symbols = new MethodLocalSymbols(method, il);
+        symbols.Begin();
+        _locals[method] = symbols;
+        return symbols;
+    }
 
     /// <summary>Whether anything worth writing to a PDB has been recorded.</summary>
     internal bool IsEmpty => _methods.Count == 0;
@@ -131,7 +148,13 @@ internal sealed class DebugInfoCollector
     /// signature, or 0 when it declares no locals. Debuggers use it to type the local slots named by
     /// the <c>LocalVariable</c> table.
     /// </param>
-    internal MetadataBuilder BuildPdbMetadata(int methodDefRowCount, Func<int, int> localSignatureRid)
+    /// <param name="methodIlSize">
+    /// Maps a <c>MethodDef</c> row id to the byte length of its IL body. Used to close the
+    /// method-body scope, whose end is the end of the method rather than an offset any emitter
+    /// reports.
+    /// </param>
+    internal MetadataBuilder BuildPdbMetadata(
+        int methodDefRowCount, Func<int, int> localSignatureRid, Func<int, int>? methodIlSize = null)
     {
         var pdb = new MetadataBuilder();
 
@@ -164,9 +187,69 @@ internal sealed class DebugInfoCollector
             pdb.AddMethodDebugInformation(single?.Handle ?? default, pdb.GetOrAddBlob(blob));
         }
 
+        WriteLocalScopes(pdb, methodIlSize);
         EmbedSources(pdb);
         return pdb;
     }
+
+    /// <summary>
+    /// Writes the <c>LocalScope</c> and <c>LocalVariable</c> tables that give a debugger variable
+    /// names and the ranges they are live over.
+    /// </summary>
+    /// <remarks>
+    /// <c>LocalScope</c> must be sorted by method, then by start offset ascending, then by length
+    /// descending — an enclosing scope has to precede the scopes nested inside it. Each scope's
+    /// variables must occupy a contiguous run of <c>LocalVariable</c> rows, so the variables are
+    /// written immediately before the scope that owns them.
+    /// </remarks>
+    private void WriteLocalScopes(MetadataBuilder pdb, Func<int, int>? methodIlSize)
+    {
+        foreach (var symbols in _locals.Values
+            .Where(s => s.HasLocals)
+            .Select(s => (Symbols: s, Rid: MetadataTokens.GetRowNumber(
+                MetadataTokens.MethodDefinitionHandle(s.Method.MetadataToken))))
+            .OrderBy(entry => entry.Rid))
+        {
+            int bodySize = methodIlSize?.Invoke(symbols.Rid) ?? 0;
+
+            foreach (var scope in symbols.Symbols.Scopes
+                .Where(scope => scope.Locals.Count > 0)
+                .OrderBy(scope => scope.StartOffset)
+                .ThenByDescending(scope => EndOf(scope, bodySize) - scope.StartOffset))
+            {
+                var firstVariable = MetadataTokens.LocalVariableHandle(
+                    pdb.GetRowCount(TableIndex.LocalVariable) + 1);
+
+                foreach (var (name, slot) in scope.Locals)
+                {
+                    pdb.AddLocalVariable(
+                        IsCompilerGenerated(name) ? LocalVariableAttributes.DebuggerHidden : LocalVariableAttributes.None,
+                        slot,
+                        pdb.GetOrAddString(name));
+                }
+
+                int end = EndOf(scope, bodySize);
+                pdb.AddLocalScope(
+                    method: MetadataTokens.MethodDefinitionHandle(symbols.Rid),
+                    importScope: default,
+                    variableList: firstVariable,
+                    constantList: MetadataTokens.LocalConstantHandle(pdb.GetRowCount(TableIndex.LocalConstant) + 1),
+                    startOffset: scope.StartOffset,
+                    length: Math.Max(0, end - scope.StartOffset));
+            }
+        }
+
+        static int EndOf(MethodLocalSymbols.Scope scope, int bodySize) =>
+            scope.IsOpen ? Math.Max(scope.StartOffset, bodySize) : scope.EndOffset;
+    }
+
+    /// <summary>
+    /// Whether a binding is scaffolding rather than something the user declared. The parser and the
+    /// lowerings name their temporaries distinctively, and marking them hidden keeps a debugger's
+    /// locals window showing only variables that appear in the source.
+    /// </summary>
+    private static bool IsCompilerGenerated(string name) =>
+        name.StartsWith('$') || name.StartsWith("__") || name.StartsWith("_dest");
 
     /// <summary>Returns the one document all points share, or null when they span several.</summary>
     private static SourceFile? SingleDocument(List<Point> points)

@@ -85,6 +85,31 @@ internal static class PdbEmitter
     }
 
     /// <summary>
+    /// Maps each <c>MethodDef</c> row id to the byte length of its IL body (0 when it has none).
+    /// </summary>
+    /// <remarks>
+    /// The method-body scope runs to the end of the method, which no emitter reports as an offset —
+    /// it is only knowable once the body is complete, so it is read back from the finished image.
+    /// </remarks>
+    internal static Func<int, int> ReadMethodIlSizes(byte[] peImage)
+    {
+        using var reader = new PEReader(new MemoryStream(peImage, writable: false));
+        var metadata = reader.GetMetadataReader();
+
+        var byRid = new int[metadata.MethodDefinitions.Count + 1];
+        foreach (var handle in metadata.MethodDefinitions)
+        {
+            var method = metadata.GetMethodDefinition(handle);
+            if (method.RelativeVirtualAddress == 0) continue;
+
+            byRid[MetadataTokens.GetRowNumber(handle)] =
+                reader.GetMethodBody(method.RelativeVirtualAddress).GetILBytes()?.Length ?? 0;
+        }
+
+        return rid => (uint)rid < (uint)byRid.Length ? byRid[rid] : 0;
+    }
+
+    /// <summary>
     /// Confirms that a post-processing pass preserved <c>MethodDef</c> identity row-for-row, which
     /// is what lets a PDB built from the pre-pass emit describe the final image.
     /// </summary>

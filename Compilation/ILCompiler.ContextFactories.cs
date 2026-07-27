@@ -80,6 +80,17 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Points the context's <see cref="LocalsManager"/> at the record collecting this method's
+    /// named locals and scopes. A no-op unless the build is emitting symbols.
+    /// </summary>
+    private void AttachLocalSymbols(CompilationContext ctx)
+    {
+        if (ctx.DebugScope is null || ctx.CurrentMethod is null || ctx.IL is null) return;
+
+        ctx.Locals.SymbolSink = _debugInfo.BeginMethodLocals(ctx.CurrentMethod, ctx.IL);
+    }
+
+    /// <summary>
     /// Creates the context for a body emitted inside the current module (function, class member,
     /// generator, async body, arrow): base invariants plus module maps and the current
     /// module/namespace scope. Does NOT set IsModuleTopLevel — declarations in these bodies are
@@ -91,6 +102,7 @@ public partial class ILCompiler
         ApplyModuleMaps(ctx);
         ctx.CurrentModulePath = _modules.CurrentPath;
         ctx.CurrentNamespacePath = _currentNamespacePath;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 
@@ -113,6 +125,7 @@ public partial class ILCompiler
         // This context emits the module/script top-level statements, so var/let/const
         // declarations here are genuine module-level bindings (#562).
         ctx.IsModuleTopLevel = true;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 
@@ -143,6 +156,7 @@ public partial class ILCompiler
         ctx.EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor;
         // Top-level statements run here: var/let/const are module-level bindings (#562).
         ctx.IsModuleTopLevel = true;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 

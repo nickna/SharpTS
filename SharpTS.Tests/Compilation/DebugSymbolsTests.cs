@@ -224,6 +224,112 @@ public class DebugSymbolsTests
         Assert.Contains(points, p => !p.IsHidden && p.StartLine == 3);
     }
 
+    // ---------------------------------------------------------------- named locals and scopes
+
+    [Fact]
+    public void LocalsCarryTheirTypeScriptNames()
+    {
+        const string source = """
+            function compute(n: number): number {
+              const doubled = n * 2;
+              const shifted = doubled + 1;
+              return shifted;
+            }
+            compute(1);
+            """;
+
+        var locals = AllLocals(CompileTypeScript(source, emitDebugSymbols: true));
+
+        Assert.Contains(locals, local => local.Name == "doubled" && !local.Hidden);
+        Assert.Contains(locals, local => local.Name == "shifted" && !local.Hidden);
+    }
+
+    /// <summary>
+    /// A binding introduced by a loop is live only for that loop, so a debugger stopped outside it
+    /// does not offer a variable that is not in scope there.
+    /// </summary>
+    [Fact]
+    public void LoopVariablesAreScopedToTheirLoop()
+    {
+        const string source = """
+            function run(): number {
+              let total = 0;
+              for (let i = 0; i < 3; i++) {
+                total = total + i;
+              }
+              return total;
+            }
+            run();
+            """;
+
+        var locals = AllLocals(CompileTypeScript(source, emitDebugSymbols: true));
+
+        var counter = Assert.Single(locals, local => local.Name == "i");
+        var total = Assert.Single(locals, local => local.Name == "total");
+
+        Assert.True(counter.ScopeLength < total.ScopeLength,
+            $"the loop binding's scope ({counter.ScopeLength} bytes) should be narrower than the " +
+            $"function body's ({total.ScopeLength} bytes)");
+        Assert.True(counter.ScopeStart > total.ScopeStart);
+    }
+
+    /// <summary>
+    /// Temporaries a lowering introduces are marked hidden so a locals window shows only variables
+    /// that appear in the source.
+    /// </summary>
+    [Fact]
+    public void LoweringTemporariesAreHiddenFromTheDebugger()
+    {
+        const string source = """
+            function unpack(pair: number[]): number {
+              const [first, second] = pair;
+              return first + second;
+            }
+            unpack([1, 2]);
+            """;
+
+        var locals = AllLocals(CompileTypeScript(source, emitDebugSymbols: true));
+
+        Assert.Contains(locals, local => local.Name == "first" && !local.Hidden);
+        Assert.Contains(locals, local => local.Name == "second" && !local.Hidden);
+        Assert.All(locals.Where(local => local.Name.StartsWith("_dest")), local => Assert.True(local.Hidden));
+    }
+
+    /// <summary>
+    /// Scopes must be ordered as the format requires — by method, then start ascending, then length
+    /// descending — or a debugger resolves names against the wrong enclosing scope.
+    /// </summary>
+    [Fact]
+    public void LocalScopesAreOrderedForTheReader()
+    {
+        const string source = """
+            function nest(): number {
+              let outer = 1;
+              for (let i = 0; i < 2; i++) {
+                let inner = i;
+                outer = outer + inner;
+              }
+              return outer;
+            }
+            nest();
+            """;
+
+        var pdb = ReadPdb(CompileTypeScript(source, emitDebugSymbols: true).Pdb!);
+
+        var scopes = pdb.LocalScopes
+            .Select(pdb.GetLocalScope)
+            .Select(scope => (Method: MetadataTokens.GetRowNumber(scope.Method), scope.StartOffset, scope.Length))
+            .ToList();
+
+        var expected = scopes
+            .OrderBy(scope => scope.Method)
+            .ThenBy(scope => scope.StartOffset)
+            .ThenByDescending(scope => scope.Length)
+            .ToList();
+
+        Assert.Equal(expected, scopes);
+    }
+
     [Fact]
     public void DebugBuildsAreMarkedDebuggableAndOthersAreNot()
     {
@@ -450,6 +556,29 @@ public class DebugSymbolsTests
             .Distinct()
             .Order()
             .ToArray();
+
+    /// <summary>Every named local in the PDB, with the scope it is live over.</summary>
+    private static List<(string Name, bool Hidden, int ScopeStart, int ScopeLength)> AllLocals(
+        CompilationArtifacts artifacts)
+    {
+        var pdb = ReadPdb(artifacts.Pdb!);
+        var locals = new List<(string, bool, int, int)>();
+
+        foreach (var scopeHandle in pdb.LocalScopes)
+        {
+            var scope = pdb.GetLocalScope(scopeHandle);
+            foreach (var variableHandle in scope.GetLocalVariables())
+            {
+                var variable = pdb.GetLocalVariable(variableHandle);
+                locals.Add((
+                    pdb.GetString(variable.Name),
+                    variable.Attributes.HasFlag(LocalVariableAttributes.DebuggerHidden),
+                    scope.StartOffset,
+                    scope.Length));
+            }
+        }
+        return locals;
+    }
 
     private static bool HasDebuggableAttribute(byte[] image)
     {
