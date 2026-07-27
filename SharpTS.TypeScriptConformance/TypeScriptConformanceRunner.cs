@@ -133,7 +133,10 @@ public sealed class TypeScriptConformanceRunner
         List<ParsedModule> modules;
         try
         {
-            resolver = new ModuleResolver(rootFiles[0], virtualFiles, programOptions);
+            resolver = new ModuleResolver(rootFiles[0], virtualFiles, programOptions)
+            {
+                JsxOptions = ResolveJsxOptions(metadata),
+            };
             var entry = resolver.LoadProgram(rootFiles[0]);
             modules = resolver.GetModulesInOrder(entry);
 
@@ -250,6 +253,34 @@ public sealed class TypeScriptConformanceRunner
         if (bool.TryParse(value, out bool parsed))
             return parsed;
         return null;
+    }
+
+    /// <summary>
+    /// Maps the test's <c>@jsx:</c> family of directives onto parser jsx options. tsc's
+    /// harness default for an unset <c>@jsx</c> is None (JSX in .tsx is TS17004);
+    /// <c>preserve</c>/<c>react-native</c> are checker-equivalent to the classic transform
+    /// here since the conformance runner never emits.
+    /// </summary>
+    private static JsxParseOptions ResolveJsxOptions(TypeScriptConformanceMetadata metadata)
+    {
+        JsxMode mode = metadata.Jsx?.Trim().ToLowerInvariant() switch
+        {
+            "react" or "preserve" or "react-native" => JsxMode.React,
+            "react-jsx" => JsxMode.ReactJsx,
+            "react-jsxdev" => JsxMode.ReactJsxDev,
+            _ => JsxMode.None,
+        };
+        var options = new JsxParseOptions(mode);
+        if (metadata.RawDirectives.TryGetValue("jsxfactory", out string? factory) &&
+            !string.IsNullOrWhiteSpace(factory))
+            options = options with { Factory = factory.Trim() };
+        if (metadata.RawDirectives.TryGetValue("jsxfragmentfactory", out string? fragment) &&
+            !string.IsNullOrWhiteSpace(fragment))
+            options = options with { FragmentFactory = fragment.Trim() };
+        if (metadata.RawDirectives.TryGetValue("jsximportsource", out string? importSource) &&
+            !string.IsNullOrWhiteSpace(importSource))
+            options = options with { ImportSource = importSource.Trim() };
+        return options;
     }
 
     private static IReadOnlyList<string>? DirectiveList(

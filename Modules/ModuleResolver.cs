@@ -147,6 +147,23 @@ public class ModuleResolver
     /// </summary>
     internal StdlibProviderChain StdlibChain => _stdlibChain;
 
+    // npm-fallback shims (react family). Deliberately NOT part of _stdlibChain: node
+    // builtins are stdlib-first, but these answer only after node_modules resolution
+    // misses, so a real installed package always beats the embedded shim.
+    private readonly EmbeddedNpmFallbackProvider _npmFallback = new();
+
+    /// <summary>
+    /// Resolved JSX settings applied to every .tsx/.jsx source this resolver parses.
+    /// Jsx config is per-project (unlike the historical per-call decorator mode), so it is a
+    /// property rather than a LoadModule parameter. Null falls back to
+    /// <see cref="JsxParseOptions.Default"/> — .tsx files always parse in the TSX dialect.
+    /// </summary>
+    public JsxParseOptions? JsxOptions { get; set; }
+
+    private static bool IsJsxSourcePath(string path) =>
+        path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Resolves a module specifier to an absolute file path.
     /// </summary>
@@ -255,6 +272,15 @@ public class ModuleResolver
                 return stdlibModule.VirtualPath;
             }
 
+            // Imports issued from inside stdlib virtual modules never have a real directory
+            // to probe node_modules from, so the npm-fallback shim answers immediately
+            // (e.g. the react shim's own `react/jsx-runtime` re-exports).
+            if (currentModulePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal) &&
+                _npmFallback.TryResolve(bareSpecifier, out var npmIntraShim) && npmIntraShim is not null)
+            {
+                return npmIntraShim.VirtualPath;
+            }
+
             if (_resolutionOptions.BaseUrl is not null)
             {
                 string? baseUrlResult = TryAddExtension(
@@ -284,6 +310,14 @@ public class ModuleResolver
             {
                 return resolvedPath;
             }
+
+            // npm-fallback shims (react family): consulted strictly AFTER node_modules so a
+            // real installed package always wins over the embedded shim.
+            if (_npmFallback.TryResolve(bareSpecifier, out var npmFallbackModule) && npmFallbackModule is not null)
+            {
+                return npmFallbackModule.VirtualPath;
+            }
+
             throw new Exception($"Module Error: Cannot resolve bare specifier '{specifier}'. " +
                                 "Bare imports require a node_modules directory with the package installed.");
         }
@@ -802,10 +836,14 @@ public class ModuleResolver
         {
             string source = ResolverReadAllText(absolutePath);
 
-            var lexer = new Lexer(source);
+            bool isJsxSource = IsJsxSourcePath(absolutePath);
+            var lexer = new Lexer(source) { JsxTolerant = isJsxSource };
             var tokens = lexer.ScanTokens();
             var parser = new Parser(tokens, decoratorMode)
-                .AsDeclarationFile(IsDeclarationFilePath(absolutePath));
+                .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
+                .WithFilePath(absolutePath);
+            if (isJsxSource)
+                parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
 
             // For module loading, we throw on parse errors (backward compatible)
@@ -1124,15 +1162,25 @@ public class ModuleResolver
         if (_loadingModules.Contains(virtualPath))
             throw new Exception($"Module Error: Circular dependency detected involving '{virtualPath}'.");
 
-        var specifier = EmbeddedStdlibProvider.TryExtractSpecifier(virtualPath);
-        if (specifier is null)
-            throw new Exception($"Module Error: Malformed stdlib virtual path '{virtualPath}'.");
+        StdlibModule? stdlibModule;
+        var npmSpecifier = EmbeddedNpmFallbackProvider.TryExtractSpecifier(virtualPath);
+        if (npmSpecifier is not null)
+        {
+            if (!_npmFallback.TryResolve(npmSpecifier, out stdlibModule) || stdlibModule is null)
+                throw new Exception($"Module Error: No npm-fallback provider resolved '{npmSpecifier}'.");
+        }
+        else
+        {
+            var specifier = EmbeddedStdlibProvider.TryExtractSpecifier(virtualPath);
+            if (specifier is null)
+                throw new Exception($"Module Error: Malformed stdlib virtual path '{virtualPath}'.");
 
-        if (!_stdlibChain.TryResolve(specifier, out var stdlibModule) || stdlibModule is null)
-            throw new Exception($"Module Error: No stdlib provider resolved '{specifier}'.");
+            if (!_stdlibChain.TryResolve(specifier, out stdlibModule) || stdlibModule is null)
+                throw new Exception($"Module Error: No stdlib provider resolved '{specifier}'.");
+        }
 
         if (stdlibModule.Source is not TypeScriptSource tsSource)
-            throw new Exception($"Module Error: Stdlib module '{specifier}' is not TypeScript source.");
+            throw new Exception($"Module Error: Stdlib module '{stdlibModule.Specifier}' is not TypeScript source.");
 
         _loadingModules.Add(virtualPath);
         try

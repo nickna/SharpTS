@@ -158,8 +158,10 @@ public class TypeScriptConformanceRunnerTests
         var tmp = Path.Combine(Path.GetTempPath(), $"sharpts-{Guid.NewGuid():N}.tsx");
         try
         {
+            // Automatic runtime: classic `@jsx: react` without a React import would be a
+            // legitimate TS2304 under the JSX checking pipeline (as in tsc).
             File.WriteAllText(tmp, """
-                // @jsx: react
+                // @jsx: react-jsx
                 // @filename: renderer.d.ts
                 declare global {
                     namespace JSX {

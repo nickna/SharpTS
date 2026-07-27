@@ -167,7 +167,7 @@ The same applies to `PropertyDescriptorStore`, `ObjectBuiltIns`, and any other S
 
 ## Important Implementation Details
 
-- **For Loop Desugaring:** Parser converts `for` loops into `while` loops
+- **JSX/TSX:** `.tsx` files parse in the TSX dialect; JSX lowers at parse time to factory calls (`Parsing/Parser.Jsx.cs`) marked with `Expr.Call.JsxOrigin`, which routes the type checker to the JSX pipeline (`TypeSystem/TypeChecker.Jsx.cs`). The embedded react shim lives in `stdlib/npm/` (npm-fallback resolution: node_modules wins). Neither backend has JSX-specific code.
 - **console.log:** Hardcoded special case in type checker, interpreter, and compiler
 - **Inner function declarations:** Supported in IL compiler with hoisting, closure capture, and recursion
 - **Method Lookup:** Searches up inheritance chain (see `TypeChecker.cs` CheckGet, `Interpreter.Properties.cs` EvaluateGet)

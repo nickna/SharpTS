@@ -33,6 +33,13 @@ public class Lexer(string source)
     // Used to disambiguate regex literals from division operator
     private bool _expectExpr = true;
 
+    /// <summary>
+    /// Lenient mode for .tsx sources (and JSX suffix re-lexing): characters that are invalid
+    /// in TypeScript but legal inside JSX text (a bare '#') are dropped instead of throwing,
+    /// so the upfront pass survives to reach the parser's source-driven JSX text scanning.
+    /// </summary>
+    public bool JsxTolerant { get; init; } = false;
+
     // Triple-slash directive support
     private readonly List<TripleSlashDirective> _tripleSlashDirectives = [];
     // Track when we've emitted a code token (directives only valid before code)
@@ -43,6 +50,13 @@ public class Lexer(string source)
     private bool _hasTsNoCheck;
     private readonly HashSet<int> _tsIgnoreLines = [];
     private readonly HashSet<int> _tsExpectErrorLines = [];
+
+    // JSX pragmas (/** @jsx h */, @jsxFrag, @jsxImportSource, @jsxRuntime), honored only
+    // before the first code token — same discipline as @ts-check.
+    private string? _jsxFactoryPragma;
+    private string? _jsxFragmentPragma;
+    private string? _jsxImportSourcePragma;
+    private string? _jsxRuntimePragma;
 
     /// <summary>
     /// Triple-slash directives parsed from the source file.
@@ -56,7 +70,8 @@ public class Lexer(string source)
     /// Line-level pragmas (`@ts-ignore`, `@ts-expect-error`) record the comment's line number.
     /// </summary>
     public TypeScriptPragmas Pragmas =>
-        new(_hasTsCheck, _hasTsNoCheck, _tsIgnoreLines, _tsExpectErrorLines);
+        new(_hasTsCheck, _hasTsNoCheck, _tsIgnoreLines, _tsExpectErrorLines,
+            _jsxFactoryPragma, _jsxFragmentPragma, _jsxImportSourcePragma, _jsxRuntimePragma);
 
     /// <summary>
     /// Every reserved word the lexer recognizes, for REPL autocomplete.
@@ -159,6 +174,54 @@ public class Lexer(string source)
 
         _tokens.Add(new Token(TokenType.EOF, "", null, _line));
         return _tokens;
+    }
+
+    /// <summary>Suffix lexer for JSX token-stream repair. See <see cref="Relex"/>.</summary>
+    private Lexer(string source, int startOffset, int startLine, int templateInterpolationDepth) : this(source)
+    {
+        _start = startOffset;
+        _current = startOffset;
+        _line = startLine;
+        _tokenStartLine = startLine;
+        // A suffix re-lex is never at the top of the file: keep triple-slash directive and
+        // file-level pragma collection off.
+        _hasEmittedCodeToken = true;
+        // Every JSX repair point follows a completed value (closing quote, '>', '}'), so a
+        // '/' as the first re-lexed character is JSX punctuation (`/>`), never a regex start.
+        _expectExpr = false;
+        // When the re-lex starts inside template interpolations, seed the brace stack so a
+        // closing '}' resumes template scanning (TEMPLATE_MIDDLE/TAIL) instead of lexing
+        // the template tail as ordinary code.
+        for (int i = 0; i < templateInterpolationDepth; i++)
+            _templateBraceDepth.Push(0);
+    }
+
+    /// <summary>
+    /// Re-lexes <paramref name="source"/> from <paramref name="fromOffset"/> with fresh default
+    /// lexer state, for the parser's JSX token-stream repair (the upfront pass applies TS
+    /// string/comment rules inside JSX text and can mis-lex everything after it).
+    /// Tokens carry absolute <see cref="Token.Start"/> offsets. Each token is paired with
+    /// whether the lexer was in neutral state after producing it (no open template
+    /// interpolation) — the parser only treats a token as a safe splice convergence point when
+    /// the original stream could agree with a fresh-state lex from there onward.
+    /// </summary>
+    internal static List<(Token Token, bool NeutralAfter)> Relex(
+        string source, int fromOffset, int startLine, int templateInterpolationDepth = 0)
+    {
+        var lexer = new Lexer(source, fromOffset, startLine, templateInterpolationDepth) { JsxTolerant = true };
+        var result = new List<(Token, bool)>();
+        while (!lexer.IsAtEnd())
+        {
+            lexer._start = lexer._current;
+            lexer._tokenStartLine = lexer._line;
+            int before = lexer._tokens.Count;
+            lexer.ScanToken();
+            bool neutral = lexer._templateBraceDepth.Count == 0;
+            for (int i = before; i < lexer._tokens.Count; i++)
+                result.Add((lexer._tokens[i], neutral));
+        }
+        result.Add((new Token(TokenType.EOF, "", null, lexer._line, source.Length), true));
+        return result;
     }
 
     private void ScanToken()
@@ -271,6 +334,12 @@ public class Lexer(string source)
                 {
                     PrivateIdentifier();
                 }
+                else if (JsxTolerant)
+                {
+                    // A stray '#' in a .tsx file usually sits inside JSX text, which the
+                    // parser rescans from source; dropping it here (like other unknown
+                    // characters) lets the upfront pass survive to reach the parser.
+                }
                 else
                 {
                     throw new Exception($"Unexpected character '#' at line {_line}");
@@ -332,6 +401,7 @@ public class Lexer(string source)
                     int commentLine = _line;
                     while (Peek() != '\n' && !IsAtEnd()) Advance();
                     ScanForTsPragma(commentStart, _current, commentLine);
+                    ScanForJsxPragmas(commentStart, _current);
                 }
                 else if (Match('*'))
                 {
@@ -813,10 +883,12 @@ public class Lexer(string source)
 
     private void BlockComment()
     {
+        int bodyStart = _current;
         while (!IsAtEnd())
         {
             if (Peek() == '*' && PeekNext() == '/')
             {
+                ScanForJsxPragmas(bodyStart, _current);
                 Advance(); // consume *
                 Advance(); // consume /
                 return;
@@ -825,6 +897,62 @@ public class Lexer(string source)
             Advance();
         }
         throw new Exception($"Unterminated block comment at line {_line}");
+    }
+
+    /// <summary>
+    /// Scans a comment body for JSX pragmas (<c>@jsx</c>, <c>@jsxFrag</c>,
+    /// <c>@jsxImportSource</c>, <c>@jsxRuntime</c>), each of which takes a value. Honored only
+    /// before the first code token; tsc conventionally uses JSDoc block comments but line
+    /// comments are accepted too (matching tsc's lenient pragma regex).
+    /// </summary>
+    private void ScanForJsxPragmas(int bodyStart, int bodyEndExclusive)
+    {
+        if (_hasEmittedCodeToken) return;
+        for (int i = bodyStart; i < bodyEndExclusive; i++)
+        {
+            if (_source[i] != '@') continue;
+            int cursor = i + 1;
+            // Longest names first — "@jsx" is a prefix of the others.
+            if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxImportSource", out var value))
+                _jsxImportSourcePragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxRuntime", out value))
+                _jsxRuntimePragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsxFrag", out value))
+                _jsxFragmentPragma = value;
+            else if (TryReadJsxPragma(ref cursor, bodyEndExclusive, "jsx", out value))
+                _jsxFactoryPragma = value;
+            else
+                continue;
+            i = cursor;
+        }
+    }
+
+    /// <summary>
+    /// Matches a pragma name at <paramref name="cursor"/> (case-insensitively — tsc lowercases
+    /// pragma names, so <c>@jsxfrag</c> is as valid as <c>@jsxFrag</c>) and reads its
+    /// whitespace-separated value.
+    /// </summary>
+    private bool TryReadJsxPragma(ref int cursor, int endExclusive, string name, out string? value)
+    {
+        value = null;
+        if (cursor + name.Length > endExclusive) return false;
+        for (int k = 0; k < name.Length; k++)
+            if (char.ToLowerInvariant(_source[cursor + k]) != char.ToLowerInvariant(name[k])) return false;
+
+        int position = cursor + name.Length;
+        // Name must end at whitespace ("@jsxes" is not "@jsx").
+        if (position < endExclusive && _source[position] is not (' ' or '\t' or '\r' or '\n'))
+            return false;
+        while (position < endExclusive && _source[position] is ' ' or '\t' or '\r' or '\n')
+            position++;
+        int valueStart = position;
+        while (position < endExclusive && !char.IsWhiteSpace(_source[position]) && _source[position] != '*')
+            position++;
+        if (position == valueStart) return false;
+
+        value = _source[valueStart..position];
+        cursor = position;
+        return true;
     }
 
     /// <summary>

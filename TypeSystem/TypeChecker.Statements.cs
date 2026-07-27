@@ -1178,6 +1178,18 @@ public partial class TypeChecker
                 return VoidResult.Instance;
             }
 
+            // The parser-synthesized JSX runtime import binds leniently (any) outside module
+            // mode so isolated .tsx buffers (tests, LSP hover) still check; module mode binds
+            // the real shim exports like any other import.
+            if (stmt.IsSynthesizedJsxRuntime)
+            {
+                foreach (var specifier in stmt.NamedImports ?? [])
+                    _environment.Define(
+                        specifier.LocalName?.Lexeme ?? specifier.Imported.Lexeme,
+                        TypeInfo.Any.Shared);
+                return VoidResult.Instance;
+            }
+
             // SharpTS-only: module-mode requirement (continued message)
             throw new TypeCheckException("Import statements require module mode. " +
                                "Use 'dotnet run -- --compile' with multi-file support", stmt.Keyword.Line);

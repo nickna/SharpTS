@@ -40,7 +40,14 @@
   <!-- Embed TypeScript standard library sources. Loaded by EmbeddedStdlibProvider
        at user-compile time; see stdlib/CONTRIBUTING.md and Modules/Stdlib/. -->
   <ItemGroup>
-    <EmbeddedResource Include="stdlib\**\*.ts" />
+    <EmbeddedResource Include="stdlib\**\*.ts" Exclude="stdlib\npm\**\*.ts" />
+    <!-- npm-fallback shim packages (react family). Explicit LogicalName per package
+         directory: default manifest naming mangles the 'react-dom' hyphen, and
+         EmbeddedNpmFallbackProvider parses these names by convention. -->
+    <EmbeddedResource Include="stdlib\npm\react\*.ts"
+                      LogicalName="SharpTS.stdlib.npm.react.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="stdlib\npm\react-dom\*.ts"
+                      LogicalName="SharpTS.stdlib.npm.react-dom.%(Filename)%(Extension)" />
     <None Remove="stdlib\**\*.ts" />
     <!-- TypeScript 5.5.4 declaration libraries are the checker contract.  They
          describe types only; SharpTS's C# runtime implementations remain

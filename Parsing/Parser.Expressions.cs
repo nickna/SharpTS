@@ -340,12 +340,19 @@ public partial class Parser
             var genericArrow = TryParseGenericArrowFunction();
             if (genericArrow != null) return genericArrow;
 
-            // TSX/JSX element or fragment. This is speculative because ordinary
-            // .ts permits angle-bracket assertions (`<T>value`).
-            var jsx = TryParseJsxElement();
-            if (jsx != null) return jsx;
+            if (_jsx is not null)
+            {
+                // TSX dialect: '<' at expression start commits to JSX (angle-bracket
+                // assertions do not exist in .tsx — tsc's rule). Real parse errors
+                // propagate rather than being swallowed into a confusing fallback.
+                if (_jsx.Mode == JsxMode.None)
+                    throw new ParseError(
+                        "Cannot use JSX unless the '--jsx' flag is provided.", "TS17004");
+                return ParseJsxElement();
+            }
 
-            // Check for angle-bracket type assertion: <Type>expr
+            // .ts dialect: JSX is not legal syntax; '<' here is an angle-bracket
+            // type assertion (`<Type>expr`).
             var assertion = TryParseAngleBracketAssertion();
             if (assertion != null) return assertion;
         }
@@ -429,184 +436,6 @@ public partial class Parser
         }
 
         return Call();
-    }
-
-    /// <summary>
-    /// Parses JSX/TSX into a runtime-neutral object expression asserted as
-    /// <c>any</c>. Intrinsic attributes are additionally checked against
-    /// <c>JSX.IntrinsicElements[tag]</c> when a declaration package provides it.
-    /// </summary>
-    private Expr? TryParseJsxElement()
-    {
-        int saved = _current;
-        try
-        {
-            return ParseJsxElement();
-        }
-        catch
-        {
-            _current = saved;
-            return null;
-        }
-    }
-
-    private Expr ParseJsxElement()
-    {
-        Token open = Consume(TokenType.LESS, "Expect '<' before JSX element.");
-        bool isFragment = Match(TokenType.GREATER);
-
-        string tagName = "";
-        Expr tagExpression;
-        if (isFragment)
-        {
-            tagExpression = new Expr.Literal("Fragment");
-        }
-        else
-        {
-            Token first = ConsumeIdentifierName("Expect JSX tag name.");
-            tagName = first.Lexeme;
-            tagExpression = char.IsLower(tagName[0])
-                ? new Expr.Literal(tagName)
-                : new Expr.Variable(first.Type == TokenType.IDENTIFIER
-                    ? first
-                    : new Token(TokenType.IDENTIFIER, first.Lexeme, null, first.Line));
-
-            while (Match(TokenType.DOT))
-            {
-                Token part = ConsumeIdentifierName("Expect JSX member name.");
-                tagName += "." + part.Lexeme;
-                tagExpression = new Expr.Get(tagExpression, part);
-            }
-        }
-
-        List<Expr.Property> attributes = [];
-        bool selfClosing = false;
-        if (!isFragment)
-        {
-            while (!Check(TokenType.GREATER) && !IsAtEnd())
-            {
-                if (Match(TokenType.SLASH))
-                {
-                    Consume(TokenType.GREATER, "Expect '>' after '/' in JSX element.");
-                    selfClosing = true;
-                    break;
-                }
-
-                if (Match(TokenType.LEFT_BRACE))
-                {
-                    Consume(TokenType.DOT_DOT_DOT, "Expect '...' in JSX spread attribute.");
-                    Expr spread = Expression();
-                    Consume(TokenType.RIGHT_BRACE, "Expect '}' after JSX spread attribute.");
-                    attributes.Add(new Expr.Property(null, spread, IsSpread: true));
-                    continue;
-                }
-
-                Token nameStart = ConsumeIdentifierName("Expect JSX attribute name.");
-                string attributeName = nameStart.Lexeme;
-                while (Match(TokenType.MINUS))
-                    attributeName += "-" + ConsumeIdentifierName("Expect JSX attribute name part.").Lexeme;
-                var attributeToken = new Token(
-                    TokenType.IDENTIFIER, attributeName, null, nameStart.Line);
-
-                Expr value = new Expr.Literal(true);
-                if (Match(TokenType.EQUAL))
-                {
-                    if (Match(TokenType.STRING))
-                    {
-                        value = new Expr.Literal(Previous().Literal);
-                    }
-                    else if (Match(TokenType.LEFT_BRACE))
-                    {
-                        value = Expression();
-                        Consume(TokenType.RIGHT_BRACE, "Expect '}' after JSX attribute expression.");
-                    }
-                    else if (Check(TokenType.LESS))
-                    {
-                        value = ParseJsxElement();
-                    }
-                    else
-                    {
-                        throw new Exception("Parse Error: JSX attribute value must be a string or expression.");
-                    }
-                }
-                attributes.Add(new Expr.Property(new Expr.IdentifierKey(attributeToken), value));
-            }
-
-            if (!selfClosing)
-                Consume(TokenType.GREATER, "Expect '>' after JSX opening tag.");
-        }
-
-        List<Expr> children = [];
-        if (!selfClosing)
-        {
-            while (!IsAtEnd())
-            {
-                if (Check(TokenType.LESS) && PeekNext().Type == TokenType.SLASH)
-                    break;
-                if (Check(TokenType.LESS))
-                {
-                    children.Add(ParseJsxElement());
-                    continue;
-                }
-                if (Match(TokenType.LEFT_BRACE))
-                {
-                    // Empty JSX expressions (`{/* comment */}` after lexing) contribute no child.
-                    if (!Check(TokenType.RIGHT_BRACE))
-                    {
-                        bool isSpreadChild = Match(TokenType.DOT_DOT_DOT);
-                        Expr child = Expression();
-                        children.Add(isSpreadChild ? new Expr.Spread(child) : child);
-                    }
-                    Consume(TokenType.RIGHT_BRACE, "Expect '}' after JSX child expression.");
-                    continue;
-                }
-
-                var text = new List<string>();
-                while (!IsAtEnd() && !Check(TokenType.LESS) && !Check(TokenType.LEFT_BRACE))
-                    text.Add(Advance().Lexeme);
-                if (text.Count > 0)
-                    children.Add(new Expr.Literal(string.Join(" ", text)));
-            }
-
-            Consume(TokenType.LESS, "Expect JSX closing tag.");
-            Consume(TokenType.SLASH, "Expect '/' in JSX closing tag.");
-            if (!isFragment)
-            {
-                string closingName = ConsumeIdentifierName("Expect JSX closing tag name.").Lexeme;
-                while (Match(TokenType.DOT))
-                    closingName += "." + ConsumeIdentifierName("Expect JSX closing member name.").Lexeme;
-                if (!string.Equals(tagName, closingName, StringComparison.Ordinal))
-                    throw new Exception($"Parse Error: JSX closing tag '{closingName}' does not match '{tagName}'.");
-            }
-            Consume(TokenType.GREATER, "Expect '>' after JSX closing tag.");
-        }
-
-        Expr props = new Expr.ObjectLiteral(attributes);
-        if (!isFragment && tagExpression is Expr.Literal)
-        {
-            string target = $"JSX.IntrinsicElements[\"{tagName}\"]";
-            props = new Expr.Satisfies(
-                props,
-                target,
-                Parser.TryParseTypeFragment(target));
-        }
-
-        var fields = new List<Expr.Property>
-        {
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "type", null, open.Line)),
-                tagExpression),
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "props", null, open.Line)),
-                props),
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "children", null, open.Line)),
-                new Expr.ArrayLiteral(children)),
-        };
-        return new Expr.TypeAssertion(
-            new Expr.ObjectLiteral(fields),
-            "any",
-            new NamedTypeNode("any", null, open.Line));
     }
 
     private Expr Call()
@@ -1413,13 +1242,13 @@ public partial class Parser
         List<Expr> expressions = [];
 
         // Parse first expression
-        expressions.Add(Expression());
+        expressions.Add(ParseTemplateInterpolation());
 
         // Parse middle parts
         while (Match(TokenType.TEMPLATE_MIDDLE))
         {
             AddPart((TemplateStringValue)Previous().Literal!, Previous().Line);
-            expressions.Add(Expression());
+            expressions.Add(ParseTemplateInterpolation());
         }
 
         // Expect tail
@@ -1450,7 +1279,7 @@ public partial class Parser
         List<Expr> expressions = [];
 
         // Parse first expression
-        expressions.Add(Expression());
+        expressions.Add(ParseTemplateInterpolation());
 
         // Parse middle parts
         while (Match(TokenType.TEMPLATE_MIDDLE))
@@ -1458,7 +1287,7 @@ public partial class Parser
             var midValue = (TemplateStringValue)Previous().Literal!;
             cooked.Add(midValue.Cooked);
             raw.Add(midValue.Raw);
-            expressions.Add(Expression());
+            expressions.Add(ParseTemplateInterpolation());
         }
 
         // Expect tail

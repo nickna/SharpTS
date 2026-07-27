@@ -65,6 +65,10 @@ namespace SharpTS.Cli;
 /// <param name="NoLib">Suppresses the default TypeScript declaration library.</param>
 /// <param name="Types">Ambient type packages to include.</param>
 /// <param name="TypeRoots">Directories containing ambient type packages.</param>
+/// <param name="Jsx">JSX transform mode; null = not set on the CLI (tsconfig, then default, applies).</param>
+/// <param name="JsxFactory">Classic-mode JSX factory expression.</param>
+/// <param name="JsxFragmentFactory">Classic-mode JSX fragment expression.</param>
+/// <param name="JsxImportSource">Automatic-mode package to import the JSX runtime from.</param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
@@ -84,7 +88,11 @@ public record GlobalOptions(
     IReadOnlyList<string>? Lib = null,
     bool? NoLib = null,
     IReadOnlyList<string>? Types = null,
-    IReadOnlyList<string>? TypeRoots = null
+    IReadOnlyList<string>? TypeRoots = null,
+    JsxMode? Jsx = null,
+    string? JsxFactory = null,
+    string? JsxFragmentFactory = null,
+    string? JsxImportSource = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -96,6 +104,16 @@ public record GlobalOptions(
     /// re-resolves with the discovered tsconfig; this keeps direct consumers correct meanwhile.
     /// </summary>
     public TypeCheckerOptions TypeCheckerOptions => StrictnessOptions.Resolve(Strictness, null);
+
+    /// <summary>
+    /// The parser-facing JSX settings after applying SharpTS defaults (automatic runtime,
+    /// React factories, "react" import source). Only consulted for .tsx/.jsx sources.
+    /// </summary>
+    public JsxParseOptions ResolvedJsxOptions => new(
+        Jsx ?? JsxMode.ReactJsx,
+        JsxFactory ?? "React.createElement",
+        JsxFragmentFactory ?? "React.Fragment",
+        JsxImportSource ?? "react");
 
     public TypeScriptProgramOptions TypeScriptProgramOptions => new()
     {
@@ -374,6 +392,18 @@ public class CommandLineParser
         return false;
     }
 
+    private static bool TryParseJsxMode(string value, out JsxMode mode)
+    {
+        switch (value.ToLowerInvariant())
+        {
+            case "react": mode = JsxMode.React; return true;
+            case "react-jsx": mode = JsxMode.ReactJsx; return true;
+            case "react-jsxdev": mode = JsxMode.ReactJsxDev; return true;
+            case "none": mode = JsxMode.None; return true;
+            default: mode = default; return false;
+        }
+    }
+
     private static (GlobalOptions options, string[] remainingArgs, string[] scriptArgs, ParsedCommand.Error? error)
         ParseGlobalOptions(string[] args)
     {
@@ -392,6 +422,8 @@ public class CommandLineParser
         bool? noLib = null;
         string? projectPath = null;
         IReadOnlyList<string>? lib = null, types = null, typeRoots = null;
+        JsxMode? jsx = null;
+        string? jsxFactory = null, jsxFragmentFactory = null, jsxImportSource = null;
         var strictness = new StrictnessOptions();
         List<string> references = [];
         List<string> remaining = [];
@@ -559,6 +591,41 @@ public class CommandLineParser
                 case "-r" or "--reference" when i + 1 < args.Length:
                     references.Add(args[++i]);
                     break;
+                case "--jsx" when value is not null || i + 1 < args.Length:
+                    string jsxValue = value ?? args[++i];
+                    if (!TryParseJsxMode(jsxValue, out var jsxMode))
+                        return (default!, [], [], new ParsedCommand.Error(
+                            jsxValue.ToLowerInvariant() is "preserve" or "react-native"
+                                ? $"Error: --jsx {jsxValue} is not supported: SharpTS executes TypeScript " +
+                                  "directly and cannot emit .jsx output. Use react-jsx, react-jsxdev, or react."
+                                : $"Error: --jsx expects react-jsx, react-jsxdev, react, or none; got '{jsxValue}'.",
+                            64));
+                    jsx = jsxMode;
+                    break;
+                case "--jsx":
+                    return (default!, [], [], new ParsedCommand.Error(
+                        "Error: --jsx requires a mode (react-jsx, react-jsxdev, react, or none).", 64));
+                case "--jsxFactory" when value is not null:
+                    jsxFactory = value;
+                    break;
+                case "--jsxFactory" when i + 1 < args.Length:
+                    jsxFactory = args[++i];
+                    break;
+                case "--jsxFragmentFactory" when value is not null:
+                    jsxFragmentFactory = value;
+                    break;
+                case "--jsxFragmentFactory" when i + 1 < args.Length:
+                    jsxFragmentFactory = args[++i];
+                    break;
+                case "--jsxImportSource" when value is not null:
+                    jsxImportSource = value;
+                    break;
+                case "--jsxImportSource" when i + 1 < args.Length:
+                    jsxImportSource = args[++i];
+                    break;
+                case "--jsxFactory" or "--jsxFragmentFactory" or "--jsxImportSource":
+                    return (default!, [], [], new ParsedCommand.Error(
+                        $"Error: {name} requires a value.", 64));
                 default:
                     remaining.Add(args[i]);
                     break;
@@ -568,7 +635,8 @@ public class CommandLineParser
         var options = new GlobalOptions(
             decoratorMode, emitDecoratorMetadata, checkJs, references, strictness, noEmit,
             projectPath, noTsConfig, showConfig, watch, incremental, force,
-            declaration, emitDeclarationOnly, declarationDir, lib, noLib, types, typeRoots);
+            declaration, emitDeclarationOnly, declarationDir, lib, noLib, types, typeRoots,
+            jsx, jsxFactory, jsxFragmentFactory, jsxImportSource);
         return (options, remaining.ToArray(), scriptArgs.ToArray(), null);
     }
 

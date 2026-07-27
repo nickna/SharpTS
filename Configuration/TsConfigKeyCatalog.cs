@@ -34,6 +34,7 @@ internal static class TsConfigKeyCatalog
         "rootDir", "outDir", "allowJs", "moduleResolution", "lib", "noLib", "baseUrl", "paths",
         "typeRoots", "types", "incremental", "composite", "tsBuildInfoFile",
         "declaration", "emitDeclarationOnly", "declarationDir",
+        "jsx", "jsxFactory", "jsxFragmentFactory", "jsxImportSource",
     ];
 
     /// <summary>
@@ -42,8 +43,7 @@ internal static class TsConfigKeyCatalog
     /// </summary>
     private static readonly HashSet<string> EmitOptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "target", "module", "moduleDetection", "jsx", "jsxFactory",
-        "jsxFragmentFactory", "jsxImportSource", "declarationMap",
+        "target", "module", "moduleDetection", "declarationMap",
         "sourceMap", "inlineSourceMap", "inlineSources", "sourceRoot", "mapRoot", "outFile", "out",
         "removeComments", "importHelpers", "downlevelIteration", "isolatedModules",
         "verbatimModuleSyntax", "esModuleInterop", "allowSyntheticDefaultImports",
