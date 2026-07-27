@@ -23,7 +23,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Repo-wide automatic versioning from Git tags. Build-time only (PrivateAssets=All). -->
-    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="All" />
+    <!-- Repo-wide automatic versioning from Git tags. Build-time only (PrivateAssets=All).
+         Version comes from Directory.Packages.props (central package management). -->
+    <PackageReference Include="MinVer" PrivateAssets="All" />
   </ItemGroup>
 </Project>

@@ -4,8 +4,10 @@ Files under `stdlib/` are the TypeScript source for Node-compatible modules
 baked into SharpTS. They are embedded as resources in `SharpTS.dll` and
 compiled into every user output alongside the user's own code.
 
-See [docs/plans/embedded-stdlib.md](../docs/plans/embedded-stdlib.md) for the
-full architecture.
+The resolution/embedding architecture lives in `Modules/Stdlib/`
+(`StdlibProviderChain`, `EmbeddedStdlibProvider`); the sources are embedded via
+the `stdlib\**\*.ts` `EmbeddedResource` group in `SharpTS.csproj`. (The original
+migration plan doc was retired when the migration completed.)
 
 ## Authoring contract
 
