@@ -340,12 +340,19 @@ public partial class Parser
             var genericArrow = TryParseGenericArrowFunction();
             if (genericArrow != null) return genericArrow;
 
-            // TSX/JSX element or fragment. This is speculative because ordinary
-            // .ts permits angle-bracket assertions (`<T>value`).
-            var jsx = TryParseJsxElement();
-            if (jsx != null) return jsx;
+            if (_jsx is not null)
+            {
+                // TSX dialect: '<' at expression start commits to JSX (angle-bracket
+                // assertions do not exist in .tsx — tsc's rule). Real parse errors
+                // propagate rather than being swallowed into a confusing fallback.
+                if (_jsx.Mode == JsxMode.None)
+                    throw new ParseError(
+                        "Cannot use JSX unless the '--jsx' flag is provided.", "TS17004");
+                return ParseJsxElement();
+            }
 
-            // Check for angle-bracket type assertion: <Type>expr
+            // .ts dialect: JSX is not legal syntax; '<' here is an angle-bracket
+            // type assertion (`<Type>expr`).
             var assertion = TryParseAngleBracketAssertion();
             if (assertion != null) return assertion;
         }
@@ -432,24 +439,12 @@ public partial class Parser
     }
 
     /// <summary>
-    /// Parses JSX/TSX into a runtime-neutral object expression asserted as
-    /// <c>any</c>. Intrinsic attributes are additionally checked against
-    /// <c>JSX.IntrinsicElements[tag]</c> when a declaration package provides it.
+    /// Parses a JSX element/fragment (TSX dialect only — the caller has already committed
+    /// on '&lt;' at expression start). Currently lowers to a runtime-neutral object expression
+    /// asserted as <c>any</c>; intrinsic attributes are checked against
+    /// <c>JSX.IntrinsicElements[tag]</c> when a declaration provides it. (Interim lowering:
+    /// replaced by factory-call desugaring in the JSX transform work.)
     /// </summary>
-    private Expr? TryParseJsxElement()
-    {
-        int saved = _current;
-        try
-        {
-            return ParseJsxElement();
-        }
-        catch
-        {
-            _current = saved;
-            return null;
-        }
-    }
-
     private Expr ParseJsxElement()
     {
         Token open = Consume(TokenType.LESS, "Expect '<' before JSX element.");

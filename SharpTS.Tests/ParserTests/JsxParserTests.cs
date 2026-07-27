@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -6,6 +7,12 @@ namespace SharpTS.Tests.ParserTests;
 
 public class JsxParserTests
 {
+    /// <summary>Parses in the TSX dialect, the way ModuleResolver does for .tsx files.</summary>
+    private static ParseDiagnosticResult ParseTsx(string source, JsxParseOptions? options = null) =>
+        new Parser(new Lexer(source).ScanTokens())
+            .WithJsx(source, options ?? JsxParseOptions.Default)
+            .Parse();
+
     [Fact]
     public void ParsesNestedElementsFragmentsAttributesAndExpressions()
     {
@@ -20,7 +27,7 @@ public class JsxParserTests
             </>;
             """;
 
-        var parsed = new Parser(new Lexer(source).ScanTokens()).Parse();
+        var parsed = ParseTsx(source);
 
         Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
         Assert.Empty(new TypeChecker(maxErrors: 50)
@@ -29,7 +36,7 @@ public class JsxParserTests
     }
 
     [Fact]
-    public void AngleBracketTypeAssertionsStillParse()
+    public void AngleBracketTypeAssertionsStillParseInTsDialect()
     {
         var parsed = new Parser(new Lexer("const n = <number>1;").ScanTokens()).Parse();
 
@@ -37,9 +44,27 @@ public class JsxParserTests
     }
 
     [Fact]
+    public void JsxIsASyntaxErrorInTsDialect()
+    {
+        var parsed = new Parser(new Lexer("const view = <div>hi</div>;").ScanTokens()).Parse();
+
+        Assert.False(parsed.IsSuccess);
+    }
+
+    [Fact]
+    public void JsxModeNoneReportsTs17004()
+    {
+        var parsed = ParseTsx("const view = <div />;",
+            JsxParseOptions.Default with { Mode = JsxMode.None });
+
+        Assert.False(parsed.IsSuccess);
+        Assert.Contains(parsed.Diagnostics, d => d.TsCode == "TS17004");
+    }
+
+    [Fact]
     public void MismatchedClosingTagIsAParseError()
     {
-        var parsed = new Parser(new Lexer("const view = <div></span>;").ScanTokens()).Parse();
+        var parsed = ParseTsx("const view = <div></span>;");
 
         Assert.False(parsed.IsSuccess);
     }
@@ -55,7 +80,7 @@ public class JsxParserTests
             }
             const view = <button disabled="wrong" />;
             """;
-        var parsed = new Parser(new Lexer(source).ScanTokens()).Parse();
+        var parsed = ParseTsx(source);
         Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
 
         var diagnostics = new TypeChecker(maxErrors: 50)

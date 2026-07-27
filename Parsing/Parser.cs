@@ -21,8 +21,8 @@ public enum DecoratorMode
 /// <remarks>
 /// Second stage of the compiler pipeline. Consumes the token stream from <see cref="Lexer"/>
 /// and produces an Abstract Syntax Tree of <see cref="Stmt"/> and <see cref="Expr"/> nodes
-/// (defined in AST.cs). Performs syntax-directed desugaring (e.g., converting for loops to
-/// while loops, expanding destructuring patterns). The resulting AST is validated by
+/// (defined in AST.cs). Performs syntax-directed desugaring (e.g., expanding destructuring
+/// patterns). The resulting AST is validated by
 /// <see cref="TypeChecker"/> and then executed by <see cref="Interpreter"/> or compiled
 /// by <see cref="ILCompiler"/>.
 /// </remarks>
@@ -58,6 +58,27 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     public Parser AsDeclarationFile(bool isDeclarationFile = true)
     {
         _isDeclarationFile = isDeclarationFile;
+        return this;
+    }
+
+    // JSX/TSX dialect state. Non-null _jsx switches the parser into the TSX dialect:
+    // '<' at expression start commits to JSX and angle-bracket assertions are rejected.
+    // The source text is required so JSX text runs and attribute strings can be scanned
+    // faithfully (the upfront lexer applies TS string/comment rules that corrupt them).
+    private JsxParseOptions? _jsx = null;
+#pragma warning disable IDE0052 // read by the JSX text rescanning work that builds on this dialect gate
+    private string? _source = null;
+#pragma warning restore IDE0052
+
+    /// <summary>
+    /// Enables the TSX dialect for this parse. Call only for .tsx/.jsx sources.
+    /// </summary>
+    /// <param name="source">The full source text the token stream was lexed from.</param>
+    /// <param name="options">Resolved jsx settings (mode, factories, import source).</param>
+    public Parser WithJsx(string source, JsxParseOptions options)
+    {
+        _source = source;
+        _jsx = options;
         return this;
     }
 
@@ -105,7 +126,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             }
             catch (Exception ex)
             {
-                RecordError(ex.Message);
+                RecordError(ex.Message, (ex as ParseError)?.TsCode);
                 Synchronize();
                 if (_diagnostics.HitErrorLimit)
                     return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
@@ -168,13 +189,14 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     }
 
     /// <summary>
-    /// Records a parse error at the current token position.
+    /// Records a parse error at the current token position, carrying the canonical
+    /// TypeScript code when the failure has one (see <see cref="ParseError"/>).
     /// </summary>
-    private void RecordError(string message)
+    private void RecordError(string message, string? tsCode = null)
     {
         Token current = IsAtEnd() ? Previous() : Peek();
         var location = new SourceLocation(_filePath, current.Line);
-        _diagnostics.AddError(DiagnosticCode.ParseError, message, location);
+        _diagnostics.AddError(DiagnosticCode.ParseError, message, location, tsCode);
     }
 
     /// <summary>

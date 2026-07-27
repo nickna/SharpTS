@@ -17,11 +17,18 @@ public sealed class DiagnosticsService
     /// so the user's own @DotNetType targets resolve too.</param>
     public DiagnosticsService(Func<string, Type?>? resolve = null) => _interop = new InteropAnalyzer(resolve);
 
-    public List<LspDiagnostic> Analyze(string text, DiagnosticPublishMode mode = DiagnosticPublishMode.SharpTsOnly)
+    public List<LspDiagnostic> Analyze(string text, DiagnosticPublishMode mode = DiagnosticPublishMode.SharpTsOnly, string? fileName = null)
     {
         // Stage3 decorators are the run-mode default and are required for @DotNetType to parse.
         var tokens = new Lexer(text).ScanTokens();
-        var parsed = new Parser(tokens, DecoratorMode.Stage3).Parse();
+        var parser = new Parser(tokens, DecoratorMode.Stage3);
+        if (fileName is not null &&
+            (fileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+             fileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase)))
+        {
+            parser.WithJsx(text, JsxParseOptions.Default);
+        }
+        var parsed = parser.Parse();
         if (!parsed.IsSuccess)
             return new List<LspDiagnostic>(); // syntax errors belong to tsserver
 

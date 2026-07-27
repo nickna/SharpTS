@@ -92,7 +92,16 @@ public abstract record Expr
         TypeNode? RedeclarationTypeAnnotationNode = null) : Expr;
     // TypeArgNodes: per-element node twins of TypeArgs (type-AST migration) — same length as
     // TypeArgs when non-null; an element without node support is null without discarding siblings.
-    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr;
+    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr
+    {
+        /// <summary>
+        /// Non-null when this call was produced by JSX lowering. The type checker dispatches
+        /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)
+        /// instead of ordinary call checking. Trailing init property so the visitor registries
+        /// (which key on node type) and all positional constructions are unaffected.
+        /// </summary>
+        public JsxCallInfo? JsxOrigin { get; init; } = null;
+    }
     // Defaulted: this property read was synthesized by destructuring desugaring and is covered
     // by a default (its own, or a default on an enclosing pattern). The type checker treats a
     // missing property as `undefined` for such reads instead of reporting TS2339, since the

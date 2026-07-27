@@ -148,6 +148,18 @@ public class ModuleResolver
     internal StdlibProviderChain StdlibChain => _stdlibChain;
 
     /// <summary>
+    /// Resolved JSX settings applied to every .tsx/.jsx source this resolver parses.
+    /// Jsx config is per-project (unlike the historical per-call decorator mode), so it is a
+    /// property rather than a LoadModule parameter. Null falls back to
+    /// <see cref="JsxParseOptions.Default"/> — .tsx files always parse in the TSX dialect.
+    /// </summary>
+    public JsxParseOptions? JsxOptions { get; set; }
+
+    private static bool IsJsxSourcePath(string path) =>
+        path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Resolves a module specifier to an absolute file path.
     /// </summary>
     /// <param name="specifier">The import specifier (e.g., './foo', '../bar', 'lodash')</param>
@@ -805,7 +817,10 @@ public class ModuleResolver
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
             var parser = new Parser(tokens, decoratorMode)
-                .AsDeclarationFile(IsDeclarationFilePath(absolutePath));
+                .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
+                .WithFilePath(absolutePath);
+            if (IsJsxSourcePath(absolutePath))
+                parser.WithJsx(source, JsxOptions ?? JsxParseOptions.Default);
             var parseResult = parser.Parse();
 
             // For module loading, we throw on parse errors (backward compatible)

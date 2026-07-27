@@ -54,6 +54,92 @@ public class TsConfigLoaderTests
 
     #endregion
 
+    #region Jsx options
+
+    [Fact]
+    public void Load_FoldsJsxOptions()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("tsconfig.json", """
+            {
+              "compilerOptions": {
+                "jsx": "react",
+                "jsxFactory": "h",
+                "jsxFragmentFactory": "HFragment",
+                "jsxImportSource": "preact"
+              }
+            }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(JsxMode.React, result.Jsx);
+        Assert.Equal("h", result.JsxFactory);
+        Assert.Equal("HFragment", result.JsxFragmentFactory);
+        Assert.Equal("preact", result.JsxImportSource);
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("jsx"));
+    }
+
+    [Theory]
+    [InlineData("react-jsx", JsxMode.ReactJsx)]
+    [InlineData("react-jsxdev", JsxMode.ReactJsxDev)]
+    [InlineData("none", JsxMode.None)]
+    public void Load_ParsesEveryJsxMode(string value, JsxMode expected)
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("tsconfig.json",
+            $$"""{ "compilerOptions": { "jsx": "{{value}}" } }""");
+
+        Assert.Equal(expected, TsConfigLoader.Load(path).Jsx);
+    }
+
+    [Fact]
+    public void Load_LeavesJsxNullWhenUnset()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("tsconfig.json", """{ "compilerOptions": {} }""");
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Null(result.Jsx);
+        Assert.Null(result.JsxFactory);
+        Assert.Null(result.JsxFragmentFactory);
+        Assert.Null(result.JsxImportSource);
+    }
+
+    [Theory]
+    [InlineData("preserve")]
+    [InlineData("react-native")]
+    public void Load_RejectsEmitOnlyJsxModes(string value)
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("tsconfig.json",
+            $$"""{ "compilerOptions": { "jsx": "{{value}}" } }""");
+
+        var ex = Assert.Throws<Exception>(() => TsConfigLoader.Load(path));
+        Assert.Contains("cannot emit .jsx output", ex.Message);
+    }
+
+    [Fact]
+    public void Load_JsxFoldsAcrossExtendsChain()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("base.json", """
+            { "compilerOptions": { "jsx": "react", "jsxFactory": "h" } }
+            """);
+        var path = dir.CreateFile("tsconfig.json", """
+            { "extends": "./base.json", "compilerOptions": { "jsx": "react-jsx" } }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        // Deriving file wins per key; untouched keys inherit from the base.
+        Assert.Equal(JsxMode.ReactJsx, result.Jsx);
+        Assert.Equal("h", result.JsxFactory);
+    }
+
+    #endregion
+
     #region Parsing
 
     [Fact]

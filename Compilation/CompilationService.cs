@@ -36,12 +36,18 @@ namespace SharpTS.Compilation;
 /// </param>
 /// <param name="FileName">
 /// Logical file name used as the <see cref="SourceLocation.FilePath"/> on diagnostics.
-/// Purely informational — nothing is read from or written to this path.
+/// Purely informational for I/O — nothing is read from or written to this path — but a
+/// .tsx/.jsx extension switches the parser into the TSX dialect.
+/// </param>
+/// <param name="Jsx">
+/// JSX settings applied when the source parses in the TSX dialect. Null uses
+/// <see cref="JsxParseOptions.Default"/> for .tsx/.jsx file names.
 /// </param>
 public sealed record CompileOptions(
     DecoratorMode DecoratorMode = DecoratorMode.None,
     string? AssemblyName = null,
-    string FileName = "input.ts");
+    string FileName = "input.ts",
+    JsxParseOptions? Jsx = null);
 
 /// <summary>
 /// Result of <see cref="CompilationService.Compile"/>.
@@ -118,7 +124,12 @@ public static class CompilationService
             }
 
             // Parse, with recovery — surfaces all parse errors, not just the first.
-            var parser = new Parser(tokens, options.DecoratorMode);
+            var parser = new Parser(tokens, options.DecoratorMode)
+                .WithFilePath(options.FileName);
+            bool isTsx = options.FileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase)
+                || options.FileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
+            if (isTsx || options.Jsx is not null)
+                parser.WithJsx(source, options.Jsx ?? JsxParseOptions.Default);
             var parseResult = parser.Parse();
             if (!parseResult.IsSuccess)
                 return Fail(parseResult.Diagnostics);

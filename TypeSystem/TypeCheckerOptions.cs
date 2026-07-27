@@ -57,6 +57,14 @@ public sealed record TypeCheckerOptions
     public int MaxErrors { get; init; } = 10;
 
     /// <summary>
+    /// The project's jsx mode. The JSX checking pipeline is otherwise mode-agnostic (each
+    /// lowered call's <c>JsxCallInfo</c> is self-describing), so this exists for diagnostics
+    /// that mention the mode. It never influences assignability verdicts, so the
+    /// compatibility caches need no <c>uncacheable</c> guard for it.
+    /// </summary>
+    public Parsing.JsxMode Jsx { get; init; } = Parsing.JsxMode.None;
+
+    /// <summary>
     /// The <c>--strict</c> umbrella. Individual flags override it by layering <c>with</c> on
     /// top, e.g. <c>TypeCheckerOptions.Strict with { NoImplicitAny = false }</c> for
     /// <c>--strict --noImplicitAny=false</c>.

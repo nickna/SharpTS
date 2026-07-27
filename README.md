@@ -204,8 +204,12 @@ The project model also supports:
 
 The program resolver loads a pinned TypeScript 5.5.4 `lib.*.d.ts` graph, reachable `.d.ts`,
 `.d.mts`, and `.d.cts` modules, package `types`/`typings` and `"types"` exports, `typesVersions`,
-and visible `node_modules/@types` packages. TSX syntax is accepted and JSX intrinsic attributes
-are checked against `JSX.IntrinsicElements`; the `jsx` setting remains an emit-only no-op.
+and visible `node_modules/@types` packages. `.tsx` files parse in the TSX dialect (JSX commits at
+`<`, angle-bracket assertions are rejected, as in tsc) and JSX intrinsic attributes are checked
+against `JSX.IntrinsicElements`. The `jsx` family of options (`jsx`, `jsxFactory`,
+`jsxFragmentFactory`, `jsxImportSource`) is honored; the default is `react-jsx` — a deliberate
+deviation from tsc, which errors without an explicit `--jsx` (restore that behavior with
+`--jsx none`). `preserve`/`react-native` are rejected since SharpTS cannot emit .jsx output.
 
 **TypeScript declaration output:**
 
@@ -244,7 +248,7 @@ each project's `.d.ts` files. They do not yet automatically consume cross-projec
 artifacts, so imports between projects must still resolve through normal `paths` or package
 mappings.
 
-JavaScript emit options such as `target`, `module`, `jsx` and `sourceMap` do not apply — SharpTS
+JavaScript emit options such as `target`, `module` and `sourceMap` do not apply — SharpTS
 compiles to .NET IL, not JavaScript — and are ignored silently; set
 `SHARPTS_TSCONFIG_VERBOSE=1` to list them. An unrecognized key is reported with a suggestion.
 

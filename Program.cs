@@ -249,6 +249,10 @@ static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(GlobalOptio
             NoLib = cli.NoLib ?? config.NoLib,
             Types = cli.Types ?? config.Types,
             TypeRoots = cli.TypeRoots ?? config.TypeRoots,
+            Jsx = cli.Jsx ?? config.Jsx,
+            JsxFactory = cli.JsxFactory ?? config.JsxFactory,
+            JsxFragmentFactory = cli.JsxFragmentFactory ?? config.JsxFragmentFactory,
+            JsxImportSource = cli.JsxImportSource ?? config.JsxImportSource,
         };
 
         return (merged, config);
@@ -310,6 +314,16 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
             ["noLib"] = options.NoLib ?? false,
             ["types"] = options.Types,
             ["typeRoots"] = options.TypeRoots,
+            ["jsx"] = options.ResolvedJsxOptions.Mode switch
+            {
+                JsxMode.React => "react",
+                JsxMode.ReactJsx => "react-jsx",
+                JsxMode.ReactJsxDev => "react-jsxdev",
+                _ => "none",
+            },
+            ["jsxFactory"] = options.ResolvedJsxOptions.Factory,
+            ["jsxFragmentFactory"] = options.ResolvedJsxOptions.FragmentFactory,
+            ["jsxImportSource"] = options.ResolvedJsxOptions.ImportSource,
         },
         ["sharpts"] = new Dictionary<string, object?>
         {
@@ -407,7 +421,10 @@ static void RunModuleFile(
             absolutePath,
             project?.ModuleResolution ?? ModuleResolutionOptions.Default,
             virtualFiles: null,
-            options.TypeScriptProgramOptions);
+            options.TypeScriptProgramOptions)
+        {
+            JsxOptions = options.ResolvedJsxOptions,
+        };
         var declarationModules = (project?.DeclarationFiles ?? [])
             .Select(path => resolver.LoadModule(path, decoratorMode))
             .ToArray();
@@ -596,7 +613,10 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         absolutePath,
         project?.ModuleResolution ?? ModuleResolutionOptions.Default,
         virtualFiles: null,
-        globalOptions.TypeScriptProgramOptions);
+        globalOptions.TypeScriptProgramOptions)
+    {
+        JsxOptions = globalOptions.ResolvedJsxOptions,
+    };
     var declarationModules = (project?.DeclarationFiles ?? [])
         .Select(path => resolver.LoadModule(path, decoratorMode))
         .ToArray();
@@ -1202,6 +1222,13 @@ static void PrintHelp()
     Console.WriteLine("  --types <names>               Comma-separated ambient type packages");
     Console.WriteLine("  --typeRoots <paths>           Comma-separated ambient package roots");
     Console.WriteLine();
+    Console.WriteLine("JSX (.tsx files):");
+    Console.WriteLine("  --jsx <mode>                  react-jsx (default), react-jsxdev, react, or none");
+    Console.WriteLine("                                (none = tsc's error-without---jsx behavior, TS17004)");
+    Console.WriteLine("  --jsxFactory <expr>           Classic-mode factory (default React.createElement)");
+    Console.WriteLine("  --jsxFragmentFactory <expr>   Classic-mode fragment (default React.Fragment)");
+    Console.WriteLine("  --jsxImportSource <pkg>       Automatic-mode runtime package (default react)");
+    Console.WriteLine();
     Console.WriteLine("Configuration (tsconfig.json):");
     Console.WriteLine("  -p, --project <path>          Use this tsconfig.json (file or directory)");
     Console.WriteLine("  -b, --build [project ...]     Check project references in dependency order");
@@ -1217,7 +1244,8 @@ static void PrintHelp()
     Console.WriteLine("  exclude. Project references, incremental/watch builds, lib/types/typeRoots,");
     Console.WriteLine("  baseUrl/paths, and classic/node10/node16/nodenext/bundler resolution are");
     Console.WriteLine("  supported. lib/noLib/types/typeRoots select declaration inputs.");
-    Console.WriteLine("  target/module/jsx emit settings do not apply to .NET IL output.");
+    Console.WriteLine("  jsx/jsxFactory/jsxFragmentFactory/jsxImportSource are honored for .tsx;");
+    Console.WriteLine("  target/module emit settings do not apply to .NET IL output.");
     Console.WriteLine("  declaration, emitDeclarationOnly, declarationDir, rootDir, and outDir");
     Console.WriteLine("  control .d.ts output for --compile and project commands.");
     Console.WriteLine("  Set SHARPTS_TSCONFIG_VERBOSE=1 to list every option that was ignored.");
