@@ -633,9 +633,12 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
             try { File.Delete(_pipePath); } catch { }
         }
         _cts?.Dispose();
-        foreach (var conn in _connections)
+        // Snapshot: DestroyCore fires the socket's close handler, which removes it
+        // from _connections mid-iteration. (This used to call GetMember("destroy"),
+        // which only *retrieved* the method — every live connection leaked.)
+        foreach (var conn in _connections.ToArray())
         {
-            try { conn.GetMember("destroy"); } catch { }
+            try { if (_interpreter != null) conn.DestroyCore(_interpreter, null); } catch { }
         }
         _connections.Clear();
     }
