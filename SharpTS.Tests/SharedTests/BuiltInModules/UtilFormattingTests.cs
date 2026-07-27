@@ -16,9 +16,12 @@ public class UtilFormattingTests
     {
         var files = new Dictionary<string, string>
         {
+            // validateStream: false forces styling regardless of NO_COLOR / stream
+            // color support (Node semantics) — keeps this hermetic in non-TTY and
+            // NO_COLOR environments (CI, agent shells).
             ["main.ts"] = """
                 import { styleText } from 'util';
-                const r = styleText('red', 'hi');
+                const r = styleText('red', 'hi', { validateStream: false });
                 console.log(r === '\x1b[31mhi\x1b[39m');
                 """
         };
@@ -33,9 +36,10 @@ public class UtilFormattingTests
     {
         var files = new Dictionary<string, string>
         {
+            // validateStream: false — see StyleText_SingleFormat_WrapsInAnsiCodes.
             ["main.ts"] = """
                 import { styleText } from 'util';
-                const r = styleText(['bold', 'red'], 'x');
+                const r = styleText(['bold', 'red'], 'x', { validateStream: false });
                 console.log(r === '\x1b[1m\x1b[31mx\x1b[39m\x1b[22m');
                 """
         };
