@@ -126,24 +126,4 @@ public static class FsFlags
 
         return (mode, access, share);
     }
-
-    /// <summary>
-    /// Validates that the flags are compatible with the specified operation.
-    /// </summary>
-    /// <param name="flags">The flags to validate.</param>
-    /// <param name="forReading">True if the operation requires read access.</param>
-    /// <param name="forWriting">True if the operation requires write access.</param>
-    /// <returns>True if the flags are compatible.</returns>
-    public static bool ValidateAccess(object? flags, bool forReading, bool forWriting)
-    {
-        var (_, access, _) = Parse(flags);
-
-        if (forReading && access == FileAccess.Write)
-            return false;
-
-        if (forWriting && access == FileAccess.Read)
-            return false;
-
-        return true;
-    }
 }

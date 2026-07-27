@@ -30,7 +30,6 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     private HttpListener? _listener;
     private readonly ISharpTSCallable _requestHandler;
     private CancellationTokenSource? _cts;
-    private Task? _listenTask;
     private bool _isListening;
     private Interpreter? _interpreter;
     private bool _isClusterWorker;
@@ -45,7 +44,6 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     private double _timeout;             // 0 = no socket timeout (Node default)
     private double _maxHeadersCount = 2000;
     private double _maxRequestsPerSocket;
-    private ISharpTSCallable? _timeoutCallback;
 
     // Drain-before-close state (issue #41): close() doesn't tear the listener
     // down while requests are in flight. It marks _closeRequested, then the
@@ -157,7 +155,6 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
             _timeout = args[0].AsNumberUnsafe();
         if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable cb)
         {
-            _timeoutCallback = cb;
             var on = base.GetMember("on") as BuiltInMethod;
             on?.Bind(this).Call(_interpreter!, ["timeout", cb]);
         }
@@ -239,8 +236,8 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         // Register with interpreter's event loop to keep process alive
         interpreter.Ref();
 
-        // Start accepting requests
-        _listenTask = AcceptRequestsAsync(_cts.Token);
+        // Start accepting requests (fire-and-forget; the loop owns its own lifetime)
+        _ = AcceptRequestsAsync(_cts.Token);
 
         // Call the listening callback
         if (callback != null)

@@ -25,7 +25,6 @@ public class SharpTSReadStream : SharpTSReadable
     private readonly string? _encodingOption;
     private readonly int? _fd;
     private readonly string _flags;
-    private readonly int? _mode;
     private readonly bool _emitClose;
     private readonly SharpTSAbortSignal? _signal;
     private long _bytesRead;
@@ -60,8 +59,6 @@ public class SharpTSReadStream : SharpTSReadable
                 _flags = flStr;
             if (options.TryGetValue("fd", out var fdv) && fdv is double fdD)
                 _fd = (int)fdD;
-            if (options.TryGetValue("mode", out var md) && md is double mdD)
-                _mode = (int)mdD;
             if (options.TryGetValue("emitClose", out var ec) && ec is bool ecBool)
                 _emitClose = ecBool;
             if (options.TryGetValue("signal", out var sig) && sig is SharpTSAbortSignal absig)

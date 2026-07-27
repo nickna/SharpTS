@@ -93,53 +93,6 @@ public static class FsAsyncHelpers
     }
 
     /// <summary>
-    /// Creates a Stats-like object for stat/lstat operations.
-    /// </summary>
-    private static SharpTSObject CreateStatsObject(
-        bool isDirectory,
-        bool isFile,
-        bool isSymbolicLink,
-        long size,
-        DateTime atime,
-        DateTime mtime,
-        DateTime ctime,
-        DateTime birthtime)
-    {
-        return new SharpTSObject(new Dictionary<string, object?>
-        {
-            ["isDirectory"] = BuiltInMethod.CreateV2("isDirectory", 0, 0, (_, _, _) => RuntimeValue.FromBoolean(isDirectory)),
-            ["isFile"] = BuiltInMethod.CreateV2("isFile", 0, 0, (_, _, _) => RuntimeValue.FromBoolean(isFile)),
-            ["isSymbolicLink"] = BuiltInMethod.CreateV2("isSymbolicLink", 0, 0, (_, _, _) => RuntimeValue.FromBoolean(isSymbolicLink)),
-            ["isBlockDevice"] = BuiltInMethod.CreateV2("isBlockDevice", 0, 0, (_, _, _) => RuntimeValue.False),
-            ["isCharacterDevice"] = BuiltInMethod.CreateV2("isCharacterDevice", 0, 0, (_, _, _) => RuntimeValue.False),
-            ["isFIFO"] = BuiltInMethod.CreateV2("isFIFO", 0, 0, (_, _, _) => RuntimeValue.False),
-            ["isSocket"] = BuiltInMethod.CreateV2("isSocket", 0, 0, (_, _, _) => RuntimeValue.False),
-            ["size"] = (double)size,
-            ["atime"] = CreateDateObject(atime),
-            ["mtime"] = CreateDateObject(mtime),
-            ["ctime"] = CreateDateObject(ctime),
-            ["birthtime"] = CreateDateObject(birthtime),
-            ["atimeMs"] = (double)new DateTimeOffset(atime).ToUnixTimeMilliseconds(),
-            ["mtimeMs"] = (double)new DateTimeOffset(mtime).ToUnixTimeMilliseconds(),
-            ["ctimeMs"] = (double)new DateTimeOffset(ctime).ToUnixTimeMilliseconds(),
-            ["birthtimeMs"] = (double)new DateTimeOffset(birthtime).ToUnixTimeMilliseconds()
-        });
-    }
-
-    /// <summary>
-    /// Creates a Date-like object from a DateTime.
-    /// </summary>
-    private static SharpTSObject CreateDateObject(DateTime dt)
-    {
-        var timestamp = (double)new DateTimeOffset(dt).ToUnixTimeMilliseconds();
-        return new SharpTSObject(new Dictionary<string, object?>
-        {
-            ["getTime"] = BuiltInMethod.CreateV2("getTime", 0, 0, (_, _, _) => RuntimeValue.FromNumber(timestamp)),
-            ["toISOString"] = BuiltInMethod.CreateV2("toISOString", 0, 0, (_, _, _) => RuntimeValue.FromString(dt.ToUniversalTime().ToString("o")))
-        });
-    }
-
-    /// <summary>
     /// Asynchronously removes a file.
     /// </summary>
     /// <param name="path">The path to the file to remove.</param>

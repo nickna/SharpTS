@@ -17,14 +17,6 @@ namespace SharpTS.Runtime.BuiltIns;
 public static class WorkerBuiltIns
 {
     /// <summary>
-    /// Gets the worker_threads module exports object.
-    /// </summary>
-    public static SharpTSObject GetWorkerThreadsModule()
-    {
-        return WorkerThreads.CreateModuleExports();
-    }
-
-    /// <summary>
     /// Gets a member from the Atomics global object.
     /// </summary>
     public static object? GetAtomicsMember(string name)

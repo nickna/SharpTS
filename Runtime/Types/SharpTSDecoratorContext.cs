@@ -56,19 +56,6 @@ public class SharpTSDecoratorContext
     public IReadOnlyList<ISharpTSCallable> Initializers => _initializers;
 
     /// <summary>
-    /// Runs all initializers with the given instance as 'this'.
-    /// </summary>
-    public void RunInitializers(Interpreter interpreter, SharpTSInstance instance)
-    {
-        foreach (var init in _initializers)
-        {
-            // Create a bound version of the initializer with 'this' set to instance
-            var bound = init is SharpTSFunction fn ? fn.Bind(instance) : init;
-            bound.Call(interpreter, []);
-        }
-    }
-
-    /// <summary>
     /// Converts this context to a SharpTS object for passing to decorators.
     /// </summary>
     public SharpTSObject ToRuntimeObject()
@@ -166,21 +153,6 @@ public class SharpTSDecoratorContext
         return new SharpTSDecoratorContext
         {
             Kind = DecoratorContextKind.Field,
-            Name = name,
-            Static = isStatic,
-            Private = false,
-            Access = access
-        };
-    }
-
-    /// <summary>
-    /// Creates a context for an accessor decorator with access object.
-    /// </summary>
-    public static SharpTSDecoratorContext ForAccessor(string name, bool isStatic, SharpTSObject? access = null)
-    {
-        return new SharpTSDecoratorContext
-        {
-            Kind = DecoratorContextKind.Accessor,
             Name = name,
             Static = isStatic,
             Private = false,

@@ -257,7 +257,6 @@ public abstract class VmModuleBase
 /// </summary>
 public sealed class VmSourceTextModule : VmModuleBase
 {
-    private readonly string _code;
     private readonly List<Stmt> _statements;
     private readonly List<string> _dependencySpecifiers;
 
@@ -265,7 +264,6 @@ public sealed class VmSourceTextModule : VmModuleBase
 
     public VmSourceTextModule(string code, object? options)
     {
-        _code = code;
         Identifier = VmModuleInterpreter.GetStringOption(options, "identifier") ?? $"vm:module({NextId()})";
         ContextObject = VmModuleInterpreter.GetOption(options, "context");
         ImportModuleDynamically = VmModuleInterpreter.GetOption(options, "importModuleDynamically");

@@ -109,17 +109,13 @@ public class SharpTSFinalizationRegistry : ITypeCategorized
     private sealed class RegistrationEntry
     {
         private readonly WeakReference<object> _target;
-        private readonly object? _heldValue;
-        private readonly ConcurrentQueue<object?> _queue;
 
         public object? Token { get; }
 
         public RegistrationEntry(object target, object? heldValue, object? token, ConcurrentQueue<object?> queue)
         {
             _target = new WeakReference<object>(target);
-            _heldValue = heldValue;
             Token = token;
-            _queue = queue;
 
             // Use ConditionalWeakTable to ensure our destructor-bearing helper
             // is released when target is collected

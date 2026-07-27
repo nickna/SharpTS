@@ -326,29 +326,10 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
     }
 
     /// <summary>
-    /// Invokes a listener supporting multiple listener types (ISharpTSCallable, TSFunction, Action, BuiltInMethod).
-    /// </summary>
-    private static void InvokeListener(object listener, Interp? interpreter, List<object?> eventArgs)
-    {
-        if (listener is ISharpTSCallable callable)
-        {
-            var result = callable.Call(interpreter!, eventArgs);
-            // An async listener's promise is unreachable from guest code —
-            // report its rejection instead of swallowing it (#228).
-            interpreter?.ObserveDiscardedCallbackResult(result);
-        }
-        else
-        {
-            // Try direct invocation for compiled code (TSFunction, Action, etc.)
-            InvokeListenerDirect(listener, eventArgs.ToArray());
-        }
-    }
-
-    /// <summary>
-    /// Invokes a listener and returns its result so the caller can decide how to
-    /// treat an async listener's promise (route via captureRejections, or report
-    /// as unhandled). Mirrors <see cref="InvokeListener"/> minus the built-in
-    /// rejection observation.
+    /// Invokes a listener supporting multiple listener types (ISharpTSCallable,
+    /// TSFunction, Action, BuiltInMethod) and returns its result so the caller can
+    /// decide how to treat an async listener's promise (route via captureRejections,
+    /// or report as unhandled) — no built-in rejection observation happens here.
     /// </summary>
     private static object? InvokeListenerReturning(object listener, Interp? interpreter, List<object?> eventArgs)
     {

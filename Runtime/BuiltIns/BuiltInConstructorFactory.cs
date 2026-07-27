@@ -67,11 +67,6 @@ public static class BuiltInConstructorFactory
     };
 
     /// <summary>
-    /// Checks if a constructor name is a simple built-in that can be handled by this factory.
-    /// </summary>
-    public static bool IsSimpleBuiltIn(string name) => _simpleConstructors.ContainsKey(name);
-
-    /// <summary>
     /// Checks if a constructor name is any kind of built-in handled by this factory.
     /// Note: Promise is NOT included as it requires special executor function handling.
     /// </summary>

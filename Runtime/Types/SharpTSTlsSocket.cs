@@ -17,7 +17,6 @@ public class SharpTSTlsSocket : SharpTSSocket
     private string? _authorizationError;
     private string? _alpnProtocol;
     private X509Certificate2? _peerCertificate;
-    private SslProtocols _negotiatedProtocol;
     private string? _servername;
     private bool _rejectUnauthorized;
 
@@ -37,7 +36,6 @@ public class SharpTSTlsSocket : SharpTSSocket
         _sslStream = sslStream;
         _stream = sslStream; // Replace the NetworkStream with SslStream
         _authorized = sslStream.IsAuthenticated && sslStream.IsMutuallyAuthenticated || sslStream.IsAuthenticated;
-        _negotiatedProtocol = sslStream.SslProtocol;
         _peerCertificate = sslStream.RemoteCertificate as X509Certificate2;
         _alpnProtocol = sslStream.NegotiatedApplicationProtocol.ToString();
         if (string.IsNullOrEmpty(_alpnProtocol)) _alpnProtocol = null;
@@ -142,7 +140,6 @@ public class SharpTSTlsSocket : SharpTSSocket
                 _stream = _sslStream;
                 _authorized = capturedErrors == SslPolicyErrors.None;
                 _authorizationError = _authorized ? null : DescribePolicyErrors(capturedErrors);
-                _negotiatedProtocol = _sslStream.SslProtocol;
                 _peerCertificate = _sslStream.RemoteCertificate as X509Certificate2;
                 _alpnProtocol = _sslStream.NegotiatedApplicationProtocol.ToString();
                 if (string.IsNullOrEmpty(_alpnProtocol)) _alpnProtocol = null;

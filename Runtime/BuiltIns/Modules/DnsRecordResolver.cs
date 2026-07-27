@@ -35,14 +35,6 @@ public static class DnsRecordResolver
         };
     }
 
-    /// <summary>
-    /// Resolves a single record type by name. Used by individual resolveMx, resolveTxt, etc.
-    /// </summary>
-    public static object ResolveByType(string hostname, string rrtype)
-    {
-        return Resolve(hostname, rrtype);
-    }
-
     public static List<object?> ResolveMx(string hostname) =>
         (List<object?>)DnsWireProtocol.Query(hostname, DnsWireProtocol.TypeMX);
 

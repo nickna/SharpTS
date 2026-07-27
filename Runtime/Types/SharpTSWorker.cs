@@ -37,7 +37,6 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     private readonly IEnumerable<object?>? _transferList;
     private volatile bool _isRunning;
     private volatile bool _isTerminated;
-    private Exception? _workerError;
     private Interpreter? _parentInterpreter;
 
     // The worker's own (isolated) interpreter, captured once it starts so terminate()
@@ -315,7 +314,6 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         }
         catch (Exception ex)
         {
-            _workerError = ex;
             // A terminated worker must not surface an 'error' event; a genuine uncaught
             // host error must.
             if (!_isTerminated)

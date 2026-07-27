@@ -33,7 +33,6 @@ internal sealed class WritableCore
     private readonly List<object?> _corkBuffer = [];
     private ISharpTSCallable? _writeCallback;
     private ISharpTSCallable? _finalCallback;
-    private int _pendingWrites;
     private int _writableLength; // total bytes of in-flight writes (backpressure tracking)
     private bool _needDrain;
 
@@ -141,7 +140,6 @@ internal sealed class WritableCore
 
     private object? DoWrite(Interp interpreter, object? chunk, string? encoding, ISharpTSCallable? callback)
     {
-        _pendingWrites++;
         var chunkSize = GetChunkSize(chunk, _objectMode());
         _writableLength += chunkSize;
 
@@ -163,7 +161,6 @@ internal sealed class WritableCore
         else
         {
             // Default behavior: just accept the data (sync completion)
-            _pendingWrites--;
             _writableLength -= chunkSize;
             callback?.Call(interpreter, []);
             CheckDrain(interpreter);
@@ -297,7 +294,6 @@ internal sealed class WritableCore
         _errored = false;
         _corked = false;
         _corkBuffer.Clear();
-        _pendingWrites = 0;
         _writableLength = 0;
         _needDrain = false;
     }
@@ -338,8 +334,7 @@ internal sealed class WritableCore
 
         public object? Call(Interp interpreter, List<object?> arguments)
         {
-            // Decrement pending writes and buffered length, then run the user's callback.
-            _core._pendingWrites--;
+            // Decrement buffered length, then run the user's callback.
             _core._writableLength -= _chunkSize;
             _callback?.Call(_interpreter, []);
             _core.CheckDrain(_interpreter);
