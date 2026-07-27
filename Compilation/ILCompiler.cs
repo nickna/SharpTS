@@ -92,6 +92,17 @@ public partial class ILCompiler
         _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     /// <summary>
+    /// Non-fatal compilation warnings (e.g. an unresolvable external .NET type).
+    /// Collected instead of written to Console so embedders observe them and the
+    /// compiler never interleaves with the compiled program's own output; the
+    /// CLI prints them to stderr after compilation.
+    /// </summary>
+    public IReadOnlyList<string> Warnings => _warnings;
+    private readonly List<string> _warnings = [];
+
+    internal void AddWarning(string message) => _warnings.Add(message);
+
+    /// <summary>
     /// The assemblies of every external .NET type the compilation bound (@DotNetType
     /// classes and dotnet: imports). These are HARD metadata references in the emitted
     /// IL; the CLI intersects them with the sharpts.json / -r reference set to decide

@@ -697,6 +697,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
             compiler.SetDecoratorMode(decoratorMode);
             compileBody(compiler);
+            PrintCompilerWarnings(compiler);
             compiler.Save(tempDllPath);
 
             // Run IL verification on the DLL if requested
@@ -741,6 +742,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
         compiler.SetDecoratorMode(decoratorMode);
         compileBody(compiler);
+        PrintCompilerWarnings(compiler);
         compiler.Save(outputPath);
 
         GenerateRuntimeConfig(outputPath);
@@ -800,6 +802,17 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     // Compilation Phase
     EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs,
         compiler => compiler.Compile(statements, typeMap, deadCodeInfo));
+}
+
+/// <summary>
+/// Prints the compiler's collected non-fatal warnings to stderr. They are collected on the
+/// compiler (not written inside Compilation/) so embedders observe them and compiler chatter
+/// can never interleave with a compiled program's stdout.
+/// </summary>
+static void PrintCompilerWarnings(ILCompiler compiler)
+{
+    foreach (var warning in compiler.Warnings)
+        Console.Error.WriteLine($"Warning: {warning}");
 }
 
 /// <summary>
