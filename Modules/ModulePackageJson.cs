@@ -15,6 +15,7 @@ internal sealed class ModulePackageJson
     public string? Type { get; init; }
     public JsonElement? Exports { get; init; }
     public JsonElement? Imports { get; init; }
+    public JsonElement? TypesVersions { get; init; }
 
     /// <summary>
     /// The owning JsonDocument — must be kept alive while Exports/Imports JsonElements are used.
@@ -67,6 +68,7 @@ internal sealed class ModulePackageJson
                 Type = GetString(root, "type"),
                 Exports = GetElement(root, "exports"),
                 Imports = GetElement(root, "imports"),
+                TypesVersions = GetElement(root, "typesVersions"),
             };
         }
         catch

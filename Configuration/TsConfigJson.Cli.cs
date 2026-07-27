@@ -51,6 +51,18 @@ internal sealed partial class TsConfigCompilerOptions
     [JsonPropertyName("noImplicitAny")]
     public bool? NoImplicitAny { get; set; }
 
+    [JsonPropertyName("noImplicitThis")]
+    public bool? NoImplicitThis { get; set; }
+
+    [JsonPropertyName("strictPropertyInitialization")]
+    public bool? StrictPropertyInitialization { get; set; }
+
+    [JsonPropertyName("exactOptionalPropertyTypes")]
+    public bool? ExactOptionalPropertyTypes { get; set; }
+
+    [JsonPropertyName("noUncheckedIndexedAccess")]
+    public bool? NoUncheckedIndexedAccess { get; set; }
+
     [JsonPropertyName("checkJs")]
     public bool? CheckJs { get; set; }
 
@@ -69,6 +81,9 @@ internal sealed partial class TsConfigCompilerOptions
     [JsonPropertyName("lib")]
     public string[]? Lib { get; set; }
 
+    [JsonPropertyName("noLib")]
+    public bool? NoLib { get; set; }
+
     [JsonPropertyName("types")]
     public string[]? Types { get; set; }
 
@@ -83,7 +98,6 @@ internal sealed partial class TsConfigCompilerOptions
 
     [JsonPropertyName("tsBuildInfoFile")]
     public string? TsBuildInfoFile { get; set; }
-
     /// <summary>See <see cref="TsConfigJson.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
@@ -95,6 +109,10 @@ internal sealed partial class TsConfigCompilerOptions
         StrictNullChecks = StrictNullChecks,
         StrictFunctionTypes = StrictFunctionTypes,
         NoImplicitAny = NoImplicitAny,
+        NoImplicitThis = NoImplicitThis,
+        StrictPropertyInitialization = StrictPropertyInitialization,
+        ExactOptionalPropertyTypes = ExactOptionalPropertyTypes,
+        NoUncheckedIndexedAccess = NoUncheckedIndexedAccess,
     };
 }
 

@@ -1634,7 +1634,8 @@ public partial class Interpreter : IDisposable
                 if (import.IsTypeOnly)
                     continue;
 
-                string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
+                string importedPath = _moduleResolver!.ResolveRuntimeModulePath(
+                    import.ModulePath, module.Path);
                 var importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
 
                 // Lazily-reached dependency: the static InterpretModules order only executes
@@ -1796,7 +1797,8 @@ public partial class Interpreter : IDisposable
         else if (export.FromModulePath != null)
         {
             // Re-export: export { x } from './module' or export * from './module'
-            string sourcePath = _moduleResolver!.ResolveModulePath(export.FromModulePath, _currentModule!.Path);
+            string sourcePath = _moduleResolver!.ResolveRuntimeModulePath(
+                export.FromModulePath, _currentModule!.Path);
             var sourceModuleInstance = _loadedModules.GetValueOrDefault(sourcePath);
 
             // CJS sources are lazy-initialized; trigger init so we have exports to read.
@@ -1904,7 +1906,8 @@ public partial class Interpreter : IDisposable
         }
 
         // Resolve the module path
-        string resolvedPath = _moduleResolver.ResolveModulePath(importReq.ModulePath, _currentModule.Path);
+        string resolvedPath = _moduleResolver.ResolveRuntimeModulePath(
+            importReq.ModulePath, _currentModule.Path, ResolutionKind.Cjs);
 
         // Find the loaded module instance
         var moduleInstance = _loadedModules.GetValueOrDefault(resolvedPath);

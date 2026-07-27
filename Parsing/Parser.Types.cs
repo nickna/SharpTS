@@ -140,7 +140,7 @@ public partial class Parser
         // Parse parameter types
         if (!Check(TokenType.RIGHT_PAREN))
         {
-            do
+            while (true)
             {
                 // Handle rest parameter: ...args: number[]
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
@@ -153,7 +153,16 @@ public partial class Parser
                 string paramType;
                 string? paramName = null;
                 TypeNode? paramTypeNode;
-                if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type)) &&
+                if (IsDestructuredFunctionTypeParameter())
+                {
+                    _ = ParseDestructurePattern();
+                    if (Match(TokenType.QUESTION))
+                        isOptional = true;
+                    Consume(TokenType.COLON, "Expect ':' after binding pattern.");
+                    paramType = ParseTypeAnnotation();
+                    paramTypeNode = TakeTypeNode();
+                }
+                else if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type)) &&
                     (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
                 {
                     paramName = Advance().Lexeme; // name may be a contextual keyword, e.g. `set: Set<T>`
@@ -201,7 +210,9 @@ public partial class Parser
                 else
                     paramTypes.Add(paramType);
 
-            } while (Match(TokenType.COMMA));
+                if (!Match(TokenType.COMMA) || Check(TokenType.RIGHT_PAREN))
+                    break;
+            }
         }
 
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
@@ -220,6 +231,34 @@ public partial class Parser
             return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
         }
         return $"({string.Join(", ", paramTypes)}) => {returnType}";
+    }
+
+    private bool IsDestructuredFunctionTypeParameter()
+    {
+        TokenType open = Peek().Type;
+        TokenType close = open switch
+        {
+            TokenType.LEFT_BRACE => TokenType.RIGHT_BRACE,
+            TokenType.LEFT_BRACKET => TokenType.RIGHT_BRACKET,
+            _ => TokenType.EOF,
+        };
+        if (close == TokenType.EOF)
+            return false;
+
+        int depth = 0;
+        for (int index = _current; index < _tokens.Count; index++)
+        {
+            if (_tokens[index].Type == open)
+                depth++;
+            else if (_tokens[index].Type == close && --depth == 0)
+            {
+                TokenType next = index + 1 < _tokens.Count
+                    ? _tokens[index + 1].Type
+                    : TokenType.EOF;
+                return next is TokenType.QUESTION or TokenType.COLON;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -502,19 +541,35 @@ public partial class Parser
             StringBuilder sb = new();
             sb.Append("typeof ");
 
-            // `typeof undefined` / `typeof this` are valid queries alongside identifiers.
-            // Contextual keywords (e.g. `Symbol`) are valid identifiers here too — `typeof Symbol.obs`.
-            Token first = Check(TokenType.UNDEFINED) || Check(TokenType.THIS)
-                ? Advance()
-                : ConsumeIdentifierName("Expect identifier after 'typeof' in type position.");
-            sb.Append(first.Lexeme);
+            if (Match(TokenType.IMPORT))
+            {
+                // Type queries can target a module namespace directly:
+                // `typeof import("./dispatcher").default`.
+                sb.Append("import");
+                Consume(TokenType.LEFT_PAREN, "Expect '(' after 'import' in type query.");
+                string modulePath = (string)Consume(
+                    TokenType.STRING, "Expect module path string in import type query.").Literal!;
+                Consume(TokenType.RIGHT_PAREN, "Expect ')' after module path in import type query.");
+                sb.Append("(\"");
+                sb.Append(modulePath.Replace("\"", "\\\"", StringComparison.Ordinal));
+                sb.Append("\")");
+            }
+            else
+            {
+                // `typeof undefined` / `typeof this` are valid queries alongside identifiers.
+                // Contextual keywords (e.g. `Symbol`) are valid identifiers here too — `typeof Symbol.obs`.
+                Token first = Check(TokenType.UNDEFINED) || Check(TokenType.THIS)
+                    ? Advance()
+                    : ConsumeIdentifierName("Expect identifier after 'typeof' in type position.");
+                sb.Append(first.Lexeme);
+            }
 
             // Handle property paths and index access: typeof obj.prop, typeof arr[0], typeof obj["key"]
             while (true)
             {
                 if (Match(TokenType.DOT))
                 {
-                    Token next = ConsumeIdentifierName("Expect property name after '.'");
+                    Token next = ConsumePropertyName("Expect property name after '.'");
                     sb.Append('.');
                     sb.Append(next.Lexeme);
                 }
@@ -553,6 +608,27 @@ public partial class Parser
                 {
                     break;
                 }
+            }
+
+            // Instantiation expressions are valid operands of a type query:
+            // `typeof ServerResponse<InstanceType<Request>>`.
+            if (Match(TokenType.LESS))
+            {
+                List<string> typeArguments = [];
+                if (!CheckGreaterInTypeContext())
+                {
+                    do
+                    {
+                        typeArguments.Add(ParseTypeAnnotation());
+                        TakeTypeNode();
+                    } while (Match(TokenType.COMMA));
+                }
+                if (!MatchGreaterInTypeContext())
+                    throw new Exception(
+                        $"Parse Error at line {Peek().Line}: Expect '>' after typeof type arguments.");
+                sb.Append('<');
+                sb.Append(string.Join(", ", typeArguments));
+                sb.Append('>');
             }
 
             // The entity path is everything after the "typeof " prefix; the resolver hands it to
@@ -613,7 +689,8 @@ public partial class Parser
                 }
                 _current = saved; // backtrack
             }
-            else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)) &&
+            else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)
+                      || IsContextualKeyword(Peek().Type)) &&
                      (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
             {
                 // (identifier: / (this: / (identifier? - a (possibly optional) function parameter
@@ -672,6 +749,15 @@ public partial class Parser
             typeName = Previous().Literal!.ToString()!;
             typeNode = new LiteralTypeNode(Previous().Literal, Previous().Line);
         }
+        // Negative numeric literal types (for example WebGL's TIMEOUT_IGNORED: -1).
+        else if (Match(TokenType.MINUS))
+        {
+            int line = Previous().Line;
+            Token number = Consume(TokenType.NUMBER, "Expect a numeric literal after '-' in a type.");
+            double value = -Convert.ToDouble(number.Literal, System.Globalization.CultureInfo.InvariantCulture);
+            typeName = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            typeNode = new LiteralTypeNode(value, line);
+        }
         // Handle bigint literal types: 1n | 2n
         else if (Match(TokenType.BIGINT_LITERAL))
         {
@@ -693,6 +779,7 @@ public partial class Parser
                  Check(TokenType.TYPE_BOOLEAN) || Check(TokenType.TYPE_SYMBOL) ||
                  Check(TokenType.TYPE_BIGINT) ||
                  Check(TokenType.IDENTIFIER) ||
+                 IsContextualKeyword(Peek().Type) ||
                  Check(TokenType.SYMBOL) || Check(TokenType.BIGINT) ||  // `Symbol`/`BigInt` as type names (lib.d.ts: `interface Symbol`)
                  Check(TokenType.THIS) ||  // polymorphic 'this' type (e.g. `): this`, `keyof this`)
                  Check(TokenType.VOID) ||  // void type
@@ -725,7 +812,9 @@ public partial class Parser
         {
             int saved = _current;
             Advance(); // consume <
-            if (IsTypeStart())
+            // Multiline declaration files often format a generic union/intersection
+            // with its operator first: `Autocomplete< | "a" | "b" >`.
+            if (IsTypeStart() || Check(TokenType.PIPE) || Check(TokenType.AMPERSAND))
             {
                 List<TypeNode>? argNodes = [];
                 List<string> typeArgs = [ParseTypeAnnotation()];
@@ -757,7 +846,8 @@ public partial class Parser
         }
 
         // Handle array suffix T[] and indexed access types T[K]
-        while (Check(TokenType.LEFT_BRACKET))
+        while (Check(TokenType.LEFT_BRACKET)
+               && !(_ambientClassDepth > 0 && Previous().Line < Peek().Line))
         {
             int saved = _current;
             Advance(); // consume [
@@ -800,39 +890,50 @@ public partial class Parser
             // Check for spread or rest element: ...T or ...Type[]
             if (Match(TokenType.DOT_DOT_DOT))
             {
+                Token? spreadName = null;
+                if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)
+                {
+                    spreadName = Advance();
+                    Advance(); // ':'
+                }
+
                 string spreadType = ParsePrimaryType();
                 // The resolver distinguishes a trailing rest (`...T[]`) from a variadic spread
                 // TEXTUALLY (EndsWith "[]"). Only carry a node when the structured view agrees —
                 // e.g. a grouped `...(T[])` reads as an array node but not as a "[]" suffix.
                 if (TakeTypeNode() is { } spreadNode && spreadType.EndsWith("[]") == spreadNode is ArrayTypeNode)
-                    elementNodes.Add(new TupleElementNode(null, spreadNode, false, true, spreadNode.Line));
+                    elementNodes.Add(new TupleElementNode(
+                        spreadName?.Lexeme, spreadNode, false, true, spreadNode.Line));
                 else
                     nodeComplete = false;
 
+                string formattedSpread = spreadName is null
+                    ? "..." + spreadType
+                    : $"...{spreadName.Lexeme}: {spreadType}";
                 if (spreadType.EndsWith("[]"))
                 {
                     // Trailing rest element (...T[]) - must be last
                     if (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.COMMA))
                     {
                         // More content after - this is a variadic spread, allow it
-                        elements.Add("..." + spreadType);
+                        elements.Add(formattedSpread);
                     }
                     else if (!Check(TokenType.RIGHT_BRACKET))
                     {
                         // Followed by comma - check what comes next
-                        elements.Add("..." + spreadType);
+                        elements.Add(formattedSpread);
                     }
                     else
                     {
                         // At end - trailing rest element
-                        elements.Add("..." + spreadType);
+                        elements.Add(formattedSpread);
                         break;
                     }
                 }
                 else
                 {
                     // Variadic spread (...T) - can appear anywhere
-                    elements.Add("..." + spreadType);
+                    elements.Add(formattedSpread);
                 }
 
                 if (!Check(TokenType.RIGHT_BRACKET))
@@ -844,7 +945,10 @@ public partial class Parser
 
             // Check for named tuple element: name: type or name?: type
             // Pattern: identifier followed by colon, OR identifier followed by ? then colon
-            bool isNamedElement = Check(TokenType.IDENTIFIER) &&
+            bool isNamedElement =
+                (Check(TokenType.IDENTIFIER)
+                 || IsKeyword(Peek().Type)
+                 || IsContextualKeyword(Peek().Type)) &&
                 (PeekNext().Type == TokenType.COLON ||
                  (PeekNext().Type == TokenType.QUESTION && _current + 2 < _tokens.Count && _tokens[_current + 2].Type == TokenType.COLON));
 
@@ -1035,7 +1139,7 @@ public partial class Parser
                 bool isOptional = Match(TokenType.QUESTION);
 
                 string propertyType;
-                bool isMethodMember = Check(TokenType.LEFT_PAREN);
+                bool isMethodMember = Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS);
                 if (isMethodMember)
                 {
                     // Method signature: methodName(params): returnType
@@ -1266,7 +1370,7 @@ public partial class Parser
         List<TypeParam> typeParams = [];
         bool sawDefault = false;
 
-        do
+        while (true)
         {
             // Check for variance modifiers: in, out, in out
             var variance = TypeParameterVariance.Invariant;
@@ -1316,7 +1420,9 @@ public partial class Parser
             }
 
             typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance, constraintNode, defaultNode));
-        } while (Match(TokenType.COMMA));
+            if (!Match(TokenType.COMMA) || Check(TokenType.GREATER))
+                break;
+        }
 
         ConsumeGreaterInTypeContext("Expect '>' after type parameters.");
         return typeParams;

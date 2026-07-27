@@ -76,6 +76,30 @@ public class TsConfigLoaderTests
     }
 
     [Fact]
+    public void Load_FoldsLibraryAndTypePackageOptions()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("tsconfig.json", """
+            {
+              "compilerOptions": {
+                "lib": ["ES2022", "DOM"],
+                "noLib": false,
+                "types": ["node"],
+                "typeRoots": ["./typings"]
+              }
+            }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(["ES2022", "DOM"], result.Lib);
+        Assert.False(result.NoLib);
+        Assert.Equal(["node"], result.Types);
+        Assert.Equal([Path.GetFullPath(dir.GetPath("typings"))], result.TypeRoots);
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("lib", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Load_MalformedJson_ThrowsNamingTheFile()
     {
         using var dir = CliTestHelper.CreateTempDirectory();

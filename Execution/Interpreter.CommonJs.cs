@@ -42,7 +42,8 @@ public partial class Interpreter
         string resolvedPath;
         try
         {
-            resolvedPath = _moduleResolver.ResolveModulePath(specifier, callerPath, ResolutionKind.Cjs);
+            resolvedPath = _moduleResolver.ResolveRuntimeModulePath(
+                specifier, callerPath, ResolutionKind.Cjs);
         }
         catch (Exception ex) when (ex is not Runtime.Exceptions.ThrowException)
         {

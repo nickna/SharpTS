@@ -342,6 +342,10 @@ public class Lexer(string source)
                 {
                     AddToken(TokenType.SLASH_EQUAL);
                 }
+                else if (LooksLikeJsxClosingTag())
+                {
+                    AddToken(TokenType.SLASH);
+                }
                 else if (_expectExpr)
                 {
                     // Regex literal
@@ -377,6 +381,26 @@ public class Lexer(string source)
                 }
                 break;
         }
+    }
+
+    private bool LooksLikeJsxClosingTag()
+    {
+        if (_tokens.Count == 0 || _tokens[^1].Type != TokenType.LESS)
+            return false;
+
+        int i = _current;
+        if (i < _source.Length && _source[i] == '>')
+            return true; // fragment: </>
+        if (i >= _source.Length ||
+            !(char.IsLetter(_source[i]) || _source[i] is '_' or '$'))
+            return false;
+
+        while (i < _source.Length &&
+               (char.IsLetterOrDigit(_source[i]) || _source[i] is '_' or '$' or '-' or '.'))
+        {
+            i++;
+        }
+        return i < _source.Length && _source[i] == '>';
     }
 
     private void Identifier()

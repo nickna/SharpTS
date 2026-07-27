@@ -13,7 +13,8 @@
     "tests/cases/conformance/es2021",
     "tests/cases/conformance/es2022",
     "tests/cases/conformance/es2023",
-    "tests/cases/conformance/esnext"
+    "tests/cases/conformance/esnext",
+    "tests/cases/conformance/jsx/inline"
   ],
   "timeoutSeconds": 5,
   "skipDirectivesFile": "skip-directives.txt",

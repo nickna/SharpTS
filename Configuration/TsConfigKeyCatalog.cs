@@ -28,9 +28,10 @@ internal static class TsConfigKeyCatalog
     /// </summary>
     private static readonly string[] AppliedCompilerOptions =
     [
-        "strict", "strictNullChecks", "strictFunctionTypes", "noImplicitAny", "checkJs",
+        "strict", "strictNullChecks", "strictFunctionTypes", "noImplicitAny", "noImplicitThis",
+        "strictPropertyInitialization", "exactOptionalPropertyTypes", "noUncheckedIndexedAccess", "checkJs",
         "preserveConstEnums", "experimentalDecorators", "decorators", "emitDecoratorMetadata",
-        "rootDir", "outDir", "allowJs", "moduleResolution", "lib", "baseUrl", "paths",
+        "rootDir", "outDir", "allowJs", "moduleResolution", "lib", "noLib", "baseUrl", "paths",
         "typeRoots", "types", "incremental", "composite", "tsBuildInfoFile",
         "declaration", "emitDeclarationOnly", "declarationDir",
     ];
@@ -55,10 +56,10 @@ internal static class TsConfigKeyCatalog
     /// <summary>Strictness-family options SharpTS recognizes but does not yet enforce.</summary>
     private static readonly HashSet<string> UnimplementedChecks = new(StringComparer.OrdinalIgnoreCase)
     {
-        "noImplicitThis", "strictPropertyInitialization", "strictBindCallApply", "alwaysStrict",
-        "useUnknownInCatchVariables", "exactOptionalPropertyTypes", "noUnusedLocals",
+        "strictBindCallApply", "alwaysStrict",
+        "useUnknownInCatchVariables", "noUnusedLocals",
         "noUnusedParameters", "noImplicitReturns", "noImplicitOverride",
-        "noFallthroughCasesInSwitch", "noUncheckedIndexedAccess",
+        "noFallthroughCasesInSwitch",
         "noPropertyAccessFromIndexSignature", "allowUnreachableCode", "allowUnusedLabels",
     };
 

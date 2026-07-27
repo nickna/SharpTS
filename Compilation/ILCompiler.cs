@@ -960,6 +960,8 @@ public partial class ILCompiler
         {
             var detector = new RuntimeFeatureDetector();
             _features = detector.Detect(allStatements);
+            if (modules.Any(module => module.IsCommonJs))
+                _features.UsesCjsRequire = true;
         }
 
         ModulePhase0_ExtractNamespaces(modules);

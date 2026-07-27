@@ -42,6 +42,12 @@
   <ItemGroup>
     <EmbeddedResource Include="stdlib\**\*.ts" />
     <None Remove="stdlib\**\*.ts" />
+    <!-- TypeScript 5.5.4 declaration libraries are the checker contract.  They
+         describe types only; SharpTS's C# runtime implementations remain
+         unchanged. -->
+    <EmbeddedResource Include="Modules\TypeScriptLibResources\lib*.d.ts"
+                      LogicalName="SharpTS.TypeScriptLib.%(Filename)%(Extension)" />
+    <None Remove="Modules\TypeScriptLibResources\lib*.d.ts" />
   </ItemGroup>
 
   <!-- Exclude test, example, benchmark, and SDK projects from this compilation.

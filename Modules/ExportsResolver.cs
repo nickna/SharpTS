@@ -25,6 +25,9 @@ public static class ExportsResolver
     /// </summary>
     public static readonly string[] CjsConditions = ["node", "require", "default"];
 
+    public static readonly string[] TypeEsmConditions = ["types", "node", "import", "default"];
+    public static readonly string[] TypeCjsConditions = ["types", "node", "require", "default"];
+
     /// <summary>
     /// Legacy combined condition set retained for callers that don't know their import
     /// kind. Prefer <see cref="EsmConditions"/> or <see cref="CjsConditions"/>.

@@ -531,6 +531,7 @@ public abstract record Stmt
     /// <param name="ExportAssignment">CommonJS export assignment: export = expr</param>
     /// <param name="NamespaceExportName">Namespace re-export alias: export * as ns from './file'</param>
     /// <param name="IsTypeOnly">True for a statement-level <c>export type</c>.</param>
+    /// <param name="GlobalNamespaceName">UMD global alias: export as namespace Name</param>
     public record Export(
         Token Keyword,
         Stmt? Declaration,
@@ -540,7 +541,8 @@ public abstract record Stmt
         bool IsDefaultExport,
         Expr? ExportAssignment = null,
         Token? NamespaceExportName = null,
-        bool IsTypeOnly = false
+        bool IsTypeOnly = false,
+        Token? GlobalNamespaceName = null
     ) : Stmt;
 
     /// <summary>

@@ -192,6 +192,7 @@ public static class TsConfigLoader
         var strictness = new StrictnessOptions();
         bool? checkJs = null, allowJs = null, preserveConstEnums = null, emitDecoratorMetadata = null;
         bool? incremental = null, composite = null, declaration = null, emitDeclarationOnly = null;
+        bool? noLib = null;
         DecoratorMode? decoratorMode = null;
         string? rootDir = null, outDir = null, declarationDir = null, baseUrl = null, buildInfoFile = null;
         IReadOnlyList<string>? files = null, includes = null, excludes = null;
@@ -217,6 +218,10 @@ public static class TsConfigLoader
                     StrictNullChecks = layer.StrictNullChecks ?? strictness.StrictNullChecks,
                     StrictFunctionTypes = layer.StrictFunctionTypes ?? strictness.StrictFunctionTypes,
                     NoImplicitAny = layer.NoImplicitAny ?? strictness.NoImplicitAny,
+                    NoImplicitThis = layer.NoImplicitThis ?? strictness.NoImplicitThis,
+                    StrictPropertyInitialization = layer.StrictPropertyInitialization ?? strictness.StrictPropertyInitialization,
+                    ExactOptionalPropertyTypes = layer.ExactOptionalPropertyTypes ?? strictness.ExactOptionalPropertyTypes,
+                    NoUncheckedIndexedAccess = layer.NoUncheckedIndexedAccess ?? strictness.NoUncheckedIndexedAccess,
                 };
 
                 checkJs = opts.CheckJs ?? checkJs;
@@ -261,6 +266,7 @@ public static class TsConfigLoader
 
                 if (opts.Lib is not null)
                     libs = opts.Lib.ToArray();
+                noLib = opts.NoLib ?? noLib;
                 if (opts.Types is not null)
                     types = opts.Types.ToArray();
                 if (opts.TypeRoots is not null)
@@ -306,6 +312,7 @@ public static class TsConfigLoader
             ProjectReferences: references,
             ModuleResolution: new ModuleResolutionOptions(resolutionMode, baseUrl, paths, typeRoots),
             Lib: libs,
+            NoLib: noLib,
             Types: types,
             TypeRoots: typeRoots,
             Incremental: incremental,
@@ -390,6 +397,7 @@ public sealed record TsConfigResult(
     IReadOnlyList<string> ProjectReferences,
     ModuleResolutionOptions ModuleResolution,
     IReadOnlyList<string>? Lib,
+    bool? NoLib,
     IReadOnlyList<string>? Types,
     IReadOnlyList<string>? TypeRoots,
     bool? Incremental,

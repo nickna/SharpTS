@@ -463,5 +463,25 @@ public class CommandLineParserTests
         Assert.Equal(OutputTarget.Exe, compile.CompileOptions.Target);
     }
 
+    [Fact]
+    public void Parse_TypeScriptProgramOptions()
+    {
+        var result = _parser.Parse([
+            "--lib", "ES2022,DOM",
+            "--types=node,jest",
+            "--typeRoots", "./types,./vendor-types",
+            "--noLib=false",
+            "app.ts",
+        ]);
+
+        var script = Assert.IsType<ParsedCommand.Script>(result);
+        Assert.Equal(["ES2022", "DOM"], script.Options.Lib);
+        Assert.Equal(["node", "jest"], script.Options.Types);
+        Assert.Equal(["./types", "./vendor-types"], script.Options.TypeRoots);
+        Assert.False(script.Options.NoLib);
+        Assert.True(script.Options.TypeScriptProgramOptions.LoadDefaultLib);
+        Assert.True(script.Options.TypeScriptProgramOptions.PreferDeclarationFiles);
+    }
+
     #endregion
 }

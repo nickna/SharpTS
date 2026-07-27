@@ -169,7 +169,11 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnNamespace(TypeInfo.Namespace nsType, Token memberName)
     {
-        var memberType = nsType.GetMember(memberName.Lexeme);
+        // Expression-space lookup must prefer the value facet when a namespace
+        // exports both a type and a value with the same name (for example
+        // `interface Intl.PluralRules` plus `const Intl.PluralRules`).
+        var memberType = nsType.Values.GetValueOrDefault(memberName.Lexeme)
+            ?? nsType.Types.GetValueOrDefault(memberName.Lexeme);
         if (memberType != null)
         {
             return memberType;
@@ -226,7 +230,9 @@ public partial class TypeChecker
         {
             if (member.Key == memberName.Lexeme)
             {
-                return member.Value;
+                return _strictNullChecks && itf.GetAllOptionalMembers().Contains(memberName.Lexeme)
+                    ? CreateUnion(member.Value, TypeInfo.Undefined.Shared)
+                    : member.Value;
             }
         }
         if (ResolveObjectPrototypeMember(memberName.Lexeme) is { } protoMember)
@@ -243,11 +249,13 @@ public partial class TypeChecker
     {
         if (record.Fields.TryGetValue(memberName.Lexeme, out var fieldType))
         {
-            return fieldType;
+            return _strictNullChecks && record.IsFieldOptional(memberName.Lexeme)
+                ? CreateUnion(fieldType, TypeInfo.Undefined.Shared)
+                : fieldType;
         }
         if (record.StringIndexType != null)
         {
-            return record.StringIndexType;
+            return WithUncheckedUndefined(record.StringIndexType);
         }
         if (ResolveObjectPrototypeMember(memberName.Lexeme) is { } protoMember)
         {

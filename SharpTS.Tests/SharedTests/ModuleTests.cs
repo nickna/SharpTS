@@ -837,7 +837,7 @@ public class ModuleTests
     #region Circular Dependency Detection
 
     [Theory, ModeData]
-    public void CircularDependency_ThrowsError(ExecutionMode mode)
+    public void CircularDependency_IsSupported(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -851,18 +851,13 @@ public class ModuleTests
                 """
         };
 
-        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
-            TestHarness.RunModules(files, "./a.ts", mode));
-        // Can be "Circular dependency" or a type error about missing exports
-        Assert.True(
-            ex.Message.Contains("circular", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("Module Error", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("no export", StringComparison.OrdinalIgnoreCase),
-            $"Expected circular or module error, got: {ex.Message}");
+        // TypeScript permits module cycles. The declaration-first module pass exposes
+        // both export surfaces before either body is checked or executed.
+        _ = TestHarness.RunModules(files, "./a.ts", mode);
     }
 
     [Theory, ModeData]
-    public void CircularDependency_IndirectCycle(ExecutionMode mode)
+    public void CircularDependency_IndirectCycle_IsSupported(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -880,14 +875,7 @@ public class ModuleTests
                 """
         };
 
-        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
-            TestHarness.RunModules(files, "./a.ts", mode));
-        // Can be "Circular dependency" or a type error about missing exports
-        Assert.True(
-            ex.Message.Contains("circular", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("Module Error", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("no export", StringComparison.OrdinalIgnoreCase),
-            $"Expected circular or module error, got: {ex.Message}");
+        _ = TestHarness.RunModules(files, "./a.ts", mode);
     }
 
     #endregion

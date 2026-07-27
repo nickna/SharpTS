@@ -781,8 +781,8 @@ public partial class TypeChecker
     /// Attempts structural assignment of <paramref name="source"/> to an unbranded class-like target —
     /// a <see cref="TypeInfo.Class"/> or a generic-class instantiation (<see cref="TypeInfo.InstantiatedGeneric"/>
     /// of a <see cref="TypeInfo.GenericClass"/>) — comparing public members and index signatures with the
-    /// generic type arguments substituted. Returns false for branded or member-less/index-less targets
-    /// (those stay nominal).
+    /// generic type arguments substituted. Unbranded member-less targets have the
+    /// structural shape <c>{}</c>, matching TypeScript class semantics.
     /// </summary>
     private bool StructurallyAssignableToClassTarget(TypeInfo targetResolved, TypeInfo source,
         bool emptyTargetAcceptsObjectSource = false)
@@ -814,11 +814,10 @@ public partial class TypeChecker
             default:
                 return false;
         }
-        // A member-less, index-less unbranded target is structurally `{}`. For class-vs-class this
-        // stays nominal (caller passes false, preserving subclass-safety), but an object-like source
-        // (interface value / record) IS assignable to `{}` — that's the emptyTargetAcceptsObjectSource
-        // path, so `interface I → empty class C` no longer spuriously fails.
-        if (members.Count == 0 && !hasIndex) return emptyTargetAcceptsObjectSource;
+        // TypeScript classes without private/protected branding are structural,
+        // including the empty shape. An empty class is therefore compatible with
+        // any non-nullish object-like source, not only interfaces/records.
+        if (members.Count == 0 && !hasIndex) return true;
         return CheckStructuralCompatibility(members, source) && IndexSignaturesSatisfied(indexCarrier, source);
     }
 

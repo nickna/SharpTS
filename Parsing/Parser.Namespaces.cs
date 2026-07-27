@@ -9,8 +9,10 @@ public partial class Parser
     /// Supports dotted names (A.B.C) which are desugared to nested namespaces.
     /// </summary>
     /// <param name="isExported">Whether this is an exported namespace</param>
-    private Stmt NamespaceDeclaration(bool isExported = false)
+    private Stmt NamespaceDeclaration(bool isExported = false, bool isAmbient = false)
     {
+        isAmbient |= _isDeclarationFile;
+
         // Parse namespace name (may be dotted: A.B.C). Contextual keywords (e.g. `Symbol`) are
         // valid identifiers here too — `module Symbol { }` shadows the global.
         Token firstName = ConsumeIdentifierName("Expect namespace name.");
@@ -27,9 +29,17 @@ public partial class Parser
 
         // Parse namespace members
         List<Stmt> members = [];
-        while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+        if (isAmbient) _ambientNamespaceDepth++;
+        try
         {
-            members.Add(NamespaceMember());
+            while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+            {
+                members.Add(NamespaceMember());
+            }
+        }
+        finally
+        {
+            if (isAmbient) _ambientNamespaceDepth--;
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after namespace body.");
@@ -54,11 +64,26 @@ public partial class Parser
     private Stmt NamespaceMember()
     {
         bool isExported = Match(TokenType.EXPORT);
+        Token? exportKeyword = isExported ? Previous() : null;
+
+        // Ambient namespaces can explicitly export an alias imported with
+        // `import X = Namespace.member` (used by @types/node promisify hooks).
+        if (isExported && Match(TokenType.LEFT_BRACE))
+        {
+            var namedExports = ParseExportSpecifiers();
+            string? fromPath = null;
+            if (Match(TokenType.FROM))
+                fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
+            ConsumeSemicolon("Expect ';' after namespace export.");
+            return new Stmt.Export(
+                exportKeyword!, null, namedExports, null, fromPath, IsDefaultExport: false);
+        }
 
         // Handle import alias inside namespace: [export] import X = Namespace.Member
         if (Match(TokenType.IMPORT))
         {
-            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
+                && PeekNext().Type == TokenType.EQUAL)
             {
                 return ImportAliasDeclaration(isExported);
             }
@@ -70,14 +95,18 @@ public partial class Parser
 
         if (Match(TokenType.NAMESPACE))
         {
-            return WrapIfExported(NamespaceDeclaration(), isExported);
+            return WrapIfExported(
+                NamespaceDeclaration(isAmbient: _ambientNamespaceDepth > 0),
+                isExported);
         }
         // `module Foo { }` — the older spelling of a nested namespace (identifier name).
         if (Check(TokenType.MODULE) &&
             (PeekNext().Type == TokenType.IDENTIFIER || IsContextualKeyword(PeekNext().Type)))
         {
             Advance(); // consume MODULE
-            return WrapIfExported(NamespaceDeclaration(), isExported);
+            return WrapIfExported(
+                NamespaceDeclaration(isAmbient: _ambientNamespaceDepth > 0),
+                isExported);
         }
         // Ambient declarations inside a namespace: `declare class/function/var/...`.
         if (Check(TokenType.DECLARE))
@@ -87,11 +116,21 @@ public partial class Parser
         if (Match(TokenType.ABSTRACT))
         {
             Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");
-            return WrapIfExported(ClassDeclaration(isAbstract: true, classDecorators: decorators), isExported);
+            return WrapIfExported(
+                ClassDeclaration(
+                    isAbstract: true,
+                    classDecorators: decorators,
+                    isDeclare: _ambientNamespaceDepth > 0),
+                isExported);
         }
         if (Match(TokenType.CLASS))
         {
-            return WrapIfExported(ClassDeclaration(isAbstract: false, classDecorators: decorators), isExported);
+            return WrapIfExported(
+                ClassDeclaration(
+                    isAbstract: false,
+                    classDecorators: decorators,
+                    isDeclare: _ambientNamespaceDepth > 0),
+                isExported);
         }
 
         // If decorators were found but next token is not a class, report error
@@ -117,7 +156,11 @@ public partial class Parser
             // A namespace-scoped `const` must parse as Stmt.Const (not the default mutable
             // Stmt.Var) so const-ness — literal-type narrowing and reassignment checks — is
             // preserved, mirroring the module-export path fixed in #428 (#467).
-            return WrapIfExported(VarDeclaration(isConst: true), isExported);
+            return WrapIfExported(
+                _ambientNamespaceDepth > 0
+                    ? AmbientVarDeclaration(isConst: true)
+                    : VarDeclaration(isConst: true),
+                isExported);
         }
         if (Match(TokenType.ENUM))
         {
@@ -127,22 +170,42 @@ public partial class Parser
         {
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
             bool isGenerator = Match(TokenType.STAR);
-            return WrapIfExported(FunctionDeclaration("function", isAsync: true, isGenerator: isGenerator), isExported);
+            return WrapIfExported(
+                FunctionDeclaration(
+                    "function",
+                    isAsync: true,
+                    isGenerator: isGenerator,
+                    isDeclare: _ambientNamespaceDepth > 0),
+                isExported);
         }
         if (Match(TokenType.FUNCTION))
         {
             bool isGenerator = Match(TokenType.STAR);
-            return WrapIfExported(FunctionDeclaration("function", isAsync: false, isGenerator: isGenerator), isExported);
+            return WrapIfExported(
+                FunctionDeclaration(
+                    "function",
+                    isAsync: false,
+                    isGenerator: isGenerator,
+                    isDeclare: _ambientNamespaceDepth > 0),
+                isExported);
         }
         if (Match(TokenType.LET))
         {
-            return WrapIfExported(VarDeclaration(), isExported);
+            return WrapIfExported(
+                _ambientNamespaceDepth > 0
+                    ? AmbientVarDeclaration(isConst: false)
+                    : VarDeclaration(),
+                isExported);
         }
         if (Match(TokenType.VAR))
         {
             // `var` must carry IsVar so it participates in var hoisting (self-referential
             // annotations/initializers like `var a: { foo: typeof a }` need the name pre-defined).
-            return WrapIfExported(VarDeclaration(isConst: false, isVar: true), isExported);
+            return WrapIfExported(
+                _ambientNamespaceDepth > 0
+                    ? AmbientVarDeclaration(isConst: false)
+                    : VarDeclaration(isConst: false, isVar: true),
+                isExported);
         }
 
         // Namespace bodies may also contain ordinary statements (e.g. `s = t;` expression

@@ -18,6 +18,10 @@ namespace SharpTS.TypeSystem;
 /// <seealso cref="TypeInfo"/>
 public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 {
+    // TypeScript symbols have independent type and value facets.  Keeping these
+    // bindings separate is essential for declarations such as
+    // `interface Error { ... }` + `declare var Error: ErrorConstructor`.
+    private readonly Dictionary<string, TypeInfo> _types = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Definition, TypeNode? DefinitionNode)> _typeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Definition, List<string> TypeParams, TypeNode? DefinitionNode)> _genericTypeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
@@ -55,6 +59,32 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 
         return base.Get(name);
     }
+
+    /// <summary>Defines the type facet of a symbol in the current scope.</summary>
+    public void DefineType(string name, TypeInfo type) => _types[name] = type;
+
+    /// <summary>Gets a type facet, searching outward through enclosing scopes.</summary>
+    public TypeInfo? GetTypeBinding(string name)
+    {
+        if (_typeParameters.TryGetValue(name, out var typeParam))
+            return typeParam;
+        if (_types.TryGetValue(name, out var type))
+            return type;
+        return Enclosing?.GetTypeBinding(name);
+    }
+
+    public TypeInfo? GetLocalTypeBinding(string name) =>
+        _types.GetValueOrDefault(name) ?? _typeParameters.GetValueOrDefault(name);
+
+    public bool IsTypeDefined(string name) =>
+        _types.ContainsKey(name) || _typeParameters.ContainsKey(name)
+        || (Enclosing?.IsTypeDefined(name) ?? false);
+
+    public bool IsTypeDefinedLocally(string name) =>
+        _types.ContainsKey(name) || _typeParameters.ContainsKey(name);
+
+    /// <summary>The type-facet names defined directly in this scope.</summary>
+    public IEnumerable<string> TypeNames => _types.Keys;
 
     /// <summary>
     /// Marks a variable as const (read-only). Used for named function expressions
@@ -115,9 +145,18 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     /// </summary>
     public (string Definition, List<string> TypeParams, TypeNode? DefinitionNode)? GetGenericTypeAlias(string name)
     {
-        if (_genericTypeAliases.TryGetValue(name, out var alias))
-            return alias;
-        return Enclosing?.GetGenericTypeAlias(name);
+        // Generic alias expansion can create a deep chain of short-lived type
+        // parameter scopes. Walk iteratively so a valid recursive declaration
+        // cannot overflow the CLR stack during an outward lookup.
+        var visited = new HashSet<TypeEnvironment>(ReferenceEqualityComparer.Instance);
+        for (TypeEnvironment? environment = this;
+             environment != null && visited.Add(environment);
+             environment = environment.Enclosing)
+        {
+            if (environment._genericTypeAliases.TryGetValue(name, out var alias))
+                return alias;
+        }
+        return null;
     }
 
     /// <summary>
@@ -142,12 +181,14 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
             var mergedNs = new TypeInfo.Namespace(name, mergedTypes.ToFrozenDictionary(), mergedValues.ToFrozenDictionary());
             _namespaces[name] = mergedNs;
             _values[name] = mergedNs;
+            _types[name] = mergedNs;
         }
         else
         {
             _namespaces[name] = ns;
             // Also define in values so it can be looked up via Get()
             _values[name] = ns;
+            _types[name] = ns;
         }
     }
 
@@ -171,8 +212,9 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     public void DefineImportAlias(string name, TypeInfo type, bool isValue)
     {
         _importAliases[name] = (type, isValue);
-        // Also define as a regular type so it can be looked up via Get()
-        _values[name] = type;
+        _types[name] = type;
+        if (isValue)
+            _values[name] = type;
     }
 
     /// <summary>

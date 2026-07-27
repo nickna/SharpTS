@@ -134,7 +134,8 @@ public partial class ILCompiler
                 else if (export.FromModulePath != null && _modules.Resolver != null)
                 {
                     // Re-export: export { x } from './module' or export * from './module'
-                    string sourcePath = _modules.Resolver.ResolveModulePath(export.FromModulePath, module.Path);
+                    string sourcePath = _modules.Resolver.ResolveRuntimeModulePath(
+                        export.FromModulePath, module.Path);
 
                     if (export.NamedExports != null)
                     {
@@ -874,7 +875,8 @@ public partial class ILCompiler
             // Re-exports (export { Foo } from './other' or export * from './other')
             else if (export.FromModulePath != null && _modules.Resolver != null)
             {
-                string sourcePath = _modules.Resolver.ResolveModulePath(export.FromModulePath, module.Path);
+                string sourcePath = _modules.Resolver.ResolveRuntimeModulePath(
+                    export.FromModulePath, module.Path);
 
                 // Get the source module's exported classes
                 if (_modules.ExportedClasses.TryGetValue(sourcePath, out var sourceExportedClasses))

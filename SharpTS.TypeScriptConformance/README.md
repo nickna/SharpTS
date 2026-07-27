@@ -28,7 +28,11 @@ This project is **not** included in `SharpTS.sln`. Solution-level `dotnet build`
 dotnet test SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj
 ```
 
-The suite runs in well under a second on the current subset (~79 tests, across `assignmentCompatibility/` and `conditional/`). It type-checks each test, diffs the resulting diagnostics against `tsc`'s `*.errors.txt` baseline, classifies into a bucket, and compares the bucket distribution against the committed baseline at `baselines/interpreted.txt`.
+The configured subset covers type relationships, conditional types, symbols,
+modern ECMAScript libraries, and representative TSX inputs. It builds each
+multi-file test as a program, diffs SharpTS diagnostics against `tsc`'s
+`*.errors.txt` baseline, and compares the bucket distribution against the
+committed baseline at `baselines/interpreted.txt`.
 
 ## Updating the baseline
 
@@ -39,6 +43,11 @@ SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1 dotnet test SharpTS.TypeScriptConformanc
 ```
 
 Same shape as `SHARPTS_TEST262_UPDATE_BASELINE=1`. Commit the regenerated `baselines/interpreted.txt` alongside the change so reviewers see what shifted.
+Sandboxed runners can additionally set
+`SHARPTS_TSCONFORMANCE_BASELINE_OUTPUT` to a writable artifact path, then
+copy that generated file into `baselines/interpreted.txt`. Set it to `-` when
+the test host has no writable filesystem; entries are emitted to test output
+with a `baseline-entry:` prefix.
 
 ## Bucket model
 
@@ -50,10 +59,12 @@ Each test classifies into one of:
 | `Fail` | Diagnostic set differs from the baseline. |
 | `ParseError` | Source failed to lex or parse before the type checker ran. |
 | `TypeCheckError` | Checker threw something unrecoverable — distinct from "checker found errors." |
-| `Skipped` | Skipped per directive policy, lib-drift filter, multi-file deferral, or explicit by-path skip. |
+| `Skipped` | Skipped per directive policy, lib-drift filter, or explicit by-path skip. |
 | `HarnessError` | Setup error: couldn't read test, baseline parse failed, etc. |
 
-`Skipped` carries a reason suffix (`Skipped:lib-drift`, `Skipped:multi-file-deferred`, `Skipped:directive:experimentaldecorators`, `Skipped:explicitly-skipped`) so the diff harness can tell different skip causes apart.
+`Skipped` carries a reason suffix (`Skipped:lib-drift`,
+`Skipped:directive:experimentaldecorators`, `Skipped:explicitly-skipped`) so
+the diff harness can tell different skip causes apart.
 
 ## Match strategy
 
@@ -61,13 +72,14 @@ Diagnostics match on `(line, tsCode)` tuples. Column is intentionally dropped �
 
 Diagnostics with no `tsCode` (SharpTS-only — e.g. `@DotNetType` integration errors) are excluded from baseline matching for that test rather than forcing a fail.
 
-## Lib-drift skip filter
+## Library selection
 
-Conformance tests that exercise lib-version-conditional surface (`// @lib: es5` expecting "method doesn't exist" errors that SharpTS doesn't reproduce because we have it always-available) get bucketed as `Skipped:lib-drift` rather than `Fail`. This stops the baseline from drowning in noise from a divergence that's not actually a checker bug.
-
-The filter is conservative — it only fires when our checker produces zero errors AND every expected baseline code is one of `TS2339` (property missing), `TS2304` (cannot find name), `TS2551` ("did you mean"), or `TS7053` (no index signature). Tests with mixed shapes fall through to normal Pass/Fail comparison.
-
-Loading `tsc`'s `lib.*.d.ts` files into the type checker would eliminate this whole class of drift but is a substantial refactor — tracked as deferred work in [#99](https://github.com/nickna/SharpTS/issues/99).
+The runner loads the compiler's embedded copy of the pinned TypeScript
+distribution's `lib.*.d.ts` graph from `Modules/TypeScriptLibResources`,
+including triple-slash library references. `@lib`, `@target`, `@noLib`,
+declaration-file roots, and visible `@types` packages flow through the same
+program resolver as the CLI. The conservative legacy `lib-drift` skip remains
+for expected missing-surface diagnostics that produce no SharpTS diagnostic.
 
 ## Configuration
 
@@ -84,7 +96,7 @@ Loading `tsc`'s `lib.*.d.ts` files into the type checker would eliminate this wh
 | `external/typescript/` | Vendored TS repo (submodule, pinned to v5.5.4) |
 | `external/typescript/tests/cases/conformance/` | The conformance corpus (~10–15k `.ts` files) |
 | `external/typescript/tests/baselines/reference/` | `tsc`'s `*.errors.txt` / `*.js` / `*.types` baselines |
-| `external/typescript/src/lib/` | `lib.es*.d.ts`, `lib.dom.d.ts`, etc. (not loaded today; see #99) |
+| `external/typescript/src/lib/` | Embedded `lib.es*.d.ts`, `lib.dom.d.ts`, and WebWorker declaration inputs |
 | `SharpTS.TypeScriptConformance/baselines/interpreted.txt` | Our committed baseline |
 
 ## See also

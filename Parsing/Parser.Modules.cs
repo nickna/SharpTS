@@ -135,7 +135,7 @@ public partial class Parser
         Token keyword = Previous(); // 'import' token
 
         // Parse alias name
-        Token aliasName = Consume(TokenType.IDENTIFIER, "Expect alias name after 'import'.");
+        Token aliasName = ConsumeIdentifierName("Expect alias name after 'import'.");
 
         // Consume '='
         Consume(TokenType.EQUAL, "Expect '=' after alias name in import alias.");
@@ -164,17 +164,11 @@ public partial class Parser
     private Stmt ImportAliasDeclarationAfterEquals(Token keyword, Token aliasName, bool isExported)
     {
         // Parse qualified path: A.B.C.member
-        List<Token> path = [Consume(TokenType.IDENTIFIER, "Expect namespace path after '='.")];
+        List<Token> path = [ConsumeIdentifierName("Expect namespace path after '='.")];
 
         while (Match(TokenType.DOT))
         {
-            path.Add(Consume(TokenType.IDENTIFIER, "Expect identifier after '.' in namespace path."));
-        }
-
-        // Path must have at least 2 parts (Namespace.member)
-        if (path.Count < 2)
-        {
-            throw new Exception($"Parse Error at line {keyword.Line}: Import alias path must have at least two parts (e.g., Namespace.Member).");
+            path.Add(ConsumeIdentifierName("Expect identifier after '.' in namespace path."));
         }
 
         ConsumeSemicolon("Expect ';' after import alias.");
@@ -231,6 +225,21 @@ public partial class Parser
             {
                 throw new Exception($"Parse Error at line {classDecorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
             }
+        }
+
+        // `export as namespace Name` exposes a UMD declaration module under a
+        // global name when consumed from a script. It has no runtime statement
+        // body, but retaining it in the AST lets the program checker install
+        // the module's type/value surface in the shared global environment.
+        if (Match(TokenType.AS))
+        {
+            RejectDecorators();
+            Consume(TokenType.NAMESPACE, "Expect 'namespace' after 'export as'.");
+            Token globalName = ConsumeIdentifierName("Expect global namespace name.");
+            ConsumeSemicolon("Expect ';' after global namespace export.");
+            return new Stmt.Export(
+                keyword, null, null, null, null, IsDefaultExport: false,
+                GlobalNamespaceName: globalName);
         }
 
         // export = <expression> (CommonJS export assignment)
@@ -309,7 +318,9 @@ public partial class Parser
             Token? namespaceExportName = null;
             if (Match(TokenType.AS))
             {
-                namespaceExportName = ConsumeIdentifierName("Expect namespace name after 'as'.");
+                // `default` is a legal namespace export name:
+                // `export * as default from "./declarations"`.
+                namespaceExportName = ConsumeSpecifierName("Expect namespace name after 'as'.");
             }
             Consume(TokenType.FROM, "Expect 'from' after '*'.");
             string fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
@@ -325,7 +336,8 @@ public partial class Parser
         if (Match(TokenType.IMPORT))
         {
             RejectDecorators();
-            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
+                && PeekNext().Type == TokenType.EQUAL)
             {
                 return ParseImportWithEquals(isExported: true);
             }
@@ -371,19 +383,25 @@ public partial class Parser
                 // the bare-`const` path (Parser.Declarations.cs). Without it the declaration
                 // was a mutable Stmt.Var — reassignment went unflagged and the literal type was
                 // widened (`export const x = 5` inferred `number` instead of `5`). See #428.
-                decl = VarDeclaration(isConst: true);
+                decl = _isDeclarationFile
+                    ? AmbientVarDeclaration(isConst: true)
+                    : VarDeclaration(isConst: true);
             }
         }
         else if (Match(TokenType.LET))
         {
             RejectDecorators();
-            decl = VarDeclaration();
+            decl = _isDeclarationFile
+                ? AmbientVarDeclaration(isConst: false)
+                : VarDeclaration();
         }
         else if (Match(TokenType.VAR))
         {
             RejectDecorators();
             // IsVar so the declaration participates in var hoisting (VarHoister).
-            decl = VarDeclaration(isConst: false, isVar: true);
+            decl = _isDeclarationFile
+                ? AmbientVarDeclaration(isConst: false)
+                : VarDeclaration(isConst: false, isVar: true);
         }
         else if (Match(TokenType.INTERFACE))
         {
@@ -450,6 +468,8 @@ public partial class Parser
             do
             {
                 bool isTypeOnly = false;
+                // `type` is a modifier when another specifier name follows,
+                // but remains a legal exported name in `export { type }`.
                 if (Check(TokenType.TYPE))
                 {
                     TokenType nextType = PeekNext().Type;
@@ -467,7 +487,7 @@ public partial class Parser
 
                 if (Match(TokenType.AS))
                 {
-                    exportedName = ConsumeIdentifierName("Expect exported name after 'as'.");
+                    exportedName = ConsumeSpecifierName("Expect exported name after 'as'.");
                 }
 
                 specifiers.Add(new Stmt.ExportSpecifier(localName, exportedName, isTypeOnly));

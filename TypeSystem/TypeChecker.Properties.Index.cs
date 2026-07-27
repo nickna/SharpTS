@@ -12,6 +12,24 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    /// <summary>
+    /// noUncheckedIndexedAccess adds undefined to reads whose key is not known to
+    /// designate an existing property/tuple element.
+    /// </summary>
+    private TypeInfo WithUncheckedUndefined(TypeInfo type)
+    {
+        if (!_noUncheckedIndexedAccess || !_strictNullChecks ||
+            type is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Undefined ||
+            type is TypeInfo.Union { ContainsUndefined: true })
+        {
+            return type;
+        }
+        return CreateUnion(type, TypeInfo.Undefined.Shared);
+    }
+
+    private TypeInfo WithOptionalPropertyUndefined(TypeInfo type, bool optional) =>
+        optional && _strictNullChecks ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
+
     private TypeInfo CheckGetIndex(Expr.GetIndex getIndex)
     {
         TypeInfo objType = CheckExpr(getIndex.Object);
@@ -209,8 +227,8 @@ public partial class TypeChecker
         if (indexType is TypeInfo.TypeParameter genericKey &&
             ApparentTypeOf(genericKey) is { } keyApparent && IsCompatible(KeyLikeUnion, keyApparent))
         {
-            if (objType is TypeInfo.Record { StringIndexType: { } recIdxType }) return recIdxType;
-            if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return itfIdxType;
+            if (objType is TypeInfo.Record { StringIndexType: { } recIdxType }) return WithUncheckedUndefined(recIdxType);
+            if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
 
         // Handle string index on objects/interfaces
@@ -220,18 +238,18 @@ public partial class TypeChecker
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
                 if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
-                    return fieldType;
+                    return WithOptionalPropertyUndefined(fieldType, rec.IsFieldOptional(propName));
                 if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))
-                    return memberType;
+                    return WithOptionalPropertyUndefined(memberType, itf.GetAllOptionalMembers().Contains(propName));
             }
 
             // Dynamic string index - use index signature if available
             if (objType is TypeInfo.Record rec2 && rec2.StringIndexType != null)
-                return rec2.StringIndexType;
+                return WithUncheckedUndefined(rec2.StringIndexType);
             if (objType is TypeInfo.Interface itf2 && itf2.StringIndexType != null)
-                return itf2.StringIndexType;
+                return WithUncheckedUndefined(itf2.StringIndexType);
             if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } clsStr)
-                return clsStr;
+                return WithUncheckedUndefined(clsStr);
 
             // Allow bracket access on any object/interface (returns any for unknown keys)
             if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
@@ -262,30 +280,30 @@ public partial class TypeChecker
                         throw new TypeCheckException($" Tuple index {i} is out of bounds.", tsCode: "TS2493");
                 }
                 // Dynamic index -> union of all possible types
-                return ComputeTupleElementUnion(tupleType);
+                return WithUncheckedUndefined(ComputeTupleElementUnion(tupleType));
             }
 
             if (objType is TypeInfo.Array arrayType)
             {
-                return arrayType.ElementType;
+                return WithUncheckedUndefined(arrayType.ElementType);
             }
 
             // String indexed by number returns a string (single character, or undefined at runtime).
             if (objType is TypeInfo.String or TypeInfo.StringLiteral)
             {
-                return TypeInfo.String.Shared;
+                return WithUncheckedUndefined(TypeInfo.String.Shared);
             }
 
             // TypedArray index access returns number
             if (objType is TypeInfo.TypedArray)
             {
-                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
             }
 
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
             if (objType is TypeInfo.Buffer)
             {
-                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
             }
 
             // Enum reverse mapping: Direction[0] returns "Up" (only for numeric enums)
@@ -305,15 +323,15 @@ public partial class TypeChecker
 
             // Number index signature on interface/record
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
-                return itf3.NumberIndexType;
+                return WithUncheckedUndefined(itf3.NumberIndexType);
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
-                return rec3.NumberIndexType;
+                return WithUncheckedUndefined(rec3.NumberIndexType);
             // A class with only a string index signature still accepts numeric keys (number keys
             // are a subset of string keys), matching TypeScript.
             if (GetClassIndexType(objType, TokenType.TYPE_NUMBER) is { } clsNum)
-                return clsNum;
+                return WithUncheckedUndefined(clsNum);
             if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } clsNumStr)
-                return clsNumStr;
+                return WithUncheckedUndefined(clsNumStr);
         }
 
         // Handle symbol index (Symbol and UniqueSymbol both qualify)
@@ -329,11 +347,11 @@ public partial class TypeChecker
                 return wellKnownType;
 
             if (objType is TypeInfo.Interface itf4 && itf4.SymbolIndexType != null)
-                return itf4.SymbolIndexType;
+                return WithUncheckedUndefined(itf4.SymbolIndexType);
             if (objType is TypeInfo.Record rec4 && rec4.SymbolIndexType != null)
-                return rec4.SymbolIndexType;
+                return WithUncheckedUndefined(rec4.SymbolIndexType);
             if (GetClassIndexType(objType, TokenType.TYPE_SYMBOL) is { } clsSym)
-                return clsSym;
+                return WithUncheckedUndefined(clsSym);
 
             // Well-known symbols (Symbol.iterator/species/toStringTag/match/...) are
             // present on essentially every object type. SharpTS models them loosely,
@@ -684,14 +702,14 @@ public partial class TypeChecker
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
                 if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
-                    return fieldType;
+                    return WithOptionalPropertyUndefined(fieldType, rec.IsFieldOptional(propName));
                 if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))
-                    return memberType;
+                    return WithOptionalPropertyUndefined(memberType, itf.GetAllOptionalMembers().Contains(propName));
             }
             if (objType is TypeInfo.Record rec2 && rec2.StringIndexType != null)
-                return rec2.StringIndexType;
+                return WithUncheckedUndefined(rec2.StringIndexType);
             if (objType is TypeInfo.Interface itf2 && itf2.StringIndexType != null)
-                return itf2.StringIndexType;
+                return WithUncheckedUndefined(itf2.StringIndexType);
             if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
                 return TypeInfo.Any.Shared;
         }
@@ -716,23 +734,23 @@ public partial class TypeChecker
                     // path reports the index as invalid across the whole union.
                     return null;
                 }
-                return ComputeTupleElementUnion(tupleType);
+                return WithUncheckedUndefined(ComputeTupleElementUnion(tupleType));
             }
             if (objType is TypeInfo.Array arrayType)
-                return arrayType.ElementType;
+                return WithUncheckedUndefined(arrayType.ElementType);
             // TypedArray index access returns number
             if (objType is TypeInfo.TypedArray)
-                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
             if (objType is TypeInfo.Buffer)
-                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
             // String indexed by number yields a single-character string.
             if (objType is TypeInfo.String or TypeInfo.StringLiteral)
-                return TypeInfo.String.Shared;
+                return WithUncheckedUndefined(TypeInfo.String.Shared);
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
-                return itf3.NumberIndexType;
+                return WithUncheckedUndefined(itf3.NumberIndexType);
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
-                return rec3.NumberIndexType;
+                return WithUncheckedUndefined(rec3.NumberIndexType);
         }
 
         return null;

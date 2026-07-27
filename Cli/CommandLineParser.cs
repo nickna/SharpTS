@@ -16,6 +16,7 @@
 using SharpTS.Compilation;
 using PEPacker.Bundling;
 using SharpTS.Configuration;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -60,6 +61,10 @@ namespace SharpTS.Cli;
 /// <param name="Declaration">Emit TypeScript declaration files for project-owned sources.</param>
 /// <param name="EmitDeclarationOnly">Emit declarations without running or producing a .NET assembly.</param>
 /// <param name="DeclarationDir">Optional root directory for generated declaration files.</param>
+/// <param name="Lib">TypeScript declaration libraries to load.</param>
+/// <param name="NoLib">Suppresses the default TypeScript declaration library.</param>
+/// <param name="Types">Ambient type packages to include.</param>
+/// <param name="TypeRoots">Directories containing ambient type packages.</param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
@@ -75,7 +80,11 @@ public record GlobalOptions(
     bool Force = false,
     bool Declaration = false,
     bool EmitDeclarationOnly = false,
-    string? DeclarationDir = null
+    string? DeclarationDir = null,
+    IReadOnlyList<string>? Lib = null,
+    bool? NoLib = null,
+    IReadOnlyList<string>? Types = null,
+    IReadOnlyList<string>? TypeRoots = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -87,6 +96,16 @@ public record GlobalOptions(
     /// re-resolves with the discovered tsconfig; this keeps direct consumers correct meanwhile.
     /// </summary>
     public TypeCheckerOptions TypeCheckerOptions => StrictnessOptions.Resolve(Strictness, null);
+
+    public TypeScriptProgramOptions TypeScriptProgramOptions => new()
+    {
+        LoadDefaultLib = true,
+        NoLib = NoLib ?? false,
+        Lib = Lib,
+        Types = Types,
+        TypeRoots = TypeRoots,
+        PreferDeclarationFiles = true,
+    };
 }
 
 /// <summary>
@@ -370,7 +389,9 @@ public class CommandLineParser
         var declaration = false;
         var emitDeclarationOnly = false;
         string? declarationDir = null;
+        bool? noLib = null;
         string? projectPath = null;
+        IReadOnlyList<string>? lib = null, types = null, typeRoots = null;
         var strictness = new StrictnessOptions();
         List<string> references = [];
         List<string> remaining = [];
@@ -444,6 +465,31 @@ public class CommandLineParser
                     return (default!, [], [], new ParsedCommand.Error(
                         "Error: --declarationDir requires a path.",
                         64));
+                case "--noLib":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    noLib = flag;
+                    break;
+                case "--lib" when value is not null:
+                    lib = SplitList(value);
+                    break;
+                case "--lib" when i + 1 < args.Length:
+                    lib = SplitList(args[++i]);
+                    break;
+                case "--types" when value is not null:
+                    types = SplitList(value);
+                    break;
+                case "--types" when i + 1 < args.Length:
+                    types = SplitList(args[++i]);
+                    break;
+                case "--typeRoots" when value is not null:
+                    typeRoots = SplitList(value);
+                    break;
+                case "--typeRoots" when i + 1 < args.Length:
+                    typeRoots = SplitList(args[++i]);
+                    break;
+                case "--lib" or "--types" or "--typeRoots":
+                    return (default!, [], [], new ParsedCommand.Error(
+                        $"Error: {name} requires a comma-separated value.", 64));
                 case "--strict":
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     strictness = strictness with { Strict = flag };
@@ -459,6 +505,22 @@ public class CommandLineParser
                 case "--noImplicitAny":
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     strictness = strictness with { NoImplicitAny = flag };
+                    break;
+                case "--noImplicitThis":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { NoImplicitThis = flag };
+                    break;
+                case "--strictPropertyInitialization":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { StrictPropertyInitialization = flag };
+                    break;
+                case "--exactOptionalPropertyTypes":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { ExactOptionalPropertyTypes = flag };
+                    break;
+                case "--noUncheckedIndexedAccess":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { NoUncheckedIndexedAccess = flag };
                     break;
                 case "--no-tsconfig":
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
@@ -506,9 +568,12 @@ public class CommandLineParser
         var options = new GlobalOptions(
             decoratorMode, emitDecoratorMetadata, checkJs, references, strictness, noEmit,
             projectPath, noTsConfig, showConfig, watch, incremental, force,
-            declaration, emitDeclarationOnly, declarationDir);
+            declaration, emitDeclarationOnly, declarationDir, lib, noLib, types, typeRoots);
         return (options, remaining.ToArray(), scriptArgs.ToArray(), null);
     }
+
+    private static string[] SplitList(string value) =>
+        value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
     private ParsedCommand ParseCompileCommand(string[] args, GlobalOptions globalOptions)
     {

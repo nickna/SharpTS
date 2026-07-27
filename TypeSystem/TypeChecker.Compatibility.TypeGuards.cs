@@ -381,7 +381,7 @@ public partial class TypeChecker
         if (currentType == null) return (null, null, null);
 
         // Look up the class
-        var classType = _environment.Get(classToken.Lexeme);
+        var classType = _environment.GetTypeBinding(classToken.Lexeme) ?? _environment.Get(classToken.Lexeme);
         if (classType == null) return (null, null, null);
 
         // Determine the instance type we're narrowing to

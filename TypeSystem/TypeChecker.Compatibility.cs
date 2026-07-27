@@ -1181,7 +1181,11 @@ public partial class TypeChecker
                 {
                     return false;
                 }
-                else if (!IsMemberCompatible(expectedFieldType, actualFieldType,
+                else if (!IsMemberCompatible(
+                             expRecord.IsFieldOptional(name) && !_exactOptionalPropertyTypes
+                                 ? CreateUnion(expectedFieldType, TypeInfo.Undefined.Shared)
+                                 : expectedFieldType,
+                             actualFieldType,
                              expRecord.IsMethodMember(name) || actRecord.IsMethodMember(name)))
                 {
                     return false;

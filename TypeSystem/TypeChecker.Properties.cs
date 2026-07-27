@@ -80,6 +80,13 @@ public partial class TypeChecker
 
         if (_currentClass == null)
         {
+            if (_noImplicitThis && _currentFunctionReturnType is not null)
+            {
+                throw new TypeCheckException(
+                    "'this' implicitly has type 'any' because it does not have a type annotation.",
+                    line: expr.Keyword.Line,
+                    tsCode: "TS2683");
+            }
             // Allow `this` in regular functions (JS constructor-function
             // pattern) and at module top level. Type it as Any so members
             // resolve permissively — matches how CJS code uses
@@ -684,7 +691,10 @@ public partial class TypeChecker
                  {
                      return valueType;
                  }
-                 if (!IsCompatible(fieldType, valueType))
+                 TypeInfo writeType = record.IsFieldOptional(set.Name.Lexeme) && !_exactOptionalPropertyTypes
+                     ? CreateUnion(fieldType, TypeInfo.Undefined.Shared)
+                     : fieldType;
+                 if (!IsCompatible(writeType, valueType))
                  {
                      throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{fieldType}'.", tsCode: "TS2322");
                  }
@@ -707,7 +717,11 @@ public partial class TypeChecker
                         throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
                     }
                     TypeInfo valueType = CheckExpr(set.Value);
-                    if (!IsCompatible(member.Value, valueType))
+                    TypeInfo writeType = itf.GetAllOptionalMembers().Contains(set.Name.Lexeme)
+                        && !_exactOptionalPropertyTypes
+                            ? CreateUnion(member.Value, TypeInfo.Undefined.Shared)
+                            : member.Value;
+                    if (!IsCompatible(writeType, valueType))
                     {
                         throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{member.Value}'.", tsCode: "TS2322");
                     }
@@ -754,6 +768,23 @@ public partial class TypeChecker
         if (objType is TypeInfo.Any)
         {
             return CheckExpr(set.Value);
+        }
+        // Namespace objects expose their value members at runtime. SharpTS built-in
+        // facades use this for explicitly mutable exports such as
+        // cluster.schedulingPolicy.
+        if (objType is TypeInfo.Namespace namespaceType)
+        {
+            if (!namespaceType.Values.TryGetValue(set.Name.Lexeme, out var memberType))
+                throw new TypeCheckException(
+                    $" Property '{set.Name.Lexeme}' does not exist on namespace '{namespaceType.Name}'.",
+                    set.Name.Line, tsCode: "TS2339");
+
+            TypeInfo valueType = CheckExpr(set.Value);
+            if (!IsCompatible(memberType, valueType))
+                throw new TypeCheckException(
+                    $" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{memberType}'.",
+                    set.Name.Line, tsCode: "TS2322");
+            return valueType;
         }
         // Functions are objects in JavaScript and support property assignment.
         // (Very common in CommonJS: `fn.prototype = {}`, `fn.DNS = "..."`.)

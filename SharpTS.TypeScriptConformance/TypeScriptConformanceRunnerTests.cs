@@ -51,6 +51,45 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Fact]
+    public void RunOne_Es2018IntlApis_MatchesTargetLibraryBaseline()
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            "es2018",
+            "es2018IntlAPIs.ts");
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(
+            result.Outcome == TypeScriptConformanceOutcome.Pass,
+            result.Message ?? result.Outcome.ToString());
+    }
+
+    [Theory]
+    [InlineData("es2019/importMeta/importMeta.ts")]
+    [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]
+    [InlineData("es2022/es2022SharedMemory.ts")]
+    [InlineData("jsx/inline/inlineJsxFactoryDeclarations.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryDeclarationsLocalTypes.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryLocalTypeGlobalFallback.tsx")]
+    public void RunOne_ExpandedSubset_DoesNotCrashParserOrChecker(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+        _output.WriteLine(result.Message ?? result.Outcome.ToString());
+
+        Assert.NotEqual(TypeScriptConformanceOutcome.ParseError, result.Outcome);
+        Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
+    }
+
+    [Fact]
     public void RunOne_NonexistentFile_ReturnsHarnessError()
     {
         var runner = new TypeScriptConformanceRunner("/nonexistent");
@@ -80,7 +119,7 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Fact]
-    public void RunOne_MultiFile_SkippedAsDeferred()
+    public void RunOne_MultiFile_UsesProgramResolver()
     {
         var tmp = Path.GetTempFileName();
         try
@@ -89,8 +128,56 @@ public class TypeScriptConformanceRunnerTests
                 "// @filename: a.ts\nexport const x = 1;\n// @filename: b.ts\nimport { x } from './a';\n");
             var runner = new TypeScriptConformanceRunner("/fake-root");
             var result = runner.RunOne(tmp);
-            Assert.Equal(TypeScriptConformanceOutcome.Skipped, result.Outcome);
-            Assert.Equal("multi-file-deferred", result.SkipReason);
+            Assert.NotEqual(TypeScriptConformanceOutcome.Skipped, result.Outcome);
+            Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
+            Assert.NotEqual(TypeScriptConformanceOutcome.ParseError, result.Outcome);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void RunOne_MultiFile_ReportsDiagnosticsFromEveryRoot()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tmp,
+                "// @filename: a.ts\nexport const x: string = 1;\n" +
+                "// @filename: b.ts\nimport { x } from './a';\nconst y: number = x;\n");
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+
+            Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
+            Assert.Contains(result.ActualDiagnostics ?? [], d => d.TsCode == "TS2322");
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void RunOne_TsxWithGlobalIntrinsicElements_UsesProgramResolver()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"sharpts-{Guid.NewGuid():N}.tsx");
+        try
+        {
+            File.WriteAllText(tmp, """
+                // @jsx: react
+                // @filename: renderer.d.ts
+                declare global {
+                    namespace JSX {
+                        interface IntrinsicElements { button: { disabled?: boolean }; }
+                    }
+                }
+                export {};
+                // @filename: view.tsx
+                <button disabled={false}></button>;
+                """);
+
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+
+            Assert.NotEqual(TypeScriptConformanceOutcome.ParseError, result.Outcome);
+            Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
+            Assert.DoesNotContain(
+                result.ActualDiagnostics ?? [],
+                diagnostic => diagnostic.TsCode is "TS2304" or "TS2339" or "TS1360");
         }
         finally { File.Delete(tmp); }
     }

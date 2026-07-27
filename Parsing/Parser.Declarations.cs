@@ -12,7 +12,8 @@ public partial class Parser
             Advance(); // consume IMPORT
             // Detect import alias: import X = Namespace.Member
             // Pattern: IDENTIFIER EQUAL (after consuming IMPORT)
-            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
+                && PeekNext().Type == TokenType.EQUAL)
             {
                 return ImportAliasDeclaration(isExported: false);
             }
@@ -89,7 +90,9 @@ public partial class Parser
             // Check for const enum
             if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: true);
             // Otherwise it's a const variable declaration
-            return VarDeclaration(isConst: true);
+            return _isDeclarationFile
+                ? AmbientVarDeclaration(isConst: true)
+                : VarDeclaration(isConst: true);
         }
         if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: false);
         // `namespace` is a contextual keyword. Treat it as a namespace
@@ -132,8 +135,14 @@ public partial class Parser
             bool isGenerator = Match(TokenType.STAR);
             return FunctionDeclaration("function", isAsync: false, isGenerator: isGenerator);
         }
-        if (Match(TokenType.LET)) return VarDeclaration();
-        if (Match(TokenType.VAR)) return VarDeclaration(isConst: false, isVar: true);
+        if (Match(TokenType.LET))
+            return _isDeclarationFile
+                ? AmbientVarDeclaration(isConst: false)
+                : VarDeclaration();
+        if (Match(TokenType.VAR))
+            return _isDeclarationFile
+                ? AmbientVarDeclaration(isConst: false)
+                : VarDeclaration(isConst: false, isVar: true);
 
         // Handle 'using' declaration (contextual keyword for explicit resource management)
         if (Check(TokenType.USING) && IsUsingDeclarationContext())
@@ -198,7 +207,7 @@ public partial class Parser
             (PeekNext().Type == TokenType.IDENTIFIER || IsContextualKeyword(PeekNext().Type)))
         {
             Advance(); // consume NAMESPACE
-            return NamespaceDeclaration();
+            return NamespaceDeclaration(isAmbient: true);
         }
 
         throw new Exception($"Parse Error at line {Peek().Line}: Expected 'class', 'function', 'const', 'let', 'var', 'enum', 'interface', 'type', 'namespace', 'module', or 'global' after 'declare'.");
@@ -301,6 +310,44 @@ public partial class Parser
                     callSignatures.Add(callSig);
                     continue;
                 }
+            }
+
+            // Interface/property accessors (`get value(): T; set value(v: U);`).
+            // `get()` and `set()` remain ordinary methods; an accessor keyword
+            // must be followed by a property name and then `(`.
+            if ((Check(TokenType.GET) || Check(TokenType.SET))
+                && (PeekAt(1).Type is TokenType.IDENTIFIER or TokenType.STRING or TokenType.NUMBER
+                    || IsKeyword(PeekAt(1).Type)
+                    || IsContextualKeyword(PeekAt(1).Type))
+                && PeekAt(2).Type == TokenType.LEFT_PAREN)
+            {
+                bool isGetter = Advance().Type == TokenType.GET;
+                Token accessorName = ConsumePropertyNameOrLiteral("Expect accessor name.");
+                Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
+
+                string accessorType;
+                TypeNode? accessorTypeNode;
+                if (isGetter)
+                {
+                    Consume(TokenType.RIGHT_PAREN, "A get accessor cannot have parameters.");
+                    Consume(TokenType.COLON, "Expect ':' before get accessor return type.");
+                    accessorType = ParseTypeAnnotation();
+                    accessorTypeNode = TakeTypeNode();
+                }
+                else
+                {
+                    List<Stmt.Parameter> setterParams = ParseSignatureParameters();
+                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after set accessor parameter.");
+                    if (setterParams.Count != 1)
+                        throw new Exception("A set accessor must have exactly one parameter.");
+                    accessorType = setterParams[0].Type ?? "any";
+                    accessorTypeNode = setterParams[0].TypeAnnotationNode;
+                }
+
+                ConsumeInterfaceMemberSeparator();
+                members.Add(new Stmt.InterfaceMember(
+                    accessorName, accessorType, TypeAnnotationNode: accessorTypeNode));
+                continue;
             }
 
             // Computed member name using a well-known symbol: `[Symbol.iterator](): T`,
@@ -500,7 +547,7 @@ public partial class Parser
 
         if (!Check(TokenType.RIGHT_PAREN))
         {
-            do
+            while (true)
             {
                 // Check for rest parameter
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
@@ -510,7 +557,9 @@ public partial class Parser
                 // Signatures have no bodies, so defaults are not parsed (`=` stays unconsumed).
                 parameters.Add(ParseNamedRuntimeParameterTail(paramName, isRest, allowDefault: false));
 
-            } while (Match(TokenType.COMMA));
+                if (!Match(TokenType.COMMA) || Check(TokenType.RIGHT_PAREN))
+                    break;
+            }
         }
 
         return parameters;
@@ -631,7 +680,7 @@ public partial class Parser
 
         if (!Check(TokenType.RIGHT_PAREN))
         {
-            do
+            while (true)
             {
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
                 string paramName = ConsumeIdentifierName("Expect parameter name.").Lexeme;
@@ -647,7 +696,10 @@ public partial class Parser
                 if (isRest) paramType = "..." + paramType;
                 else if (isOptional) paramType += "?";
                 paramTypes.Add(paramType);
-            } while (Match(TokenType.COMMA));
+
+                if (!Match(TokenType.COMMA) || Check(TokenType.RIGHT_PAREN))
+                    break;
+            }
         }
 
         Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
@@ -851,10 +903,58 @@ public partial class Parser
     /// </summary>
     private Stmt ParseDeclareModuleMember()
     {
+        // Inside an ambient external module, TypeScript permits the shorthand
+        // `global { ... }` in addition to the top-level `declare global { ... }`.
+        // DefinitelyTyped uses this form to augment globals from a module.
+        if (Match(TokenType.GLOBAL))
+        {
+            return DeclareGlobalDeclaration(Previous());
+        }
+
+        if (Match(TokenType.IMPORT))
+        {
+            if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
+                && PeekNext().Type == TokenType.EQUAL)
+                return ImportAliasDeclaration(isExported: false);
+            return ImportDeclaration();
+        }
+
         // Members can be exported
         if (Match(TokenType.EXPORT))
         {
             Token exportKeyword = Previous();
+
+            if (Match(TokenType.EQUAL))
+            {
+                Expr exportValue = Expression();
+                ConsumeSemicolon("Expect ';' after export assignment.");
+                return new Stmt.Export(
+                    exportKeyword, null, null, null, null, false, exportValue);
+            }
+
+            if (Match(TokenType.IMPORT))
+            {
+                if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
+                    && PeekNext().Type == TokenType.EQUAL)
+                    return ParseImportWithEquals(isExported: true);
+                throw new Exception(
+                    $"Parse Error at line {Peek().Line}: Expected import alias after 'export import'.");
+            }
+
+            if (Match(TokenType.STAR))
+            {
+                Token? namespaceExportName = null;
+                if (Match(TokenType.AS))
+                    namespaceExportName = ConsumeSpecifierName(
+                        "Expect namespace name after 'as'.");
+                Consume(TokenType.FROM, "Expect 'from' after '*'.");
+                string fromPath = (string)Consume(
+                    TokenType.STRING, "Expect module path.").Literal!;
+                ConsumeSemicolon("Expect ';' after export.");
+                return new Stmt.Export(
+                    exportKeyword, null, null, null, fromPath, false,
+                    NamespaceExportName: namespaceExportName);
+            }
 
             // export { x, y as z } [from './module'] — e.g. `declare global { export { globalThis as global } }`
             if (Match(TokenType.LEFT_BRACE))
@@ -879,7 +979,8 @@ public partial class Parser
             // export function foo(): void;
             if (Match(TokenType.FUNCTION))
             {
-                var func = FunctionDeclaration("function", isAsync: false, isGenerator: false);
+                var func = FunctionDeclaration(
+                    "function", isAsync: false, isGenerator: false, isDeclare: true);
                 return new Stmt.Export(exportKeyword, func, null, null, null, false);
             }
 
@@ -929,7 +1030,8 @@ public partial class Parser
 
         if (Match(TokenType.FUNCTION))
         {
-            return FunctionDeclaration("function", isAsync: false, isGenerator: false);
+            return FunctionDeclaration(
+                "function", isAsync: false, isGenerator: false, isDeclare: true);
         }
 
         if (Match(TokenType.CONST))
