@@ -43,17 +43,9 @@ public class SharpTSWeakRef : ITypeCategorized
 
         if (target is string or double or bool or int or long or float or decimal)
         {
-            throw new Exception($"Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object, not '{GetTypeName(target)}'.");
+            throw new Exception($"Runtime Error: Invalid value used as weak reference target. WeakRef target must be an object, not '{WeakTargetErrors.TypeNameOf(target)}'.");
         }
     }
-
-    private static string GetTypeName(object value) => value switch
-    {
-        string => "string",
-        double or int or long or float or decimal => "number",
-        bool => "boolean",
-        _ => value.GetType().Name
-    };
 
     public override string ToString() => "WeakRef {}";
 }

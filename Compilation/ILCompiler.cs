@@ -407,7 +407,7 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
 
         // Check for "use strict" directive at file level
-        _isStrictMode = CheckForUseStrict(statements);
+        _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
 
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to the module top level so the mature top-level state-machine pipeline can lower them
@@ -440,33 +440,6 @@ public partial class ILCompiler
     }
 
     #region Compile Phases
-
-    /// <summary>
-    /// Checks if the statements begin with a "use strict" directive.
-    /// </summary>
-    /// <param name="statements">The list of statements to check.</param>
-    /// <returns>True if "use strict" directive is found at the beginning.</returns>
-    private static bool CheckForUseStrict(List<Stmt>? statements)
-    {
-        if (statements == null) return false;
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Directive directive)
-            {
-                if (directive.Value == "use strict")
-                {
-                    return true;
-                }
-                // Continue checking other directives at the start
-            }
-            else
-            {
-                // Non-directive statement encountered, stop checking
-                break;
-            }
-        }
-        return false;
-    }
 
     /// <summary>
     /// Phase 0: Extract .NET namespace from @Namespace file directive.

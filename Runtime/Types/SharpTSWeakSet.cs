@@ -62,17 +62,9 @@ public class SharpTSWeakSet : ITypeCategorized
         // Check for primitive types that cannot be WeakSet values
         if (value is string or double or bool or int or long or float or decimal)
         {
-            throw new Exception($"Runtime Error: Invalid value used in weak set. WeakSet values must be objects, not '{GetTypeName(value)}'.");
+            throw new Exception($"Runtime Error: Invalid value used in weak set. WeakSet values must be objects, not '{WeakTargetErrors.TypeNameOf(value)}'.");
         }
     }
-
-    private static string GetTypeName(object value) => value switch
-    {
-        string => "string",
-        double or int or long or float or decimal => "number",
-        bool => "boolean",
-        _ => value.GetType().Name
-    };
 
     public override string ToString() => "WeakSet { <items unknown> }";
 }

@@ -204,7 +204,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body);
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);
         // ES2022 Private Class Elements support for async generator methods (a private async
         // generator threads its QUALIFIED class name so nested private member access resolves — #720).
         ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;

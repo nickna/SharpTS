@@ -973,7 +973,7 @@ public partial class ILCompiler
         ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
         ApplyLockDecoratorFields(ctx);
         // Check for method-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body);
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);
         // ES2022 Private Class Elements support
         ctx.CurrentClassName = typeBuilder.Name;
         ctx.CurrentClassBuilder = typeBuilder;

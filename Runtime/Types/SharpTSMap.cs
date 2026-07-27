@@ -172,17 +172,8 @@ public class SharpTSMap : ITypeCategorized, IEnumerable<object?>
     public override string ToString()
     {
         var entries = _map.Select(kvp =>
-            $"{FormatValue(DenormalizeKey(kvp.Key))} => {FormatValue(kvp.Value)}");
+            $"{CollectionInspect.FormatValue(DenormalizeKey(kvp.Key))} => {CollectionInspect.FormatValue(kvp.Value)}");
         return $"Map({_map.Count}) {{ {string.Join(", ", entries)} }}";
     }
 
-    private static string FormatValue(object? value) => value switch
-    {
-        null => "undefined",
-        string s => $"\"{s}\"",
-        bool b => b ? "true" : "false",
-        SharpTSArray arr => arr.ToString(),
-        SharpTSObject obj => obj.ToString(),
-        _ => value.ToString() ?? "undefined"
-    };
 }

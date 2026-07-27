@@ -71,17 +71,9 @@ public class SharpTSWeakMap : ITypeCategorized
         // Check for primitive types that cannot be WeakMap keys
         if (key is string or double or bool or int or long or float or decimal)
         {
-            throw new Exception($"Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects, not '{GetTypeName(key)}'.");
+            throw new Exception($"Runtime Error: Invalid value used as weak map key. WeakMap keys must be objects, not '{WeakTargetErrors.TypeNameOf(key)}'.");
         }
     }
-
-    private static string GetTypeName(object value) => value switch
-    {
-        string => "string",
-        double or int or long or float or decimal => "number",
-        bool => "boolean",
-        _ => value.GetType().Name
-    };
 
     public override string ToString() => "WeakMap { <items unknown> }";
 }

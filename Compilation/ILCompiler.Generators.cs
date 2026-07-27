@@ -383,7 +383,7 @@ public partial class ILCompiler
         var il = smBuilder.MoveNextMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il);
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body);
         // Captured outer variables are read live (by reference) rather than snapshotted (#541).
         // These mirror the async-generator MoveNext context so reads/writes of top-level
         // variables go straight to their backing storage instead of a stale state-machine field.
@@ -451,7 +451,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body);
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);
         // ES2022 Private Class Elements support for generator methods (a private generator threads
         // its QUALIFIED class name so nested private member access resolves under modules — #720).
         ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;

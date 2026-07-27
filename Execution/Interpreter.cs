@@ -1130,7 +1130,7 @@ public partial class Interpreter : IDisposable
         try
         {
             // Check for "use strict" directive at file level
-            bool isStrict = CheckForUseStrict(statements);
+            bool isStrict = Parsing.DirectivePrologue.HasUseStrict(statements);
             if (isStrict)
             {
                 // Wrap the current environment with strict mode enabled
@@ -1389,7 +1389,7 @@ public partial class Interpreter : IDisposable
         using (PushScriptContext(scriptEnv, script))
         {
             // Check for "use strict" directive
-            bool isStrict = CheckForUseStrict(script.Statements);
+            bool isStrict = Parsing.DirectivePrologue.HasUseStrict(script.Statements);
             if (isStrict && !_environment.IsStrictMode)
             {
                 _environment = new RuntimeEnvironment(_environment, strictMode: true);
@@ -1930,32 +1930,6 @@ public partial class Interpreter : IDisposable
         }
 
         return ExecutionResult.Success();
-    }
-
-    /// <summary>
-    /// Checks if the statements begin with a "use strict" directive.
-    /// </summary>
-    /// <param name="statements">The list of statements to check.</param>
-    /// <returns>True if "use strict" directive is found at the beginning.</returns>
-    private static bool CheckForUseStrict(List<Stmt> statements)
-    {
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Directive directive)
-            {
-                if (directive.Value == "use strict")
-                {
-                    return true;
-                }
-                // Continue checking other directives at the start
-            }
-            else
-            {
-                // Non-directive statement encountered, stop checking
-                break;
-            }
-        }
-        return false;
     }
 
     /// <summary>
