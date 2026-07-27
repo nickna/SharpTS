@@ -74,7 +74,8 @@ Diagnostics with no `tsCode` (SharpTS-only — e.g. `@DotNetType` integration er
 
 ## Library selection
 
-The runner loads the pinned TypeScript distribution's `lib.*.d.ts` graph,
+The runner loads the compiler's embedded copy of the pinned TypeScript
+distribution's `lib.*.d.ts` graph from `Modules/TypeScriptLibResources`,
 including triple-slash library references. `@lib`, `@target`, `@noLib`,
 declaration-file roots, and visible `@types` packages flow through the same
 program resolver as the CLI. The conservative legacy `lib-drift` skip remains
