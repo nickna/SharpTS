@@ -747,7 +747,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
 
             // Call stream.SetWriteCallback(tsFunction)
-            il.Emit(OpCodes.Callvirt, runtime.TSWritableType.GetMethod("SetWriteCallback")!);
+            il.Emit(OpCodes.Callvirt, runtime.TSWritableSetWriteCallback!);
         }
 
         // Cache: _instance = stream
