@@ -88,64 +88,6 @@ public class DeclarationGenerator
         return _emitter.EmitAll(metadataList);
     }
 
-    /// <summary>
-    /// Generates TypeScript declarations for specified types in an assembly.
-    /// </summary>
-    /// <param name="assemblyPath">Path to the assembly file</param>
-    /// <param name="typeNames">List of type names to include (supports wildcards like "System.IO.*")</param>
-    /// <returns>TypeScript declaration code</returns>
-    public string GenerateForTypes(string assemblyPath, IEnumerable<string> typeNames)
-    {
-        if (!File.Exists(assemblyPath))
-        {
-            throw new FileNotFoundException($"Assembly not found: {assemblyPath}");
-        }
-
-        Assembly assembly;
-        try
-        {
-            assembly = Assembly.LoadFrom(assemblyPath);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to load assembly: {ex.Message}", ex);
-        }
-
-        var metadataList = new List<TypeMetadata>();
-        var patterns = typeNames.ToList();
-
-        foreach (var type in assembly.GetExportedTypes())
-        {
-            // Skip compiler-generated types
-            if (type.Name.StartsWith("<"))
-                continue;
-
-            // Skip nested types
-            if (type.IsNested)
-                continue;
-
-            // Skip generic type definitions for MVP
-            if (type.IsGenericTypeDefinition)
-                continue;
-
-            // Check if type matches any pattern
-            if (!MatchesAnyPattern(type.FullName ?? type.Name, patterns))
-                continue;
-
-            try
-            {
-                var metadata = _inspector.Inspect(type);
-                metadataList.Add(metadata);
-            }
-            catch
-            {
-                // Skip types that fail inspection
-            }
-        }
-
-        return _emitter.EmitAll(metadataList);
-    }
-
     private static Type? ResolveType(string typeName)
     {
         // First try direct resolution
@@ -199,37 +141,4 @@ public class DeclarationGenerator
         return null;
     }
 
-    private static bool MatchesAnyPattern(string typeName, List<string> patterns)
-    {
-        foreach (var pattern in patterns)
-        {
-            if (MatchesPattern(typeName, pattern))
-                return true;
-        }
-        return false;
-    }
-
-    private static bool MatchesPattern(string typeName, string pattern)
-    {
-        // Exact match
-        if (pattern == typeName)
-            return true;
-
-        // Wildcard at end (e.g., "System.IO.*")
-        if (pattern.EndsWith(".*"))
-        {
-            string prefix = pattern[..^2]; // Remove ".*"
-            return typeName.StartsWith(prefix + ".");
-        }
-
-        // Wildcard anywhere (basic glob support)
-        if (pattern.Contains('*'))
-        {
-            var regex = new System.Text.RegularExpressions.Regex(
-                "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\*", ".*") + "$");
-            return regex.IsMatch(typeName);
-        }
-
-        return false;
-    }
 }

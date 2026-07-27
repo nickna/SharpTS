@@ -161,13 +161,5 @@ public class ParsedModule
         Statements = statements;
     }
 
-    /// <summary>
-    /// Creates a sanitized name suitable for use as a .NET type name.
-    /// </summary>
-    public string GetSanitizedTypeName()
-    {
-        return new string(ModuleName.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
-    }
-
     public override string ToString() => $"Module({ModuleName})";
 }

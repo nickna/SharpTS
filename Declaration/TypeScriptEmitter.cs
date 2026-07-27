@@ -286,11 +286,6 @@ public class TypeScriptEmitter
         }
     }
 
-    private void Append(string text)
-    {
-        _sb.Append(text);
-    }
-
     private void AppendLine(string text = "")
     {
         if (!string.IsNullOrEmpty(text))

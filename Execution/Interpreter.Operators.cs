@@ -18,7 +18,7 @@ public partial class Interpreter
     /// <returns>The new value after the operation.</returns>
     /// <remarks>
     /// Retrieves the current value, applies the compound operator via
-    /// <see cref="ApplyCompoundOperator"/>, and stores the result.
+    /// <see cref="ApplyCompoundOperatorRV"/>, and stores the result.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition_assignment">MDN Compound Assignment</seealso>
     private RuntimeValue EvaluateCompoundAssign(Expr.CompoundAssign compound)

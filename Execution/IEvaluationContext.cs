@@ -152,18 +152,4 @@ internal static class EvaluationContextExtensions
         return results;
     }
 
-    /// <summary>
-    /// Executes multiple statements sequentially, stopping on abrupt completion.
-    /// </summary>
-    public static async ValueTask<ExecutionResult> ExecuteAllAsync(
-        this IEvaluationContext ctx,
-        IEnumerable<Stmt> stmts)
-    {
-        foreach (var stmt in stmts)
-        {
-            var result = await ctx.ExecuteStmtAsync(stmt);
-            if (result.IsAbrupt) return result;
-        }
-        return ExecutionResult.Success();
-    }
 }

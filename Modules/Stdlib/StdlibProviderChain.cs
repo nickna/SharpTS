@@ -45,20 +45,4 @@ public sealed class StdlibProviderChain
         return false;
     }
 
-    /// <summary>
-    /// Returns every provider that claims a given specifier, in precedence order.
-    /// Used to diagnose conflicts between peer providers.
-    /// </summary>
-    public IReadOnlyList<IModuleProvider> FindAllClaimants(string specifier)
-    {
-        var claimants = new List<IModuleProvider>();
-        foreach (var provider in _providers)
-        {
-            if (provider.ProvidedModules.Contains(specifier))
-            {
-                claimants.Add(provider);
-            }
-        }
-        return claimants;
-    }
 }

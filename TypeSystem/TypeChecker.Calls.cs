@@ -9,8 +9,7 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 /// <remarks>
 /// Contains CheckCall and overload resolution helpers:
-/// GetCallableFunction, TryMatchConstructorArgs, ResolveOverloadedCall,
-/// TryMatchSignature, SelectMostSpecificOverload, CompareSpecificity, IsMoreSpecific.
+/// TryMatchConstructorArgs, ResolveOverloadedCall, TryMatchSignature.
 /// </remarks>
 public partial class TypeChecker
 {
@@ -918,20 +917,6 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Extracts the callable function type from a TypeInfo that could be Function or OverloadedFunction.
-    /// For OverloadedFunction, returns the implementation's type.
-    /// </summary>
-    private TypeInfo.Function? GetCallableFunction(TypeInfo? methodType)
-    {
-        return methodType switch
-        {
-            TypeInfo.Function f => f,
-            TypeInfo.OverloadedFunction of => of.Implementation,
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// Checks if constructor arguments match a constructor signature.
     /// </summary>
     private bool TryMatchConstructorArgs(List<TypeInfo> argTypes, List<TypeInfo> paramTypes, int minArity, bool hasRestParam)
@@ -1164,103 +1149,6 @@ public partial class TypeChecker
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// Select the most specific signature from a list of matching signatures.
-    /// Uses "most specific match" rules: prefer more specific types over general ones.
-    /// </summary>
-    private TypeInfo.Function SelectMostSpecificOverload(List<TypeInfo.Function> candidates, List<TypeInfo> argTypes)
-    {
-        if (candidates.Count == 1)
-            return candidates[0];
-
-        TypeInfo.Function mostSpecific = candidates[0];
-
-        for (int i = 1; i < candidates.Count; i++)
-        {
-            int comparison = CompareSpecificity(mostSpecific, candidates[i], argTypes);
-            if (comparison < 0)
-            {
-                // candidates[i] is more specific
-                mostSpecific = candidates[i];
-            }
-            // If comparison == 0 (equally specific), keep the first one (declaration order)
-        }
-
-        return mostSpecific;
-    }
-
-    /// <summary>
-    /// Compare two signatures for specificity.
-    /// Returns: &gt;0 if sig1 is more specific, &lt;0 if sig2 is more specific, 0 if equally specific.
-    /// </summary>
-    private int CompareSpecificity(TypeInfo.Function sig1, TypeInfo.Function sig2, List<TypeInfo> argTypes)
-    {
-        int score = 0;
-        int paramCount = Math.Min(Math.Min(sig1.ParamTypes.Count, sig2.ParamTypes.Count), argTypes.Count);
-
-        for (int i = 0; i < paramCount; i++)
-        {
-            var p1 = sig1.ParamTypes[i];
-            var p2 = sig2.ParamTypes[i];
-
-            if (IsMoreSpecific(p1, p2))
-                score++;
-            else if (IsMoreSpecific(p2, p1))
-                score--;
-        }
-
-        return score;
-    }
-
-    /// <summary>
-    /// Returns true if 'specific' is a more specific type than 'general'.
-    /// Specificity rules:
-    /// - Literal types are more specific than primitives
-    /// - Primitives are more specific than unions containing them
-    /// - Derived classes are more specific than base classes
-    /// - Non-nullable types are more specific than nullable types
-    /// </summary>
-    private bool IsMoreSpecific(TypeInfo specific, TypeInfo general)
-    {
-        // Literal type > Primitive type
-        if (specific is TypeInfo.StringLiteral && general is TypeInfo.String)
-            return true;
-        if (specific is TypeInfo.NumberLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER })
-            return true;
-        if (specific is TypeInfo.BooleanLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN })
-            return true;
-
-        // Primitive > Union containing it
-        if (general is TypeInfo.Union union)
-        {
-            if (specific is TypeInfo.Primitive || specific is TypeInfo.StringLiteral ||
-                specific is TypeInfo.NumberLiteral || specific is TypeInfo.BooleanLiteral)
-            {
-                // Check if the specific type is one of the union members
-                if (union.FlattenedTypes.Any(t => IsCompatible(t, specific)))
-                    return true;
-            }
-        }
-
-        // Non-nullable > Nullable (union with null)
-        if (general is TypeInfo.Union nullableUnion && nullableUnion.ContainsNull)
-        {
-            if (specific is not TypeInfo.Null && specific is not TypeInfo.Union)
-                return true;
-        }
-
-        // Derived class > Base class
-        if (specific is TypeInfo.Instance i1 && general is TypeInfo.Instance i2)
-        {
-            if (i1.ClassType is TypeInfo.Class specificClass && i2.ClassType is TypeInfo.Class generalClass)
-            {
-                return IsSubclassOf(specificClass, generalClass);
-            }
-        }
-
-        return false;
     }
 
     private TypeInfo CheckClearTimerCall(Expr.Call call, string functionName)

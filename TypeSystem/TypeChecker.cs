@@ -248,12 +248,6 @@ public partial class TypeChecker
     private readonly Stack<Dictionary<string, TypeInfo>> _declaredVariableTypesStack = new();
 
     /// <summary>
-    /// Gets the current narrowing context (top of stack), or empty if none.
-    /// </summary>
-    private Narrowing.NarrowingContext CurrentNarrowingContext =>
-        _narrowingContextStack.Count > 0 ? _narrowingContextStack.Peek() : Narrowing.NarrowingContext.Empty;
-
-    /// <summary>
     /// Gets the narrowed type for a path, if one exists in the current scope.
     /// Also checks for explicit invalidations that block lookup in parent scopes.
     /// </summary>
@@ -576,17 +570,6 @@ public partial class TypeChecker
             _ => null
         };
     }
-
-    /// <summary>
-    /// Cache for variance position analysis results.
-    /// Key: "{TypeName}:{TypeParamName}", Value: positions where param appears
-    /// </summary>
-    private readonly Dictionary<string, VariancePositions> _variancePositionCache = new();
-
-    /// <summary>
-    /// Records where a type parameter appears (input vs output positions).
-    /// </summary>
-    private record VariancePositions(bool AppearsInOutput, bool AppearsInInput);
 
     // Error recovery support
     private readonly DiagnosticCollector _diagnostics = new();

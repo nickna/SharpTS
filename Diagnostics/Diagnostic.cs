@@ -105,26 +105,15 @@ public record Diagnostic(
         {
             DiagnosticCode.TypeError or
             DiagnosticCode.TypeMismatch or
-            DiagnosticCode.UndefinedMember or
-            DiagnosticCode.InvalidCall or
             DiagnosticCode.TypeOperation => "Type Error",
 
-            DiagnosticCode.ParseError or
-            DiagnosticCode.UnexpectedToken or
-            DiagnosticCode.SyntaxError => "Parse Error",
+            DiagnosticCode.ParseError => "Parse Error",
 
-            DiagnosticCode.RuntimeError or
-            DiagnosticCode.DivisionByZero or
-            DiagnosticCode.NullReference or
-            DiagnosticCode.IndexOutOfRange or
-            DiagnosticCode.InvalidOperation => "Runtime Error",
+            DiagnosticCode.RuntimeError => "Runtime Error",
 
-            DiagnosticCode.ModuleError or
-            DiagnosticCode.ModuleNotFound or
-            DiagnosticCode.CircularDependency => "Module Error",
+            DiagnosticCode.ModuleError => "Module Error",
 
-            DiagnosticCode.CompileError or
-            DiagnosticCode.ILValidation => "Compile Error",
+            DiagnosticCode.CompileError => "Compile Error",
 
             DiagnosticCode.ConfigError => "Config Error",
 
@@ -143,18 +132,6 @@ public record Diagnostic(
     public static Diagnostic TypeError(string message, SourceLocation? location = null)
         => new(DiagnosticSeverity.Error, DiagnosticCode.TypeError, message, location);
 
-    /// <summary>Creates a type mismatch diagnostic.</summary>
-    public static Diagnostic TypeMismatch(string message, SourceLocation? location = null)
-        => new(DiagnosticSeverity.Error, DiagnosticCode.TypeMismatch, message, location);
-
-    /// <summary>Creates an undefined member diagnostic.</summary>
-    public static Diagnostic UndefinedMember(string message, SourceLocation? location = null)
-        => new(DiagnosticSeverity.Error, DiagnosticCode.UndefinedMember, message, location);
-
-    /// <summary>Creates an invalid call diagnostic.</summary>
-    public static Diagnostic InvalidCall(string message, SourceLocation? location = null)
-        => new(DiagnosticSeverity.Error, DiagnosticCode.InvalidCall, message, location);
-
     /// <summary>Creates a parse error diagnostic.</summary>
     public static Diagnostic ParseError(string message, SourceLocation? location = null)
         => new(DiagnosticSeverity.Error, DiagnosticCode.ParseError, message, location);
@@ -166,10 +143,6 @@ public record Diagnostic(
     /// <summary>Creates a compile error diagnostic.</summary>
     public static Diagnostic CompileError(string message, SourceLocation? location = null)
         => new(DiagnosticSeverity.Error, DiagnosticCode.CompileError, message, location);
-
-    /// <summary>Creates a runtime error diagnostic.</summary>
-    public static Diagnostic RuntimeError(string message, SourceLocation? location = null)
-        => new(DiagnosticSeverity.Error, DiagnosticCode.RuntimeError, message, location);
 
     /// <summary>Creates a config error diagnostic.</summary>
     public static Diagnostic ConfigError(string message, SourceLocation? location = null)
