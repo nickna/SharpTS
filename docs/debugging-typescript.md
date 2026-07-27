@@ -54,7 +54,13 @@ debugging is out of scope.
 
 None of this needs a SharpTS-specific debug adapter — the assembly is an ordinary .NET one.
 
-**VS Code** — install the C# extension (it supplies the `coreclr` adapter), then:
+**VS Code** — install the C# extension, which supplies the `coreclr` adapter. With the SharpTS
+extension installed, **SharpTS: Debug Current File** does the whole round trip: it saves the file
+if it is dirty, compiles that saved source with `-g`, and starts a debug session on the result. It
+checks for the C# extension first and offers to install it rather than failing obscurely.
+
+To drive it from `launch.json` instead, compile with `-g` and point the configuration at the
+assembly:
 
 ```json
 {
@@ -67,7 +73,10 @@ None of this needs a SharpTS-specific debug adapter — the assembly is an ordin
 }
 ```
 
-Compile with `-g` first; the launch config points at the `.dll`, not the `.ts`.
+The config names the `.dll`, not the `.ts` — the PDB is what takes the debugger back to source.
+Output is written beside the source file, which is where the runtimeconfig, co-located
+dependencies, and imported modules resolve from, and which avoids leaving build output to
+accumulate in a temporary directory.
 
 **Rider / Visual Studio** — open or attach to the compiled assembly as you would any .NET program;
 both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.

@@ -54,6 +54,10 @@
         "title": "SharpTS: Compile Current File"
       },
       {
+        "command": "sharpts.debug",
+        "title": "SharpTS: Debug Current File"
+      },
+      {
         "command": "sharpts.run",
         "title": "SharpTS: Run Current File"
       },

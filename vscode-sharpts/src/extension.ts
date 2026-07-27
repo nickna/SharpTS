@@ -16,6 +16,7 @@ import {
     TransportKind
 } from 'vscode-languageclient/node';
 import { CompileCommands } from './commands/CompileCommands';
+import { DebugCommands } from './commands/DebugCommands';
 
 let client: LanguageClient | undefined;
 
@@ -58,8 +59,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Compile / run commands use the core CLI (`SharpTS.dll`), not the LSP server.
     const compileCommands = new CompileCommands(coreDll);
+    // Debugging reuses that compile step with `-g`, then hands the assembly to the .NET debug
+    // adapter — SharpTS ships no adapter of its own.
+    const debugCommands = new DebugCommands((extraArgs) => compileCommands.compile(extraArgs));
     context.subscriptions.push(
         vscode.commands.registerCommand('sharpts.compile', () => compileCommands.compile()),
+        vscode.commands.registerCommand('sharpts.debug', () => debugCommands.debugCurrentFile()),
         vscode.commands.registerCommand('sharpts.run', () => compileCommands.run()),
         vscode.commands.registerCommand('sharpts.compileAndRun', () => compileCommands.compileAndRun()),
         vscode.commands.registerCommand('sharpts.restartServer', () => client?.restart()),
