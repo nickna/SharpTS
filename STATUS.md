@@ -274,6 +274,7 @@ This document tracks TypeScript language features and their implementation statu
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
 | Tagged template literals | ✅ | `` tag`template` `` syntax with TemplateStringsArray and raw property |
 | Numeric separators | ✅ | `1_000_000` for readability |
+| JSX/TSX | ✅ | `.tsx` parses in the TSX dialect (JSX commits at `<`; angle-bracket assertions rejected, as tsc). Faithful text/entity scanning; classic (`jsx: react`, `jsxFactory`/`jsxFragmentFactory`) and automatic (`react-jsx`/`react-jsxdev`, `jsxImportSource`) transforms; `@jsx`-family pragmas. Default `react-jsx` (deviation: tsc errors without `--jsx`; restore via `--jsx none`). Checker: intrinsics vs `JSX.IntrinsicElements` (TS2322/TS2339/TS2559/TS2741/TS2739/TS7026), component props + return type (TS2786/TS2604/TS2769), result type `JSX.Element`. Embedded react shim + `react-dom/server.renderToString` run bare `.tsx` with zero installs (real react in node_modules wins). Deferred: contextual typing of attribute callbacks, generic-component inference, `ElementClass`-driven class-component props, children arity fidelity, `JSX.Element` qualification in emitted `.d.ts` (prints bare `Element`). |
 
 ---
 

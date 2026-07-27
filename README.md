@@ -211,6 +211,29 @@ against `JSX.IntrinsicElements`. The `jsx` family of options (`jsx`, `jsxFactory
 deviation from tsc, which errors without an explicit `--jsx` (restore that behavior with
 `--jsx none`). `preserve`/`react-native` are rejected since SharpTS cannot emit .jsx output.
 
+**JSX out of the box:**
+
+A bare `.tsx` file parses, type-checks, and runs with zero configuration and no npm install —
+the automatic runtime resolves to an embedded react shim (a real `react` in `node_modules`
+always wins), and `react-dom/server` provides `renderToString` for HTML generation:
+
+```tsx
+// hello.tsx — run with: sharpts hello.tsx (or --compile)
+import { renderToString } from "react-dom/server";
+
+function Greeting(props: { name: string }) {
+    return <p className="greet">Hello {props.name}!</p>;
+}
+
+console.log(renderToString(<Greeting name="world" />));
+// <p class="greet">Hello world!</p>
+```
+
+Intrinsic tags check against the shim's curated `JSX.IntrinsicElements` (or `@types/react`
+when present), component tags check props against the component's parameter type, and JSX
+expressions type as `JSX.Element`, with tsc's diagnostic codes. Per-file `/** @jsx h */`,
+`@jsxFrag`, `@jsxImportSource`, and `@jsxRuntime` pragmas are honored.
+
 **TypeScript declaration output:**
 
 SharpTS can emit checked `.d.ts` files for TypeScript consumers while continuing to compile

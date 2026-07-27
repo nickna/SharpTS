@@ -63,6 +63,36 @@ public class JsxPragmaTests
     }
 
     [Fact]
+    public void PragmaNamesAreCaseInsensitive()
+    {
+        // tsc lowercases pragma names: @jsxfrag is as valid as @jsxFrag
+        // (pinned by conformance test inlineJsxAndJsxFragPragmaOverridesCompilerOptions).
+        var pragmas = Lex("/** @jsxfrag null */\nlet a = 1;");
+
+        Assert.Equal("null", pragmas.JsxFragmentFactory);
+    }
+
+    [Fact]
+    public void NullFragmentFactoryLowersToNullLiteral()
+    {
+        const string source = """
+            /** @jsx h @jsxFrag null */
+            declare function h(...args: any[]): any;
+            let view = <>x</>;
+            """;
+        var lexer = new Lexer(source) { JsxTolerant = true };
+        var tokens = lexer.ScanTokens();
+        var parsed = new Parser(tokens)
+            .WithJsx(source, JsxParseOptions.Default.ApplyPragmas(lexer.Pragmas))
+            .Parse();
+
+        Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
+        var view = parsed.Statements.OfType<Stmt.Var>().First(v => v.Name.Lexeme == "view");
+        var call = Assert.IsType<Expr.Call>(view.Initializer);
+        Assert.Null(Assert.IsType<Expr.Literal>(call.Arguments[0]).Value);
+    }
+
+    [Fact]
     public void ApplyPragmas_JsxForcesClassicWithFactory()
     {
         var options = JsxParseOptions.Default.ApplyPragmas(

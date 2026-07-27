@@ -435,7 +435,7 @@ public partial class Parser
         if (isFragment && _jsx!.FactoryFromPragma && !_jsx.FragmentFactoryFromPragma)
             throw new ParseError(
                 "JSX fragment is not supported when using an inline JSX factory pragma.", "TS17017");
-        Expr tag = isFragment ? BuildDottedExpr(_jsx!.FragmentFactory, open.Line) : tagExpression;
+        Expr tag = isFragment ? BuildFragmentFactoryExpr(open.Line) : tagExpression;
 
         Expr.ObjectLiteral? propsLiteral = null;
         Expr propsArgument;
@@ -577,6 +577,16 @@ public partial class Parser
                 open.Line),
         };
     }
+
+    /// <summary>
+    /// The classic-mode fragment tag. <c>@jsxFrag null</c> (or jsxFragmentFactory "null")
+    /// means a literal null tag — tsc emits <c>factory(null, null, …)</c> — not an
+    /// identifier named "null".
+    /// </summary>
+    private Expr BuildFragmentFactoryExpr(int line) =>
+        string.Equals(_jsx!.FragmentFactory, "null", StringComparison.Ordinal)
+            ? new Expr.Literal(null)
+            : BuildDottedExpr(_jsx.FragmentFactory, line);
 
     /// <summary>Builds the value expression for a dotted factory name ("React.createElement" → React.createElement).</summary>
     private static Expr BuildDottedExpr(string dottedName, int line)

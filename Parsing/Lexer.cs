@@ -927,13 +927,17 @@ public class Lexer(string source)
         }
     }
 
-    /// <summary>Matches a pragma name at <paramref name="cursor"/> and reads its whitespace-separated value.</summary>
+    /// <summary>
+    /// Matches a pragma name at <paramref name="cursor"/> (case-insensitively — tsc lowercases
+    /// pragma names, so <c>@jsxfrag</c> is as valid as <c>@jsxFrag</c>) and reads its
+    /// whitespace-separated value.
+    /// </summary>
     private bool TryReadJsxPragma(ref int cursor, int endExclusive, string name, out string? value)
     {
         value = null;
         if (cursor + name.Length > endExclusive) return false;
         for (int k = 0; k < name.Length; k++)
-            if (_source[cursor + k] != name[k]) return false;
+            if (char.ToLowerInvariant(_source[cursor + k]) != char.ToLowerInvariant(name[k])) return false;
 
         int position = cursor + name.Length;
         // Name must end at whitespace ("@jsxes" is not "@jsx").
