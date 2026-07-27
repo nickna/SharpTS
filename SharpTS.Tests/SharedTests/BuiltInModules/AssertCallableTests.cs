@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class AssertCallableTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Callable_PassesAndThrows(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -31,8 +30,7 @@ public class AssertCallableTests
         Assert.Equal("threw:true\nok is fn:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Rejects_ResolvesWhenPromiseRejects(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -58,8 +56,7 @@ public class AssertCallableTests
         Assert.Equal("rejects-ok\nno-reject-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_DoesNotReject_PassesWhenNoRejection(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +75,7 @@ public class AssertCallableTests
         Assert.Equal("does-not-reject-ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Match_And_DoesNotMatch(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +96,7 @@ public class AssertCallableTests
         Assert.Equal("match-throws:true,dnm-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_IfError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -120,8 +115,7 @@ public class AssertCallableTests
         Assert.Equal("ifError-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_LooseDeepEqual_Coerces(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -144,8 +138,7 @@ public class AssertCallableTests
         Assert.Equal("loose-deep-ok\nnot-deep-ok\nstrict-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_NamedImports_OfNewFunctions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

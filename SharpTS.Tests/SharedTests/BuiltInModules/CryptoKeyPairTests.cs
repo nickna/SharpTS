@@ -10,8 +10,7 @@ public class CryptoKeyPairTests
 {
     #region RSA Key Generation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_RSA_2048(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_RSA_4096(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -54,8 +52,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_RSA_DefaultOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -77,8 +74,7 @@ public class CryptoKeyPairTests
 
     #region EC Key Generation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_EC_P256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -99,8 +95,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_EC_P384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -119,8 +114,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_EC_P521(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -139,8 +133,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_EC_DefaultCurve(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -162,8 +155,7 @@ public class CryptoKeyPairTests
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_InvalidType_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -187,8 +179,7 @@ public class CryptoKeyPairTests
 
     #region Integration Tests with Sign/Verify
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_RSA_WorksWithCreateSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -219,8 +210,7 @@ public class CryptoKeyPairTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GenerateKeyPairSync_EC_WorksWithCreateSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

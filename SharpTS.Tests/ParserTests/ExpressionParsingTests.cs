@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,17 +12,9 @@ public class ExpressionParsingTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     private static Expr ParseExpression(string source)
     {
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Single(statements);
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         return exprStmt.Expr;
@@ -297,7 +290,7 @@ public class ExpressionParsingTests
     {
         // String literals at the start of a file are parsed as directive prologue (like "use strict")
         // This is correct JavaScript/TypeScript behavior
-        var statements = Parse("\"hello\";");
+        var statements = TestHarness.ParseOrThrow("\"hello\";");
         Assert.Single(statements);
         var directive = Assert.IsType<Stmt.Directive>(statements[0]);
         Assert.Equal("hello", directive.Value);
@@ -307,7 +300,7 @@ public class ExpressionParsingTests
     public void Literal_String_InExpression()
     {
         // Test string literal in a non-directive position (after a non-directive statement)
-        var statements = Parse("0; \"hello\";");
+        var statements = TestHarness.ParseOrThrow("0; \"hello\";");
         Assert.Equal(2, statements.Count);
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[1]);
         var literal = Assert.IsType<Expr.Literal>(exprStmt.Expr);

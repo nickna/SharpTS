@@ -10,8 +10,7 @@ public class AsyncHooksTests
 {
     #region Import Patterns
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncHooks_NamedImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class AsyncHooksTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncHooks_NamespaceImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +42,7 @@ public class AsyncHooksTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncHooks_NodePrefixImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -65,8 +62,7 @@ public class AsyncHooksTests
 
     #region Constructor
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Constructor(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -87,8 +83,7 @@ public class AsyncHooksTests
 
     #region getStore
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_GetStore_ReturnsUndefined_Outside(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -108,8 +103,7 @@ public class AsyncHooksTests
 
     #region run
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_SetsStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -127,8 +121,7 @@ public class AsyncHooksTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_RestoresAfter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -145,8 +138,7 @@ public class AsyncHooksTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_ReturnsCallbackResult(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +155,7 @@ public class AsyncHooksTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_NestedRuns(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -190,8 +181,7 @@ public class AsyncHooksTests
 
     #region enterWith
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_EnterWith_SetsStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -212,8 +202,7 @@ public class AsyncHooksTests
 
     #region exit
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Exit_ClearsStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -238,8 +227,7 @@ public class AsyncHooksTests
 
     #region disable
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Disable_PreventsAccess(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -263,8 +251,7 @@ public class AsyncHooksTests
 
     #region Multiple Instances
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_MultipleInstances_Independent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -290,8 +277,7 @@ public class AsyncHooksTests
 
     #region Store with Object Values
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_WithObjectStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -310,8 +296,7 @@ public class AsyncHooksTests
         Assert.Equal("abc-123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_WithNullStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -329,8 +314,7 @@ public class AsyncHooksTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_WithNumberStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -352,8 +336,7 @@ public class AsyncHooksTests
 
     #region Async Context Propagation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_AsyncCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -371,8 +354,7 @@ public class AsyncHooksTests
         Assert.Equal("async-value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_AsyncCallback_AcrossAwait(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -396,8 +378,7 @@ public class AsyncHooksTests
         Assert.Equal("across-await\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_AsyncCallback_NestedAwait(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -422,8 +403,7 @@ public class AsyncHooksTests
         Assert.Equal("nested-await\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_PromiseThen(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -443,8 +423,7 @@ public class AsyncHooksTests
         Assert.Equal("in-then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_NestedAsyncRuns(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -469,8 +448,7 @@ public class AsyncHooksTests
         Assert.Equal("outer\ninner\nouter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_AsyncWithObjectStore(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -499,8 +477,7 @@ public class AsyncHooksTests
 
     #region Cross-Module Access
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_CrossModule_SharedInstance(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -532,8 +509,7 @@ public class AsyncHooksTests
 
     #region enterWith Advanced
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_EnterWith_OverwritesPrevious(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -556,8 +532,7 @@ public class AsyncHooksTests
 
     #region Run Restores on Exception
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_Run_RestoresOnException(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -584,8 +559,7 @@ public class AsyncHooksTests
 
     #region Multiple Instances Advanced
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncLocalStorage_MultipleInstances_NestedRunsDifferentInstances(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class FunctionShadowingCallTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parameter_ShadowsTopLevelFunction_InCall(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class FunctionShadowingCallTests
         Assert.Equal("20", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LocalConst_ShadowsTopLevelFunction_InCall(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class FunctionShadowingCallTests
         Assert.Equal("20", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedFunction_ShadowsTopLevelFunction_InCall(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +47,7 @@ public class FunctionShadowingCallTests
         Assert.Equal("20", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnshadowedTopLevelFunction_StillCalledDirectly(ExecutionMode mode)
     {
         // Control: a function with no shadowing binding in scope must still reach the top-level h.
@@ -64,8 +60,7 @@ public class FunctionShadowingCallTests
         Assert.Equal("20,1", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LetParameter_ShadowsTopLevelFunction_InCall(ExecutionMode mode)
     {
         // A reassigned `let` still shadows the top-level function for the rest of the body; the call

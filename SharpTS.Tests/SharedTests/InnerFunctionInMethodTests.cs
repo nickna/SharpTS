@@ -28,8 +28,7 @@ public class InnerFunctionInMethodTests
 {
     // ---- The headline #1237 repro: non-capturing inner function in an instance method ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_NonCapturingInnerFunction_IsReferenceable(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +45,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Capturing a method-local const (was "Undefined variable", then a null capture pre-fix) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_CapturingInnerFunction_SeesMethodLocal(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +63,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Capturing a method parameter (value-type double must be boxed into the closure field) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_InnerFunction_CapturesParameter(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +80,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Capturing a value-type method-local (boxing on the local fallback path) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_InnerFunction_CapturesNumericLocal(ExecutionMode mode)
     {
         var source = """
@@ -102,8 +98,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Self-recursion (own name resolved via direct dispatch, not a captured local) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_InnerFunction_SelfRecursion(ExecutionMode mode)
     {
         var source = """
@@ -120,8 +115,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Two inner functions sharing a captured method-local ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_TwoInnerFunctions_ShareCapture(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +134,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Capturing a module top-level variable from inside a method (routes via entry-point DC) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_InnerFunction_CapturesTopLevelVar(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +152,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Block-nested inner function inside a method (composes with #1230 in-place path) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_LoopBody_InnerFunction_CapturesLoopVariable_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +171,7 @@ public class InnerFunctionInMethodTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_IfBlock_InnerFunction_CapturesBlockConst(ExecutionMode mode)
     {
         var source = """
@@ -202,8 +193,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Static method ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_InnerFunction_IsReferenceable(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +211,7 @@ public class InnerFunctionInMethodTests
 
     // ---- Private method (ES2022 #member) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_InnerFunction_IsReferenceable(ExecutionMode mode)
     {
         var source = """

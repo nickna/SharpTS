@@ -75,8 +75,7 @@ public class PathWin32ConformanceTests
         Assert.True(output.Contains("ALL OK"), $"path.win32.{what} diverges from Node:\n{output}");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Win32_Normalize_MatchesNode(ExecutionMode mode)
     {
         // Single-leading-separator cases are the regression guard: before the fix
@@ -108,8 +107,7 @@ public class PathWin32ConformanceTests
             """, mode, "normalize");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Win32_IsAbsolute_MatchesNode(ExecutionMode mode)
     {
         RunTable("""
@@ -130,8 +128,7 @@ public class PathWin32ConformanceTests
             """, mode, "isAbsolute");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Win32_Join_MatchesNode(ExecutionMode mode)
     {
         RunTable("""
@@ -150,8 +147,7 @@ public class PathWin32ConformanceTests
             """, mode, "join");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Win32_Dirname_MatchesNode(ExecutionMode mode)
     {
         // Note: Node's win32 dirname preserves the input separators rather than
@@ -167,8 +163,7 @@ public class PathWin32ConformanceTests
             """, mode, "dirname");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Win32_Parse_MatchesNode(ExecutionMode mode)
     {
         RunTable("""
@@ -186,8 +181,7 @@ public class PathWin32ConformanceTests
     /// normalize bug was reachable through the most common path APIs of all.
     /// Guarded only where the host actually is Windows.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlatformDefault_OnWindows_RootedPathsSurvive(ExecutionMode mode)
     {
         if (!OperatingSystem.IsWindows()) return;

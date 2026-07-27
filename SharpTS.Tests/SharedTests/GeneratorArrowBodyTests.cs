@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GeneratorArrowBodyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NonCapturingArrowCallbackInsideYield(ExecutionMode mode)
     {
         // #435: the arrow lives inside the yielded expression, so it was never collected →
@@ -31,8 +30,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("m=2,4,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturingClosureReadsLoopVariable(ExecutionMode mode)
     {
         // #669: per-iteration `for (let k …)` bindings captured by a closure created inside the
@@ -51,8 +49,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("012\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ArrowReadsCapturedLocal(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +63,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("11,12,13\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ArrowReadsCapturedParameter(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +76,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("101,102,103\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ArrowReadsCapturedTopLevelVar(ExecutionMode mode)
     {
         // #732: a TOP-LEVEL (module-level) variable captured by an arrow inside the generator body.
@@ -99,8 +94,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("11,12,13\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ArrowWritesCapturedTopLevelVar(ExecutionMode mode)
     {
         // #732 (write case): an arrow inside the generator body WRITES a captured top-level binding.
@@ -116,8 +110,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodArrowReadsCapturedTopLevelVar(ExecutionMode mode)
     {
         // #732 for an INSTANCE generator method — the separate EmitGeneratorMethodBody context also
@@ -131,8 +124,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("11,12,13\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodArrowWritesCapturedTopLevelVar(ExecutionMode mode)
     {
         // #732 instance-method write case.
@@ -145,8 +137,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodArrowCapturesThis(ExecutionMode mode)
     {
         // #435/#669: `this` is referenced only inside the arrow, so the generator analyzer must
@@ -162,8 +153,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("8,9,10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForEachMutatesCapturedObjectNotBinding(ExecutionMode mode)
     {
         // A callback that mutates the captured array OBJECT (push) — not the binding — is fine:
@@ -180,8 +170,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("2,4,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForEachWritesCapturedBinding(ExecutionMode mode)
     {
         // #674: an arrow that WRITES a captured generator local. The mutation must reach the
@@ -199,8 +188,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("123\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CallbackAccumulatesIntoCapturedNumber(ExecutionMode mode)
     {
         // #674, numeric accumulator — the canonical `reduce`-by-side-effect shape.
@@ -216,8 +204,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MultipleMutatedCaptures(ExecutionMode mode)
     {
         // #674: two distinct captured locals mutated by one callback — each gets its own DC field.
@@ -233,8 +220,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("10,24\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CallbackMutatesCapturedParameter(ExecutionMode mode)
     {
         // #674: the mutated capture is a generator PARAMETER — the stub seeds it into the DC.
@@ -249,8 +235,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("106\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedCallbackWritesCaptureThroughToGenerator(ExecutionMode mode)
     {
         // #674 (the case the compile-time guard could not see): a NESTED arrow writes a variable
@@ -267,8 +252,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MutatedAndReadOnlyCapturesMixed(ExecutionMode mode)
     {
         // #674: a read-only capture (`base`, by-value snapshot) and a mutated capture (`total`,
@@ -285,8 +269,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("36\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturedWriteSurvivesAcrossYield(ExecutionMode mode)
     {
         // #674: the mutated capture is also live across a yield. The DC lives on a state-machine
@@ -306,8 +289,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("before:0|after:6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodWritesCapturedBinding(ExecutionMode mode)
     {
         // #724: an INSTANCE generator method whose arrow WRITES a captured method local. The method's
@@ -327,8 +309,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodCallbackMutatesCapturedParameter(ExecutionMode mode)
     {
         // #724: the mutated capture is a method PARAMETER (value-typed in the stub). The instance stub
@@ -341,8 +322,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("106\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodMixesThisAndMutatedLocal(ExecutionMode mode)
     {
         // #724 + #435: the arrow reads `this` (via the state machine's ThisField) AND writes a captured
@@ -358,8 +338,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("36\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodCapturedWriteSurvivesAcrossYield(ExecutionMode mode)
     {
         // #724: the mutated capture is live across a yield — the DC lives on a state-machine field so
@@ -375,8 +354,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("b:0|a:6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_TwoClassesSameMethodNameWriteCaptureIndependently(ExecutionMode mode)
     {
         // #724: two classes declaring a `*g()` with a write-capture must get DISTINCT function display
@@ -390,8 +368,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("3 103\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_WritesCapturedBinding(ExecutionMode mode)
     {
         // #725: a sync arrow inside an ASYNC generator (`async function*`) body that WRITES a captured
@@ -411,8 +388,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_CapturedWriteSurvivesAcrossAwait(ExecutionMode mode)
     {
         // #725: the mutated capture is live across an actual `await` suspension — the DC lives on the
@@ -430,8 +406,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_MixedMutatedAndReadOnlyCaptures(ExecutionMode mode)
     {
         // #725: a read-only capture (`base`, by-value snapshot) and a mutated capture (`total`, function
@@ -448,8 +423,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("36\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_InstanceMethodWritesCapturedBinding(ExecutionMode mode)
     {
         // #725: the async-generator INSTANCE method analogue — the function DC is registered in
@@ -468,8 +442,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ArrowReadsCapturedTopLevelVar(ExecutionMode mode)
     {
         // #725 also threads $entryPointDC into arrows nested in an async generator body (the async
@@ -489,8 +462,7 @@ public class GeneratorArrowBodyTests
     // reading the $Undefined sentinel (NaN for value defaults, the missing string for ref defaults).
     // Only the omitted-arg path was broken; supplying the argument always worked.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_DefaultedParamCapturedByArrow_OmittedUsesDefault(ExecutionMode mode)
     {
         // value-type default, captured by a forEach arrow — free-function generator.
@@ -502,8 +474,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_DefaultedParamCapturedByArrow_SuppliedWins(ExecutionMode mode)
     {
         // Regression guard: a supplied argument must beat the default on the captured path too.
@@ -515,8 +486,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("106\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_RefDefaultedParamCapturedByArrow_InstanceMethod(ExecutionMode mode)
     {
         // reference-type (string) default, captured — instance generator method.
@@ -529,8 +499,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("x123\nY123\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_DefaultedParamCapturedByArrow_OmittedUsesDefault(ExecutionMode mode)
     {
         // value-type default, captured — async generator.
@@ -542,8 +511,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ClassExpressionMethodWritesCapturedBinding(ExecutionMode mode)
     {
         // #789: the class-EXPRESSION analogue of #724. Class expressions are only collected during the
@@ -563,8 +531,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ClassExpressionMethodMutatesCapturedParameter(ExecutionMode mode)
     {
         // #789: the mutated capture is a method PARAMETER (value-typed in the stub) — class-expr analogue
@@ -577,8 +544,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("106\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ClassExpressionMethodMixesThisAndMutatedLocal(ExecutionMode mode)
     {
         // #789: the arrow reads `this` (state machine ThisField) AND writes a captured local (function DC)
@@ -594,8 +560,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("36\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ClassExpressionMethodCapturedWriteSurvivesAcrossYield(ExecutionMode mode)
     {
         // #789: the mutated capture is live across a yield — the DC lives on a state-machine field so it
@@ -611,8 +576,7 @@ public class GeneratorArrowBodyTests
         Assert.Equal("b:0|a:6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ClassExpressionMethodWritesCapturedBinding(ExecutionMode mode)
     {
         // #789: the async-generator class-EXPRESSION analogue of #725 — the function DC is registered in

@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class WeakRefTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_CreateAndDeref(ExecutionMode mode)
     {
         var source = @"
@@ -22,8 +21,7 @@ public class WeakRefTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_Typeof(ExecutionMode mode)
     {
         var source = @"
@@ -35,8 +33,7 @@ public class WeakRefTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_DerefWithClassInstance(ExecutionMode mode)
     {
         var source = @"
@@ -52,8 +49,7 @@ public class WeakRefTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_DerefReturnsCorrectValue(ExecutionMode mode)
     {
         var source = @"
@@ -67,8 +63,7 @@ public class WeakRefTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_WithArrayTarget(ExecutionMode mode)
     {
         var source = @"
@@ -82,8 +77,7 @@ public class WeakRefTests
         Assert.Equal("3\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_MultipleRefs(ExecutionMode mode)
     {
         var source = @"
@@ -98,8 +92,7 @@ public class WeakRefTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakRef_WithTypeArgument(ExecutionMode mode)
     {
         var source = @"

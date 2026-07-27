@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class JSONProxyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Stringify_ProxyWithGetTrap(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class JSONProxyTests
         Assert.Equal("{\"a\":10,\"b\":20}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Stringify_ProxyWithOwnKeysTrap(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class JSONProxyTests
         Assert.Equal("{\"a\":1,\"c\":3}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Stringify_RevokedProxy_Throws(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class JSONProxyTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Object_Keys_Proxy_DispatchesOwnKeysTrap(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +73,7 @@ public class JSONProxyTests
         Assert.Equal("x,y\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Object_GetOwnPropertyNames_Proxy_DispatchesOwnKeysTrap(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +88,7 @@ public class JSONProxyTests
         Assert.Equal("p,q,r\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Object_Keys_RevokedProxy_Throws(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +115,7 @@ public class JSONProxyTests
     // OwnKeys / Get operations dispatch to the proxy's traps. The tests below
     // pin the spec-required behavior in both interpreter and compiled modes.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Reviver_ReceivesHolderAsThis(ExecutionMode mode)
     {
         // Reviver mutates `this` while walking — only possible if `this` is
@@ -148,8 +141,7 @@ public class JSONProxyTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Reviver_ArrayIndexKeyIsString(ExecutionMode mode)
     {
         // ECMA-262 step 2.b.iii.1: the reviver receives ToString(F(I)) for
@@ -169,8 +161,7 @@ public class JSONProxyTests
         Assert.Equal("string,string,string,\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Reviver_UndefinedRemovesObjectKey(ExecutionMode mode)
     {
         var source = """
@@ -185,8 +176,7 @@ public class JSONProxyTests
         Assert.Equal("{\"a\":1,\"c\":3}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Parse_Reviver_DispatchesProxyTraps(ExecutionMode mode)
     {
         // Reviver inserts a Proxy as a sibling value; the walker continues
@@ -231,8 +221,7 @@ public class JSONProxyTests
         Assert.Contains("set:y=200;", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Reviver_WithNullValue(ExecutionMode mode)
     {
         // Pins the null-guard in the IL ApplyReviver: when the parsed value
@@ -250,8 +239,7 @@ public class JSONProxyTests
         Assert.Equal("was-null,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Parse_RevokedProxyDuringReviver_Throws(ExecutionMode mode)
     {
         // A revoked Proxy reached during the walk must throw. The trap

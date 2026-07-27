@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncMethodArrowCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_Arrow_WritesCapturedVariable(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +38,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_Arrow_WritesCapturedVariableAfterAwait(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +56,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_Arrow_CompoundWriteWithAwaitAndMultipleCaptures(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +79,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("12:a\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuspendingArrow_NoCapture(ExecutionMode mode)
     {
         // Pre-existing InvalidProgramException: a suspending async arrow in an async method, even
@@ -101,8 +97,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuspendingArrow_ReadsCapture(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +114,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("101\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_Arrow_WritesCapturedParameter(ExecutionMode mode)
     {
         // The promoted variable is a method PARAMETER (copied into the function DC by the stub), not a
@@ -139,8 +133,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncStaticMethod_Arrow_WritesCapturedVariableAfterAwait(ExecutionMode mode)
     {
         // Static async methods take a separate emission path (EmitStaticAsyncMethodBody) with the
@@ -160,8 +153,7 @@ public class AsyncMethodArrowCaptureTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncStaticMethod_SuspendingArrow_NoCapture(ExecutionMode mode)
     {
         var source = """

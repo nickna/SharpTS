@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class InterfaceFieldAssignmentTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignPrimitiveField_OnInterface(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -37,8 +36,7 @@ public class InterfaceFieldAssignmentTests
         Assert.Equal("hello 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignArrayField_ThenPush_PreservesElementType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -57,8 +55,7 @@ public class InterfaceFieldAssignmentTests
         Assert.Equal("2 a b string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignField_InsideSwitchStateMachine(ExecutionMode mode)
     {
         // Exactly the WHATWG URL parser pattern: interface param, switch-heavy

@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class DnsTransportParityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_DefaultResultOrder_GetSetAndValidation(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class DnsTransportParityTests
         Assert.Equal("verbatim\nipv6first\nbogus rejected\nipv6first\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_ResultOrder_AffectsLookupFamily(ExecutionMode mode)
     {
         // 'localhost' resolves to 127.0.0.1 everywhere; with ipv4first the lookup
@@ -52,8 +50,7 @@ public class DnsTransportParityTests
         Assert.Equal("family 4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Resolver_SetLocalAddress_ValidatesAndAccepts(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

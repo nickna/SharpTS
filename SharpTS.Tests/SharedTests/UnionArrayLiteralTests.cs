@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class UnionArrayLiteralTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IssueRepro_ArrowReturningArrayMixingFreeFnCallAndParam(ExecutionMode mode)
     {
         // Exact issue repro: array literal mixing a free-function call (number[]) and the
@@ -30,8 +29,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapCallback_ArrayMixingFreeFnCallAndParam(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlatMapCallback_ArrayMixingFreeFnCallAndParam(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +49,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScalarUnionArrayLiteral(ExecutionMode mode)
     {
         // No collection member, but number | string still generates a Union_* struct, so the
@@ -65,8 +61,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PromiseUnionReturn(ExecutionMode mode)
     {
         // Promise<number | string> maps to Task<Union_*> — the analogous choke point.
@@ -82,8 +77,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("number\n5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapWithUnionValueType(ExecutionMode mode)
     {
         // Map<string, number[] | number> exercises MapMapTypeStrict's value element via the
@@ -98,8 +92,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Control_HomogeneousNestedNumberArray(ExecutionMode mode)
     {
         // No union (number[][]) — must remain unaffected by the fix.
@@ -111,8 +104,7 @@ public class UnionArrayLiteralTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Control_HomogeneousNumberArray(ExecutionMode mode)
     {
         // No union (number[]) — must remain unaffected by the fix.

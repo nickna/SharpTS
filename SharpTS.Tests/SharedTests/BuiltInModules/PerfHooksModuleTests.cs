@@ -11,8 +11,7 @@ public class PerfHooksModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -28,8 +27,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +42,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Import_PerformanceObserver(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -64,8 +61,7 @@ public class PerfHooksModuleTests
 
     #region performance.now() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_PerformanceNow_ReturnsNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -81,8 +77,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_PerformanceNow_NonNegative(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -98,8 +93,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_PerformanceNow_Increasing(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -120,8 +114,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_PerformanceNow_MeasuresElapsed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -146,8 +139,7 @@ public class PerfHooksModuleTests
 
     #region performance.timeOrigin Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_TimeOrigin_ReturnsNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +155,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_TimeOrigin_ReasonableValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -186,8 +177,7 @@ public class PerfHooksModuleTests
 
     #region performance.mark() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Mark_CreatesEntry(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -206,8 +196,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Mark_StartTimeIncreases(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -226,8 +215,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Mark_AppearsInGetEntries(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -249,8 +237,7 @@ public class PerfHooksModuleTests
 
     #region performance.measure() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Measure_BetweenMarks(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -272,8 +259,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Measure_FromMarkToNow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -294,8 +280,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Measure_NameOnly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -317,8 +302,7 @@ public class PerfHooksModuleTests
 
     #region performance.getEntries*() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_GetEntries_ReturnsAll(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -338,8 +322,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_GetEntriesByName_FiltersCorrectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -360,8 +343,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_GetEntriesByName_WithType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -384,8 +366,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_GetEntriesByType_FiltersCorrectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -416,8 +397,7 @@ public class PerfHooksModuleTests
 
     #region performance.clearMarks() / clearMeasures() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_ClearMarks_RemovesAll(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -439,8 +419,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_ClearMarks_ByName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -464,8 +443,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_ClearMeasures_RemovesAll(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -491,8 +469,7 @@ public class PerfHooksModuleTests
 
     #region PerformanceObserver Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Observer_ReceivesEntries(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -512,8 +489,7 @@ public class PerfHooksModuleTests
         Assert.Contains("callback-fired", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Observer_Disconnect(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -536,8 +512,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_Observer_FiltersByEntryType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -563,8 +538,7 @@ public class PerfHooksModuleTests
 
     #region Practical Usage Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_MeasureFunctionDuration(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -593,8 +567,7 @@ public class PerfHooksModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PerfHooks_MarkAndMeasureWorkflow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

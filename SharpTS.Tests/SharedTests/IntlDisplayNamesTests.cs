@@ -11,8 +11,7 @@ public class IntlDisplayNamesTests
 {
     // ========== Language Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_LanguageFrench(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class IntlDisplayNamesTests
         Assert.Contains("French", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_LanguageEnglish(ExecutionMode mode)
     {
         var source = @"
@@ -37,8 +35,7 @@ public class IntlDisplayNamesTests
 
     // ========== Region Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_RegionUS(ExecutionMode mode)
     {
         var source = @"
@@ -49,8 +46,7 @@ public class IntlDisplayNamesTests
         Assert.Contains("United States", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_RegionGB(ExecutionMode mode)
     {
         var source = @"
@@ -63,8 +59,7 @@ public class IntlDisplayNamesTests
 
     // ========== Script Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_ScriptLatin(ExecutionMode mode)
     {
         var source = @"
@@ -77,8 +72,7 @@ public class IntlDisplayNamesTests
 
     // ========== Currency Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_CurrencyUSD(ExecutionMode mode)
     {
         var source = @"
@@ -89,8 +83,7 @@ public class IntlDisplayNamesTests
         Assert.Contains("Dollar", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_CurrencyEUR(ExecutionMode mode)
     {
         var source = @"
@@ -103,8 +96,7 @@ public class IntlDisplayNamesTests
 
     // ========== Calendar Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_CalendarGregory(ExecutionMode mode)
     {
         var source = @"
@@ -117,8 +109,7 @@ public class IntlDisplayNamesTests
 
     // ========== DateTimeField Display Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_DateTimeFieldYear(ExecutionMode mode)
     {
         var source = @"
@@ -131,8 +122,7 @@ public class IntlDisplayNamesTests
 
     // ========== Fallback Behavior ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_FallbackCode(ExecutionMode mode)
     {
         var source = @"
@@ -143,8 +133,7 @@ public class IntlDisplayNamesTests
         Assert.Equal("ZZZ\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_FallbackNone(ExecutionMode mode)
     {
         var source = @"
@@ -158,8 +147,7 @@ public class IntlDisplayNamesTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisplayNames_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"

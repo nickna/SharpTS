@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ReflectApiTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Has_ChecksPropertyExistence(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class ReflectApiTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Has_ArrayIndex(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class ReflectApiTests
         Assert.Equal("true\ntrue\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Has_InheritedProperty(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ReflectApiTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_DeleteProperty_RemovesProperty(ExecutionMode mode)
     {
         var source = """
@@ -75,8 +71,7 @@ public class ReflectApiTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_DeleteProperty_MissingProperty_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +84,7 @@ public class ReflectApiTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_DeleteProperty_FrozenObject_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +98,7 @@ public class ReflectApiTests
         Assert.Equal("false\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_DeleteProperty_SealedObject_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +112,7 @@ public class ReflectApiTests
         Assert.Equal("false\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Get_ReadsProperty(ExecutionMode mode)
     {
         var source = """
@@ -133,8 +125,7 @@ public class ReflectApiTests
         Assert.Equal("hello\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Get_MissingProperty_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -146,8 +137,7 @@ public class ReflectApiTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Set_SetsProperty(ExecutionMode mode)
     {
         var source = """
@@ -161,8 +151,7 @@ public class ReflectApiTests
         Assert.Equal("true\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Set_FrozenObject_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -177,8 +166,7 @@ public class ReflectApiTests
         Assert.Equal("false\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_OwnKeys_ReturnsAllKeys(ExecutionMode mode)
     {
         var source = """
@@ -194,8 +182,7 @@ public class ReflectApiTests
         Assert.Equal("3\na\nb\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_GetPrototypeOf_ReturnsPrototype(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +196,7 @@ public class ReflectApiTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_SetPrototypeOf_SetsPrototype(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +210,7 @@ public class ReflectApiTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_SetPrototypeOf_NonExtensible_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +224,7 @@ public class ReflectApiTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_IsExtensible_ReturnsTrueByDefault(ExecutionMode mode)
     {
         var source = """
@@ -252,8 +236,7 @@ public class ReflectApiTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_PreventExtensions_ReturnsTrueAndPrevents(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +250,7 @@ public class ReflectApiTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_GetOwnPropertyDescriptor_ReturnsDescriptor(ExecutionMode mode)
     {
         var source = """
@@ -284,8 +266,7 @@ public class ReflectApiTests
         Assert.Equal("42\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_GetOwnPropertyDescriptor_MissingProperty_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +279,7 @@ public class ReflectApiTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_DefineProperty_DefinesProperty(ExecutionMode mode)
     {
         var source = """
@@ -313,8 +293,7 @@ public class ReflectApiTests
         Assert.Equal("true\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Apply_CallsFunction(ExecutionMode mode)
     {
         var source = """
@@ -329,8 +308,7 @@ public class ReflectApiTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reflect_Construct_CreatesInstance(ExecutionMode mode)
     {
         var source = """

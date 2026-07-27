@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StaticGeneratorMethodTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGenerator_SingleYield_Works(ExecutionMode mode)
     {
         var source = """
@@ -22,8 +21,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGenerator_WithParameter_Works(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +33,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("0,2,4\n0\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGenerator_ReadsStaticField_Works(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +47,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGenerator_ExplicitReturnType_Works(ExecutionMode mode)
     {
         // Per #692: an explicit Generator<T> return type doesn't change the lowering path.
@@ -63,8 +59,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceGenerator_StillWorks(ExecutionMode mode)
     {
         // Regression guard: the instance form (the path #692 did not touch) keeps working.
@@ -76,8 +71,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticAsyncGenerator_ForAwait_Works(ExecutionMode mode)
     {
         // #778: a static async generator (static async *m()) was emitted as a plain async method, so
@@ -92,8 +86,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("1\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticAsyncGenerator_ParameterAndAwait_Works(ExecutionMode mode)
     {
         // Reads a parameter (in a yield, not a for-condition — see the CompiledOnly test below) and
@@ -107,8 +100,7 @@ public class StaticGeneratorMethodTests
         Assert.Equal("5\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticAsyncGenerator_DefaultParamLoopAndAwait_Works(ExecutionMode mode)
     {
         // Exercises a default value-type parameter, a C-style for loop whose bound reads that

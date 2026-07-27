@@ -10,8 +10,7 @@ public class ErrorTests
 {
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_NoArgs_CreatesErrorWithEmptyMessage(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class ErrorTests
         Assert.Equal("Error\n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_WithMessage_CreatesErrorWithMessage(ExecutionMode mode)
     {
         var source = @"
@@ -36,8 +34,7 @@ public class ErrorTests
         Assert.Equal("Error\nSomething went wrong\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CalledWithoutNew_StillCreatesError(ExecutionMode mode)
     {
         var source = @"
@@ -49,8 +46,7 @@ public class ErrorTests
         Assert.Equal("Error\nWithout new\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_ToString_FormatsCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -61,8 +57,7 @@ public class ErrorTests
         Assert.Equal("Error: Test error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_ToString_NoMessage(ExecutionMode mode)
     {
         var source = @"
@@ -73,8 +68,7 @@ public class ErrorTests
         Assert.Equal("Error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_StringCoercion_InvokesToString(ExecutionMode mode)
     {
         // String(e), `${e}` and "" + e must all go through Error.prototype.toString
@@ -89,8 +83,7 @@ public class ErrorTests
         Assert.Equal("TypeError: boom\nTypeError: boom\nTypeError: boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_StringCoercion_NoMessage(ExecutionMode mode)
     {
         var source = @"
@@ -101,8 +94,7 @@ public class ErrorTests
         Assert.Equal("RangeError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_StringCoercion_FromCatch(ExecutionMode mode)
     {
         var source = @"
@@ -117,8 +109,7 @@ public class ErrorTests
         Assert.Equal("TypeError: caught\nTypeError: caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instance_StringCoercion_InvokesUserToString(ExecutionMode mode)
     {
         // #922 generalization: a user class with its own toString() is dispatched
@@ -135,8 +126,7 @@ public class ErrorTests
         Assert.Equal("(1,2)\n(1,2)\n(1,2)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instance_StringCoercion_NoToString_KeepsDefault(ExecutionMode mode)
     {
         // A plain instance with no toString() brands as Node's ordinary-object
@@ -150,8 +140,7 @@ public class ErrorTests
         Assert.Equal("[object Object]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_HasStackProperty(ExecutionMode mode)
     {
         var source = @"
@@ -166,8 +155,7 @@ public class ErrorTests
 
     #region Error Subtype Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -179,8 +167,7 @@ public class ErrorTests
         Assert.Equal("TypeError\nInvalid type\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RangeError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -192,8 +179,7 @@ public class ErrorTests
         Assert.Equal("RangeError\nOut of range\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReferenceError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -205,8 +191,7 @@ public class ErrorTests
         Assert.Equal("ReferenceError\nUndefined variable\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SyntaxError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -218,8 +203,7 @@ public class ErrorTests
         Assert.Equal("SyntaxError\nUnexpected token\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URIError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -231,8 +215,7 @@ public class ErrorTests
         Assert.Equal("URIError\nInvalid URI\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EvalError_CreatesWithCorrectName(ExecutionMode mode)
     {
         var source = @"
@@ -248,8 +231,7 @@ public class ErrorTests
 
     #region Error Subtype Without New
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeError_CalledWithoutNew_StillCreatesError(ExecutionMode mode)
     {
         var source = @"
@@ -261,8 +243,7 @@ public class ErrorTests
         Assert.Equal("TypeError\nWithout new\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RangeError_CalledWithoutNew_StillCreatesError(ExecutionMode mode)
     {
         var source = @"
@@ -277,8 +258,7 @@ public class ErrorTests
 
     #region AggregateError Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AggregateError_WithErrors_CreatesCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -292,8 +272,7 @@ public class ErrorTests
         Assert.Equal("AggregateError\nMultiple errors\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AggregateError_WithEmptyArray_CreatesCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -306,8 +285,7 @@ public class ErrorTests
         Assert.Equal("AggregateError\nNo errors\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AggregateError_DefaultMessage(ExecutionMode mode)
     {
         var source = @"
@@ -322,8 +300,7 @@ public class ErrorTests
 
     #region Mutable Properties Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_NameIsMutable(ExecutionMode mode)
     {
         var source = @"
@@ -335,8 +312,7 @@ public class ErrorTests
         Assert.Equal("CustomError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_MessageIsMutable(ExecutionMode mode)
     {
         var source = @"
@@ -352,8 +328,7 @@ public class ErrorTests
 
     #region Throw/Catch Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CanBeThrown(ExecutionMode mode)
     {
         var source = @"
@@ -368,8 +343,7 @@ public class ErrorTests
         Assert.Equal("Error\nThrown error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeError_CanBeThrown(ExecutionMode mode)
     {
         var source = @"
@@ -384,8 +358,7 @@ public class ErrorTests
         Assert.Equal("TypeError\nType error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_RethrowPreservesProperties(ExecutionMode mode)
     {
         var source = @"
@@ -409,8 +382,7 @@ public class ErrorTests
 
     #region Error.cause Tests (ES2022)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_WithCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
@@ -423,8 +395,7 @@ public class ErrorTests
         Assert.Equal("wrapped\noriginal\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_WithStringCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
@@ -436,8 +407,7 @@ public class ErrorTests
         Assert.Equal("failed\nnetwork timeout\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_WithNumberCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
@@ -448,8 +418,7 @@ public class ErrorTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_WithoutCause_CauseIsUndefined(ExecutionMode mode)
     {
         var source = @"
@@ -460,8 +429,7 @@ public class ErrorTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeError_WithCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
@@ -475,8 +443,7 @@ public class ErrorTests
         Assert.Equal("TypeError\ntype mismatch\nroot cause\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CauseChaining_ThreeLevels(ExecutionMode mode)
     {
         var source = @"
@@ -491,8 +458,7 @@ public class ErrorTests
         Assert.Equal("top\nmiddle\nroot\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CauseInTryCatch_PreservedAfterThrow(ExecutionMode mode)
     {
         var source = @"
@@ -509,8 +475,7 @@ public class ErrorTests
         Assert.Equal("wrapper\nRangeError\nout of range\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CauseIsMutable(ExecutionMode mode)
     {
         var source = @"
@@ -522,8 +487,7 @@ public class ErrorTests
         Assert.Equal("manually set\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_CalledWithoutNew_WithCause(ExecutionMode mode)
     {
         var source = @"
@@ -539,8 +503,7 @@ public class ErrorTests
 
     #region Error as Global Variable (Issue #24)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofError_ReturnsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -552,8 +515,7 @@ public class ErrorTests
         Assert.Equal("function\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExtendsError_Basic(ExecutionMode mode)
     {
         var source = @"
@@ -571,8 +533,7 @@ public class ErrorTests
         Assert.Equal("MyError\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExtendsError_InstanceofMyError(ExecutionMode mode)
     {
         var source = @"
@@ -590,8 +551,7 @@ public class ErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExtendsTypeError(ExecutionMode mode)
     {
         var source = @"
@@ -612,8 +572,7 @@ public class ErrorTests
         Assert.Equal("CustomTypeError\nbad type\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExtendsError_MultiLevel(ExecutionMode mode)
     {
         var source = @"
@@ -642,8 +601,7 @@ public class ErrorTests
         Assert.Equal("AppError\nserver error\n500\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExtendsError_NoExplicitConstructor(ExecutionMode mode)
     {
         var source = @"
@@ -669,8 +627,7 @@ public class ErrorTests
     /// synthesizes a real <c>RangeError</c>, matching compiled mode which throws a real
     /// <c>$RangeError</c>. Asserted identical in both modes.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltInRangeError_CaughtAsRangeErrorInstance(ExecutionMode mode)
     {
         var source = @"
@@ -693,8 +650,7 @@ public class ErrorTests
     /// no initial value throws <c>"TypeError: ..."</c> from the built-in. The caught value
     /// must be a real <c>TypeError</c> in both modes.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltInTypeError_CaughtAsTypeErrorInstance(ExecutionMode mode)
     {
         var source = @"
@@ -718,8 +674,7 @@ public class ErrorTests
     /// caught as the typed Error by an outer <c>try</c>. Guards the catch-binding coercion
     /// against the host-error string round-trip across the boundary.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltInError_AcrossFunctionBoundary_CaughtAsTypedError(ExecutionMode mode)
     {
         var source = @"
@@ -740,8 +695,7 @@ public class ErrorTests
     /// identity when caught (the catch-binding coercion only touches prefixed strings), and a
     /// guest <c>throw</c> of a plain string stays a string.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GuestThrows_PreserveValueIdentity(ExecutionMode mode)
     {
         var source = @"

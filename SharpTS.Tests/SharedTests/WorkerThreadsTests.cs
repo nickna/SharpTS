@@ -11,8 +11,7 @@ public class WorkerThreadsTests
 {
     #region SharedArrayBuffer Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SharedArrayBuffer_Constructor_CreatesBufferWithSize(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class WorkerThreadsTests
         Assert.Equal("16\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SharedArrayBuffer_Slice_CreatesNewBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -40,8 +38,7 @@ public class WorkerThreadsTests
 
     #region TypedArray over SharedArrayBuffer Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Int32Array_OverSharedArrayBuffer_SharesMemory(ExecutionMode mode)
     {
         var source = @"
@@ -55,8 +52,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_WithByteOffset_CreatesCorrectView(ExecutionMode mode)
     {
         var source = @"
@@ -69,8 +65,7 @@ public class WorkerThreadsTests
         Assert.Equal("4\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Uint8Array_OverSharedArrayBuffer_WorksCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -85,8 +80,7 @@ public class WorkerThreadsTests
         Assert.Equal("255\n128\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_FromLength_CreatesArray(ExecutionMode mode)
     {
         var source = @"
@@ -107,8 +101,7 @@ public class WorkerThreadsTests
 
     #region Atomics Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Load_ReadsValue(ExecutionMode mode)
     {
         var source = @"
@@ -121,8 +114,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Store_WritesValue(ExecutionMode mode)
     {
         var source = @"
@@ -135,8 +127,7 @@ public class WorkerThreadsTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Add_AddsAndReturnsOldValue(ExecutionMode mode)
     {
         var source = @"
@@ -151,8 +142,7 @@ public class WorkerThreadsTests
         Assert.Equal("10\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Sub_SubtractsAndReturnsOldValue(ExecutionMode mode)
     {
         var source = @"
@@ -167,8 +157,7 @@ public class WorkerThreadsTests
         Assert.Equal("10\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Exchange_SwapsValues(ExecutionMode mode)
     {
         var source = @"
@@ -183,8 +172,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_CompareExchange_Success(ExecutionMode mode)
     {
         var source = @"
@@ -199,8 +187,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_CompareExchange_Failure(ExecutionMode mode)
     {
         var source = @"
@@ -215,8 +202,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_And_PerformsBitwiseAnd(ExecutionMode mode)
     {
         var source = @"
@@ -231,8 +217,7 @@ public class WorkerThreadsTests
         Assert.Equal("15\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Or_PerformsBitwiseOr(ExecutionMode mode)
     {
         var source = @"
@@ -247,8 +232,7 @@ public class WorkerThreadsTests
         Assert.Equal("10\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_Xor_PerformsBitwiseXor(ExecutionMode mode)
     {
         var source = @"
@@ -263,8 +247,7 @@ public class WorkerThreadsTests
         Assert.Equal("15\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Atomics_IsLockFree_ReturnsBooleanForSize(ExecutionMode mode)
     {
         var source = @"
@@ -279,8 +262,7 @@ public class WorkerThreadsTests
 
     #region MessageChannel Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannel_Constructor_CreatesTwoPorts(ExecutionMode mode)
     {
         var source = @"
@@ -293,8 +275,7 @@ public class WorkerThreadsTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannel_PortOnMessage_ReceivesPostedValue(ExecutionMode mode)
     {
         // #209 (interpreter) / #222 (compiled $MessagePort): port.on() must
@@ -315,8 +296,7 @@ public class WorkerThreadsTests
         Assert.Contains("received: hello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannel_MessagesPostedBeforeListener_DeliveredInOrderAfterImplicitStart(ExecutionMode mode)
     {
         // #222: messages posted before any listener exists must queue and be
@@ -338,8 +318,7 @@ public class WorkerThreadsTests
         Assert.Contains("got: first\ngot: second", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannel_UnclosedPort_DoesNotHangProcess(ExecutionMode mode)
     {
         // #1254: a plain in-process MessageChannel (neither port ever transferred to a
@@ -362,8 +341,7 @@ public class WorkerThreadsTests
 
     #region StructuredClone Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesObject(ExecutionMode mode)
     {
         var source = @"
@@ -377,8 +355,7 @@ public class WorkerThreadsTests
         Assert.Equal("1\n999\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesNestedObjects(ExecutionMode mode)
     {
         var source = @"
@@ -392,8 +369,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesArrays(ExecutionMode mode)
     {
         var source = @"
@@ -407,8 +383,7 @@ public class WorkerThreadsTests
         Assert.Equal("1\n999\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_SharesSharedArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -428,8 +403,7 @@ public class WorkerThreadsTests
         Assert.Equal("42\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesMap(ExecutionMode mode)
     {
         var source = @"
@@ -443,8 +417,7 @@ public class WorkerThreadsTests
         Assert.Equal("1\n999\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesSet(ExecutionMode mode)
     {
         var source = @"
@@ -464,8 +437,7 @@ public class WorkerThreadsTests
     /// affect the clone. Before the fix, compiled mode's <c>$Runtime.StructuredClone</c>
     /// aliased all of these by reference (only List/Dictionary/Set were deep-cloned).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesDateIndependently(ExecutionMode mode)
     {
         var source = @"
@@ -478,8 +450,7 @@ public class WorkerThreadsTests
         Assert.Equal("1000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesRegExpSourceAndFlags(ExecutionMode mode)
     {
         var source = @"
@@ -493,8 +464,7 @@ public class WorkerThreadsTests
         Assert.Equal("abc\ngi\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesTypedArrayIndependently(ExecutionMode mode)
     {
         var source = @"
@@ -507,8 +477,7 @@ public class WorkerThreadsTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesBufferIndependently(ExecutionMode mode)
     {
         var source = @"
@@ -521,8 +490,7 @@ public class WorkerThreadsTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ClonesErrorPreservingNameAndMessage(ExecutionMode mode)
     {
         var source = @"
@@ -542,8 +510,7 @@ public class WorkerThreadsTests
     /// Before the fix, compiled mode's shallow fallback aliased these by reference instead
     /// of throwing.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ThrowsForFunction(ExecutionMode mode)
     {
         // Dual-mode parity check: a non-guest-throw exception's catch value is the raw
@@ -562,8 +529,7 @@ public class WorkerThreadsTests
         Assert.Equal("threw:string\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ThrowsForNestedFunction(ExecutionMode mode)
     {
         var source = @"
@@ -578,8 +544,7 @@ public class WorkerThreadsTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ThrowsForSymbol(ExecutionMode mode)
     {
         var source = @"
@@ -594,8 +559,7 @@ public class WorkerThreadsTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuredClone_ThrowsForClassInstance(ExecutionMode mode)
     {
         var source = @"
@@ -635,8 +599,7 @@ public class WorkerThreadsTests
     /// the Ref keeps the loop alive for it, so the test cannot flake the way a
     /// wall-clock window would.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Terminate_KeepsEventLoopAliveUntilSettled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -674,8 +637,7 @@ public class WorkerThreadsTests
     /// the parked wait. A still-leaked thread would never produce it. <c>"survived"</c> after
     /// the wait must never be delivered — termination is not catchable by guest code.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Terminate_WakesAtomicsWaitAndEmitsExitCode1(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -719,8 +681,7 @@ public class WorkerThreadsTests
     /// hardcoded 0 and nothing stopped the loop early, so a terminated worker either reported
     /// 0 or waited out the 5s join.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Terminate_StopsCooperativeEventLoopWorkerWithExitCode1(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -760,8 +721,7 @@ public class WorkerThreadsTests
     /// before any <c>'message'</c> it posts. SharpTS emitted no such event. The worker posts
     /// a message at the top of its script; the parent must see <c>'online'</c> first.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Online_FiresBeforeFirstMessage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -796,8 +756,7 @@ public class WorkerThreadsTests
     /// is detached by the time <c>new Worker</c> returns. Dual-mode: the Worker uses the C#
     /// <c>StructuredClone</c> in both interpreter and compiled parents.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ArrayBufferInTransferList_DetachesSource(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -827,8 +786,7 @@ public class WorkerThreadsTests
     /// the fix the interpreter had no ArrayBuffer clone arm and threw "Cannot clone value of
     /// type SharpTSArrayBuffer", so the worker failed to spawn. Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_NonTransferredArrayBufferWorkerData_IsCopiedNotDetached(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -894,8 +852,7 @@ public class WorkerThreadsTests
     /// parent's set routes to the shared C# store in both modes (compiled via a reflection
     /// helper); the worker reads it through the interpreter.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_EnvironmentData_VisibleInWorker_NotInProcessEnv(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -924,8 +881,7 @@ public class WorkerThreadsTests
     /// dual-mode by <see cref="Worker_ReceiveMessageOnPort_OnTransferredPort"/> (driven through
     /// the interpreter inside the worker).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReceiveMessageOnPort_EmptyPort_IsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -949,8 +905,7 @@ public class WorkerThreadsTests
     /// emitted <c>$MessagePort</c> queue directly (it was previously a stub that always returned
     /// <c>undefined</c>).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReceiveMessageOnPort_QueuedMessage_ReturnsMessageThenUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -982,8 +937,7 @@ public class WorkerThreadsTests
     /// <c>{ idle, active, utilization }</c> object (SharpTS has no precise idle/active loop
     /// accounting). Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Performance_EventLoopUtilization_ReturnsShape(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1009,8 +963,7 @@ public class WorkerThreadsTests
     /// #1004: <c>worker.getHeapSnapshot()</c> throws a clear "not supported" error — a
     /// V8-format heap snapshot has no .NET equivalent (epic ceiling). Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_GetHeapSnapshot_ThrowsClearError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1072,8 +1025,7 @@ public class WorkerThreadsTests
     /// <c>worker.resourceLimits</c> (cosmetic — .NET cannot enforce V8 heap/stack sizing).
     /// Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ResourceLimits_EchoedBack(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1102,8 +1054,7 @@ public class WorkerThreadsTests
     /// Console into a per-worker Readable <c>worker.stdout</c>; the parent reads it via
     /// 'data'/'end'. Each chunk is marshalled onto the parent loop before delivery. Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_StdoutTrue_CapturesWorkerConsoleOutput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1136,8 +1087,7 @@ public class WorkerThreadsTests
     /// the worker always interprets; a compiled parent reaches <c>worker.stdin</c> via runtime
     /// dispatch on the C# SharpTSWorker (like worker.stdout).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_StdinTrue_ParentWriteReadableInWorker(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1168,8 +1118,7 @@ public class WorkerThreadsTests
     /// worker accumulates each chunk and, on 'end', posts the concatenation — verifying both
     /// ordering and that end() flushes after the last chunk. Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_StdinTrue_MultipleWritesPreserveOrder(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1201,8 +1150,7 @@ public class WorkerThreadsTests
     /// (its GetMember convention for stdout/stderr too), which is falsy like Node's <c>null</c>,
     /// so <c>!w.stdin</c> holds. Dual-mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_StdinWithoutOption_IsAbsent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1234,8 +1182,7 @@ public class WorkerThreadsTests
     /// <c>StructuredClone</c> registry (compiled via a reflection helper), and the Worker
     /// transferList clone honors it in both modes.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_MarkAsUntransferable_BufferIsClonedNotDetached(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1269,8 +1216,7 @@ public class WorkerThreadsTests
     /// postMessage. Dual-mode: the worker always interprets and posts through the C#
     /// <c>SharpTSWorker</c>, whose clone throws DataCloneError for a function in both modes.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_PostUncloneableToParent_FiresMessageError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1297,8 +1243,7 @@ public class WorkerThreadsTests
     /// <c>parentPort</c> fires <c>'messageerror'</c>. The worker echoes which event it saw.
     /// Dual-mode (parent posts through the C# <c>SharpTSWorker</c>).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ParentPostsUncloneable_WorkerParentPortFiresMessageError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1334,8 +1279,7 @@ public class WorkerThreadsTests
     /// <c>'messageerror'</c>, matching the interpreter's receiver-side model (previously
     /// compiled returned the function by reference and fired <c>'message'</c>).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannelPort_PostUncloneable_FiresMessageError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1364,8 +1308,7 @@ public class WorkerThreadsTests
     /// unknown values by reference, so a nested function silently passed through as
     /// <c>'message'</c> in compiled mode.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannelPort_PostNestedUncloneable_FiresMessageError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1406,8 +1349,7 @@ public class WorkerThreadsTests
     /// and the running-Ref keeps the parent alive until it does, so the test cannot
     /// flake the way a wall-clock window would.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_RunningWorker_KeepsParentLoopAliveUntilMessage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1437,8 +1379,7 @@ public class WorkerThreadsTests
     /// <c>ref()</c> after an <c>unref()</c> restores the keep-alive so a later
     /// delayed message is still delivered (positive, load-independent assertion).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_UnrefThenRef_RestoresKeepAlive(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1477,8 +1418,7 @@ public class WorkerThreadsTests
     /// passed as an object, not an array — the shape that always yielded null under
     /// the old <c>as SharpTSArray</c> read, confirming the bag no longer trips on it.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_StdioAndResourceLimitsOptions_AreHonored(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1528,8 +1468,7 @@ public class WorkerThreadsTests
     /// <c>__dirname</c> routes the harness through the real-disk path so the worker
     /// can load its script.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_WorkerData_PrimitiveIsVisibleInWorker(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1557,8 +1496,7 @@ public class WorkerThreadsTests
     /// <c>Dictionary&lt;string, object?&gt;</c> clone path as well as the interpreter
     /// <c>SharpTSObject</c> path.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_WorkerData_ObjectIsClonedAndVisibleInWorker(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1611,8 +1549,7 @@ public class WorkerThreadsTests
     /// output-present check — so it cannot flake under load.
     /// </para>
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_TransferredMessagePort_RoundTripsBetweenParentAndWorker(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1651,8 +1588,7 @@ public class WorkerThreadsTests
     /// compiled <c>Dictionary&lt;string, object?&gt;</c> clone path through the bridge
     /// as well as the interpreter <c>SharpTSObject</c> path).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_TransferredMessagePort_StructuredClonesObjectPayloads(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1694,8 +1630,7 @@ public class WorkerThreadsTests
     /// an object carrying <c>message</c>. The guest reads <c>e.message</c> with a string
     /// fallback so the rejection text is observable either way.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_MessagePortInWorkerDataWithoutTransfer_IsRejected(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1733,8 +1668,7 @@ public class WorkerThreadsTests
     /// only after the previous reply, so each delivery happens while the worker is
     /// otherwise quiescent.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_TransferredMessagePort_MultipleRoundTripsWhileIdle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1780,8 +1714,7 @@ public class WorkerThreadsTests
     /// compiled <c>CompiledMessagePortBridge.ReceiveMessageSync</c> as well as the
     /// interpreter <c>SharpTSMessagePort</c> path.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ReceiveMessageOnPort_OnTransferredPort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1823,8 +1756,7 @@ public class WorkerThreadsTests
     /// In interpreter mode the cross-thread <c>SharpTSMessagePort</c> delivery handles
     /// both ends.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_SplitChannel_WorkersCanCommunicateDirectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1875,8 +1807,7 @@ public class WorkerThreadsTests
     /// the parent can log them on the main thread (worker console.log is not guaranteed
     /// to reach the captured output before the harness returns).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_SplitChannel_MultipleRoundTrips(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1944,8 +1875,7 @@ public class WorkerThreadsTests
     /// <c>__dirname</c> routes the harness through the real-disk path so the worker can
     /// load its script. Load-independent positive assertion (output present).
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ImportFromWorkerThreads_ResolvesInModuleMode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1972,8 +1902,7 @@ public class WorkerThreadsTests
     /// case for <c>worker_threads</c>. Here the worker imports a relative helper and a
     /// worker_threads binding together.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_ImportRelativeModule_WorksInModuleMode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -2016,8 +1945,7 @@ public class WorkerThreadsTests
     /// hold in BOTH modes (previously asserted only for the interpreter, which #464
     /// targeted).
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_UncloneableWorkerData_RejectsWithErrorObjectNotString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -2062,8 +1990,7 @@ public class WorkerThreadsTests
     /// so the compiled path is only ever reached on the main thread. This locks in that both modes agree
     /// and that the canonical <c>if (parentPort)</c> main-thread guard keeps working (not a throw).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParentPort_OnMainThread_IsNull(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

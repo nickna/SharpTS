@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class UtilTypesHelpersTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_ExpandedPredicates(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -34,8 +33,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MIMEType_Parses(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -56,8 +54,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("text\nhtml\ntext/html\nutf-8\ntrue\ntext/html;charset=utf-8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MIMEParams_SetGetDelete(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +75,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("1\nnull\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Aborted_ResolvesOnAbort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +96,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("resolved\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Aborted_AlreadyAborted_ResolvesImmediately(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -122,8 +117,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("resolved\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseEnv_ParsesDotenv(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -141,8 +135,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("bar\nqux\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyAliases_Work(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +160,7 @@ public class UtilTypesHelpersTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n{\"a\":1,\"b\":2}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetCallSites_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

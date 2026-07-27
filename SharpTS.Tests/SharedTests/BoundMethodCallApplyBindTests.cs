@@ -21,8 +21,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class BoundMethodCallApplyBindTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Push_VariadicDirect(ExecutionMode mode)
     {
         // Pre-existing bug: arr.push(a, b, c) in compiled mode only pushed the first arg.
@@ -38,8 +37,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("4\n10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Unshift_VariadicDirect(ExecutionMode mode)
     {
         // JS `arr.unshift(a, b, c)` on [x,y] yields [a,b,c,x,y].
@@ -57,8 +55,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("5\n1\n2\n3\n4\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Push_CallSingleArg(ExecutionMode mode)
     {
         var source = @"
@@ -72,8 +69,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("4\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Push_CallMultipleArgs(ExecutionMode mode)
     {
         var source = @"
@@ -88,8 +84,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("4\n10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Push_ApplyWithArrayArg(ExecutionMode mode)
     {
         var source = @"
@@ -103,8 +98,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("5\n5\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Push_BindThenCall(ExecutionMode mode)
     {
         // bind with receiver + partial args, then invoke with more args.
@@ -121,8 +115,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("6\n100\n101\n102\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Get_CallAndApply(ExecutionMode mode)
     {
         var source = @"
@@ -137,8 +130,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Set_CallChainable(ExecutionMode mode)
     {
         var source = @"
@@ -153,8 +145,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("100\n200\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Get_BindWithPartialArg(ExecutionMode mode)
     {
         // `.bind(m, 'key')` prepends 'key' so calling with no args invokes get('key').
@@ -171,8 +162,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("42\n99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Has_CallAndApply(ExecutionMode mode)
     {
         var source = @"
@@ -187,8 +177,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Add_BindThenCall(ExecutionMode mode)
     {
         var source = @"
@@ -204,8 +193,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("2\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BoundMethod_NameProperty(ExecutionMode mode)
     {
         // `.name` on a bound array/map/set method returns the captured method name.
@@ -221,8 +209,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("push\nget\nhas\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BoundMethod_TypeofAfterBind(ExecutionMode mode)
     {
         // A bind() result must still report as 'function'.
@@ -235,8 +222,7 @@ public class BoundMethodCallApplyBindTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_MapGet_CallAndApply(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

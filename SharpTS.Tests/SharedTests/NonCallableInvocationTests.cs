@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NonCallableInvocationTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullCallee_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class NonCallableInvocationTests
         Assert.Equal("true object is not a function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedAndMissingMethod_ThrowTypeError(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +51,7 @@ public class NonCallableInvocationTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCallablePrimitive_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -67,8 +64,7 @@ public class NonCallableInvocationTests
         Assert.Equal("true number is not a function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalCall_OfNullish_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +78,7 @@ public class NonCallableInvocationTests
         Assert.Equal("undefined\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainMethodCall_ShortCircuitsWholeChain(ExecutionMode mode)
     {
         // ECMA-262 §13.3: a.b?.m(x) yields undefined when a.b is nullish — the
@@ -103,8 +98,7 @@ public class NonCallableInvocationTests
         Assert.Equal("undefined\n/x/\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCallableMember_EvaluatesArgsBeforeCallabilityCheck(ExecutionMode mode)
     {
         // ECMA-262 §13.3.6.1: ArgumentListEvaluation (step 2) runs before the
@@ -122,8 +116,7 @@ public class NonCallableInvocationTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MemberAccessOnUndefinedCallee_ThrowsBeforeArgs(ExecutionMode mode)
     {
         // ECMA-262 §13.3.2.1: evaluating the callee `o.bar.gar` calls
@@ -142,8 +135,7 @@ public class NonCallableInvocationTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyThisMethodCall_EvaluatesArgs(ExecutionMode mode)
     {
         // `this.bar(se())` in a function called without a receiver: sloppy-mode
@@ -163,8 +155,7 @@ public class NonCallableInvocationTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitBreak_WithoutIteratorReturn_DoesNotThrow(ExecutionMode mode)
     {
         // iterator.return() is optional per the iterator protocol; the for-await

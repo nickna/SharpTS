@@ -12,8 +12,7 @@ public class IntersectionTests
 {
     #region Basic Intersection of Interfaces
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ObjectTypes_MergesProperties(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class IntersectionTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_RequiresAllProperties(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class IntersectionTests
         Assert.Equal("1\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_MissingProperty_TypeError(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class IntersectionTests
 
     #region Multiple Intersections
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_MultipleTypes_Works(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +84,7 @@ public class IntersectionTests
 
     #region Type Alias with Intersection
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_TypeAlias_Works(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +105,7 @@ public class IntersectionTests
 
     #region Compatible Property Merge
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_CompatibleProperties_Merges(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +126,7 @@ public class IntersectionTests
 
     #region Precedence Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_BindsTighterThanUnion_MatchesFirst(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +143,7 @@ public class IntersectionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_BindsTighterThanUnion_MatchesSecond(ExecutionMode mode)
     {
         var source = """
@@ -173,8 +165,7 @@ public class IntersectionTests
 
     #region Special Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithUnknown_ProducesOtherType(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +178,7 @@ public class IntersectionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithAny_ProducesAny(ExecutionMode mode)
     {
         var source = """
@@ -201,8 +191,7 @@ public class IntersectionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithNever_ProducesNever(ExecutionMode mode)
     {
         var source = """
@@ -218,8 +207,7 @@ public class IntersectionTests
 
     #region Primitive Intersections
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ConflictingPrimitives_ProducesNever(ExecutionMode mode)
     {
         var source = """
@@ -235,8 +223,7 @@ public class IntersectionTests
 
     #region Property Conflicts
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ConflictingPropertyTypes_PropertyBecomesNever(ExecutionMode mode)
     {
         var source = """
@@ -255,8 +242,7 @@ public class IntersectionTests
 
     #region Function Parameter
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_AsFunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -279,8 +265,7 @@ public class IntersectionTests
 
     #region Nested Intersection in Union
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_NestedInUnion_Works(ExecutionMode mode)
     {
         var source = """
@@ -299,8 +284,7 @@ public class IntersectionTests
         Assert.Equal("1\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_NestedInUnion_MatchesSecondBranch(ExecutionMode mode)
     {
         var source = """
@@ -322,8 +306,7 @@ public class IntersectionTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ClassWithInterface_Works(ExecutionMode mode)
     {
         var source = """
@@ -346,8 +329,7 @@ public class IntersectionTests
         Assert.Equal("Report\nContent here\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_TwoInterfaces_WithMethods(ExecutionMode mode)
     {
         var source = """
@@ -372,8 +354,7 @@ public class IntersectionTests
         Assert.Equal("Hello\nGoodbye\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ArrayOfIntersection_Works(ExecutionMode mode)
     {
         var source = """
@@ -395,8 +376,7 @@ public class IntersectionTests
         Assert.Equal("Alice\n30\nBob\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_ArrayOfIntersection_MissingProperty_TypeError(ExecutionMode mode)
     {
         var source = """
@@ -413,8 +393,7 @@ public class IntersectionTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_GenericConstraint_Works(ExecutionMode mode)
     {
         var source = """
@@ -433,8 +412,7 @@ public class IntersectionTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_GenericConstraint_MissingProperty_TypeError(ExecutionMode mode)
     {
         var source = """
@@ -452,8 +430,7 @@ public class IntersectionTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_AsReturnType_Works(ExecutionMode mode)
     {
         var source = """
@@ -473,8 +450,7 @@ public class IntersectionTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithOptionalProperties_Works(ExecutionMode mode)
     {
         var source = """
@@ -490,8 +466,7 @@ public class IntersectionTests
         Assert.Equal("1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithOptionalProperties_AllProvided(ExecutionMode mode)
     {
         var source = """
@@ -508,8 +483,7 @@ public class IntersectionTests
         Assert.Equal("1\nhello\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_DeeplyNested_Works(ExecutionMode mode)
     {
         var source = """
@@ -531,8 +505,7 @@ public class IntersectionTests
         Assert.Equal("1\ntwo\ntrue\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_InUnionWithNull_Works(ExecutionMode mode)
     {
         // Test intersection type with null in union - requires null check before property access
@@ -551,8 +524,7 @@ public class IntersectionTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_InUnionWithNull_NullValue(ExecutionMode mode)
     {
         var source = """
@@ -567,8 +539,7 @@ public class IntersectionTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_SamePropertySameType_Merges(ExecutionMode mode)
     {
         var source = """
@@ -585,8 +556,7 @@ public class IntersectionTests
         Assert.Equal("common\n1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intersection_WithLiteralType_Works(ExecutionMode mode)
     {
         var source = """

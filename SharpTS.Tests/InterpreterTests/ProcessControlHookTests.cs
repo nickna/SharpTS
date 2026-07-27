@@ -33,7 +33,15 @@ public class ProcessControlHookTests
             // the embedder contract: throw from the handler to unwind instead.
             Assert.Contains("after-exit", output);
         }
-        finally { ProcessControl.ExitHandler = original; }
+        finally
+        {
+            ProcessControl.ExitHandler = original;
+            // process.exit publishes the code to Environment.ExitCode BEFORE the
+            // handler runs; with an intercepting handler the process survives, so
+            // the code would leak into every later test that reads it (the
+            // ProcessLifecycleTests 'exit 0' events read Environment.ExitCode).
+            Environment.ExitCode = 0;
+        }
     }
 
     [Fact]

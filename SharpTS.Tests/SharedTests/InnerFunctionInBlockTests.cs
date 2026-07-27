@@ -25,8 +25,7 @@ public class InnerFunctionInBlockTests
 {
     // ---- The headline #1230 repro: inner function in a loop body capturing a loop-body const ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LoopBody_InnerFunction_CapturesBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +45,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Capturing the loop VARIABLE directly (needs the value boxed into the closure field) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LoopBody_InnerFunction_CapturesLoopVariable_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +64,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Non-capturing inner function in a plain block (was also unreferenceable) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainBlock_NonCapturingInnerFunction_IsReferenceable(ExecutionMode mode)
     {
         var source = """
@@ -86,8 +83,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Inner function in an if-branch inside a function ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfBranch_InnerFunction_IsReferenceable(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +101,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Two block-levels deep: function nested in an if inside a loop ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LoopThenIf_InnerFunction_CapturesLoopVariable_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +122,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Inner function capturing an enclosing parameter ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Block_InnerFunction_CapturesParameter(ExecutionMode mode)
     {
         var source = """
@@ -145,8 +139,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Recursive inner function declared in a block ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Block_RecursiveInnerFunction(ExecutionMode mode)
     {
         var source = """
@@ -163,8 +156,7 @@ public class InnerFunctionInBlockTests
 
     // ---- Sibling inner functions in a block: a later one calls an earlier one ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Block_SiblingInnerFunctions_CallEarlierSibling(ExecutionMode mode)
     {
         var source = """
@@ -182,8 +174,7 @@ public class InnerFunctionInBlockTests
 
     // ---- while-loop body ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WhileLoopBody_InnerFunction_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +196,7 @@ public class InnerFunctionInBlockTests
 
     // ---- for-of loop body: inner function captures the loop variable ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfLoopBody_InnerFunction_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +215,7 @@ public class InnerFunctionInBlockTests
 
     // ---- An arrow created in the same block captures the block-scoped inner function's value ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Block_ArrowCapturesInnerFunctionValue(ExecutionMode mode)
     {
         var source = """

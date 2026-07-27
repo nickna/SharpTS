@@ -10,8 +10,7 @@ public class ArrayFlatTests
 {
     #region Flat Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_DefaultDepth_FlattensOneLevel(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class ArrayFlatTests
         Assert.Equal("5\n1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_DepthTwo_FlattensNested(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class ArrayFlatTests
         Assert.Equal("4\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_DepthZero_ShallowCopy(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ArrayFlatTests
         Assert.Equal("2\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_LargeDepth_FlattensCompletely(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +75,7 @@ public class ArrayFlatTests
         Assert.Equal("5\n1\n2\n3\n4\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_EmptyArray_ReturnsEmpty(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +88,7 @@ public class ArrayFlatTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Flat_NoNestedArrays_ReturnsCopy(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +108,7 @@ public class ArrayFlatTests
 
     #region FlatMap Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlatMap_ArrayResult_Flattens(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +127,7 @@ public class ArrayFlatTests
         Assert.Equal("6\n1\n2\n2\n4\n3\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlatMap_NonArrayResult_AddedDirectly(ExecutionMode mode)
     {
         var source = """
@@ -151,8 +143,7 @@ public class ArrayFlatTests
         Assert.Equal("3\n2\n4\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlatMap_EmptyArrayResult_Filters(ExecutionMode mode)
     {
         var source = """
@@ -167,8 +158,7 @@ public class ArrayFlatTests
         Assert.Equal("2\n2\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlatMap_ReceivesIndexAndArray(ExecutionMode mode)
     {
         var source = """

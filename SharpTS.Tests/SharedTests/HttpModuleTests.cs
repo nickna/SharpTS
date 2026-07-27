@@ -21,8 +21,7 @@ public class HttpModuleTests : IDisposable
     }
 
     public void Dispose() => _server.Dispose();
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchIsGlobal(ExecutionMode mode)
     {
         // Test that fetch is available as a global
@@ -33,8 +32,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchReturnsPromise(ExecutionMode mode)
     {
         // Test that fetch returns something with .then. Point at the local server
@@ -49,8 +47,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpModuleImport(ExecutionMode mode)
     {
         // Test that http module can be imported
@@ -65,8 +62,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpModuleExports(ExecutionMode mode)
     {
         // Test http module exports - use typeof instead of 'in' operator for compiler compatibility
@@ -84,8 +80,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpCreateServer(ExecutionMode mode)
     {
         // Test creating a server (without starting it)
@@ -103,8 +98,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpListenZero_BindsEphemeralPort(ExecutionMode mode)
     {
         // #214: HttpListener has no dynamic-port support, so listen(0) probes
@@ -127,8 +121,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpStatusCodes(ExecutionMode mode)
     {
         // Test STATUS_CODES constant
@@ -145,8 +138,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("OK\nNot Found\nInternal Server Error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpMethods(ExecutionMode mode)
     {
         // Test METHODS constant
@@ -163,8 +155,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent(ExecutionMode mode)
     {
         // Test globalAgent object
@@ -180,8 +171,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("object\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponseProperties(ExecutionMode mode)
     {
         // Test Response properties
@@ -197,8 +187,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("true\n200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchJsonMethod(ExecutionMode mode)
     {
         // Test Response.json() method
@@ -214,8 +203,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchTextMethod(ExecutionMode mode)
     {
         // Test Response.text() method
@@ -231,8 +219,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchWithPost(ExecutionMode mode)
     {
         // Test POST request with body
@@ -254,8 +241,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("POST\n123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThisHasFetch(ExecutionMode mode)
     {
         // Test that fetch is accessible via globalThis and is the same reference
@@ -266,8 +252,7 @@ public class HttpModuleTests : IDisposable
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThisHasFetch_TypeCheck(ExecutionMode mode)
     {
         // Test that fetch is accessible via globalThis

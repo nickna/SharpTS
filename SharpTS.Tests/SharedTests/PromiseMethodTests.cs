@@ -12,8 +12,7 @@ public class PromiseMethodTests
 {
     #region Promise.then() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_BasicChaining(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class PromiseMethodTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_MultipleChains(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +52,7 @@ public class PromiseMethodTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_ReturnsPromise_Flattens(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +73,7 @@ public class PromiseMethodTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_WithOnRejected(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +92,7 @@ public class PromiseMethodTests
         Assert.Equal("caught: error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_PassesValueThrough(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +112,7 @@ public class PromiseMethodTests
     // (then/catch) or no-op (finally). Previously the interpreter registered
     // these with minArity 1 and threw "expects 1-2 arguments but got 0" (#382).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Then_ZeroArgs_PassesValueThrough(ExecutionMode mode)
     {
         var source = """
@@ -133,8 +127,7 @@ public class PromiseMethodTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Catch_ZeroArgs_PassesValueThrough(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +142,7 @@ public class PromiseMethodTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_ZeroArgs_PassesValueThrough(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +161,7 @@ public class PromiseMethodTests
 
     #region Promise.catch() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Catch_HandlesRejection(ExecutionMode mode)
     {
         var source = """
@@ -186,8 +177,7 @@ public class PromiseMethodTests
         Assert.Equal("handled: something went wrong\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Catch_PassesThroughResolved(ExecutionMode mode)
     {
         var source = """
@@ -203,8 +193,7 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Catch_AfterThen(ExecutionMode mode)
     {
         var source = """
@@ -226,8 +215,7 @@ public class PromiseMethodTests
 
     #region Promise.finally() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_RunsOnResolved(ExecutionMode mode)
     {
         var source = """
@@ -246,8 +234,7 @@ public class PromiseMethodTests
         Assert.Equal("42\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_DoesNotAlterValue(ExecutionMode mode)
     {
         var source = """
@@ -268,8 +255,7 @@ public class PromiseMethodTests
 
     #region Promise.all() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void All_ResolvesAllPromises(ExecutionMode mode)
     {
         var source = """
@@ -289,8 +275,7 @@ public class PromiseMethodTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void All_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -305,8 +290,7 @@ public class PromiseMethodTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void All_WithNonPromises(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +309,7 @@ public class PromiseMethodTests
 
     #region Promise.race() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Race_FirstResolvedWins(ExecutionMode mode)
     {
         var source = """
@@ -343,8 +326,7 @@ public class PromiseMethodTests
         Assert.Equal("first\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Race_NonPromiseWins(ExecutionMode mode)
     {
         var source = """
@@ -366,8 +348,7 @@ public class PromiseMethodTests
 
     #region Promise.resolve() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_WrapsValue(ExecutionMode mode)
     {
         var source = """
@@ -383,8 +364,7 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_NoDoubleWrap(ExecutionMode mode)
     {
         var source = """
@@ -404,8 +384,7 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_NoArgs(ExecutionMode mode)
     {
         var source = """
@@ -426,8 +405,7 @@ public class PromiseMethodTests
     /// Previously, this caused double-wrapping: Promise(Task(Promise(Task(value))))
     /// which led to infinite loops in async iterators.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_NestedPromiseResolve_Flattens(ExecutionMode mode)
     {
         var source = """
@@ -447,8 +425,7 @@ public class PromiseMethodTests
     /// <summary>
     /// Regression test: Triple-nested Promise.resolve must flatten correctly.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_TripleNestedPromise_Flattens(ExecutionMode mode)
     {
         var source = """
@@ -471,8 +448,7 @@ public class PromiseMethodTests
     /// This is the exact pattern that caused infinite loops in async iterators
     /// when the iterator result object was double-wrapped.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_IteratorResultObject_NotDoubleWrapped(ExecutionMode mode)
     {
         var source = """
@@ -493,8 +469,7 @@ public class PromiseMethodTests
     /// <summary>
     /// Regression test: Async function returning Promise.resolve should not double-wrap.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_FromAsyncFunction_NotDoubleWrapped(ExecutionMode mode)
     {
         var source = """
@@ -516,8 +491,7 @@ public class PromiseMethodTests
 
     #region Promise.reject() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reject_CreatesRejectedPromise(ExecutionMode mode)
     {
         var source = """
@@ -541,8 +515,7 @@ public class PromiseMethodTests
 
     #region Complex Scenarios
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Chaining_ThenCatchFinally(ExecutionMode mode)
     {
         var source = """
@@ -574,8 +547,7 @@ public class PromiseMethodTests
         Assert.Equal("25\nthen1 then2 finally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleThenOnSamePromise(ExecutionMode mode)
     {
         var source = """
@@ -597,8 +569,7 @@ public class PromiseMethodTests
 
     #region Promise.allSettled() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllSettled_AllResolve(ExecutionMode mode)
     {
         var source = """
@@ -618,8 +589,7 @@ public class PromiseMethodTests
         Assert.Equal("fulfilled\n1\nfulfilled\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllSettled_SomeReject(ExecutionMode mode)
     {
         var source = """
@@ -642,8 +612,7 @@ public class PromiseMethodTests
         Assert.Equal("fulfilled\n1\nrejected\nerror\nfulfilled\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllSettled_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -658,8 +627,7 @@ public class PromiseMethodTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllSettled_WithNonPromises(ExecutionMode mode)
     {
         var source = """
@@ -681,8 +649,7 @@ public class PromiseMethodTests
 
     #region Promise.any() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_FirstResolves(ExecutionMode mode)
     {
         var source = """
@@ -699,8 +666,7 @@ public class PromiseMethodTests
         Assert.Equal("first\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_NonPromiseWins(ExecutionMode mode)
     {
         var source = """
@@ -718,8 +684,7 @@ public class PromiseMethodTests
         Assert.Equal("immediate\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_FirstFulfilledAfterRejection(ExecutionMode mode)
     {
         var source = """
@@ -737,8 +702,7 @@ public class PromiseMethodTests
         Assert.Equal("success\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_AllReject_ThrowsAggregateError(ExecutionMode mode)
     {
         var source = """
@@ -760,8 +724,7 @@ public class PromiseMethodTests
         Assert.Equal("caught\nAggregateError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_EmptyArray_ThrowsAggregateError(ExecutionMode mode)
     {
         // ECMA-262 §27.2.4.3: empty iterable rejects with an AggregateError
@@ -785,8 +748,7 @@ public class PromiseMethodTests
         Assert.Equal("caught\nAggregateError\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_RejectionIsInstanceofAggregateError(ExecutionMode mode)
     {
         // #232: the combinator's rejection must be the same representation
@@ -812,8 +774,7 @@ public class PromiseMethodTests
         Assert.Equal("true\ntrue\ntrue true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Any_ErrorsCarryGuestRejectionValues(ExecutionMode mode)
     {
         // #232: e.errors must hold what each promise rejected with — the
@@ -838,8 +799,7 @@ public class PromiseMethodTests
         Assert.Equal("2\ntrue t1\ntrue boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllSettled_ReasonCarriesGuestValue(ExecutionMode mode)
     {
         // #232 (adjacent): allSettled's rejected outcome must carry the guest
@@ -860,8 +820,7 @@ public class PromiseMethodTests
         Assert.Equal("rejected\ntrue r1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void InstanceofError_InsideAsyncFunction(ExecutionMode mode)
     {
         // #232 root cause in compiled mode: state-machine bodies (async
@@ -889,8 +848,7 @@ public class PromiseMethodTests
 
     #region Promise Executor Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ImmediateResolve(ExecutionMode mode)
     {
         var source = """
@@ -908,8 +866,7 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ImmediateReject(ExecutionMode mode)
     {
         var source = """
@@ -931,8 +888,7 @@ public class PromiseMethodTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ResolveWithObject(ExecutionMode mode)
     {
         var source = """
@@ -950,8 +906,7 @@ public class PromiseMethodTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ResolveWithUndefined(ExecutionMode mode)
     {
         var source = """
@@ -969,8 +924,7 @@ public class PromiseMethodTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ExecutorThrows(ExecutionMode mode)
     {
         var source = """
@@ -992,8 +946,7 @@ public class PromiseMethodTests
         Assert.Equal("caught executor error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_OnlyFirstSettlementCounts(ExecutionMode mode)
     {
         var source = """
@@ -1013,8 +966,7 @@ public class PromiseMethodTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ChainWithThen(ExecutionMode mode)
     {
         var source = """
@@ -1032,8 +984,7 @@ public class PromiseMethodTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_ChainWithCatch(ExecutionMode mode)
     {
         var source = """
@@ -1051,8 +1002,7 @@ public class PromiseMethodTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_UseInPromiseAll(ExecutionMode mode)
     {
         var source = """
@@ -1070,8 +1020,7 @@ public class PromiseMethodTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorConstructor_UseInPromiseRace(ExecutionMode mode)
     {
         var source = """
@@ -1099,8 +1048,7 @@ public class PromiseMethodTests
     /// dispatch itself stays unobservable until guest classes can subclass
     /// Promise (#233) and Symbol is a first-class value (#234).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PromiseConstructorProperty_IsPromiseGlobal(ExecutionMode mode)
     {
         var source = """
@@ -1126,8 +1074,7 @@ public class PromiseMethodTests
     /// new Exception(reason.ToString()), so catch handlers saw a host string
     /// ("Error: nope") instead of the rejected error object (#232 family).
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutorReject_PreservesGuestReason(ExecutionMode mode)
     {
         var source = """

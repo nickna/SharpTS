@@ -13,8 +13,7 @@ public class ObjectPrototypeTests
 {
     // === preventExtensions ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_BlocksNewProperties(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_AllowsModifyingExisting(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class ObjectPrototypeTests
         Assert.Equal("100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_AllowsDeleting(ExecutionMode mode)
     {
         // Delete operator support varies by mode
@@ -53,8 +50,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_ReturnsTheObject(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +61,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_OnArray(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +73,7 @@ public class ObjectPrototypeTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_ArrayAllowsModification(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +87,7 @@ public class ObjectPrototypeTests
 
     // === isExtensible ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_TrueForNormalObject(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +96,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_FalseAfterPreventExtensions(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +107,7 @@ public class ObjectPrototypeTests
         Assert.Equal("false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_FalseForFrozenObject(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +117,7 @@ public class ObjectPrototypeTests
         Assert.Equal("false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_FalseForSealedObject(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +127,7 @@ public class ObjectPrototypeTests
         Assert.Equal("false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_FalseForPrimitives(ExecutionMode mode)
     {
         var source = """
@@ -148,8 +137,7 @@ public class ObjectPrototypeTests
         Assert.Equal("false\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_TrueForArray(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +147,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsExtensible_FalseAfterPreventExtensionsOnArray(ExecutionMode mode)
     {
         var source = """
@@ -173,8 +160,7 @@ public class ObjectPrototypeTests
 
     // === getOwnPropertySymbols ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetOwnPropertySymbols_ReturnsSymbolKeys(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +173,7 @@ public class ObjectPrototypeTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetOwnPropertySymbols_EmptyForNoSymbols(ExecutionMode mode)
     {
         var source = """
@@ -198,8 +183,7 @@ public class ObjectPrototypeTests
         Assert.Equal("0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetOwnPropertySymbols_ReturnsArray(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +195,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetOwnPropertySymbols_SymbolsAreUsable(ExecutionMode mode)
     {
         var source = """
@@ -226,8 +209,7 @@ public class ObjectPrototypeTests
 
     // === getPrototypeOf ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetPrototypeOf_ReturnsPrototypeFromCreate(ExecutionMode mode)
     {
         var source = """
@@ -238,8 +220,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetPrototypeOf_ReturnsNullForNullPrototype(ExecutionMode mode)
     {
         var source = """
@@ -249,8 +230,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetPrototypeOf_PlainObjectIsNotUndefined(ExecutionMode mode)
     {
         // The two modes diverge here: compiled returns %Object.prototype% (spec-
@@ -267,8 +247,7 @@ public class ObjectPrototypeTests
 
     // === setPrototypeOf ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_ChangesPrototype(ExecutionMode mode)
     {
         var source = """
@@ -281,8 +260,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_ReturnsTheObject(ExecutionMode mode)
     {
         var source = """
@@ -293,8 +271,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_CopiesPropertiesFromNewPrototype(ExecutionMode mode)
     {
         var source = """
@@ -307,8 +284,7 @@ public class ObjectPrototypeTests
         Assert.Equal("42\n100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_ToNull(ExecutionMode mode)
     {
         var source = """
@@ -320,8 +296,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_ThrowsOnNonExtensible(ExecutionMode mode)
     {
         var source = """
@@ -338,8 +313,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetPrototypeOf_ThrowsOnClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -360,8 +334,7 @@ public class ObjectPrototypeTests
 
     // === Edge cases and interactions ===
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_DifferentFromFreeze(ExecutionMode mode)
     {
         // preventExtensions allows modification but not addition
@@ -379,8 +352,7 @@ public class ObjectPrototypeTests
         Assert.Equal("100\n1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PreventExtensions_DifferentFromSeal_AllowsDelete(ExecutionMode mode)
     {
         // preventExtensions allows delete, seal does not
@@ -399,8 +371,7 @@ public class ObjectPrototypeTests
         Assert.Equal("10\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInstance_IsExtensible(ExecutionMode mode)
     {
         var source = """
@@ -416,8 +387,7 @@ public class ObjectPrototypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInstance_PreventExtensions(ExecutionMode mode)
     {
         var source = """
@@ -436,8 +406,7 @@ public class ObjectPrototypeTests
         Assert.Equal("false\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInstance_GetOwnPropertySymbols(ExecutionMode mode)
     {
         var source = """
@@ -455,8 +424,7 @@ public class ObjectPrototypeTests
 
     // ECMA-262 §20.1.3.4 Object.prototype.isPrototypeOf — was stubbed to
     // always return false (#104).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsPrototypeOf_WalksPrototypeChain(ExecutionMode mode)
     {
         var source = """

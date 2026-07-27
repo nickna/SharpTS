@@ -23,8 +23,7 @@ public class TimerTests
 {
     #region setTimeout Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_ReturnsTimeout(ExecutionMode mode)
     {
         // setTimeout should return a Timeout object
@@ -37,8 +36,7 @@ public class TimerTests
         Assert.Equal("object\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_ZeroDelay_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         // setTimeout with 0 delay should still execute (interpreted: check variable)
@@ -54,8 +52,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_ZeroDelay_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setTimeout with 0 delay should execute callback (compiled: check console output)
@@ -72,8 +69,7 @@ public class TimerTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_DefaultDelay_IsZero_Interpreted(ExecutionMode mode)
     {
         // setTimeout without delay should default to 0 (interpreted)
@@ -88,8 +84,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_DefaultDelay_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setTimeout without delay should default to 0 and execute (compiled)
@@ -105,8 +100,7 @@ public class TimerTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_KeepsEventLoopAlive(ExecutionMode mode)
     {
         // In interpreted mode, the event loop should stay alive for timers by default
@@ -117,8 +111,7 @@ public class TimerTests
         Assert.Equal("executed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_Unref_AllowsExit_Interpreted(ExecutionMode mode)
     {
         // unref() drops a timer's hold on the event loop: the program exits once
@@ -147,8 +140,7 @@ public class TimerTests
 
     #region clearTimeout Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearTimeout_PreventsExecution_Interpreted(ExecutionMode mode)
     {
         // clearTimeout should prevent callback from executing (interpreted: check variable)
@@ -165,8 +157,7 @@ public class TimerTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearTimeout_PreventsExecution_Compiled(ExecutionMode mode)
     {
         // clearTimeout should prevent callback from executing (compiled: check console output)
@@ -183,8 +174,7 @@ public class TimerTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearTimeout_Null_DoesNotThrow(ExecutionMode mode)
     {
         // clearTimeout(null) should not throw
@@ -196,8 +186,7 @@ public class TimerTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearTimeout_Undefined_DoesNotThrow(ExecutionMode mode)
     {
         // clearTimeout(undefined) should not throw
@@ -209,8 +198,7 @@ public class TimerTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearTimeout_NoArgs_DoesNotThrow(ExecutionMode mode)
     {
         // clearTimeout() with no args should not throw
@@ -226,8 +214,7 @@ public class TimerTests
 
     #region ref/unref Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_Ref_ReturnsSameObject(ExecutionMode mode)
     {
         // ref() should return the same Timeout object for chaining
@@ -240,8 +227,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_Unref_ReturnsSameObject(ExecutionMode mode)
     {
         // unref() should return the same Timeout object for chaining
@@ -254,8 +240,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_HasRef_DefaultsToTrue(ExecutionMode mode)
     {
         // hasRef should default to true
@@ -267,8 +252,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_Unref_SetsHasRefFalse(ExecutionMode mode)
     {
         // unref() should set hasRef to false
@@ -281,8 +265,7 @@ public class TimerTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_RefAfterUnref_SetsHasRefTrue(ExecutionMode mode)
     {
         // ref() after unref() should set hasRef back to true
@@ -296,8 +279,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timeout_MethodChaining(ExecutionMode mode)
     {
         // ref/unref should support method chaining
@@ -313,8 +295,7 @@ public class TimerTests
 
     #region setTimeout with Arguments Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_PassesArgsToCallback_Interpreted(ExecutionMode mode)
     {
         // Additional args should be passed to callback (interpreted: captured variable)
@@ -329,8 +310,7 @@ public class TimerTests
         Assert.Equal("helloworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_PassesArgsToCallback_Compiled(ExecutionMode mode)
     {
         // Additional args should be passed to callback (compiled: console.log)
@@ -348,8 +328,7 @@ public class TimerTests
 
     #region Type Checking Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_RequiresCallback(ExecutionMode mode)
     {
         // setTimeout without callback should fail type checking
@@ -360,8 +339,7 @@ public class TimerTests
         Assert.Contains("setTimeout", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_CallbackMustBeFunction(ExecutionMode mode)
     {
         // setTimeout with non-function callback should fail type checking
@@ -372,8 +350,7 @@ public class TimerTests
         Assert.Contains("function", ex.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetTimeout_DelayMustBeNumber(ExecutionMode mode)
     {
         // setTimeout with non-number delay should fail type checking
@@ -388,8 +365,7 @@ public class TimerTests
 
     #region setInterval Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_ReturnsTimeout(ExecutionMode mode)
     {
         // setInterval should return a Timeout object (same as setTimeout)
@@ -403,8 +379,7 @@ public class TimerTests
         Assert.Equal("object\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_ExecutesMultipleTimes_Interpreted(ExecutionMode mode)
     {
         // setInterval should execute multiple times (interpreted: count variable)
@@ -421,8 +396,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setInterval should execute callback (compiled: console.log and self-clear)
@@ -447,8 +421,7 @@ public class TimerTests
             "Expected 'done' to appear after 'tick' in output");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearInterval_StopsExecution_Interpreted(ExecutionMode mode)
     {
         // clearInterval should stop the interval (interpreted: count variable)
@@ -467,8 +440,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearInterval_StopsExecution_Compiled(ExecutionMode mode)
     {
         // clearInterval should stop the interval from executing (compiled: console.log)
@@ -484,8 +456,7 @@ public class TimerTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_PassesArgsToCallback_Interpreted(ExecutionMode mode)
     {
         // Additional args should be passed to callback (interpreted: captured variable)
@@ -501,8 +472,7 @@ public class TimerTests
         Assert.Equal("helloworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_PassesArgsToCallback_Compiled(ExecutionMode mode)
     {
         // Additional args should be passed to callback (compiled: console.log)
@@ -517,8 +487,7 @@ public class TimerTests
         Assert.Contains("helloworld", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_DefaultDelay_Interpreted(ExecutionMode mode)
     {
         // setInterval without delay should default to 0 (interpreted)
@@ -534,8 +503,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_DefaultDelay_Compiled(ExecutionMode mode)
     {
         // setInterval without delay should default to 0 and execute (compiled)
@@ -556,8 +524,7 @@ public class TimerTests
 
     #region clearInterval Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearInterval_Null_DoesNotThrow(ExecutionMode mode)
     {
         // clearInterval(null) should not throw
@@ -569,8 +536,7 @@ public class TimerTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearInterval_Undefined_DoesNotThrow(ExecutionMode mode)
     {
         // clearInterval(undefined) should not throw
@@ -582,8 +548,7 @@ public class TimerTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClearInterval_NoArgs_DoesNotThrow(ExecutionMode mode)
     {
         // clearInterval() with no args should not throw
@@ -599,8 +564,7 @@ public class TimerTests
 
     #region setInterval ref/unref Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interval_Ref_ReturnsSameObject(ExecutionMode mode)
     {
         // ref() should return the same object for chaining
@@ -614,8 +578,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interval_Unref_ReturnsSameObject(ExecutionMode mode)
     {
         // unref() should return the same object for chaining
@@ -629,8 +592,7 @@ public class TimerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interval_HasRef_DefaultsToTrue(ExecutionMode mode)
     {
         // hasRef should default to true
@@ -647,8 +609,7 @@ public class TimerTests
 
     #region setInterval Type Checking Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_RequiresCallback(ExecutionMode mode)
     {
         // setInterval without callback should fail type checking
@@ -659,8 +620,7 @@ public class TimerTests
         Assert.Contains("setInterval", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_CallbackMustBeFunction(ExecutionMode mode)
     {
         // setInterval with non-function callback should fail type checking
@@ -671,8 +631,7 @@ public class TimerTests
         Assert.Contains("function", ex.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetInterval_DelayMustBeNumber(ExecutionMode mode)
     {
         // setInterval with non-number delay should fail type checking
@@ -687,8 +646,7 @@ public class TimerTests
 
     #region Promise + setTimeout Integration Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_Promise_SetTimeout_ResolvesCallback(ExecutionMode mode)
     {
         // await new Promise(r => setTimeout(r, N)) — the canonical delay-async pattern
@@ -707,8 +665,7 @@ public class TimerTests
         Assert.Contains("top-end", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_Promise_SetTimeout_ZeroDelay(ExecutionMode mode)
     {
         // await new Promise(r => setTimeout(r, 0)) — zero-delay variant

@@ -10,8 +10,7 @@ public class IndexSignatureTests
 {
     #region String Index Signatures
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringIndex_BasicGetSet_Works(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class IndexSignatureTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringIndex_WithExplicitProperties_Works(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class IndexSignatureTests
         Assert.Equal("app\n1.0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringIndex_DynamicKeyAccess_Works(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +67,7 @@ public class IndexSignatureTests
 
     #region Number Index Signatures
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberIndex_BasicGetSet_Works(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +85,7 @@ public class IndexSignatureTests
         Assert.Equal("zero\none\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberIndex_WithExplicitProperties_Works(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +109,7 @@ public class IndexSignatureTests
 
     #region Symbol Index Signatures
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolIndex_BasicGetSet_Works(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +126,7 @@ public class IndexSignatureTests
         Assert.Equal("value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolIndex_MultipleSymbols_Works(ExecutionMode mode)
     {
         var source = """
@@ -157,8 +150,7 @@ public class IndexSignatureTests
 
     #region Mixed Index Signatures
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedIndex_StringAndNumber_Works(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +173,7 @@ public class IndexSignatureTests
 
     #region Plain Object Bracket Notation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainObject_BracketNotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -195,8 +186,7 @@ public class IndexSignatureTests
         Assert.Equal("test\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainObject_DynamicKeyAccess_Works(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +199,7 @@ public class IndexSignatureTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainObject_SetWithBracket_Works(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +219,7 @@ public class IndexSignatureTests
 
     #region Class Instance Bracket Notation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInstance_BracketNotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -252,8 +240,7 @@ public class IndexSignatureTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInstance_SymbolKey_Works(ExecutionMode mode)
     {
         var source = """
@@ -278,8 +265,7 @@ public class IndexSignatureTests
 
     #region Inline Type Index Signature
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InlineType_IndexSignature_Works(ExecutionMode mode)
     {
         var source = """

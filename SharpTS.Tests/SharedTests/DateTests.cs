@@ -10,8 +10,7 @@ public class DateTests
 {
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_NoArgs_CreatesCurrentDate(ExecutionMode mode)
     {
         // Date with no args should create a date near current time
@@ -25,8 +24,7 @@ public class DateTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_Milliseconds_CreatesFromEpoch(ExecutionMode mode)
     {
         // Create date from milliseconds since epoch
@@ -38,8 +36,7 @@ public class DateTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_Components_CreatesCorrectDate(ExecutionMode mode)
     {
         // Create date from year, month, day
@@ -54,8 +51,7 @@ public class DateTests
         Assert.Equal("2024\n0\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_Components_WithTime(ExecutionMode mode)
     {
         var source = @"
@@ -72,8 +68,7 @@ public class DateTests
         Assert.Equal("2024\n5\n20\n14\n30\n45\n123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ISOString_ParsesCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -88,8 +83,7 @@ public class DateTests
 
     #region Static Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_Now_ReturnsNumber(ExecutionMode mode)
     {
         var source = @"
@@ -101,8 +95,7 @@ public class DateTests
         Assert.Equal("number\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_FunctionCall_ReturnsString(ExecutionMode mode)
     {
         // Date() called without 'new' returns a string
@@ -118,8 +111,7 @@ public class DateTests
 
     #region Getter Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_GetMonth_Returns0Indexed(ExecutionMode mode)
     {
         // January is 0, December is 11
@@ -133,8 +125,7 @@ public class DateTests
         Assert.Equal("0\n11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_GetDay_ReturnsCorrectDayOfWeek(ExecutionMode mode)
     {
         // 2024-01-01 is Monday (day 1), Sunday is 0
@@ -146,8 +137,7 @@ public class DateTests
         Assert.Equal("0\n", output); // January 7, 2024 is Sunday
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_GetTimezoneOffset_ReturnsNumber(ExecutionMode mode)
     {
         var source = @"
@@ -163,8 +153,7 @@ public class DateTests
 
     #region Setter Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetFullYear_MutatesAndReturnsTimestamp(ExecutionMode mode)
     {
         var source = @"
@@ -177,8 +166,7 @@ public class DateTests
         Assert.Equal("2025\nnumber\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetMonth_MutatesDate(ExecutionMode mode)
     {
         var source = @"
@@ -190,8 +178,7 @@ public class DateTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetDate_MutatesDay(ExecutionMode mode)
     {
         var source = @"
@@ -203,8 +190,7 @@ public class DateTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetHours_MutatesTime(ExecutionMode mode)
     {
         var source = @"
@@ -216,8 +202,7 @@ public class DateTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetTime_SetsFromEpoch(ExecutionMode mode)
     {
         var source = @"
@@ -233,8 +218,7 @@ public class DateTests
 
     #region Conversion Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToISOString_ReturnsUTCFormat(ExecutionMode mode)
     {
         var source = @"
@@ -247,8 +231,7 @@ public class DateTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToJSON_ReturnsISOString(ExecutionMode mode)
     {
         // toJSON returns the same ISO string as toISOString for a valid date (#491).
@@ -260,8 +243,7 @@ public class DateTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToJSON_InvalidDate_ReturnsNull(ExecutionMode mode)
     {
         // ECMA-262 §21.4.4.37: toJSON returns null for a non-finite (Invalid) date,
@@ -274,8 +256,7 @@ public class DateTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ValueOf_ReturnsTimestamp(ExecutionMode mode)
     {
         var source = @"
@@ -286,8 +267,7 @@ public class DateTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToString_ReturnsString(ExecutionMode mode)
     {
         var source = @"
@@ -304,8 +284,7 @@ public class DateTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_InvalidString_CreatesInvalidDate(ExecutionMode mode)
     {
         var source = @"
@@ -317,8 +296,7 @@ public class DateTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_MonthOverflow_RollsOver(ExecutionMode mode)
     {
         // Month 12 should roll over to next year
@@ -331,8 +309,7 @@ public class DateTests
         Assert.Equal("2025\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_TwoDigitYear_MapsTo1900s(ExecutionMode mode)
     {
         // Years 0-99 in constructor should map to 1900-1999
@@ -348,8 +325,7 @@ public class DateTests
 
     #region UTC, Locale, and Legacy Methods (issue #516)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_UTCGetters_ReadEpochInUTC(ExecutionMode mode)
     {
         // UTC getters read the stored instant directly, so the result is timezone-independent.
@@ -362,8 +338,7 @@ public class DateTests
         Assert.Equal("1970 0 1 4\n0 0 0 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_UTCSetters_MutateInUTC(ExecutionMode mode)
     {
         // Single-argument setters behave identically in both modes (no optional args dropped).
@@ -383,8 +358,7 @@ public class DateTests
         Assert.Equal("2020 5 15\n13 30 45 500\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetUTCMonth_RollsOver(ExecutionMode mode)
     {
         // setUTCMonth(13) advances into the next year (month 1 = February).
@@ -398,8 +372,7 @@ public class DateTests
         Assert.Equal("2025 1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToUTCString_FormatsInRFC7231(ExecutionMode mode)
     {
         var source = @"
@@ -410,8 +383,7 @@ public class DateTests
         Assert.Equal("Thu, 01 Jan 1970 00:00:00 GMT\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToLocaleMethods_ReturnStrings(ExecutionMode mode)
     {
         // Output is locale/host-defined, so assert only that they return non-empty strings.
@@ -425,8 +397,7 @@ public class DateTests
         Assert.Equal("string true\nstring true\nstring true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_GetYearAndSetYear_AnnexB(ExecutionMode mode)
     {
         // getYear/setYear operate in local time; constructing and reading locally is TZ-independent.
@@ -443,8 +414,7 @@ public class DateTests
         Assert.Equal("124\n1999\n2005\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_InvalidDate_NewMembersDegradeGracefully(ExecutionMode mode)
     {
         var source = @"
@@ -458,8 +428,7 @@ public class DateTests
         Assert.Equal("Invalid Date\nInvalid Date\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_SetMinutesAndSeconds_MutateInBothModes(ExecutionMode mode)
     {
         // Regression guard: compiled setMinutes/setSeconds/setMilliseconds were previously
@@ -475,8 +444,7 @@ public class DateTests
         Assert.Equal("45 50 123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_MultiArgSetters_HonorOptionalArgs(ExecutionMode mode)
     {
         // #536: both modes honor the optional trailing arguments of the multi-argument setters
@@ -496,8 +464,7 @@ public class DateTests
         Assert.Equal("2020 5 15\n13 30 45 500\n8 15 5 40\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_MultiArgSetters_OverflowRollsOverAllAtOnce(ExecutionMode mode)
     {
         // setUTCFullYear(2020, 1, 31) = Feb 31 2020 -> Mar 2 (leap year), computed all-at-once,
@@ -511,8 +478,7 @@ public class DateTests
         Assert.Equal("2020 2 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_UTC_ReturnsUTCTimestamp(ExecutionMode mode)
     {
         // #538: Date.UTC builds a UTC timestamp; month defaults 0, date 1; 2-digit years map to
@@ -529,8 +495,7 @@ public class DateTests
         Assert.Equal("1704067200000\n1718458245500\n1704067200000\n0\ntrue\n2000-01-01T00:00:00.000Z\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_Parse_ReturnsTimestampOrNaN(ExecutionMode mode)
     {
         // #538: Date.parse returns the timestamp for a parseable string (NaN otherwise), and is
@@ -544,8 +509,7 @@ public class DateTests
         Assert.Equal("1705314600000\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_UTCAndParse_ValueForm(ExecutionMode mode)
     {
         // #538: the statics are also usable in value form (e.g. const f = Date.UTC).
@@ -559,8 +523,7 @@ public class DateTests
         Assert.Equal("1704067200000\n1705314600000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Date_ToLocale_HonorsLocaleAndOptions(ExecutionMode mode)
     {
         // #539: locale and options are honored. Exact locale-formatted output is host-dependent

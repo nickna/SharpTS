@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class EventsStaticHelpersTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Once_ResolvesWithEventArguments(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Once_StaticForm_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -54,8 +52,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("hi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Once_RejectsOnError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -80,8 +77,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("caught:boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Once_RejectsOnAlreadyAbortedSignal(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -107,8 +103,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("aborted:AbortError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void On_AsyncIterator_YieldsEventArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -136,8 +131,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void On_AsyncIterator_AbortEndsIteration(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +161,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("1|AbortError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetEventListeners_ReturnsListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -189,8 +182,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("2\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetMaxListeners_PerEmitterAndDefault(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -211,8 +203,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("15\n10\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticListenerCount_CountsListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -232,8 +223,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("2\n2\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AddAbortListener_FiresOnAbort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -256,8 +246,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("fired:1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AddAbortListener_DisposePreventsFiring(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -281,8 +270,7 @@ public class EventsStaticHelpersTests
         Assert.Equal("fired:0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AddAbortListener_AlreadyAbortedFiresOnMicrotask(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

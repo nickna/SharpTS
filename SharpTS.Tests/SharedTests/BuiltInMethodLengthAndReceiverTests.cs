@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class BuiltInMethodLengthAndReceiverTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RegExpPrototypeMethods_ExposeLength(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class BuiltInMethodLengthAndReceiverTests
         Assert.Equal("1\n1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossCuttingBuiltInMethods_ExposeLength(ExecutionMode mode)
     {
         // §17: each built-in function's `length` is its formal parameter count.
@@ -45,8 +43,7 @@ public class BuiltInMethodLengthAndReceiverTests
         Assert.Equal("1\n2\n1\n1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RegExpExec_OnNonRegExpReceiver_ThrowsTypeError(ExecutionMode mode)
     {
         // §22.2.6.x: exec/test require `this` to have the [[RegExpMatcher]] slot;

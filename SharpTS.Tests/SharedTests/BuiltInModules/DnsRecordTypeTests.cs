@@ -90,8 +90,7 @@ public class DnsRecordTypeTests
 
     #region API surface tests (no network)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Import_NewMethods_Exist(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +113,7 @@ public class DnsRecordTypeTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsPromises_Import_NewMethods_Exist(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -138,8 +136,7 @@ public class DnsRecordTypeTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_NamedImport_ResolveMx(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

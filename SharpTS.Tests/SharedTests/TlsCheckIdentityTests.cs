@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TlsCheckIdentityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CheckServerIdentity_SanMatch(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -25,8 +24,7 @@ public class TlsCheckIdentityTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CheckServerIdentity_Mismatch(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +42,7 @@ public class TlsCheckIdentityTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CheckServerIdentity_Wildcard(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -62,8 +59,7 @@ public class TlsCheckIdentityTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CheckServerIdentity_CnFallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

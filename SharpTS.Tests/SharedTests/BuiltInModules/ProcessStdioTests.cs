@@ -11,8 +11,7 @@ public class ProcessStdioTests
 {
     #region process.stdout
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_Write_OutputsData(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class ProcessStdioTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_Write_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +35,7 @@ public class ProcessStdioTests
         Assert.Equal("testtrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_IsObject(ExecutionMode mode)
     {
         var source = """
@@ -49,8 +46,7 @@ public class ProcessStdioTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_HasWritableProperties(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +57,7 @@ public class ProcessStdioTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_HasOnMethod(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +68,7 @@ public class ProcessStdioTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_OnDrain_RegistersListener(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +83,7 @@ public class ProcessStdioTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_IsTTY_IsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +98,7 @@ public class ProcessStdioTests
 
     #region process.stderr
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStderr_IsObject(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +109,7 @@ public class ProcessStdioTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStderr_IsTTY_IsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -129,8 +120,7 @@ public class ProcessStdioTests
         Assert.Equal("boolean\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStderr_HasWritableProperties(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +131,7 @@ public class ProcessStdioTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStderr_HasOnMethod(ExecutionMode mode)
     {
         var source = """
@@ -157,8 +146,7 @@ public class ProcessStdioTests
 
     #region process.stdin
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_IsObject(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +157,7 @@ public class ProcessStdioTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_IsTTY_IsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +168,7 @@ public class ProcessStdioTests
         Assert.Equal("boolean\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_HasReadableProperties(ExecutionMode mode)
     {
         var source = """
@@ -193,8 +179,7 @@ public class ProcessStdioTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_HasOnMethod(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +190,7 @@ public class ProcessStdioTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_HasPauseResume(ExecutionMode mode)
     {
         var source = """
@@ -218,8 +202,7 @@ public class ProcessStdioTests
         Assert.Equal("function\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_HasSetEncoding(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +217,7 @@ public class ProcessStdioTests
 
     #region Stream method chaining
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_SetEncoding_ReturnsThis(ExecutionMode mode)
     {
         var source = """
@@ -251,8 +233,7 @@ public class ProcessStdioTests
 
     #region Module import patterns
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessModule_StdoutWrite(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -267,8 +248,7 @@ public class ProcessStdioTests
         Assert.Equal("module test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessModule_StdinType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -289,8 +269,7 @@ public class ProcessStdioTests
 
     #region EventEmitter integration
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_EventEmitter_Methods(ExecutionMode mode)
     {
         var source = """
@@ -306,8 +285,7 @@ public class ProcessStdioTests
         Assert.Equal("function\nfunction\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_EventEmitter_Methods(ExecutionMode mode)
     {
         var source = """
@@ -327,8 +305,7 @@ public class ProcessStdioTests
 
     #region Writable stream interface
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_WritableInterface(ExecutionMode mode)
     {
         var source = """
@@ -342,8 +319,7 @@ public class ProcessStdioTests
         Assert.Equal("function\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdout_WritableStateProperties(ExecutionMode mode)
     {
         var source = """
@@ -360,8 +336,7 @@ public class ProcessStdioTests
 
     #region Readable stream interface
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_ReadableInterface(ExecutionMode mode)
     {
         var source = """
@@ -377,8 +352,7 @@ public class ProcessStdioTests
         Assert.Equal("function\nfunction\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessStdin_ReadableStateProperties(ExecutionMode mode)
     {
         var source = """

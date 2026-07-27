@@ -10,8 +10,7 @@ public class DnsModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -28,8 +27,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -49,8 +47,7 @@ public class DnsModuleTests
 
     #region Constants Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Constants_Defined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -71,8 +68,7 @@ public class DnsModuleTests
 
     #region dns.lookup Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_Localhost_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -89,8 +85,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_Localhost_HasAddressAndFamily(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -107,8 +102,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_Localhost_AddressIsValid(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -127,8 +121,7 @@ public class DnsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_Localhost_FamilyIs4Or6(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -144,8 +137,7 @@ public class DnsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_WithFamilyOption_IPv4(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -187,8 +179,7 @@ public class DnsModuleTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_Lookup_RequiresHostname(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -208,8 +199,7 @@ public class DnsModuleTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Dns_Lookup_Callback_InvokedWithAddressAndFamily(ExecutionMode mode)
     {
         // #206: the callback form must invoke (err, address, family)
@@ -230,8 +220,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Dns_Lookup_Callback_AllOption_ReceivesArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -274,8 +263,7 @@ public class DnsModuleTests
 
     #region dns.lookupService Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Dns_LookupService_Callback_InvokedWithHostnameAndService(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -294,8 +282,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_LookupService_LocalhostPort80_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -312,8 +299,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_LookupService_HasHostnameAndService(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -330,8 +316,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_LookupService_ServiceIsPortString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -347,8 +332,7 @@ public class DnsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dns_LookupService_InvalidAddress_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

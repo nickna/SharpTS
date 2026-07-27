@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NetModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -23,8 +22,7 @@ public class NetModuleTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetModuleNodePrefix(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -38,8 +36,7 @@ public class NetModuleTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetModuleExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -58,8 +55,7 @@ public class NetModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetIsIPv4(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -79,8 +75,7 @@ public class NetModuleTests
         Assert.Equal("4\n6\n0\ntrue\nfalse\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetCreateServerReturnsServer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -99,8 +94,7 @@ public class NetModuleTests
         Assert.Equal("false\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetServerListenAndClose(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -124,8 +118,7 @@ public class NetModuleTests
         Assert.Equal("listening\ntrue\ntrue\nclosed\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetServerListeningEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -148,8 +141,7 @@ public class NetModuleTests
         Assert.Contains("close event fired", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetServerConnectionEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -173,8 +165,7 @@ public class NetModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetConnectPositionalPortHostCallback(ExecutionMode mode)
     {
         // Node signature: net.connect(port[, host][, connectListener]) — the
@@ -200,8 +191,7 @@ public class NetModuleTests
         Assert.Contains("connect listener fired", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetSocketWriteAndReceive(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -232,8 +222,7 @@ public class NetModuleTests
         Assert.Contains("received: hello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetSocketCloseEmittedOnceWhenDestroyedAfterEnd(ExecutionMode mode)
     {
         // Node emits 'close' exactly once per socket lifetime. Calling destroy()
@@ -265,8 +254,7 @@ public class NetModuleTests
         Assert.Contains("close events: 1", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetSocketProperties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -293,8 +281,7 @@ public class NetModuleTests
         Assert.Contains("false", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NetServerGetConnections(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -328,8 +315,7 @@ public class NetModuleTests
         return OperatingSystem.IsWindows() ? pipeName : $"/tmp/{pipeName}.sock";
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_PipeBasic(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -361,8 +347,7 @@ public class NetModuleTests
         Assert.Contains("received: pong", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_ConnectionEvent(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -386,8 +371,7 @@ public class NetModuleTests
         Assert.Contains("connection event fired", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_MultipleClients(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -418,8 +402,7 @@ public class NetModuleTests
         Assert.Contains("connection 2", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_OptionsObject(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -442,8 +425,7 @@ public class NetModuleTests
         Assert.Contains("connected via options", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_Properties(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -468,8 +450,7 @@ public class NetModuleTests
         Assert.Contains("readyState: open", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_ServerAddress(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -496,8 +477,7 @@ public class NetModuleTests
         Assert.Contains($"addr: {pipePath}", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_BidirectionalEcho(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -530,8 +510,7 @@ public class NetModuleTests
         Assert.Contains("echo:hello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public void IpcSocket_ConnectErrorCode(ExecutionMode mode)
     {
@@ -561,8 +540,7 @@ public class NetModuleTests
         Assert.Contains("code: E", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_ServerListenErrorEvent(ExecutionMode mode)
     {
         var pipePath = GetIpcPath();
@@ -594,8 +572,7 @@ public class NetModuleTests
         Assert.Contains("listening", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IpcSocket_NetConnect(ExecutionMode mode)
     {
         // Test net.connect() as alias for net.createConnection() with IPC
@@ -625,8 +602,7 @@ public class NetModuleTests
 
     #endregion
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpsModuleImport(ExecutionMode mode)
     {
         // Test that https module can be imported (delegates to http)

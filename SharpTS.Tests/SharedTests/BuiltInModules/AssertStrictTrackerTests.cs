@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class AssertStrictTrackerTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Strict_LooseFormsAliasStrict(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class AssertStrictTrackerTests
         Assert.Equal("equal-strict-throws:true,deep-strict-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Strict_IsCallableAndSelfReferential(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -52,8 +50,7 @@ public class AssertStrictTrackerTests
         Assert.Equal("callable-throws:true\nself:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PartialDeepStrictEqual_Contains(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -76,8 +73,7 @@ public class AssertStrictTrackerTests
         Assert.Equal("pass\nmissing-throws:true\nstrict-leaf-throws:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallTracker_VerifyPassesWhenCallCountMatches(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -99,8 +95,7 @@ public class AssertStrictTrackerTests
         Assert.Equal("42\nreport-empty:true\nverified\ngetCalls:2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallTracker_VerifyThrowsWhenCountMismatches(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

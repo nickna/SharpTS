@@ -23,8 +23,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncTrySuspensionWalkerTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInsideSwitch(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +51,7 @@ public class AsyncTrySuspensionWalkerTests
     // sync-segment mini try/catch), so before #914 the compiled raw throw escaped the guest try and
     // faulted the Task. Fixed by AsyncFunctionMoveNextEmitter.EmitThrow routing a top-level throw into
     // the active flag-based try's exception local (running any intervening finally first).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInsideThrow(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +68,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("caught: boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInsideConsoleLog(ExecutionMode mode)
     {
         // console.log(...) is an ordinary expression statement; its call arm was missing.
@@ -94,8 +91,7 @@ public class AsyncTrySuspensionWalkerTests
     // took the real-IL lowering (illegal BranchIntoTry resume → InvalidProgramException).
     // Fixed in #914 by delegating the walker to the canonical ExprContainsSuspension
     // (the CompoundSetIndex emission already spilled the receiver/index correctly).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInCompoundIndexedAssign(ExecutionMode mode)
     {
         // arr[0] += await ... exercises CompoundAssign + GetIndex + SetIndex.
@@ -115,8 +111,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("arr0: 15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInIndexExpression(ExecutionMode mode)
     {
         // arr[await ...] exercises GetIndex with the await in the index.
@@ -136,8 +131,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("v: 30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInsideLabeledStatement(ExecutionMode mode)
     {
         // The labeled loop wraps the await; pre-fix the missing LabeledStatement
@@ -163,8 +157,7 @@ public class AsyncTrySuspensionWalkerTests
     // had been added). Each puts an await inside a composite the walker must descend into, within
     // a try; under-reporting any of them would re-expose the BranchIntoTry resume failure.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInCompoundMemberAssign(ExecutionMode mode)
     {
         // obj.x += await ... is Expr.CompoundSet.
@@ -184,8 +177,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("x: 15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInLogicalIndexedAssign(ExecutionMode mode)
     {
         // arr[0] ||= await ... is Expr.LogicalSetIndex; arr[0] is falsy so the RHS await runs.
@@ -205,8 +197,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("arr0: 5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInArrayLiteral(ExecutionMode mode)
     {
         // [await ...] is Expr.ArrayLiteral with a suspending element.
@@ -225,8 +216,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("a: 3,9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_AwaitInTemplateLiteral(ExecutionMode mode)
     {
         // `v=${await ...}` is Expr.TemplateLiteral with a suspending interpolation.
@@ -245,8 +235,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("v=4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_ThrowAwait_RunsOwnFinallyThenCatch(ExecutionMode mode)
     {
         // The routed throw lands in this try's catch and its own finally still runs after (#914).
@@ -266,8 +255,7 @@ public class AsyncTrySuspensionWalkerTests
         Assert.Equal("caught: boom\nfinally\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTry_ThrowAwait_NestedInIf_RoutesToCatch(ExecutionMode mode)
     {
         // The `if` is the segment-breaker (its branch contains the await); the throw is emitted while

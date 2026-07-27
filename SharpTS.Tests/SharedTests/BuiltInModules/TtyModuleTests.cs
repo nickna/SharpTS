@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class TtyModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tty_Isatty_ReturnsBoolean(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -24,8 +23,7 @@ public class TtyModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tty_Isatty_InvalidFd_ReturnsFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -39,8 +37,7 @@ public class TtyModuleTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tty_Isatty_TypeofIsFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -54,8 +51,7 @@ public class TtyModuleTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tty_Isatty_NamedImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -70,8 +66,7 @@ public class TtyModuleTests
         Assert.Equal("function\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tty_Isatty_Cjs_Require(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

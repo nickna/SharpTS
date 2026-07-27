@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class UsingDeclarationTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_CallsDisposeAtBlockEnd(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class UsingDeclarationTests
         Assert.Equal("inside block\ndisposed: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_SkipsNullValues(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class UsingDeclarationTests
         Assert.Equal("inside block, after block\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_DisposesInReverseOrder(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +63,7 @@ public class UsingDeclarationTests
         Assert.Equal("c, b, a\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_DisposesOnException(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +87,7 @@ public class UsingDeclarationTests
         Assert.Equal("disposed: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_DisposesOnReturn(ExecutionMode mode)
     {
         var source = """
@@ -116,8 +111,7 @@ public class UsingDeclarationTests
         Assert.Equal("result: 42\ndisposed: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_CommaSeparated_DisposesAll(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +128,7 @@ public class UsingDeclarationTests
         Assert.Equal("b, a\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_VariableAccessible_InsideBlock(ExecutionMode mode)
     {
         var source = """
@@ -152,8 +145,7 @@ public class UsingDeclarationTests
         Assert.Equal("value: 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_WithTypeAnnotation(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +170,7 @@ public class UsingDeclarationTests
         Assert.Equal("value: 100\ndisposed: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_NestedBlocks_DisposeInCorrectOrder(ExecutionMode mode)
     {
         var source = """
@@ -198,8 +189,7 @@ public class UsingDeclarationTests
         Assert.Equal("inner, between, outer\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_DisposeReceivesCorrectThis(ExecutionMode mode)
     {
         var source = """
@@ -219,8 +209,7 @@ public class UsingDeclarationTests
         Assert.Equal("test-resource\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Using_DisposeThrows_CatchesError(ExecutionMode mode)
     {
         var source = """

@@ -10,8 +10,7 @@ public class WeakMapSetTests
 {
     #region WeakMap Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_CreateEmpty(ExecutionMode mode)
     {
         var source = @"
@@ -22,8 +21,7 @@ public class WeakMapSetTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_SetAndGet(ExecutionMode mode)
     {
         var source = @"
@@ -36,8 +34,7 @@ public class WeakMapSetTests
         Assert.Equal("value1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_Has(ExecutionMode mode)
     {
         var source = @"
@@ -52,8 +49,7 @@ public class WeakMapSetTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_Delete(ExecutionMode mode)
     {
         var source = @"
@@ -69,8 +65,7 @@ public class WeakMapSetTests
         Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_SetReturnsWeakMap(ExecutionMode mode)
     {
         var source = @"
@@ -83,8 +78,7 @@ public class WeakMapSetTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_ChainedSet(ExecutionMode mode)
     {
         var source = @"
@@ -101,8 +95,7 @@ public class WeakMapSetTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_GetNonExistentKeyReturnsNull(ExecutionMode mode)
     {
         var source = @"
@@ -114,8 +107,7 @@ public class WeakMapSetTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_UpdateExistingKey(ExecutionMode mode)
     {
         var source = @"
@@ -130,8 +122,7 @@ public class WeakMapSetTests
         Assert.Equal("100\n200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_MultipleKeys(ExecutionMode mode)
     {
         var source = @"
@@ -154,8 +145,7 @@ public class WeakMapSetTests
 
     #region WeakSet Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_CreateEmpty(ExecutionMode mode)
     {
         var source = @"
@@ -166,8 +156,7 @@ public class WeakMapSetTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_Add(ExecutionMode mode)
     {
         var source = @"
@@ -180,8 +169,7 @@ public class WeakMapSetTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_Has(ExecutionMode mode)
     {
         var source = @"
@@ -196,8 +184,7 @@ public class WeakMapSetTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_Delete(ExecutionMode mode)
     {
         var source = @"
@@ -213,8 +200,7 @@ public class WeakMapSetTests
         Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_AddReturnsWeakSet(ExecutionMode mode)
     {
         var source = @"
@@ -227,8 +213,7 @@ public class WeakMapSetTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_ChainedAdd(ExecutionMode mode)
     {
         var source = @"
@@ -245,8 +230,7 @@ public class WeakMapSetTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_AddDuplicate(ExecutionMode mode)
     {
         var source = @"
@@ -260,8 +244,7 @@ public class WeakMapSetTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_MultipleObjects(ExecutionMode mode)
     {
         var source = @"
@@ -284,8 +267,7 @@ public class WeakMapSetTests
 
     #region WeakMap with Class Keys
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_WithClassInstanceKeys(ExecutionMode mode)
     {
         var source = @"
@@ -308,8 +290,7 @@ public class WeakMapSetTests
 
     #region WeakSet with Class Instances
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_WithClassInstances(ExecutionMode mode)
     {
         var source = @"
@@ -331,8 +312,7 @@ public class WeakMapSetTests
 
     #region WeakMap with Array Keys
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakMap_WithArrayKeys(ExecutionMode mode)
     {
         var source = @"
@@ -352,8 +332,7 @@ public class WeakMapSetTests
 
     #region WeakSet with Array Elements
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakSet_WithArrayElements(ExecutionMode mode)
     {
         var source = @"

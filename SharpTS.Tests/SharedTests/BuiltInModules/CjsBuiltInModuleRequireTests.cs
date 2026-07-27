@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CjsBuiltInModuleRequireTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_Path_Join(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class CjsBuiltInModuleRequireTests
         Assert.Equal("function\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_Assert_Ok(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -43,8 +41,7 @@ public class CjsBuiltInModuleRequireTests
         Assert.Equal("passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_Tty_Isatty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -62,8 +59,7 @@ public class CjsBuiltInModuleRequireTests
     /// <summary>
     /// Tests require() of multiple built-in modules in the same CJS file.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_MultipleModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -90,8 +86,7 @@ public class CjsBuiltInModuleRequireTests
     /// fields. Both paths landed with the path migration; this test pins that os's
     /// equivalent shape also works.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_Os_Platform(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -109,8 +104,7 @@ public class CjsBuiltInModuleRequireTests
     /// <summary>
     /// Regression: querystring (also an embedded stdlib ESM module) via require().
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_Querystring_Parse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -142,8 +136,7 @@ public class CjsBuiltInModuleRequireTests
     /// MODULE_NOT_FOUND at startup (#1217, fixed by running the require-literal walk over
     /// ESM bodies scoped to stdlib specifiers).
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_PrimitiveSeamFacade_FromEsmEntry(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +160,7 @@ public class CjsBuiltInModuleRequireTests
     /// Regression (#1217): the require() call sits inside a function body in an ESM module —
     /// the discovery walk must find nested require literals, not just top-level statements.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cjs_Require_StdlibFacade_InsideFunction_FromEsmEntry(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -190,8 +182,7 @@ public class CjsBuiltInModuleRequireTests
     /// Regression (#1210): dynamic import() of a stdlib facade never statically imported hits
     /// the same lazy path — the facade's primitive:* deps must execute on demand.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void DynamicImport_PrimitiveSeamFacade_WithoutStaticImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -24,7 +25,7 @@ public class CompilationContextFactoryTests
     [Fact]
     public void CompilationContext_IsOnlyConstructedInTheFactoryLayer()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = RepoPaths.FindRepoRoot();
         var compilationDir = Path.Combine(repoRoot, "Compilation");
         var violations = new List<string>();
 
@@ -58,18 +59,4 @@ public class CompilationContextFactoryTests
             string.Join("\n", violations));
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null)
-        {
-            if (Directory.Exists(Path.Combine(dir, "Compilation")) &&
-                File.Exists(Path.Combine(dir, "SharpTS.csproj")))
-            {
-                return dir;
-            }
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }

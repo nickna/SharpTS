@@ -15,8 +15,7 @@ public class StreamsWebBasicTests
 {
     #region ReadableStream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_ConstructorEnqueueCloseRead(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -46,8 +45,7 @@ public class StreamsWebBasicTests
         Assert.Equal("hello false\nworld false\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStream_From_ImportedConstructor(ExecutionMode mode)
     {
         // #210: static-property dispatch on the imported constructor wrapper
@@ -78,8 +76,7 @@ public class StreamsWebBasicTests
 
     #region Read result JS semantics (regression: MakeReadResult must behave like a real object)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadResult_ObjectKeys(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -101,8 +98,7 @@ public class StreamsWebBasicTests
         Assert.Equal("value,done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadResult_JsonStringify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -124,8 +120,7 @@ public class StreamsWebBasicTests
         Assert.Equal("{\"value\":\"hello\",\"done\":false}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadResult_ForInIteration(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -149,8 +144,7 @@ public class StreamsWebBasicTests
         Assert.Equal("done,value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadResult_ObjectSpread(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -177,8 +171,7 @@ public class StreamsWebBasicTests
 
     #region WritableStream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_IsLockedAfterGetReader(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -195,8 +188,7 @@ public class StreamsWebBasicTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_DesiredSizeReflectsBackpressure(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -219,8 +211,7 @@ public class StreamsWebBasicTests
         Assert.Equal("2\n1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_PullCallbackInvokedOnRead(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -249,8 +240,7 @@ public class StreamsWebBasicTests
         Assert.Equal("0 1 2 true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_ErrorPropagatesToReader(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -279,8 +269,7 @@ public class StreamsWebBasicTests
         Assert.Contains("boom", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WritableStream_WriteCloseSequence(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -311,8 +300,7 @@ public class StreamsWebBasicTests
 
     #region TransformStream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TransformStream_BasicTransformViaPipeThrough(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -352,8 +340,7 @@ public class StreamsWebBasicTests
 
     #region pipeTo
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_PipeToWritable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -387,8 +374,7 @@ public class StreamsWebBasicTests
 
     #region Module import
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamWeb_ImportNamedExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -415,8 +401,7 @@ public class StreamsWebBasicTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamWeb_CountQueuingStrategy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

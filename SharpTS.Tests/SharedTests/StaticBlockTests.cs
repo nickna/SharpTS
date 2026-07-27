@@ -14,8 +14,7 @@ public class StaticBlockTests
 {
     // ============== BASIC FUNCTIONALITY ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ExecutesOnClassDeclaration(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class StaticBlockTests
         Assert.Equal("block executed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_MultipleBlocksExecuteInOrder(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class StaticBlockTests
         Assert.Equal("first\nsecond\nthird\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_CanAccessStaticField(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +53,7 @@ public class StaticBlockTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_CanModifyStaticField(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +67,7 @@ public class StaticBlockTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_InterleavedWithFieldsInOrder(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +84,7 @@ public class StaticBlockTests
 
     // ============== THIS BINDING ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ThisRefersToClass(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +97,7 @@ public class StaticBlockTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ThisCanModifyStaticProperty(ExecutionMode mode)
     {
         var source = """
@@ -118,8 +111,7 @@ public class StaticBlockTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ThisCanCallStaticMethod(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +124,7 @@ public class StaticBlockTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_CanCallStaticMethod(ExecutionMode mode)
     {
         // Using class name directly works in both interpreter and compiler
@@ -149,8 +140,7 @@ public class StaticBlockTests
 
     // ============== INHERITANCE ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_SubclassBlockRunsAfterSuperclass(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +155,7 @@ public class StaticBlockTests
         Assert.Equal("parent\nchild\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_CanAccessInheritedStaticField(ExecutionMode mode)
     {
         var source = """
@@ -183,8 +172,7 @@ public class StaticBlockTests
 
     // ============== CLASS EXPRESSIONS ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_InAnonymousClassExpression(ExecutionMode mode)
     {
         var source = """
@@ -198,8 +186,7 @@ public class StaticBlockTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_InNamedClassExpression(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +200,7 @@ public class StaticBlockTests
 
     // ============== CONTROL FLOW ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_WithIfElse(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +220,7 @@ public class StaticBlockTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_WithForLoop(ExecutionMode mode)
     {
         var source = """
@@ -253,8 +238,7 @@ public class StaticBlockTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_WithTryCatch(ExecutionMode mode)
     {
         var source = """
@@ -274,8 +258,7 @@ public class StaticBlockTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_BreakInLoop(ExecutionMode mode)
     {
         var source = """
@@ -296,8 +279,7 @@ public class StaticBlockTests
 
     // ============== EDGE CASES ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_Empty(ExecutionMode mode)
     {
         var source = """
@@ -310,8 +292,7 @@ public class StaticBlockTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_InGenericClass(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +306,7 @@ public class StaticBlockTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_InAbstractClass(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +320,7 @@ public class StaticBlockTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ThrowPropagates(ExecutionMode mode)
     {
         var source = """
@@ -354,8 +333,7 @@ public class StaticBlockTests
 
     // ============== ERROR VALIDATION ==============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ReturnStatementNotAllowed(ExecutionMode mode)
     {
         var source = """
@@ -367,8 +345,7 @@ public class StaticBlockTests
         Assert.Contains("Return statements are not allowed in static blocks", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_ReturnValueNotAllowed(ExecutionMode mode)
     {
         var source = """
@@ -380,8 +357,7 @@ public class StaticBlockTests
         Assert.Contains("Return statements are not allowed in static blocks", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticBlock_NoAccessModifiersAllowed(ExecutionMode mode)
     {
         var source = """

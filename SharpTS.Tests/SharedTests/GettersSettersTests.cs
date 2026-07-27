@@ -10,8 +10,7 @@ public class GettersSettersTests
 {
     #region Basic Getter/Setter
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class GettersSettersTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Setter_SetsValue(ExecutionMode mode)
     {
         var source = """
@@ -63,8 +61,7 @@ public class GettersSettersTests
 
     #region Computed Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_ComputedProperty(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +84,7 @@ public class GettersSettersTests
         Assert.Equal("50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterOnly_ReadOnlyProperty(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +113,7 @@ public class GettersSettersTests
 
     #region Multiple Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterSetter_MultipleProperties(ExecutionMode mode)
     {
         var source = """
@@ -157,8 +152,7 @@ public class GettersSettersTests
 
     #region Temperature Conversion
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_TemperatureConversion(ExecutionMode mode)
     {
         var source = """
@@ -190,8 +184,7 @@ public class GettersSettersTests
 
     #region Chained Access
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterSetter_ChainedAccess(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +214,7 @@ public class GettersSettersTests
 
     #region Constructor Initialization
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_InitializedFromConstructor(ExecutionMode mode)
     {
         var source = """
@@ -243,8 +235,7 @@ public class GettersSettersTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Setter_InvokedViaBracketAssignment(ExecutionMode mode)
     {
         // Regression for #290: bracket assignment `obj["n"] = v` must invoke the declared setter,
@@ -265,8 +256,7 @@ public class GettersSettersTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AccessorBody_ResolvesCapturedTopLevelVariable(ExecutionMode mode)
     {
         // Regression for #300: a getter/setter body referencing a top-level
@@ -291,8 +281,7 @@ public class GettersSettersTests
         Assert.Equal("v5\nv8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterOnly_BracketWrite_IsNoOp(ExecutionMode mode)
     {
         // Regression for #293: in compiled mode, a bracket write to a getter-only
@@ -316,8 +305,7 @@ public class GettersSettersTests
         Assert.Equal("99\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterWithSetter_BracketWrite_InvokesSetter(ExecutionMode mode)
     {
         // Companion to GetterOnly_BracketWrite_IsNoOp: a property that DOES have a
@@ -342,8 +330,7 @@ public class GettersSettersTests
 
     #region Top-level variable capture (#300)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_ResolvesCapturedTopLevelVariable(ExecutionMode mode)
     {
         // #300: in compiled mode an accessor body that referenced a top-level
@@ -363,8 +350,7 @@ public class GettersSettersTests
         Assert.Equal("v5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetterAndStaticGetter_ResolveCapturedTopLevelVariable(ExecutionMode mode)
     {
         // Cover the setter and static-getter accessor shapes too — all share the

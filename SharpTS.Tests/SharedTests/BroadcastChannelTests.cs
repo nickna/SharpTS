@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class BroadcastChannelTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_HasName(ExecutionMode mode)
     {
         var source = @"
@@ -22,8 +21,7 @@ public class BroadcastChannelTests
         Assert.Equal("chan-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_DeliversBetweenChannelsWithSameName(ExecutionMode mode)
     {
         var source = @"
@@ -40,8 +38,7 @@ public class BroadcastChannelTests
         Assert.Equal("b got: hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_SenderDoesNotReceiveOwnMessages(ExecutionMode mode)
     {
         var source = @"
@@ -57,8 +54,7 @@ public class BroadcastChannelTests
         Assert.Equal("done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_DifferentNamesDoNotInteract(ExecutionMode mode)
     {
         var source = @"
@@ -76,8 +72,7 @@ public class BroadcastChannelTests
         Assert.Equal("done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_PostAfterCloseThrows(ExecutionMode mode)
     {
         var source = @"
@@ -94,8 +89,7 @@ public class BroadcastChannelTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_DeliversToMultipleSubscribers(ExecutionMode mode)
     {
         var source = @"
@@ -115,8 +109,7 @@ public class BroadcastChannelTests
         Assert.Contains("c: hi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_AddEventListenerWorks(ExecutionMode mode)
     {
         var source = @"
@@ -133,8 +126,7 @@ public class BroadcastChannelTests
         Assert.Equal("got: world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_OnmessageSetterWorks(ExecutionMode mode)
     {
         var source = @"
@@ -151,8 +143,7 @@ public class BroadcastChannelTests
         Assert.Equal("onmsg: slot\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_OnmessageAndOnListenerBothFire(ExecutionMode mode)
     {
         var source = @"
@@ -169,8 +160,7 @@ public class BroadcastChannelTests
         Assert.Contains("onmsg: hi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_StructuredCloneMutationIsolation(ExecutionMode mode)
     {
         // Per-receiver deep clone: mutating the received object on the listener side
@@ -204,8 +194,7 @@ public class BroadcastChannelTests
     /// <c>onmessageerror</c> property handler was itself never invoked (only the EventEmitter
     /// 'messageerror' event fired) — both are fixed together here.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_PostUncloneable_FiresMessageError(ExecutionMode mode)
     {
         var source = @"
@@ -224,8 +213,7 @@ public class BroadcastChannelTests
         Assert.DoesNotContain("should-not-fire", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_WorksInsideAsyncFunction(ExecutionMode mode)
     {
         // Regression: exercises the async state-machine emitter path for
@@ -245,8 +233,7 @@ public class BroadcastChannelTests
         Assert.Equal("async got: from async\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BroadcastChannel_ModuleQualifiedNewWorks(ExecutionMode mode)
     {
         // Regression: `new wt.BroadcastChannel(name)` via TryEmitModuleQualifiedConstructor.

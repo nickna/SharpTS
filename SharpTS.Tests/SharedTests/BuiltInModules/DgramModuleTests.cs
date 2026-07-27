@@ -10,8 +10,7 @@ public class DgramModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class DgramModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -47,8 +45,7 @@ public class DgramModuleTests
 
     #region createSocket Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_CreateSocket_Udp4(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -68,8 +65,7 @@ public class DgramModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_CreateSocket_HasEventEmitterMethods(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -92,8 +88,7 @@ public class DgramModuleTests
 
     #region Bind Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Bind_EmitsListeningEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -115,8 +110,7 @@ public class DgramModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Bind_WithCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -139,8 +133,7 @@ public class DgramModuleTests
 
     #region Send and Receive Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_SendReceive_BasicMessage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -169,8 +162,7 @@ public class DgramModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_SendReceive_BufferMessage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -203,8 +195,7 @@ public class DgramModuleTests
 
     #region Close Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Close_EmitsCloseEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -225,8 +216,7 @@ public class DgramModuleTests
         Assert.Contains("closed", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Close_WithCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -250,8 +240,7 @@ public class DgramModuleTests
 
     #region Address Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Address_ReturnsInfo(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -277,8 +266,7 @@ public class DgramModuleTests
 
     #region Socket Options Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_SetBroadcast(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -298,8 +286,7 @@ public class DgramModuleTests
         Assert.Contains("broadcast-set", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_SetTTL(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -323,8 +310,7 @@ public class DgramModuleTests
 
     #region Connected Mode Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Socket_Connect_And_Send(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -353,8 +339,7 @@ public class DgramModuleTests
         Assert.Contains("connected-msg", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Socket_Disconnect(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -382,8 +367,7 @@ public class DgramModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Socket_RemoteAddress(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -407,8 +391,7 @@ public class DgramModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Socket_BufferSize_GetSet(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -434,8 +417,7 @@ public class DgramModuleTests
         Assert.Contains("set-ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_Socket_Connect_Event(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

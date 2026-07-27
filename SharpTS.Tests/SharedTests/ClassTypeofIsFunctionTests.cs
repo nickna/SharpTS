@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class ClassTypeofIsFunctionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofClass_ReturnsFunction_SameModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class ClassTypeofIsFunctionTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofClass_ReturnsFunction_ImportedClass(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -14,8 +14,7 @@ public class ProcessSurfaceTests
 {
     // ---- #1079: module facade === global ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessModule_DefaultExport_IsTheGlobalProcess(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class ProcessSurfaceTests
         Assert.Equal("true\nfunction function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessModule_ExitCode_SettableThroughDefaultExport(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class ProcessSurfaceTests
         Assert.Equal("7\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessModule_NamedExports_ExposeTheFullSurface(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +59,7 @@ public class ProcessSurfaceTests
         Assert.Equal("function function function function\n24.15.0\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ValuePosition_IsLiveObject(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +72,7 @@ public class ProcessSurfaceTests
         Assert.Equal("true function true\n[object process]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ExpandoAssignment_RoundTrips(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +86,7 @@ public class ProcessSurfaceTests
 
     // ---- #1082: diagnostics ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_CpuUsage_ReturnsMicrosecondsAndSupportsDelta(ExecutionMode mode)
     {
         var source = """
@@ -107,8 +101,7 @@ public class ProcessSurfaceTests
         Assert.Equal("number number\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ResourceUsage_HasNodeShape(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +114,7 @@ public class ProcessSurfaceTests
         Assert.Equal("true true true\nnumber number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_HrtimeBigint_ReturnsBigint(ExecutionMode mode)
     {
         var source = """
@@ -133,8 +125,7 @@ public class ProcessSurfaceTests
         Assert.Equal("bigint\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Process_HrtimeBigint_IsMonotonic(ExecutionMode mode)
     {
         // Interpreted-only: compiled dynamic comparison of two any-typed
@@ -150,8 +141,7 @@ public class ProcessSurfaceTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsageRss_ReturnsPositiveNumber(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +154,7 @@ public class ProcessSurfaceTests
         Assert.Equal("number true\ntrue true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryQueries_ReturnNumbers(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +169,7 @@ public class ProcessSurfaceTests
 
     // ---- #1083: umask ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Umask_GetAndSetRoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -199,8 +187,7 @@ public class ProcessSurfaceTests
 
     // ---- #1084: report ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Report_GetReport_HasDocumentedShape(ExecutionMode mode)
     {
         var source = """
@@ -218,8 +205,7 @@ public class ProcessSurfaceTests
 
     // ---- #1085: identity / info properties ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_IdentityProperties_HaveExpectedShapes(ExecutionMode mode)
     {
         var source = """
@@ -240,8 +226,7 @@ public class ProcessSurfaceTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Title_SetAndGetRoundTrips(ExecutionMode mode)
     {
         var source = """
@@ -258,8 +243,7 @@ public class ProcessSurfaceTests
     // ---- #1086: POSIX identity (platform-conditional; compiled POSIX is a
     //      documented interpreter-first deferral, so interp-only) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Process_PosixIdentity_MatchesPlatform(ExecutionMode mode)
     {
         var source = """
@@ -277,8 +261,7 @@ public class ProcessSurfaceTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_SourceMapsFlag_Settable(ExecutionMode mode)
     {
         var source = """

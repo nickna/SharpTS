@@ -60,7 +60,7 @@ public class StandaloneDllTests
     [Fact]
     public void CompilationFiles_ShouldNotUseTypeofForEmittedIL()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = RepoPaths.FindRepoRoot();
         var compilationDir = Path.Combine(repoRoot, "Compilation");
         var violations = new List<string>();
 
@@ -116,7 +116,7 @@ public class StandaloneDllTests
     [Fact]
     public void CompilationFiles_ShouldNotIntroduceNewSharpTsLateBindingOutsideAllowlist()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = RepoPaths.FindRepoRoot();
         var compilationDir = Path.Combine(repoRoot, "Compilation");
         var violations = new List<string>();
 
@@ -1414,18 +1414,4 @@ public class StandaloneDllTests
         }
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null)
-        {
-            if (Directory.Exists(Path.Combine(dir, "Compilation")) &&
-                File.Exists(Path.Combine(dir, "SharpTS.csproj")))
-            {
-                return dir;
-            }
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }

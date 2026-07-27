@@ -13,8 +13,7 @@ public class AsyncBlockScopeShadowTests
 {
     #region Async function (#766)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockConstShadow_DoesNotLeakToOuter(ExecutionMode mode)
     {
         // A const in a nested block that shadows an outer body-level const must get its own slot
@@ -32,8 +31,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockShadow_LiveAcrossAwait_GetsOwnField(ExecutionMode mode)
     {
         // The inner shadow is itself read after an await, so it must hoist to its OWN field, distinct
@@ -56,8 +54,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("5/100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockLetShadow_ReassignedAcrossAwait(ExecutionMode mode)
     {
         // A let shadow compound-assigned across awaits keeps its own value, separate from the outer
@@ -82,8 +79,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("12/7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockShadowsParameter(ExecutionMode mode)
     {
         // An inner block const may shadow a (hoisted) parameter without clobbering it (#766).
@@ -104,8 +100,7 @@ public class AsyncBlockScopeShadowTests
 
     #region Async arrow (#766)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestedBlockConstShadow_DoesNotLeakToOuter(ExecutionMode mode)
     {
         // Same shadow leak in a compiled async arrow's state machine (#766).
@@ -126,8 +121,7 @@ public class AsyncBlockScopeShadowTests
 
     #region Async generator (#766 + #768)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockConstShadow_DoesNotLeakToOuter(ExecutionMode mode)
     {
         // Compiled: the nested-block shadow leaked onto the outer binding's hoisted field → [0, 0] (#766).
@@ -150,8 +144,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("0,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockShadow_LiveAcrossYield_GetsOwnField(ExecutionMode mode)
     {
         // Both the inner shadow and the outer binding survive the suspension on their own slots (#766).
@@ -177,8 +170,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("0,1,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockBindingBeforeAwait_YieldsValue(ExecutionMode mode)
     {
         // #768: distinct names (no shadowing). The interpreter lost a nested-block binding's value when
@@ -201,8 +193,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("0,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockLetBeforeAwait_Reassigned(ExecutionMode mode)
     {
         // #768 variant: a nested-block let read/updated before any await must keep its value.
@@ -223,8 +214,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("5,9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockShadow_CapturedByArrow_DoesNotLeak(ExecutionMode mode)
     {
         // An inner block const that shadows an outer binding AND is read by a nested arrow gets its own
@@ -258,8 +248,7 @@ public class AsyncBlockScopeShadowTests
 
     #region Read-capture of a shadow by an inner arrow (#837, async analog of #767)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockShadow_CapturedByArrow(ExecutionMode mode)
     {
         // An inner block const that shadows an outer binding AND is read by a nested arrow gets its own
@@ -288,8 +277,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("5,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestedBlockShadow_CapturedByArrow(ExecutionMode mode)
     {
         // Async-ARROW analog of the above (#837): the shadow read by an inner arrow gets its own slot.
@@ -313,8 +301,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("5,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_TwoShadowsReadCapturedByDistinctArrows(ExecutionMode mode)
     {
         // Two independent nested-block shadows, each read by its own arrow, must each get their own slot
@@ -351,8 +338,7 @@ public class AsyncBlockScopeShadowTests
 
     #region Write-capture of a shadow by an inner sync arrow (#838, write analog of #767)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedBlockShadow_WriteCapturedByArrow(ExecutionMode mode)
     {
         // An inner block let that shadows an outer binding AND is WRITTEN by a nested sync arrow gets its
@@ -379,8 +365,7 @@ public class AsyncBlockScopeShadowTests
         Assert.Equal("6,6,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NestedBlockShadow_WriteCapturedByArrow(ExecutionMode mode)
     {
         // Async-GENERATOR analog (#838): the write-captured shadow gets its own renamed DC field, shared

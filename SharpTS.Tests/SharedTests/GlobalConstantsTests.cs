@@ -11,8 +11,7 @@ public class GlobalConstantsTests
 {
     #region NaN Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_OutputsNaN(ExecutionMode mode)
     {
         var source = "console.log(NaN);";
@@ -20,8 +19,7 @@ public class GlobalConstantsTests
         Assert.Equal("NaN\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_TypeOfIsNumber(ExecutionMode mode)
     {
         var source = "console.log(typeof NaN);";
@@ -29,8 +27,7 @@ public class GlobalConstantsTests
         Assert.Equal("number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_StrictEqualityBehavior(ExecutionMode mode)
     {
         // ECMA-262 7.2.16 IsStrictlyEqual: NaN is never strictly equal to
@@ -41,8 +38,7 @@ public class GlobalConstantsTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_IsNaNReturnsTrue(ExecutionMode mode)
     {
         var source = "console.log(isNaN(NaN));";
@@ -50,8 +46,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_NumberIsNaNReturnsTrue(ExecutionMode mode)
     {
         var source = "console.log(Number.isNaN(NaN));";
@@ -59,8 +54,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_ArithmeticProducesNaN(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +66,7 @@ public class GlobalConstantsTests
         Assert.Equal("NaN\nNaN\nNaN\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_ComparisonWithNumbers(ExecutionMode mode)
     {
         // Test NaN comparison behavior
@@ -86,8 +79,7 @@ public class GlobalConstantsTests
         Assert.Equal("false\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_SameAsNumberNaN(ExecutionMode mode)
     {
         // Global NaN should produce same isNaN result as Number.NaN
@@ -103,8 +95,7 @@ public class GlobalConstantsTests
 
     #region Infinity Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_OutputsInfinity(ExecutionMode mode)
     {
         var source = "console.log(Infinity);";
@@ -112,8 +103,7 @@ public class GlobalConstantsTests
         Assert.Equal("Infinity\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_NegativeOutputsNegativeInfinity(ExecutionMode mode)
     {
         var source = "console.log(-Infinity);";
@@ -121,8 +111,7 @@ public class GlobalConstantsTests
         Assert.Equal("-Infinity\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_TypeOfIsNumber(ExecutionMode mode)
     {
         var source = "console.log(typeof Infinity);";
@@ -130,8 +119,7 @@ public class GlobalConstantsTests
         Assert.Equal("number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_IsFiniteReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -142,8 +130,7 @@ public class GlobalConstantsTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_NumberIsFiniteReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +141,7 @@ public class GlobalConstantsTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_EqualsItself(ExecutionMode mode)
     {
         var source = """
@@ -166,8 +152,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_Comparisons(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +164,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_Arithmetic(ExecutionMode mode)
     {
         var source = """
@@ -193,8 +177,7 @@ public class GlobalConstantsTests
         Assert.Equal("Infinity\nInfinity\n0\nNaN\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_EqualsNumberPositiveInfinity(ExecutionMode mode)
     {
         var source = "console.log(Infinity === Number.POSITIVE_INFINITY);";
@@ -202,8 +185,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Infinity_NegativeEqualsNumberNegativeInfinity(ExecutionMode mode)
     {
         var source = "console.log(-Infinity === Number.NEGATIVE_INFINITY);";
@@ -215,8 +197,7 @@ public class GlobalConstantsTests
 
     #region undefined Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_OutputsUndefined(ExecutionMode mode)
     {
         var source = "console.log(undefined);";
@@ -224,8 +205,7 @@ public class GlobalConstantsTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_TypeOfIsUndefined(ExecutionMode mode)
     {
         var source = "console.log(typeof undefined);";
@@ -233,8 +213,7 @@ public class GlobalConstantsTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_EqualsItself(ExecutionMode mode)
     {
         var source = "console.log(undefined === undefined);";
@@ -242,8 +221,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_LooseEqualsNull(ExecutionMode mode)
     {
         var source = "console.log(undefined == null);";
@@ -251,8 +229,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_StrictNotEqualsNull(ExecutionMode mode)
     {
         var source = "console.log(undefined === null);";
@@ -260,8 +237,7 @@ public class GlobalConstantsTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_IsFalsy(ExecutionMode mode)
     {
         var source = """
@@ -275,8 +251,7 @@ public class GlobalConstantsTests
         Assert.Equal("falsy\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_NullishCoalescingFallsThrough(ExecutionMode mode)
     {
         var source = """
@@ -287,8 +262,7 @@ public class GlobalConstantsTests
         Assert.Equal("default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_InArrayIsUndefined(ExecutionMode mode)
     {
         // Verify undefined can be stored and retrieved from arrays
@@ -301,8 +275,7 @@ public class GlobalConstantsTests
         Assert.Equal("true\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_StringConcatenation(ExecutionMode mode)
     {
         var source = """
@@ -316,8 +289,7 @@ public class GlobalConstantsTests
 
     #region Combined Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalConstants_AllAccessibleTogether(ExecutionMode mode)
     {
         var source = """
@@ -331,8 +303,7 @@ public class GlobalConstantsTests
         Assert.Equal("4\nnumber\nnumber\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalConstants_CanBePassedToFunctions(ExecutionMode mode)
     {
         var source = """

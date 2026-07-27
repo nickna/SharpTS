@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class InnerFunctionScopeDisplayClassTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SiblingClosures_ShareInnerFunctionLocal(ExecutionMode mode)
     {
         // Minimal repro from #313: get() must see inc()'s mutations.
@@ -41,8 +40,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EachInvocation_GetsFreshScope(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +64,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("31\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturedParameter_ReassignedAndMutatedBySiblings(ExecutionMode mode)
     {
         // Captured typed parameter: reassignment in the function body must be
@@ -91,8 +88,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("106\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedInnerFunction_OwnsItsOwnScope(ExecutionMode mode)
     {
         // The scope-owning function is itself nested inside another inner
@@ -119,8 +115,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Closure_CapturesInnerFunctionScopeAndAncestorArrowScope(ExecutionMode mode)
     {
         // One closure captures from TWO scopes: the inner function's own
@@ -145,8 +140,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("110\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HoistedSiblingFunctions_ShareInnerFunctionLocal(ExecutionMode mode)
     {
         // The sibling closures are hoisted function declarations, not arrows —
@@ -170,8 +164,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("21\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunctionInTopLevelFunction_SiblingsShare(ExecutionMode mode)
     {
         // Enclosing callable is a top-level function declaration, not an arrow.
@@ -194,8 +187,7 @@ public class InnerFunctionScopeDisplayClassTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EscapedClosures_MutateAfterReturn(ExecutionMode mode)
     {
         // Closures escape the inner function and mutate later — storage is

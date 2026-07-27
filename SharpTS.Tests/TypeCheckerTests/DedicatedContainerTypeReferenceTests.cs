@@ -370,8 +370,7 @@ public class DedicatedContainerTypeReferenceTests
 
     // ---- regression guard: ordinary use of these annotations type-checks and runs in BOTH modes ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedIterator_IteratesCorrectly(ExecutionMode mode)
     {
         // The annotation is type-level only; it must not perturb interpretation or IL codegen.

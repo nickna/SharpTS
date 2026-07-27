@@ -19,8 +19,7 @@ public class ProcessLifecycleTests
         ProcessBuiltIns.ResetProcessState();
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ExitEvent_FiresAtNaturalEnd(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class ProcessLifecycleTests
         Assert.Equal("main\nexit 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_BeforeExit_FiresBeforeExit(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class ProcessLifecycleTests
         Assert.Equal("main\nbeforeExit 0\nexit 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_BeforeExit_ListenerCanScheduleMoreWork(ExecutionMode mode)
     {
         // A beforeExit listener scheduling async work re-enters the loop and
@@ -67,8 +64,7 @@ public class ProcessLifecycleTests
         Assert.Equal("extra work\nexit after 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Warning_EventCarriesNameMessageAndCode(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +78,7 @@ public class ProcessLifecycleTests
         Assert.Equal("CustomWarning boom W123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_NoDeprecation_SuppressesDeprecationWarnings(ExecutionMode mode)
     {
         var source = """
@@ -98,8 +93,7 @@ public class ProcessLifecycleTests
         Assert.Equal("fired: false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Process_UnhandledRejection_And_RejectionHandled(ExecutionMode mode)
     {
         // Compiled-mode promise rejection tracking is a documented deferral
@@ -121,8 +115,7 @@ public class ProcessLifecycleTests
         Assert.Equal("unhandled: boom\nhandled\nend\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Kill_SelfSignal_DispatchesToListener(ExecutionMode mode)
     {
         // NOTE: no process.exit() here — the harness runs guest code in-process,
@@ -142,8 +135,7 @@ public class ProcessLifecycleTests
         Assert.Equal("after kill\ngot SIGINT\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Kill_SignalZero_ExistenceCheck(ExecutionMode mode)
     {
         var source = """
@@ -161,8 +153,7 @@ public class ProcessLifecycleTests
         Assert.Equal("true\nnonexistent threw: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ExitEvent_FiresOnProcessExitThroughModuleListener(ExecutionMode mode)
     {
         // Listener registered through the module surface fires for the global

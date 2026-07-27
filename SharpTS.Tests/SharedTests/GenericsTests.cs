@@ -10,8 +10,7 @@ public class GenericsTests
 {
     #region Generic Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_TypeInference_Works(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class GenericsTests
         Assert.Equal("42\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_ExplicitTypeArgument_Works(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class GenericsTests
         Assert.Equal("42\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_MultipleTypeParameters_Works(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +55,7 @@ public class GenericsTests
         Assert.Equal("42\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_WithArrayType_Works(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class GenericsTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericArrowFunction_Works(ExecutionMode mode)
     {
         var source = """
@@ -94,8 +89,7 @@ public class GenericsTests
 
     #region Generic Classes
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_BasicInstantiation_Works(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +109,7 @@ public class GenericsTests
         Assert.Equal("42\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_InferredTypeArguments_Works(ExecutionMode mode)
     {
         // `new Box(5)` relies on type-argument inference from the constructor argument.
@@ -142,8 +135,7 @@ public class GenericsTests
         Assert.Equal("5\nhello\ntrue\nx 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_WithMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +156,7 @@ public class GenericsTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_MultipleTypeParameters_Works(ExecutionMode mode)
     {
         var source = """
@@ -190,8 +181,7 @@ public class GenericsTests
     // the open generic TypeDef inside the class's own method bodies, which the CLR refuses
     // to load at JIT time (TypeLoadException: Could not load type 'Stack').
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_ArrayFieldAndGetter_Works(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +214,7 @@ public class GenericsTests
         Assert.Equal("3\n30\n30\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_NonGenericFields_Work(ExecutionMode mode)
     {
         var source = """
@@ -250,8 +239,7 @@ public class GenericsTests
         Assert.Equal("lbl:1:42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_MethodCallingOwnMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -270,8 +258,7 @@ public class GenericsTests
         Assert.Equal("box:generic\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_ExtendedByNonGeneric_InheritedFieldAndSuperCall_Work(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +290,7 @@ public class GenericsTests
         Assert.Equal("14 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_ExplicitAccessors_Work(ExecutionMode mode)
     {
         var source = """
@@ -330,8 +316,7 @@ public class GenericsTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_AsyncMethodTouchingFields_Works(ExecutionMode mode)
     {
         var source = """
@@ -358,8 +343,7 @@ public class GenericsTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_GeneratorMethodTouchingFields_Works(ExecutionMode mode)
     {
         var source = """
@@ -392,8 +376,7 @@ public class GenericsTests
 
     #region Generic Interfaces
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericInterface_ObjectLiteral_Works(ExecutionMode mode)
     {
         var source = """
@@ -408,8 +391,7 @@ public class GenericsTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericInterface_MultipleTypeParameters_Works(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +412,7 @@ public class GenericsTests
 
     #region Type Constraints
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_WithConstraint_Works(ExecutionMode mode)
     {
         var source = """
@@ -457,8 +438,7 @@ public class GenericsTests
         Assert.Equal("Rex\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClass_WithConstraint_Works(ExecutionMode mode)
     {
         var source = """
@@ -489,8 +469,7 @@ public class GenericsTests
         Assert.Equal("Buddy speaks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericFunction_MixedConstraints_Works(ExecutionMode mode)
     {
         var source = """

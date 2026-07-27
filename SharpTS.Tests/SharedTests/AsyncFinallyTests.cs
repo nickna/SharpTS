@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncFinallyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_BasicCase(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class AsyncFinallyTests
         Assert.Equal("in try\ncleanup called\nafter try/finally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_ExceptionInTry_WithCatch(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +56,7 @@ public class AsyncFinallyTests
         Assert.Equal("in try\nin catch: error from try\ncleanup called\nafter try/catch/finally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_ExceptionInTry_NoCatch_Rethrows(ExecutionMode mode)
     {
         var source = """
@@ -90,8 +87,7 @@ public class AsyncFinallyTests
         Assert.Equal("in try\ncleanup called\nouter caught: error from try\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_AwaitInBothTryAndFinally(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +113,7 @@ public class AsyncFinallyTests
         Assert.Equal("got: 42\ncleanup called\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_ExceptionInAwaitedCall_Rethrows(ExecutionMode mode)
     {
         var source = """
@@ -152,8 +147,7 @@ public class AsyncFinallyTests
         Assert.Equal("cleanup called\ncaught: async error\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_MultipleAwaitsInFinally(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +173,7 @@ public class AsyncFinallyTests
         Assert.Equal("in try\nstep1\nstep2\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_NestedTryFinally(ExecutionMode mode)
     {
         var source = """
@@ -210,8 +203,7 @@ public class AsyncFinallyTests
         Assert.Equal("outer try\ninner try\ncleanup1\ncleanup2\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_ExceptionInFinallyReplacesOriginal(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +231,7 @@ public class AsyncFinallyTests
         Assert.Equal("caught: finally error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_ReturnsValueFromTry(ExecutionMode mode)
     {
         var source = """
@@ -265,8 +256,7 @@ public class AsyncFinallyTests
         Assert.Equal("cleanup\ngot: 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_WithAwait_AwaitInAllBlocks(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +293,7 @@ public class AsyncFinallyTests
     // run the try's finally. Previously the compiled state machine jumped straight to the loop label,
     // skipping the (now flag-based) finally. ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_ContinueOutOfTryWithAwait_RunsFinally(ExecutionMode mode)
     {
         // The issue repro: `continue` crosses the finally on iteration i==1.
@@ -330,8 +319,7 @@ public class AsyncFinallyTests
         Assert.Equal("b0f0f1b2f2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_BreakOutOfTryWithAwait_RunsFinally(ExecutionMode mode)
     {
         var source = """
@@ -356,8 +344,7 @@ public class AsyncFinallyTests
         Assert.Equal("b0f0f1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_ContinueOutOfTryWithAwait_AwaitingFinally_RunsFinally(ExecutionMode mode)
     {
         // The finally itself awaits — previously dropped entirely on the continue.
@@ -384,8 +371,7 @@ public class AsyncFinallyTests
         Assert.Equal("b0f0f1b2f2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_ReturnOutOfTryWithAwait_NoAwaitFinally_RunsFinally(ExecutionMode mode)
     {
         // The `return` half: a no-await finally was previously only run when the finally itself awaited.
@@ -412,8 +398,7 @@ public class AsyncFinallyTests
         Assert.Equal("finally ran\nret5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_BreakOutOfNestedTriesWithAwait_RunsBothFinallysInnermostFirst(ExecutionMode mode)
     {
         var source = """
@@ -442,8 +427,7 @@ public class AsyncFinallyTests
         Assert.Equal("i0o0b1i1o1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_LabeledBreakOutOfTryWithAwait_RunsFinally(ExecutionMode mode)
     {
         var source = """
@@ -470,8 +454,7 @@ public class AsyncFinallyTests
         Assert.Equal("00ff\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_BreakTargetingLoopInsideTryWithAwait_DoesNotRunFinally(ExecutionMode mode)
     {
         // Regression: a break whose target loop is *inside* the try crosses no finally, so the finally

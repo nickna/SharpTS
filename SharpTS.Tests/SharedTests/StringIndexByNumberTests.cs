@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringIndexByNumberTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexString_ByNumber_ReturnsCharacter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

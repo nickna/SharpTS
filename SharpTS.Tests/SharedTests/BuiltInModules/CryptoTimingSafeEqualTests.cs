@@ -12,8 +12,7 @@ public class CryptoTimingSafeEqualTests
 {
     // ============ BASIC FUNCTIONALITY TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_EqualBuffers_ReturnsTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -30,8 +29,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_DifferentBuffers_ReturnsFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -48,8 +46,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_EmptyBuffers_ReturnsTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -66,8 +63,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_SingleByte_Equal(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -84,8 +80,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_SingleByte_NotEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -104,8 +99,7 @@ public class CryptoTimingSafeEqualTests
 
     // ============ LENGTH MISMATCH TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_DifferentLengths_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -127,8 +121,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_EmptyVsNonEmpty_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -152,8 +145,7 @@ public class CryptoTimingSafeEqualTests
 
     // ============ CRYPTO USE CASES ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_HashComparison(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -170,8 +162,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_HmacComparison(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -188,8 +179,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_DifferentHashes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -208,8 +198,7 @@ public class CryptoTimingSafeEqualTests
 
     // ============ RETURN TYPE TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_ReturnsBoolean(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -229,8 +218,7 @@ public class CryptoTimingSafeEqualTests
 
     // ============ LARGE BUFFER TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_LargeBuffers_Equal(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -247,8 +235,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_LargeBuffers_OneByteDifferent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -268,8 +255,7 @@ public class CryptoTimingSafeEqualTests
 
     // ============ STRING INPUT TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_StringInputs_Equal(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -286,8 +272,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_StringInputs_NotEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -304,8 +289,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_StringInputs_DifferentLengths_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -325,8 +309,7 @@ public class CryptoTimingSafeEqualTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimingSafeEqual_MixedInputs_BufferAndString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

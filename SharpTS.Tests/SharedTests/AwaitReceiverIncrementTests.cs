@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AwaitReceiverIncrementTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_AwaitInGetReceiver_DoesNotThrow(ExecutionMode mode)
     {
         // The exact repro from issue #451.
@@ -38,8 +37,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_AwaitInGetReceiver_MutatesAndReturnsOld(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("1 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixIncrement_AwaitInGetReceiver_ReturnsNew(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +71,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("2 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixDecrement_AwaitInGetIndexReceiver(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +88,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("9 9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_AwaitInIndexExpression(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +104,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("6 6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_AwaitInBothReceiverAndIndex(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +122,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("3 4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_AwaitDeepInNestedReceiver(ExecutionMode mode)
     {
         var source = """
@@ -146,8 +139,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("5 6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Increment_AwaitInReceiver_UsableAsSubexpression(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +156,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("105 6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadAndAssign_ThroughAwaitReceiver_StillWork(ExecutionMode mode)
     {
         // The issue notes these always worked; guard against the fix regressing them.
@@ -187,8 +178,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("1 9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainIncrements_StillWorkInsideAsyncFunction(ExecutionMode mode)
     {
         // Regression guard: variable / plain-receiver / plain-index increments
@@ -212,8 +202,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("-1 8 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInReceiver_InsideAsyncArrow(ExecutionMode mode)
     {
         var source = """
@@ -231,8 +220,7 @@ public class AwaitReceiverIncrementTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInReceiver_InsideAsyncGenerator(ExecutionMode mode)
     {
         var source = """

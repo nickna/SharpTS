@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncArrowSyncWriteCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_SyncArrowWritesCapturedLocal(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class AsyncArrowSyncWriteCaptureTests
         Assert.Equal("6,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_SyncArrowWritesCapturedLocal(ExecutionMode mode)
     {
         // The async arrow is itself nested inside an async function — it still needs its OWN function DC
@@ -54,8 +52,7 @@ public class AsyncArrowSyncWriteCaptureTests
         Assert.Equal("6,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_CompoundAssignCapturedLocal(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +69,7 @@ public class AsyncArrowSyncWriteCaptureTests
         Assert.Equal("7,7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_WriteCapturedBlockScopeShadow_DoesNotLeak(ExecutionMode mode)
     {
         // Combines this fix with #838: the written capture is a nested-block shadow of an outer binding;
@@ -99,8 +95,7 @@ public class AsyncArrowSyncWriteCaptureTests
         Assert.Equal("6,6,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_TwoArrowsWriteDistinctCapturedLocals(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +114,7 @@ public class AsyncArrowSyncWriteCaptureTests
         Assert.Equal("2,11,2,11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_CapturedWriteSurvivesAcrossAwait(ExecutionMode mode)
     {
         // The mutation straddles an await — the DC lives on the (reference-held) state machine field, so

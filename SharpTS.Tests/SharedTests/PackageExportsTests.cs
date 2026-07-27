@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PackageExportsTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SimpleStringExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -30,8 +29,7 @@ public class PackageExportsTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConditionalExports_Import(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -53,8 +51,7 @@ public class PackageExportsTests
         Assert.Equal("esm\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SubpathExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +75,7 @@ public class PackageExportsTests
         Assert.Equal("main\nhelped\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WildcardExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -98,8 +94,7 @@ public class PackageExportsTests
         Assert.Equal("foo-value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullRestriction_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -120,8 +115,7 @@ public class PackageExportsTests
         Assert.ThrowsAny<Exception>(() => TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MainFieldFallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -140,8 +134,7 @@ public class PackageExportsTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtensionMapping_JsToTs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -160,8 +153,7 @@ public class PackageExportsTests
         Assert.Equal("mapped-from-ts\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScopedPackage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -180,8 +172,7 @@ public class PackageExportsTests
         Assert.Equal("scoped-value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScopedPackageSubpath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -203,8 +194,7 @@ public class PackageExportsTests
         Assert.Equal("util-value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoPackageJson_LegacyIndexTs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -222,8 +212,7 @@ public class PackageExportsTests
         Assert.Equal("legacy-value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SelfReferencing(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -245,8 +234,7 @@ public class PackageExportsTests
         Assert.Equal("hello from utils\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SubpathImports_HashPrefix(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -265,8 +253,7 @@ public class PackageExportsTests
         Assert.Equal("import-mapped\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedConditionalWithSubpath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

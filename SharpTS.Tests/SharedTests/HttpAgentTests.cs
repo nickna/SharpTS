@@ -10,8 +10,7 @@ public class HttpAgentTests
 {
     #region globalAgent
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_IsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -26,8 +25,7 @@ public class HttpAgentTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_KeepAlive_IsTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -42,8 +40,7 @@ public class HttpAgentTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_MaxSockets_IsInfinity(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -58,8 +55,7 @@ public class HttpAgentTests
         Assert.Equal("Infinity\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_AllProperties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -81,8 +77,7 @@ public class HttpAgentTests
         Assert.Equal("true\n1000\nInfinity\nInfinity\n256\n0\nlifo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_Destroy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -97,8 +92,7 @@ public class HttpAgentTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_GetName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +108,7 @@ public class HttpAgentTests
         Assert.Equal("example.com:443::\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpGlobalAgent_Sockets_IsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -136,8 +129,7 @@ public class HttpAgentTests
 
     #region Agent constructor
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_Constructor_Exists(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -152,8 +144,7 @@ public class HttpAgentTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_Constructor_NoArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -171,8 +162,7 @@ public class HttpAgentTests
         Assert.Equal("object\nfalse\nInfinity\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_Constructor_WithKeepAlive(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -188,8 +178,7 @@ public class HttpAgentTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_Constructor_WithAllOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -221,8 +210,7 @@ public class HttpAgentTests
 
     #region Agent instance methods (interpreter only - use GetMember dispatch)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_GetName_Default(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -238,8 +226,7 @@ public class HttpAgentTests
         Assert.Equal("localhost:80::\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_GetName_WithOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -255,8 +242,7 @@ public class HttpAgentTests
         Assert.Equal("api.example.com:8080::\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_Destroy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -277,8 +263,7 @@ public class HttpAgentTests
 
     #region Named import
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_NamedImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -299,8 +284,7 @@ public class HttpAgentTests
 
     #region Property mutation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_PropertyMutation_MaxSockets(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -318,8 +302,7 @@ public class HttpAgentTests
         Assert.Equal("Infinity\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_PropertyMutation_KeepAlive(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -341,8 +324,7 @@ public class HttpAgentTests
 
     #region Agent as request option (compatibility)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_InRequestOptions_DoesNotThrow(ExecutionMode mode)
     {
         // Verify that passing agent in request options doesn't cause errors

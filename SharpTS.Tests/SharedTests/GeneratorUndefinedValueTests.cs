@@ -21,8 +21,7 @@ public class GeneratorUndefinedValueTests
 {
     // ---- Resumed `yield` value (the issue's primary case) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResumedYield_ConcatenatedAsString_IsUndefined(ExecutionMode mode)
     {
         // The repro from #443: for…of resumes with no sent value, so `yield 1` evaluates to undefined.
@@ -33,8 +32,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("x:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResumedYield_StoredInLocal_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -44,8 +42,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("r=undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResumedYield_InArithmetic_IsNaN(ExecutionMode mode)
     {
         // undefined + 10 === NaN; exercises numeric coercion of the resumed sentinel, not just string.
@@ -56,8 +53,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("NaN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleResumedYields_AreEachUndefined(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class GeneratorUndefinedValueTests
 
     // ---- `yield*` completion value ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarOverArray_CompletionIsUndefined(ExecutionMode mode)
     {
         // A plain array has no return value, so the yield* completion value is undefined.
@@ -81,8 +76,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("x:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarOverString_CompletionIsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +86,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("x:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarOverGeneratorNoReturn_CompletionIsUndefined(ExecutionMode mode)
     {
         // inner runs off the end (no `return`), so the yield* completion value is undefined —
@@ -106,8 +99,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("x:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarOverGeneratorBareReturn_CompletionIsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -118,8 +110,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("x:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarOverGeneratorWithReturn_CompletionIsReturnValue(ExecutionMode mode)
     {
         // The fix must not regress the case that already worked: an explicit `return <value>`
@@ -139,8 +130,7 @@ public class GeneratorUndefinedValueTests
     // (#480), fixed by making a bare `return;` produce the `undefined` sentinel at its source
     // (VisitReturn) rather than C# null, while preserving `return null;` as null (see below).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndCompletionValue_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -152,8 +142,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("a:1\nb:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BareReturnCompletionValue_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +154,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("a:1\nb:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnNullCompletionValue_IsNull(ExecutionMode mode)
     {
         // `return null;` is distinct from a bare `return;`: the completion value is JS null, not
@@ -190,8 +178,7 @@ public class GeneratorUndefinedValueTests
     // (state == -2 → `_returnFalseLabel`), so `.next()` re-surfaced the last `return`ed or yielded
     // value. The interpreter is already correct for these cases, so they assert cross-mode parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextAfterExplicitReturn_IsUndefined(ExecutionMode mode)
     {
         // `return 42` is surfaced exactly once; the next `.next()` reports undefined, not 42.
@@ -206,8 +193,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("a:1\nb:42\nc:undefined\nd:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextAfterReturnMethod_IsUndefined(ExecutionMode mode)
     {
         // `gen.return(99)` closes the generator with 99; the next `.next()` reports undefined,
@@ -223,8 +209,7 @@ public class GeneratorUndefinedValueTests
         Assert.Equal("ret:99,true\nafter:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextAfterOffEndCompletion_StaysUndefined(ExecutionMode mode)
     {
         // Repeated `.next()` past a no-return completion keeps reporting undefined (never the

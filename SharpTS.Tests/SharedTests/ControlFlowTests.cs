@@ -10,8 +10,7 @@ public class ControlFlowTests
 {
     #region Switch Statements
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_BasicCase_MatchesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class ControlFlowTests
         Assert.Equal("two\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_DefaultCase_ExecutesWhenNoMatch(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class ControlFlowTests
         Assert.Equal("other\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_FallThrough_ExecutesMultipleCases(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +75,7 @@ public class ControlFlowTests
         Assert.Equal("two\nthree\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_WithString_MatchesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +100,7 @@ public class ControlFlowTests
 
     #region For-of Loops
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_Basic_IteratesArray(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +114,7 @@ public class ControlFlowTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_WithBreak_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +131,7 @@ public class ControlFlowTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_WithContinue_SkipsIteration(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +148,7 @@ public class ControlFlowTests
         Assert.Equal("1\n2\n4\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_WithStrings_IteratesElements(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +166,7 @@ public class ControlFlowTests
 
     #region Typeof Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Number_ReturnsNumber(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +178,7 @@ public class ControlFlowTests
         Assert.Equal("number\nnumber\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_String_ReturnsString(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +190,7 @@ public class ControlFlowTests
         Assert.Equal("string\nstring\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Boolean_ReturnsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +202,7 @@ public class ControlFlowTests
         Assert.Equal("boolean\nboolean\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Array_ReturnsObject(ExecutionMode mode)
     {
         var source = """
@@ -226,8 +214,7 @@ public class ControlFlowTests
         Assert.Equal("object\nobject\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Object_ReturnsObject(ExecutionMode mode)
     {
         var source = """
@@ -238,8 +225,7 @@ public class ControlFlowTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Function_ReturnsFunction(ExecutionMode mode)
     {
         var source = """
@@ -251,8 +237,7 @@ public class ControlFlowTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_Null_ReturnsObject(ExecutionMode mode)
     {
         var source = """
@@ -268,8 +253,7 @@ public class ControlFlowTests
 
     #region Instanceof Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instanceof_DirectInstance_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -282,8 +266,7 @@ public class ControlFlowTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instanceof_InheritedInstance_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +281,7 @@ public class ControlFlowTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instanceof_DifferentClass_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -313,8 +295,7 @@ public class ControlFlowTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Instanceof_ParentNotChild_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -332,8 +313,7 @@ public class ControlFlowTests
 
     #region Break and Continue in While Loops
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void While_WithBreak_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -351,8 +331,7 @@ public class ControlFlowTests
         Assert.Equal("0\n1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void While_WithContinue_SkipsIteration(ExecutionMode mode)
     {
         var source = """
@@ -374,8 +353,7 @@ public class ControlFlowTests
 
     #region For Loops
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void For_Basic_IteratesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -388,8 +366,7 @@ public class ControlFlowTests
         Assert.Equal("0\n1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void For_WithBreak_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -405,8 +382,7 @@ public class ControlFlowTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void For_WithContinue_ExecutesIncrement(ExecutionMode mode)
     {
         var source = """
@@ -424,8 +400,7 @@ public class ControlFlowTests
         Assert.Equal("8\n", output);  // 0+1+3+4 = 8
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void For_WithContinue_DoesNotInfiniteLoop(ExecutionMode mode)
     {
         var source = """
@@ -441,8 +416,7 @@ public class ControlFlowTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void For_ContinueAtStart_StillIncrements(ExecutionMode mode)
     {
         var source = """

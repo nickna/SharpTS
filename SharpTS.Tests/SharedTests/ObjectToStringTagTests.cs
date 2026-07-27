@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ObjectToStringTagTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltInConstructors_TagAsFunction(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class ObjectToStringTagTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserFunctions_TagAsFunction(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +48,7 @@ public class ObjectToStringTagTests
         Assert.Equal("[object Function]\n[object Function]\n[object Function]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonFunctions_KeepTheirTags(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +67,7 @@ public class ObjectToStringTagTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectKeys_OnFunction_ReturnsExpandoProps(ExecutionMode mode)
     {
         // ECMA-262: Object.keys does ToObject — functions are objects, and

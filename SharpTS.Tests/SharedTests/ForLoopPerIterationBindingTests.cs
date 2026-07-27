@@ -23,8 +23,7 @@ public class ForLoopPerIterationBindingTests
 {
     // ---- Headline repro: arrow capturing the loop `let` ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowCapturesLetLoopVar_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +35,7 @@ public class ForLoopPerIterationBindingTests
     }
 
     // The #622 headline repro: a generator created per iteration capturing the loop variable.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorCapturesLetLoopVar_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +48,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- Multi-declarator: every declared name is per-iteration ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultiDeclarator_AllNamesPerIteration(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +61,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- continue keeps per-iteration semantics ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ContinuePath_StillPerIteration(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- Nested loops: inner closure captures both per-iteration bindings ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoops_BothBindingsPerIteration(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +87,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- Single-statement body (no block braces) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoBraceBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -111,8 +105,7 @@ public class ForLoopPerIterationBindingTests
     // the body BOTH mutates AND a closure captures, so closures reference-capture the live cell
     // (end-of-body value 0/1/2) instead of snapshotting the mid-body value (10/11/12). The cheap
     // value-snapshot path (#649) still serves the common non-mutating case.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_CapturesLiveSlot(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +118,7 @@ public class ForLoopPerIterationBindingTests
 
     // Same mutate-and-restore pattern inside a SYNC function body (cell lives as a local
     // in the function frame). Exercises the function-context EmitFor path.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_SyncFunctionBody(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +135,7 @@ public class ForLoopPerIterationBindingTests
     // The cell is shared by reference, so a closure that WRITES the loop binding mutates that
     // iteration's binding and a sibling reader observes it. Each iteration k: writer increments
     // binding k (k → k+1), reader returns k+1. node: 1,2,3.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_ClosureWritesThrough(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +150,7 @@ public class ForLoopPerIterationBindingTests
 
     // Same as above but the writer uses `i++` (postfix increment in a closure), exercising
     // the increment emitter's captured-cell write-through path.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_ClosureIncrementsThrough(ExecutionMode mode)
     {
         var source = """
@@ -175,8 +165,7 @@ public class ForLoopPerIterationBindingTests
 
     // Nested loops where BOTH loop vars are mutate-and-restored and captured by the inner
     // closure — each needs its own cell, copied forward independently.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoops_BothBindingsMutated(ExecutionMode mode)
     {
         var source = """
@@ -198,8 +187,7 @@ public class ForLoopPerIterationBindingTests
     // has no direct await/yield — the per-iteration cell is an IL local that lives for the
     // whole loop within one MoveNext segment. Loops whose body itself suspends remain on the
     // snapshot path (cell-as-field is a further follow-up).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_AsyncFunctionBody(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +201,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_GeneratorBody(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +217,7 @@ public class ForLoopPerIterationBindingTests
 
     // Async generator: consumed via `.next()` (a compiled async generator consumed through
     // `for await…of` is a separate pre-existing gap that hangs even without the mutation).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_AsyncGeneratorBody(ExecutionMode mode)
     {
         var source = """
@@ -250,8 +236,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyMutatesLoopVar_AsyncArrowBody(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +252,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- Negative: `var` is function-scoped — one shared binding, closures read the final value ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void VarLoopVar_SharedBinding_ReadsFinal(ExecutionMode mode)
     {
         var source = """
@@ -281,8 +265,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- Negative: a bare-expression initializer assigns an outer var — one shared binding ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpressionInitializer_OuterVar_ReadsFinal(ExecutionMode mode)
     {
         var source = """
@@ -296,8 +279,7 @@ public class ForLoopPerIterationBindingTests
 
     // ---- A fresh per-iteration const is unaffected (already correct in both modes) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerConstSnapshot_StillWorks(ExecutionMode mode)
     {
         var source = """
@@ -315,8 +297,7 @@ public class ForLoopPerIterationBindingTests
     // remained a local that each closure snapshots.) The fix keeps these per-iteration loop bindings
     // out of the function display class, so they are snapshotted per iteration like the top-level case.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SyncFunctionBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -330,8 +311,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -345,8 +325,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassMethodBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -362,8 +341,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -377,8 +355,7 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunctionBody_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -399,8 +376,7 @@ public class ForLoopPerIterationBindingTests
     // loop-body closure also captures the per-iteration loop variable: the per-iteration exclusion
     // must apply only to the loop binding, not to ordinary captured locals. `outer` ends at 3 for
     // every closure; `k` is per-iteration.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionBody_OuterCapturedVarStaysShared(ExecutionMode mode)
     {
         var source = """

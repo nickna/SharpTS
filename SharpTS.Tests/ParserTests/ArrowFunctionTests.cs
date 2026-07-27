@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,17 +12,9 @@ public class ArrowFunctionTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     private static Expr.ArrowFunction ParseArrowFromVarOrConst(string source)
     {
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Single(statements);
         var initializer = statements[0] switch
         {
@@ -275,7 +268,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_AsCallbackArgument()
     {
-        var statements = Parse("arr.map(x => x * 2);");
+        var statements = TestHarness.ParseOrThrow("arr.map(x => x * 2);");
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         var call = Assert.IsType<Expr.Call>(exprStmt.Expr);
         Assert.Single(call.Arguments);
@@ -285,7 +278,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_MultipleCallbackArguments()
     {
-        var statements = Parse("arr.reduce((acc, x) => acc + x, 0);");
+        var statements = TestHarness.ParseOrThrow("arr.reduce((acc, x) => acc + x, 0);");
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         var call = Assert.IsType<Expr.Call>(exprStmt.Expr);
         Assert.Equal(2, call.Arguments.Count);

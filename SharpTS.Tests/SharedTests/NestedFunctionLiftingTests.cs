@@ -15,8 +15,7 @@ public class NestedFunctionLiftingTests
 {
     // ── #470: a plain function declared inside a state-machine body ──────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainFunction_NestedInGeneratorBody_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainFunction_NestedInAsyncBody_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class NestedFunctionLiftingTests
 
     // ── #501: a nested generator/async function declaration ──────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedInPlainFunction_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("[42]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedInGeneratorBody_NonCapturing_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("[1,2,3]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedInPlainFunction_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -90,8 +85,7 @@ public class NestedFunctionLiftingTests
 
     // ── Recursion: self-reference must resolve to the relocated declaration ───────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveNestedFunction_InGeneratorBody(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +98,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("120\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveNestedGenerator_InPlainFunction(ExecutionMode mode)
     {
         var source = """
@@ -122,8 +115,7 @@ public class NestedFunctionLiftingTests
 
     // ── Multiple siblings and name independence across scopes ────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleIndependentNestedHelpers(ExecutionMode mode)
     {
         var source = """
@@ -138,8 +130,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("[1,2]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SameNamedNestedHelpers_InDifferentFunctions_StayIndependent(ExecutionMode mode)
     {
         // Each relocated declaration gets a fresh unique top-level name, so two generators that both
@@ -152,8 +143,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("[1] [2]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LiftedHelper_DoesNotHijack_SameNamedBindingElsewhere(ExecutionMode mode)
     {
         // `a`'s nested `h` is relocated; `b`'s own (unrelated) nested `h` must keep returning 20.
@@ -166,8 +156,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("[10] 20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerator_NameCollidesWithTopLevelFunction_IsLifted(ExecutionMode mode)
     {
         // The nested generator `a3` shares a name with a top-level function. It is relocated under a
@@ -184,8 +173,7 @@ public class NestedFunctionLiftingTests
 
     // ── Deep nesting ─────────────────────────────────────────────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeeplyNestedGenerators(ExecutionMode mode)
     {
         var source = """
@@ -204,8 +192,7 @@ public class NestedFunctionLiftingTests
 
     // ── Generator value-references to a top-level function (the lift's alias relies on this) ──────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevelFunction_ReferencedAsValueInsideGenerator(ExecutionMode mode)
     {
         // A top-level function used as a value (not a direct call) inside a generator body must
@@ -222,8 +209,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("function\n7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedHelper_YieldedAsValue_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +228,7 @@ public class NestedFunctionLiftingTests
     // the inner-function pass and previously threw "Undefined variable" in compiled mode. The lifter
     // now relocates the non-capturing ones to the module top level.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainFunction_InTopLevelBlock_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -252,8 +237,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InTopLevelBlock_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -262,8 +246,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockFunction_ReferencingModuleBinding_IsCallable(ExecutionMode mode)
     {
         // A block function that references a module-level binding (not a block/loop-scoped one) is
@@ -276,8 +259,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveBlockFunction_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +268,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("120\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_InTopLevelIfBlock_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +284,7 @@ public class NestedFunctionLiftingTests
     // only route that lowers a capturing GENERATOR/ASYNC (the compiler cannot emit one as a capturing
     // closure directly). Previously these threw "ReferenceError: Undefined variable" in compiled mode.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockFunction_CapturingBlockConst_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -313,8 +293,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockFunction_CapturingMultipleBlockBindings_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -323,8 +302,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockAsyncFunction_CapturingBlockConst_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -333,8 +311,7 @@ public class NestedFunctionLiftingTests
         Assert.Equal("y\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveBlockGenerator_CapturingBlockConst_IsCallable(ExecutionMode mode)
     {
         // The function's own name is forwarded too, so the relocated body's self-calls resolve to
@@ -373,8 +350,7 @@ public class NestedFunctionLiftingTests
     // Only a GENERATOR encloser snapshots its captures at creation, so its forward-reference form stays
     // unsupported and fails cleanly rather than miscompiling.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingNestedGenerator_ForwardReference_IsLifted(ExecutionMode mode)
     {
         var source = """
@@ -393,8 +369,7 @@ public class NestedFunctionLiftingTests
     // #924: function declarations hoist inside an ASYNC function body just as in a sync body, so a
     // forward reference to a function declared later resolves. Previously the interpreter raised
     // "Undefined variable" (ExecuteBlockAsync never ran the hoisting pass).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainFunctionDeclaration_ForwardReference_InAsyncFunction_IsHoisted(ExecutionMode mode)
     {
         var source = """
@@ -411,8 +386,7 @@ public class NestedFunctionLiftingTests
     // #924: a capturing generator declaration whose forward reference precedes it, inside an ASYNC
     // (non-generator) function. The interpreter hoists it; the compiler hoists its forwarding binding
     // (the async encloser reads captures live at call time, unlike a generator encloser).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingGeneratorDeclaration_ForwardReference_InAsyncFunction_IsLifted(ExecutionMode mode)
     {
         var source = """

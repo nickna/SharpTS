@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,17 +12,9 @@ public class ClassDeclarationTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     private static Stmt.Class ParseClass(string source)
     {
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Single(statements);
         return Assert.IsType<Stmt.Class>(statements[0]);
     }
@@ -102,7 +95,7 @@ public class ClassDeclarationTests
             class Bar { }
             class Foo extends Bar { }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Equal(2, statements.Count);
         var fooClass = Assert.IsType<Stmt.Class>(statements[1]);
         Assert.NotNull(fooClass.SuperclassExpr);
@@ -116,7 +109,7 @@ public class ClassDeclarationTests
             interface IBar { }
             class Foo implements IBar { }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Equal(2, statements.Count);
         var fooClass = Assert.IsType<Stmt.Class>(statements[1]);
         Assert.NotNull(fooClass.Interfaces);
@@ -132,7 +125,7 @@ public class ClassDeclarationTests
             interface IFoo { }
             class Foo extends Bar implements IFoo { }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var fooClass = Assert.IsType<Stmt.Class>(statements[2]);
         Assert.NotNull(fooClass.SuperclassExpr);
         Assert.NotNull(fooClass.Interfaces);
@@ -147,7 +140,7 @@ public class ClassDeclarationTests
             interface IB { }
             class Foo implements IA, IB { }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var fooClass = Assert.IsType<Stmt.Class>(statements[2]);
         Assert.NotNull(fooClass.Interfaces);
         Assert.Equal(2, fooClass.Interfaces.Count);
@@ -437,7 +430,7 @@ public class ClassDeclarationTests
                 override doSomething() { }
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var fooClass = Assert.IsType<Stmt.Class>(statements[0]);
         Assert.True(fooClass.Methods[0].IsOverride);
     }

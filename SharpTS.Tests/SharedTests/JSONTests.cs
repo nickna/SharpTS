@@ -10,8 +10,7 @@ public class JSONTests
 {
     #region JSON.parse basic tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Number(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class JSONTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_String(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class JSONTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Boolean(ExecutionMode mode)
     {
         var source = """
@@ -49,8 +46,7 @@ public class JSONTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Null(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class JSONTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Object(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +71,7 @@ public class JSONTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_Array(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +86,7 @@ public class JSONTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_NestedObject(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +98,7 @@ public class JSONTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Parse_WithReviver(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +120,7 @@ public class JSONTests
 
     #region JSON.stringify basic tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Number(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +132,7 @@ public class JSONTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_String(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +144,7 @@ public class JSONTests
         Assert.Equal("\"hello\"\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Boolean(ExecutionMode mode)
     {
         var source = """
@@ -167,8 +156,7 @@ public class JSONTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Null(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +168,7 @@ public class JSONTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Undefined_ReturnsUndefinedNotNull(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.1 step 12: a top-level undefined makes
@@ -199,8 +186,7 @@ public class JSONTests
         Assert.Equal("undefined\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Function_ReturnsUndefined(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.3 step 9: a top-level callable serializes to the JS
@@ -214,8 +200,7 @@ public class JSONTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Object(ExecutionMode mode)
     {
         var source = """
@@ -228,8 +213,7 @@ public class JSONTests
         Assert.Equal("{\"a\":1,\"b\":2}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_Array(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +226,7 @@ public class JSONTests
         Assert.Equal("[1,2,3]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_WithIndent(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +239,7 @@ public class JSONTests
         Assert.Equal("{\n  \"a\": 1\n}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_WithReplacerArray(ExecutionMode mode)
     {
         var source = """
@@ -270,8 +252,7 @@ public class JSONTests
         Assert.Equal("{\"a\":1,\"c\":3}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_EmptyObject(ExecutionMode mode)
     {
         var source = """
@@ -284,8 +265,7 @@ public class JSONTests
         Assert.Equal("{}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +278,7 @@ public class JSONTests
         Assert.Equal("[]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Roundtrip(ExecutionMode mode)
     {
         var source = """
@@ -318,8 +297,7 @@ public class JSONTests
 
     #region Enhanced JSON.stringify tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +318,7 @@ public class JSONTests
         Assert.Equal("{\"name\":\"Bob\",\"age\":25}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ClassInstance_ToJSON(ExecutionMode mode)
     {
         var source = """
@@ -363,8 +340,7 @@ public class JSONTests
         Assert.Equal("{\"custom\":50}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ObjectWithToJSON(ExecutionMode mode)
     {
         var source = """
@@ -382,8 +358,7 @@ public class JSONTests
         Assert.Equal("\"custom\"\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Stringify_ToJSON_ReceivesPropertyKey(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.3 SerializeJSONProperty step 2.b.i: toJSON is invoked
@@ -404,8 +379,7 @@ public class JSONTests
         Assert.Equal("{\"a\":\"k=a\",\"b\":[\"i=0\",\"i=1\"]}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void JSON_Stringify_Replacer_ReceivesPropertyKey(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.3 step 3.a: replacer is called with (key, value).
@@ -426,8 +400,7 @@ public class JSONTests
         Assert.Equal("|x|y|0|1\n{\"x\":1,\"y\":[10,20]}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BigInt_Throws(ExecutionMode mode)
     {
         var source = """
@@ -443,8 +416,7 @@ public class JSONTests
         Assert.Equal("caught error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_StringIndent_Tab(ExecutionMode mode)
     {
         var source = """
@@ -457,8 +429,7 @@ public class JSONTests
         Assert.Equal("{\n\t\"a\": 1\n}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_StringIndent_Custom(ExecutionMode mode)
     {
         var source = """
@@ -471,8 +442,7 @@ public class JSONTests
         Assert.Equal("{\n>>>\"a\": 1\n}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_NestedClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -497,8 +467,7 @@ public class JSONTests
         Assert.Equal("{\"inner\":{\"value\":42}}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ClassInstanceWithIndent(ExecutionMode mode)
     {
         var source = """
@@ -528,8 +497,7 @@ public class JSONTests
     // previously emitted the wrapper's __primitiveType/__primitiveValue marker fields; compiled
     // mode was already correct, so these run in both modes as a parity check.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedPrimitives_TopLevel(ExecutionMode mode)
     {
         var source = """
@@ -540,8 +508,7 @@ public class JSONTests
         Assert.Equal("5\n\"hi\"\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedPrimitives_AsObjectProperties(ExecutionMode mode)
     {
         var source = """
@@ -550,8 +517,7 @@ public class JSONTests
         Assert.Equal("{\"a\":5,\"b\":\"x\",\"c\":false}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedPrimitives_AsArrayElements(ExecutionMode mode)
     {
         var source = """
@@ -560,8 +526,7 @@ public class JSONTests
         Assert.Equal("[1,\"y\",false]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedNumber_AsSpace_Indents(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.1 step 5: a boxed Number `space` contributes its primitive value (2 → 2
@@ -572,8 +537,7 @@ public class JSONTests
         Assert.Equal("[\n  7\n]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedString_AsSpace_Indents(ExecutionMode mode)
     {
         // A boxed String `space` contributes its primitive value as the literal indent string.
@@ -583,8 +547,7 @@ public class JSONTests
         Assert.Equal("{\n--\"k\": 1\n}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_PlainObjectWithPrimitiveValueField_NotUnwrapped(ExecutionMode mode)
     {
         // An ordinary object that merely has a __primitiveValue field (but no __primitiveType) is
@@ -596,8 +559,7 @@ public class JSONTests
         Assert.Equal("{\"__primitiveValue\":7}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_PlainObjectWithPrimitiveValueField_WithSpace_NotUnwrapped(ExecutionMode mode)
     {
         // Same as above but exercises the StringifyFull code path (replacer/space present).
@@ -615,8 +577,7 @@ public class JSONTests
     // ToNumber/ToString, which go through OrdinaryToPrimitive and so honor a user-
     // overridden own valueOf/toString — not the raw [[PrimitiveValue]] slot.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedNumber_Value_HonorsValueOfOverride(ExecutionMode mode)
     {
         // value-number-object.js: a replacer returns a new Number whose own valueOf
@@ -636,8 +597,7 @@ public class JSONTests
         Assert.Equal("[2]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedString_Value_HonorsToStringOverride(ExecutionMode mode)
     {
         // value-string-object.js: a String wrapper with an own toString override
@@ -650,8 +610,7 @@ public class JSONTests
         Assert.Equal("\"OVERRIDE\"\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedNumber_Space_HonorsValueOfOverride(ExecutionMode mode)
     {
         // space-number-object.js: space = new Number(1) with valueOf → 3 indents by 3.
@@ -664,8 +623,7 @@ public class JSONTests
         Assert.Equal("{\n   \"k\": 1\n}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedString_Space_HonorsToStringOverride(ExecutionMode mode)
     {
         // space-string-object.js: space = new String with toString override is the indent.
@@ -677,8 +635,7 @@ public class JSONTests
         Assert.Equal("{\n>>\"k\": 1\n}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ReplacerArray_BoxedNumber_UsesToString(ExecutionMode mode)
     {
         // replacer-array-number-object.js: a Number wrapper in the replacer array is a
@@ -693,8 +650,7 @@ public class JSONTests
         Assert.Equal("{\"toString\":2}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ReplacerArray_BoxedString_UsedAsKey(ExecutionMode mode)
     {
         // replacer-array-string-object.js: a String wrapper element selects that key.
@@ -705,8 +661,7 @@ public class JSONTests
         Assert.Equal("{\"z\":1}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_ReplacerArray_PlainNumber_CoercedToKey(ExecutionMode mode)
     {
         // ECMA-262 25.5.2.1 step 4.b: a plain Number element coerces to its ToString key.
@@ -716,8 +671,7 @@ public class JSONTests
         Assert.Equal("{\"a\":1,\"2\":2,\"c\":3}\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JSON_Stringify_BoxedNumber_AbruptValueOf_Propagates(ExecutionMode mode)
     {
         // value-number-object.js abrupt case: a throwing valueOf/toString must propagate.

@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArrayTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayLiteral_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class ArrayTests
         Assert.Equal("[1, 2, 3]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayIndexing_ReturnsCorrectElement(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class ArrayTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayLength_ReturnsCorrectLength(ExecutionMode mode)
     {
         var source = """
@@ -49,8 +46,7 @@ public class ArrayTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayPush_AddsElement(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +60,7 @@ public class ArrayTests
         Assert.Equal("3\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayPop_RemovesAndReturnsLastElement(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +74,7 @@ public class ArrayTests
         Assert.Equal("3\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayShift_RemovesAndReturnsFirstElement(ExecutionMode mode)
     {
         var source = """
@@ -95,8 +89,7 @@ public class ArrayTests
         Assert.Equal("1\n2\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayUnshift_AddsElementAtBeginning(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +103,7 @@ public class ArrayTests
         Assert.Equal("1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArraySlice_ReturnsSubarray(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +118,7 @@ public class ArrayTests
         Assert.Equal("3\n2\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayMap_TransformsElements(ExecutionMode mode)
     {
         var source = """
@@ -145,8 +136,7 @@ public class ArrayTests
         Assert.Equal("2\n4\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayFilter_FiltersElements(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +155,7 @@ public class ArrayTests
         Assert.Equal("3\n2\n4\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayForEach_IteratesElements(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +170,7 @@ public class ArrayTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayIndexAssignment_ModifiesElement(ExecutionMode mode)
     {
         var source = """
@@ -195,8 +183,7 @@ public class ArrayTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedArray_AccessesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +198,7 @@ public class ArrayTests
         Assert.Equal("1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyArray_HasZeroLength(ExecutionMode mode)
     {
         var source = """

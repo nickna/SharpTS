@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class NodeErrorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadFileSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -31,8 +30,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StatSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -53,8 +51,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReaddirSync_NonexistentDir_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -75,8 +72,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnlinkSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -97,8 +93,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RmdirSync_NonexistentDir_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -119,8 +114,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RenameSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -141,8 +135,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CopyFileSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +156,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AccessSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -185,8 +177,7 @@ public class NodeErrorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NodeError_HasPathProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -205,8 +196,7 @@ public class NodeErrorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NodeError_MessageIncludesCode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

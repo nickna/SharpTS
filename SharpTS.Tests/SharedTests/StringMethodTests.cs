@@ -10,8 +10,7 @@ public class StringMethodTests
 {
     #region String Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Length_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class StringMethodTests
 
     #region Basic String Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CharAt_ReturnsCharacter(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class StringMethodTests
         Assert.Equal("h\ne\no\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Substring_WithStartAndEnd_ReturnsSubstring(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +52,7 @@ public class StringMethodTests
         Assert.Equal("ell\nhe\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Substring_WithStartOnly_ReturnsToEnd(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +64,7 @@ public class StringMethodTests
         Assert.Equal("llo\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_IndexOf_ReturnsIndex(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +77,7 @@ public class StringMethodTests
         Assert.Equal("2\n4\n-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ToUpperCase_ReturnsUpperCase(ExecutionMode mode)
     {
         var source = """
@@ -95,8 +89,7 @@ public class StringMethodTests
         Assert.Equal("HELLO\nHELLO WORLD\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ToLowerCase_ReturnsLowerCase(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +101,7 @@ public class StringMethodTests
         Assert.Equal("hello\nhello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Trim_RemovesWhitespace(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +113,7 @@ public class StringMethodTests
         Assert.Equal("hello\nno space\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Replace_ReplacesFirstOccurrence(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +125,7 @@ public class StringMethodTests
         Assert.Equal("hexlo\nhell0 world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Split_ReturnsArray(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +140,7 @@ public class StringMethodTests
         Assert.Equal("3\na\nb\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Split_WithEmptyDelimiter_SplitsChars(ExecutionMode mode)
     {
         var source = """
@@ -166,8 +155,7 @@ public class StringMethodTests
         Assert.Equal("3\na\nb\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Includes_ReturnsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +167,7 @@ public class StringMethodTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_StartsWith_ReturnsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +179,7 @@ public class StringMethodTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_EndsWith_ReturnsBoolean(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +195,7 @@ public class StringMethodTests
 
     #region String with Variables
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_MethodsOnVariable_Work(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +209,7 @@ public class StringMethodTests
         Assert.Equal("11\nHELLO WORLD\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ChainedMethods_Work(ExecutionMode mode)
     {
         var source = """
@@ -240,8 +224,7 @@ public class StringMethodTests
 
     #region Slice Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Slice_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -253,8 +236,7 @@ public class StringMethodTests
         Assert.Equal("ell\nllo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Slice_NegativeIndices(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +249,7 @@ public class StringMethodTests
         Assert.Equal("llo\nell\nell\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Slice_EdgeCases(ExecutionMode mode)
     {
         var source = """
@@ -285,8 +266,7 @@ public class StringMethodTests
 
     #region Repeat Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Repeat_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +278,7 @@ public class StringMethodTests
         Assert.Equal("ababab\nxxxxx\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Repeat_EdgeCases(ExecutionMode mode)
     {
         var source = """
@@ -316,8 +295,7 @@ public class StringMethodTests
 
     #region Pad Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_PadStart_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -330,8 +308,7 @@ public class StringMethodTests
         Assert.Equal("005\n123abc\n     hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_PadStart_EdgeCases(ExecutionMode mode)
     {
         var source = """
@@ -343,8 +320,7 @@ public class StringMethodTests
         Assert.Equal("hello\nhi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_PadEnd_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -357,8 +333,7 @@ public class StringMethodTests
         Assert.Equal("500\nabc123\nhello     \n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_PadEnd_EdgeCases(ExecutionMode mode)
     {
         var source = """
@@ -374,8 +349,7 @@ public class StringMethodTests
 
     #region CharCodeAt Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CharCodeAt_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -388,8 +362,7 @@ public class StringMethodTests
         Assert.Equal("65\n66\n111\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CharCodeAt_OutOfRange(ExecutionMode mode)
     {
         var source = """
@@ -405,8 +378,7 @@ public class StringMethodTests
 
     #region Concat Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Concat_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -423,8 +395,7 @@ public class StringMethodTests
 
     #region LastIndexOf Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_LastIndexOf_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -441,8 +412,7 @@ public class StringMethodTests
 
     #region Trim Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_TrimStart_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -454,8 +424,7 @@ public class StringMethodTests
         Assert.Equal("hello  \nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_TrimEnd_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -471,8 +440,7 @@ public class StringMethodTests
 
     #region ReplaceAll Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ReplaceAll_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -485,8 +453,7 @@ public class StringMethodTests
         Assert.Equal("hexxo\nbbb\nhell0 w0rld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ReplaceAll_EdgeCases(ExecutionMode mode)
     {
         // ECMA-262 22.1.3.20: empty search inserts replacement at every
@@ -505,8 +472,7 @@ public class StringMethodTests
 
     #region At Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_At_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -520,8 +486,7 @@ public class StringMethodTests
         Assert.Equal("h\nl\no\nl\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_At_OutOfRange(ExecutionMode mode)
     {
         var source = """
@@ -537,8 +502,7 @@ public class StringMethodTests
 
     #region String.fromCharCode Static Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_BasicUsage(ExecutionMode mode)
     {
         var source = """
@@ -551,8 +515,7 @@ public class StringMethodTests
         Assert.Equal("Hello\nA\nWorld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_NoArguments(ExecutionMode mode)
     {
         var source = """
@@ -564,8 +527,7 @@ public class StringMethodTests
         Assert.Equal("\nempty:\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_SingleCharacter(ExecutionMode mode)
     {
         var source = """
@@ -578,8 +540,7 @@ public class StringMethodTests
         Assert.Equal("A\na\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_SpecialCharacters(ExecutionMode mode)
     {
         var source = """
@@ -592,8 +553,7 @@ public class StringMethodTests
         Assert.Equal("\n\n\t\n \n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_WithVariables(ExecutionMode mode)
     {
         var source = """
@@ -608,8 +568,7 @@ public class StringMethodTests
         Assert.Equal("Hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_RoundTripWithCharCodeAt(ExecutionMode mode)
     {
         var source = """
@@ -627,8 +586,7 @@ public class StringMethodTests
         Assert.Equal("Test\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCharCode_LargeCodePoints(ExecutionMode mode)
     {
         // Values > 65535 should be truncated to 16-bit (& 0xFFFF)
@@ -649,8 +607,7 @@ public class StringMethodTests
 
     #region String.fromCodePoint Static Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_InvalidCodePoint_MessageIncludesValue(ExecutionMode mode)
     {
         // #731: the RangeError message must carry the offending code-point value
@@ -664,8 +621,7 @@ public class StringMethodTests
         Assert.Equal("Invalid code point -1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_BasicBMP(ExecutionMode mode)
     {
         var source = """
@@ -677,8 +633,7 @@ public class StringMethodTests
         Assert.Equal("Hello\nA\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_NoArguments(ExecutionMode mode)
     {
         var source = """
@@ -689,8 +644,7 @@ public class StringMethodTests
         Assert.Equal("><\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_SupplementaryCharacters(ExecutionMode mode)
     {
         // U+1F600 = 128512 (Grinning Face emoji)
@@ -707,8 +661,7 @@ public class StringMethodTests
         Assert.Equal("2\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_MixedBMPAndSupplementary(ExecutionMode mode)
     {
         var source = """
@@ -723,8 +676,7 @@ public class StringMethodTests
         Assert.Equal("4\n65\n66\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_WithVariables(ExecutionMode mode)
     {
         var source = """
@@ -737,8 +689,7 @@ public class StringMethodTests
         Assert.Equal("9731\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_FromCodePoint_LoneSurrogates(ExecutionMode mode)
     {
         // ECMA-262 §22.1.2.2 + §11.1.3 UTF16EncodeCodePoint: lone surrogates
@@ -762,8 +713,7 @@ public class StringMethodTests
 
     #region String.prototype.codePointAt
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_BasicBMP(ExecutionMode mode)
     {
         var source = """
@@ -776,8 +726,7 @@ public class StringMethodTests
         Assert.Equal("65\n66\n67\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_OutOfRange(ExecutionMode mode)
     {
         var source = """
@@ -789,8 +738,7 @@ public class StringMethodTests
         Assert.Equal("undefined\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_SurrogatePair(ExecutionMode mode)
     {
         // Create a string with a supplementary character and read it back
@@ -803,8 +751,7 @@ public class StringMethodTests
         Assert.Equal("128512\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_SecondSurrogate(ExecutionMode mode)
     {
         // Accessing index 1 of a surrogate pair should return the low surrogate's code unit value
@@ -823,8 +770,7 @@ public class StringMethodTests
         Assert.Equal("true", lines[2]);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -840,8 +786,7 @@ public class StringMethodTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CodePointAt_MatchesCharCodeAtForBMP(ExecutionMode mode)
     {
         var source = """
@@ -863,8 +808,7 @@ public class StringMethodTests
 
     #region New Methods on Variable and Chained
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_NewMethods_OnVariable(ExecutionMode mode)
     {
         var source = """
@@ -878,8 +822,7 @@ public class StringMethodTests
         Assert.Equal("Hello\nHello WorldHello World\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_NewMethods_Chained(ExecutionMode mode)
     {
         var source = """
@@ -895,8 +838,7 @@ public class StringMethodTests
 
     #region Normalize Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Normalize_DefaultNFC(ExecutionMode mode)
     {
         // \u00e9 is precomposed é (NFC), e\u0301 is decomposed e + combining accent (NFD)
@@ -914,8 +856,7 @@ public class StringMethodTests
         Assert.Equal("1\n2\n1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Normalize_NFD(ExecutionMode mode)
     {
         var source = """
@@ -929,8 +870,7 @@ public class StringMethodTests
         Assert.Equal("2\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Normalize_AllForms(ExecutionMode mode)
     {
         var source = """
@@ -945,8 +885,7 @@ public class StringMethodTests
         Assert.Equal("1\n2\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Normalize_AlreadyNormalized(ExecutionMode mode)
     {
         var source = """
@@ -963,8 +902,7 @@ public class StringMethodTests
 
     #region LocaleCompare Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_LocaleCompare_Equal(ExecutionMode mode)
     {
         var source = """
@@ -975,8 +913,7 @@ public class StringMethodTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_LocaleCompare_LessThan(ExecutionMode mode)
     {
         var source = """
@@ -987,8 +924,7 @@ public class StringMethodTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_LocaleCompare_GreaterThan(ExecutionMode mode)
     {
         var source = """
@@ -999,8 +935,7 @@ public class StringMethodTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_LocaleCompare_WithVariables(ExecutionMode mode)
     {
         var source = """

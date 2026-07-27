@@ -10,8 +10,7 @@ public class LogicalAssignmentTests
 {
     #region &&= Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_TruthyValue_AssignsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_FalsyValue_KeepsOriginal(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class LogicalAssignmentTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_NullValue_KeepsNull(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +49,7 @@ public class LogicalAssignmentTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_ShortCircuit_DoesNotEvaluateRight(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +69,7 @@ public class LogicalAssignmentTests
 
     #region ||= Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_FalsyValue_AssignsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_TruthyValue_KeepsOriginal(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +95,7 @@ public class LogicalAssignmentTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_NullValue_AssignsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +108,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_ShortCircuit_DoesNotEvaluateRight(ExecutionMode mode)
     {
         var source = """
@@ -136,8 +128,7 @@ public class LogicalAssignmentTests
 
     #region ??= Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_NullValue_AssignsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +141,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_UndefinedValue_AssignsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +154,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_ZeroValue_KeepsOriginal(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +167,7 @@ public class LogicalAssignmentTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_EmptyString_KeepsOriginal(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +180,7 @@ public class LogicalAssignmentTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_ShortCircuit_DoesNotEvaluateRight(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +200,7 @@ public class LogicalAssignmentTests
 
     #region Object Property Access
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_ObjectProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -227,8 +213,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_ObjectProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -241,8 +226,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_ObjectProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -259,8 +243,7 @@ public class LogicalAssignmentTests
 
     #region Array Index Access
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AndAssign_ArrayIndex_Works(ExecutionMode mode)
     {
         var source = """
@@ -273,8 +256,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrAssign_ArrayIndex_Works(ExecutionMode mode)
     {
         var source = """
@@ -287,8 +269,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishAssign_ArrayIndex_Works(ExecutionMode mode)
     {
         var source = """
@@ -305,8 +286,7 @@ public class LogicalAssignmentTests
 
     #region Return Value
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_ReturnsResultValue(ExecutionMode mode)
     {
         var source = """
@@ -319,8 +299,7 @@ public class LogicalAssignmentTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_ReturnsOriginalWhenNotAssigned(ExecutionMode mode)
     {
         var source = """

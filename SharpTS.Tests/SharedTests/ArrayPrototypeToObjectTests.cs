@@ -21,8 +21,7 @@ public class ArrayPrototypeToObjectTests
 {
     // ── callback's `obj` argument is a wrapper object for a primitive `this` ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForEach_OnStringPrimitive_CallbackReceivesStringWrapper(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +34,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("object:true;object:true;\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("[true,true]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Filter_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         // Keeps every element because `obj instanceof String` is true for each.
@@ -62,8 +59,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("[\"a\",\"b\"]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Some_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Every_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         // Mirrors Test262 built-ins/Array/prototype/every/15.4.4.16-1-7.js:
@@ -89,8 +84,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reduce_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         var source = """
@@ -102,8 +96,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("TT\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReduceRight_OnStringPrimitive_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +108,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("TT\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_OnStringPrimitive_ElementsAreChars(ExecutionMode mode)
     {
         // The element argument (kValue) is still the per-index character string,
@@ -130,8 +122,7 @@ public class ArrayPrototypeToObjectTests
 
     // ── String OBJECT receiver: ToObject is identity, wrapper passes through ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Every_OnStringObject_ObjArgIsStringWrapper(ExecutionMode mode)
     {
         // Mirrors Test262 .../every/15.4.4.16-1-8.js.
@@ -146,8 +137,7 @@ public class ArrayPrototypeToObjectTests
 
     // ── plain array-like / real array receivers must be unaffected ───────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_OnRealArray_ObjArgIsTheArray(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +149,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("[10,20,30]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_OnPlainArrayLike_PassesReceiverThrough(ExecutionMode mode)
     {
         var source = """
@@ -173,8 +162,7 @@ public class ArrayPrototypeToObjectTests
 
     // ── Object.defineProperties reads Properties via Get (accessor getters) ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefineProperties_BooleanObjectProperties_GetterThisIsWrapper(ExecutionMode mode)
     {
         // Mirrors Test262 built-ins/Object/defineProperties/15.2.3.7-2-4.js:
@@ -194,8 +182,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefineProperties_NumberObjectProperties_GetterThisIsWrapper(ExecutionMode mode)
     {
         // Mirrors Test262 .../defineProperties/15.2.3.7-2-6.js.
@@ -213,8 +200,7 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefineProperties_SkipsNonEnumerableSourceProperty(ExecutionMode mode)
     {
         // ObjectDefineProperties only processes own ENUMERABLE keys of Properties.

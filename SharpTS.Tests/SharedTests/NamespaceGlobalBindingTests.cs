@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NamespaceGlobalBindingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_StaticAbort_Resolves(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class NamespaceGlobalBindingTests
         Assert.Equal("true\nwhy\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_DirectConstruction_Throws(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class NamespaceGlobalBindingTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Intl_ValuePosition_AndMemberConstruction(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class NamespaceGlobalBindingTests
         Assert.Equal("1,234.5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WebStreamConstructors_ValuePosition_AndInstanceof(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +72,7 @@ public class NamespaceGlobalBindingTests
     // ReadableStream.from(iterable) eagerly drains the iterable into a closed
     // stream (#269). Both modes are covered now that compiled mode emits a
     // $ReadableStream.from static (interp uses SharpTSWebStreamsConstructors).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WebStreamConstructors_From(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +86,7 @@ public class NamespaceGlobalBindingTests
 
     // #269: the produced stream yields each element of the iterable followed by
     // done — verified by draining it through a reader.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WebStreamConstructors_From_DrainsIterable(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +107,7 @@ public class NamespaceGlobalBindingTests
         Assert.Equal("a false\nb false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MessageChannel_ValuePosition(ExecutionMode mode)
     {
         var source = """

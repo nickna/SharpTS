@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class LexicalForwardReferenceTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_ReferencesLaterLet(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("1", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_ReferencesLaterConst(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("5", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ReferencesLaterLet(ExecutionMode mode)
     {
         // The exact second repro from the issue (a generator declared before its let binding).
@@ -56,8 +53,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("1,2", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowConst_ReferencesLaterLet(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("42", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedLet_ForwardReferenced_TypeChecks(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +77,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("hi", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ReferencesLaterLet_InEnclosingBody(ExecutionMode mode)
     {
         // The forward binding lives in the enclosing FUNCTION body, not module scope.
@@ -99,8 +93,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("99", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowingConst_BindsToInnerDeclaration(ExecutionMode mode)
     {
         // The inner `const x` shadows the outer one throughout `wrapper`, including in f's closure.
@@ -122,8 +115,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("shadow", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowingConst_DoesNotClobberOuterModuleBinding(ExecutionMode mode)
     {
         // The companion to #562: the function-local shadow must not write through to the module
@@ -141,8 +133,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("inner outer", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MutualRecursion_ViaConstArrows_StillWorks(ExecutionMode mode)
     {
         // Guards that hoisting let/const as `any` does not clobber the precise function type that
@@ -157,8 +148,7 @@ public class LexicalForwardReferenceTests
         Assert.Equal("true true", TestHarness.Run(source, mode).Trim());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceMemberFunction_ReferencesLaterConst(ExecutionMode mode)
     {
         // A namespace member function declared before a namespace-level const type-checks the same way

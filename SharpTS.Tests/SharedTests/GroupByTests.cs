@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GroupByTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectGroupBy_BasicGrouping(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class GroupByTests
         Assert.Equal("3\n1\n2\n2\nbananas\ncherries\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectGroupBy_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class GroupByTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectGroupBy_NumericKeys(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class GroupByTests
         Assert.Equal("3\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectGroupBy_CallbackReceivesIndex(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class GroupByTests
         Assert.Equal("2\n2\na\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapGroupBy_BasicGrouping(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +94,7 @@ public class GroupByTests
         Assert.Equal("1\n2\nbananas\ncherries\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapGroupBy_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +106,7 @@ public class GroupByTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapGroupBy_NullUndefinedKeys(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +124,7 @@ public class GroupByTests
         Assert.Equal("2\n2\n1\n2\n1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapGroupBy_MultipleItemsPerGroup(ExecutionMode mode)
     {
         var source = """

@@ -10,15 +10,14 @@ namespace SharpTS.Tests.SharedTests;
 /// evaluates truthy when each individual sub-expression is false.
 /// </summary>
 /// <remarks>
-/// The workaround in <c>stdlib/node/assert.ts</c> is to bind each
-/// sub-condition to a local first. When this bug is fixed, remove the
-/// <see cref="TheoryAttribute.Skip"/> attribute below and the workaround in
-/// <c>deepEquals</c> can be reverted to an inline compound expression.
+/// Regression note: the compiler bug is fixed (this test runs un-skipped in
+/// both modes and passes). <c>stdlib/node/assert.ts</c>'s <c>deepEquals</c>
+/// still uses the bind-each-sub-condition-to-a-local workaround from the
+/// broken era; it is behavior-equivalent, so reverting it is optional.
 /// </remarks>
 public class CrossModuleChainedLogicalOrTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLogicalOr_WithTypeofAndNull_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

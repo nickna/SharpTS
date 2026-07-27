@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncFunctionExpressionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Anonymous_ResolvesValue(ExecutionMode mode)
     {
         // The exact repro from issue #635.
@@ -23,8 +22,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Named_ResolvesValue(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +33,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Awaited(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +48,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_ImmediatelyInvoked(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("ran\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_AwaitInsideBody(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +75,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_AsCallbackArgument(ExecutionMode mode)
     {
         // Async function expression passed directly as an argument (a common position that the
@@ -94,8 +88,7 @@ public class AsyncFunctionExpressionTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorFunctionExpression_ForAwaitOf(ExecutionMode mode)
     {
         // `async function*` expression — the `function` keyword path also accepts the `*`, giving an

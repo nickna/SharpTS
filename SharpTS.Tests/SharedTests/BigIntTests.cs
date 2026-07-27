@@ -11,8 +11,7 @@ public class BigIntTests
 {
     #region Literal and Typeof Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LiteralSyntax_Works(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class BigIntTests
         Assert.Equal("123n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_TypeofReturnsBigint(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class BigIntTests
 
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ConstructorFromNumber_Works(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +53,7 @@ public class BigIntTests
         Assert.Equal("42n\nbigint\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ConstructorFromString_Works(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class BigIntTests
         Assert.Equal("12345n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ConstructorFromHexString_Works(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +77,7 @@ public class BigIntTests
         Assert.Equal("255n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +93,7 @@ public class BigIntTests
 
     #region Arithmetic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Addition_Works(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +106,7 @@ public class BigIntTests
         Assert.Equal("30n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Subtraction_Works(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +119,7 @@ public class BigIntTests
         Assert.Equal("20n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Multiplication_Works(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +132,7 @@ public class BigIntTests
         Assert.Equal("42n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Division_TruncatesTowardZero(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +145,7 @@ public class BigIntTests
         Assert.Equal("2n\n-2n\n5n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Remainder_Works(ExecutionMode mode)
     {
         var source = """
@@ -168,8 +157,7 @@ public class BigIntTests
         Assert.Equal("1n\n2n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Exponentiation_Works(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +169,7 @@ public class BigIntTests
         Assert.Equal("1024n\n81n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_UnaryNegation_Works(ExecutionMode mode)
     {
         var source = """
@@ -199,8 +186,7 @@ public class BigIntTests
 
     #region Bitwise Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_BitwiseAnd_Works(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +197,7 @@ public class BigIntTests
         Assert.Equal("8n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_BitwiseOr_Works(ExecutionMode mode)
     {
         var source = """
@@ -223,8 +208,7 @@ public class BigIntTests
         Assert.Equal("14n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_BitwiseXor_Works(ExecutionMode mode)
     {
         var source = """
@@ -235,8 +219,7 @@ public class BigIntTests
         Assert.Equal("6n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_BitwiseNot_Works(ExecutionMode mode)
     {
         var source = """
@@ -248,8 +231,7 @@ public class BigIntTests
         Assert.Equal("-6n\n5n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LeftShift_Works(ExecutionMode mode)
     {
         var source = """
@@ -261,8 +243,7 @@ public class BigIntTests
         Assert.Equal("1024n\n40n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_RightShift_Works(ExecutionMode mode)
     {
         var source = """
@@ -278,8 +259,7 @@ public class BigIntTests
 
     #region Comparison Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Equality_Works(ExecutionMode mode)
     {
         var source = """
@@ -293,8 +273,7 @@ public class BigIntTests
         Assert.Equal("true\nfalse\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Comparisons_Work(ExecutionMode mode)
     {
         var source = """
@@ -314,8 +293,7 @@ public class BigIntTests
 
     #region Large Numbers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LargeNumbers_Work(ExecutionMode mode)
     {
         var source = """
@@ -328,8 +306,7 @@ public class BigIntTests
         Assert.Equal("9007199254740993n\n9007199254740994n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_VeryLargeNumbers_Work(ExecutionMode mode)
     {
         var source = """
@@ -346,8 +323,7 @@ public class BigIntTests
 
     #region Usage in Functions and Variables
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_InFunction_Works(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +337,7 @@ public class BigIntTests
         Assert.Equal("300n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_AsVariable_Works(ExecutionMode mode)
     {
         var source = """
@@ -375,8 +350,7 @@ public class BigIntTests
         Assert.Equal("15n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ZeroAndNegative_Work(ExecutionMode mode)
     {
         var source = """
@@ -389,8 +363,7 @@ public class BigIntTests
         Assert.Equal("0n\n-1n\n-100n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ChainedOperations_Work(ExecutionMode mode)
     {
         var source = """
@@ -402,8 +375,7 @@ public class BigIntTests
         Assert.Equal("27n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_InTernary_Works(ExecutionMode mode)
     {
         var source = """
@@ -415,8 +387,7 @@ public class BigIntTests
         Assert.Equal("10n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_Reassignment_Works(ExecutionMode mode)
     {
         var source = """
@@ -433,8 +404,7 @@ public class BigIntTests
 
     #region Type Errors
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_MixedWithNumber_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -445,8 +415,7 @@ public class BigIntTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_UnsignedRightShift_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -461,8 +430,7 @@ public class BigIntTests
 
     #region Coercion and Methods (#912)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ToString_NoRadix(ExecutionMode mode)
     {
         var source = """
@@ -473,8 +441,7 @@ public class BigIntTests
         Assert.Equal("123\n0\n-42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ToString_Radix(ExecutionMode mode)
     {
         var source = """
@@ -488,8 +455,7 @@ public class BigIntTests
         Assert.Equal("ff\n11111111\n377\n73\n-ff\n0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ToString_Radix_ArbitraryPrecision(ExecutionMode mode)
     {
         var source = """
@@ -498,8 +464,7 @@ public class BigIntTests
         Assert.Equal("18ee90ff6c373e0ee4e3f0ad2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_StringCoercion_IsBareNumericForm(ExecutionMode mode)
     {
         // ECMA-262 ToString(bigint) has no "n" suffix (that form is console.log-only).
@@ -512,8 +477,7 @@ public class BigIntTests
         Assert.Equal("42\n42\n42\n-7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_ConsoleLog_KeepsDebugForm(ExecutionMode mode)
     {
         // console.log / inspection keeps the "42n" debug form even though String() drops it.
@@ -524,8 +488,7 @@ public class BigIntTests
         Assert.Equal("42n\n5n\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_NumberCoercion(ExecutionMode mode)
     {
         var source = """
@@ -536,8 +499,7 @@ public class BigIntTests
         Assert.Equal("42\n-7\n0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_BooleanCoercion(ExecutionMode mode)
     {
         // ToBoolean(bigint): 0n is falsy, every other bigint is truthy.
@@ -552,8 +514,7 @@ public class BigIntTests
         Assert.Equal("false\ntrue\ntrue\ntrue\nf\nt\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LooseEquality_WithNumber(ExecutionMode mode)
     {
         // ECMA-262 7.2.15: bigint == number compares mathematical values.
@@ -567,8 +528,7 @@ public class BigIntTests
         Assert.Equal("true\nfalse\nfalse\nfalse\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LooseEquality_WithStringAndBoolean(ExecutionMode mode)
     {
         var source = """
@@ -582,8 +542,7 @@ public class BigIntTests
         Assert.Equal("true\nfalse\ntrue\ntrue\ntrue\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_StrictEquality_AcrossTypes_IsFalse(ExecutionMode mode)
     {
         // A bigint is never the same Type as a number, so === is always false.
@@ -600,8 +559,7 @@ public class BigIntTests
 
     #region Instanceof Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_InstanceOf_Object_IsFalse(ExecutionMode mode)
     {
         // bigint is a primitive; instanceof must return false, not throw a
@@ -614,8 +572,7 @@ public class BigIntTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_InstanceOf_UserClass_IsFalse(ExecutionMode mode)
     {
         var source = """
@@ -630,8 +587,7 @@ public class BigIntTests
 
     #region Bigint Literal Types (#1207)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LiteralTypedOperands_UseBigintArithmetic(ExecutionMode mode)
     {
         // const-bound operands carry TypeInfo.BigIntLiteral in the type map; the
@@ -648,8 +604,7 @@ public class BigIntTests
         Assert.Equal("5n\n110\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_TypeofGuard_BranchSurvivesDeadCodeAnalysis(ExecutionMode mode)
     {
         // The compiled dead-code analyzer had no "bigint" arm in its typeof matcher,
@@ -665,8 +620,7 @@ public class BigIntTests
         Assert.Equal("big\nlit\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LiteralTypedReceiver_MethodCallWorks(ExecutionMode mode)
     {
         // toString(radix) on a BigIntLiteral-typed receiver must route through the
@@ -680,8 +634,7 @@ public class BigIntTests
         Assert.Equal("ff\n255\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BigInt_LiteralUnionNarrowing_RunsCorrectBranch(ExecutionMode mode)
     {
         var source = """

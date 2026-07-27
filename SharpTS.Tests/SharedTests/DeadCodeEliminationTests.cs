@@ -15,8 +15,7 @@ public class DeadCodeEliminationTests
 {
     #region Level 1: Constant Condition Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfTrue_OnlyThenBranchExecutes(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfFalse_OnlyElseBranchExecutes(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("else\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfFalse_NoElse_NothingExecutes(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("after\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAnd_FalseShortCircuits(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("else\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalOr_TrueShortCircuits(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +84,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Negation_NotFalse_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +98,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Negation_NotTrue_ExecutesElse(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +112,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("else\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComplexLogical_TrueAndTrue_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +126,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComplexLogical_FalseOrFalse_ExecutesElse(ExecutionMode mode)
     {
         var source = """
@@ -153,8 +144,7 @@ public class DeadCodeEliminationTests
 
     #region Level 2: Type-Based Condition Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofString_AlwaysTrue_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +159,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("is string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofString_AlwaysFalse_SkipsEntireIf(ExecutionMode mode)
     {
         var source = """
@@ -184,8 +173,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofNumber_AlwaysTrue_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +188,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("is number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofBoolean_AlwaysFalse_ExecutesElse(ExecutionMode mode)
     {
         var source = """
@@ -216,8 +203,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("not boolean\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofNotEqual_StringIsNotNumber_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -232,8 +218,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("not number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofStrictEqual_StringIsString_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -248,8 +233,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("is string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeofStrictNotEqual_NumberIsNotString_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -264,8 +248,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("not string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnionType_MixedTypeof_BothBranchesReachable(ExecutionMode mode)
     {
         var source = """
@@ -287,8 +270,7 @@ public class DeadCodeEliminationTests
 
     #region Level 3: Control Flow Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AfterReturn_CodeNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +285,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("before\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AfterThrow_CodeNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -323,8 +304,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("before\ncaught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AfterBreak_CodeNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -342,8 +322,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AfterContinue_CodeNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +340,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnFromFunctionCall_AfterCodeNotExecuted(ExecutionMode mode)
     {
         // Test that code after return with function call result is not executed
@@ -382,8 +360,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("before\ngetValue\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfBothBranchesReturn_AfterIfNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -402,8 +379,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleReturns_OnlyFirstExecuted(ExecutionMode mode)
     {
         var source = """
@@ -425,8 +401,7 @@ public class DeadCodeEliminationTests
 
     #region Exhaustive Switch Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExhaustiveSwitch_DefaultNotExecuted(ExecutionMode mode)
     {
         var source = """
@@ -445,8 +420,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonExhaustiveSwitch_DefaultExecuted(ExecutionMode mode)
     {
         var source = """
@@ -463,8 +437,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("default\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchWithThreeOptions_AllCasesCovered(ExecutionMode mode)
     {
         var source = """
@@ -489,8 +462,7 @@ public class DeadCodeEliminationTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedIfTrue_BothLevelsOptimized(ExecutionMode mode)
     {
         var source = """
@@ -508,8 +480,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("inner then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedIfFalse_BothLevelsOptimized(ExecutionMode mode)
     {
         var source = """
@@ -527,8 +498,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("inner else\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WhileFalse_BodyNeverExecutes(ExecutionMode mode)
     {
         var source = """
@@ -541,8 +511,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("after\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TernaryWithTrue_ReturnsFirstValue(ExecutionMode mode)
     {
         var source = """
@@ -553,8 +522,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TernaryWithFalse_ReturnsSecondValue(ExecutionMode mode)
     {
         var source = """
@@ -565,8 +533,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GroupedCondition_TrueInParens_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -580,8 +547,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNegation_NotNotTrue_ExecutesThen(ExecutionMode mode)
     {
         var source = """
@@ -595,8 +561,7 @@ public class DeadCodeEliminationTests
         Assert.Equal("then\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionWithMultipleExitPoints_CorrectPathExecutes(ExecutionMode mode)
     {
         var source = """

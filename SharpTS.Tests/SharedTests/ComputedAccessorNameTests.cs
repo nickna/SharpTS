@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ComputedAccessorNameTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticSymbolGetter_SpeciesPattern(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceSymbolGetterAndSetter(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("Tagged!\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticSymbolGetter_InheritedThroughSubclassChain(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +65,7 @@ public class ComputedAccessorNameTests
     // The class-expression emission path gained a .cctor registration hook +
     // synthetic-method body emission mirroring the class-declaration path (#266),
     // so these now run in both modes.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolAccessor_InClassExpression(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +79,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("expr\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolAccessor_InClassExpression_GetterSetterWithFieldAndModuleLocalKey(ExecutionMode mode)
     {
         // Getter + setter sharing one symbol slot, a well-known key reading an
@@ -108,8 +103,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("tag5 5\ntag99 99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolAccessor_InClassExpression_Static(ExecutionMode mode)
     {
         // Static symbol-keyed getter on a class expression dispatches through the
@@ -127,8 +121,7 @@ public class ComputedAccessorNameTests
 
     // A get and set accessor for the SAME symbol must coexist (they merge into one
     // registry slot) and the .cctor registration must not disturb static field init.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolGetterAndSetter_SameKey_WithStaticField(ExecutionMode mode)
     {
         var source = """
@@ -153,8 +146,7 @@ public class ComputedAccessorNameTests
     // evaluated in the lazily-run class .cctor, which executes after the
     // top-level binding is assigned, so `key` resolves correctly. Getter and
     // setter share one registry slot.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolAccessor_ModuleLocalKey(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +166,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("10\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LiteralComputedKeys_FoldToOrdinaryNames(ExecutionMode mode)
     {
         var source = """
@@ -189,8 +180,7 @@ public class ComputedAccessorNameTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringAndKeywordAccessorNames_Parse(ExecutionMode mode)
     {
         var source = """

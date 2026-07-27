@@ -11,8 +11,7 @@ public class ProcessNextTickTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_Import_FromProcessModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class ProcessNextTickTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ProcessGlobal_IsFunction(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class ProcessNextTickTests
 
     #region Execution Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ExecutesCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -64,8 +61,7 @@ public class ProcessNextTickTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ViaProcessGlobal_ExecutesCallback(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +77,7 @@ public class ProcessNextTickTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ReturnsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -102,8 +97,7 @@ public class ProcessNextTickTests
 
     #region Arguments Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_PassesArguments_ThreeArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -127,8 +121,7 @@ public class ProcessNextTickTests
         Assert.Equal("42\nhello\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_PassesArguments_TwoArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -154,8 +147,7 @@ public class ProcessNextTickTests
     // Regression for #1149: the facade forwards `...args` to the primitive instead
     // of hand-unrolling an arity ladder, so more than 8 trailing args now survive in
     // both interpreter and compiled modes (the old ladder capped at 8).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_PassesArguments_BeyondEightArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -178,8 +170,7 @@ public class ProcessNextTickTests
 
     // Regression for #1149: a caller-side spread (`...payload`) is expanded by the
     // built-in module emitter rather than packed as a single nested-array element.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ForwardsCallerSpread(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -204,8 +195,7 @@ public class ProcessNextTickTests
 
     #region Multiple Callbacks Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_MultipleCallbacks_AllExecute(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -232,8 +222,7 @@ public class ProcessNextTickTests
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextTick_ThrowsWithoutCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -7,8 +7,7 @@ namespace SharpTS.Tests.SharedTests;
 public class StrictModeTests
 {
     // Basic directive parsing
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_DirectiveIsParsed(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class StrictModeTests
     }
 
     // Frozen object tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FrozenObject_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class StrictModeTests
         Assert.Contains("Cannot assign to read only property", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoUseStrict_FrozenObject_SilentlyFails(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +48,7 @@ public class StrictModeTests
     }
 
     // Sealed object tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_SealedObject_AddProperty_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +62,7 @@ public class StrictModeTests
         Assert.Contains("Cannot add property", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_SealedObject_ModifyExisting_Works(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +76,7 @@ public class StrictModeTests
         Assert.Equal("2\n", output); // Sealed objects allow modifying existing properties
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoUseStrict_SealedObject_AddProperty_SilentlyFails(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +91,7 @@ public class StrictModeTests
     }
 
     // Frozen array tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FrozenArray_SetElement_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -111,8 +104,7 @@ public class StrictModeTests
         Assert.Contains("TypeError", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoUseStrict_FrozenArray_SetElement_SilentlyFails(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +118,7 @@ public class StrictModeTests
     }
 
     // Function-level strict mode
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FunctionLevel_AffectsOnlyFunction(ExecutionMode mode)
     {
         var source = """
@@ -147,8 +138,7 @@ public class StrictModeTests
         Assert.Equal("1\n", output); // Global modification silently ignored
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FunctionLevel_ThrowsInFunction(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +155,7 @@ public class StrictModeTests
     }
 
     // Strict mode inheritance to nested functions (uses arrow functions for compiler compatibility)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_InheritsToNestedFunctions(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +176,7 @@ public class StrictModeTests
     }
 
     // Multiple directives
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_OtherDirectivesAllowed(ExecutionMode mode)
     {
         var source = """
@@ -202,8 +190,7 @@ public class StrictModeTests
     }
 
     // Directive must be at the start
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_AfterStatements_NotDirective(ExecutionMode mode)
     {
         var source = """
@@ -219,8 +206,7 @@ public class StrictModeTests
     }
 
     // Class instance frozen
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FrozenClassInstance_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +228,7 @@ public class StrictModeTests
     }
 
     // Delete variable tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_DeleteVariable_ThrowsSyntaxError(ExecutionMode mode)
     {
         var source = """
@@ -257,8 +242,7 @@ public class StrictModeTests
         Assert.Contains("Delete of unqualified identifier", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyMode_DeleteVariable_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -275,8 +259,7 @@ public class StrictModeTests
     }
 
     // Duplicate parameter tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_DuplicateParameters_ThrowsSyntaxError(ExecutionMode mode)
     {
         var source = """
@@ -291,8 +274,7 @@ public class StrictModeTests
         Assert.Contains("Duplicate parameter name", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_FunctionLevelStrict_DuplicateParameters_ThrowsSyntaxError(ExecutionMode mode)
     {
         // Function with "use strict" directive inside should detect duplicate params
@@ -311,8 +293,7 @@ public class StrictModeTests
     // eval/arguments assignment tests
     // Note: In strict mode, 'eval' and 'arguments' cannot be used as assignment targets
     // This is checked during parsing when we see `eval = ...` or `arguments = ...`
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_AssignToEval_ThrowsSyntaxError(ExecutionMode mode)
     {
         // Need to have eval as a variable first, then reassign it
@@ -327,8 +308,7 @@ public class StrictModeTests
         Assert.Contains("eval or arguments", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_AssignToArguments_ThrowsSyntaxError(ExecutionMode mode)
     {
         var source = """
@@ -343,8 +323,7 @@ public class StrictModeTests
     }
 
     // Legacy octal literal tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyOctalLiteral_ThrowsSyntaxError(ExecutionMode mode)
     {
         var source = """
@@ -356,8 +335,7 @@ public class StrictModeTests
         Assert.Contains("Legacy octal literals are not allowed", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ModernOctalLiteral_Works(ExecutionMode mode)
     {
         var source = """
@@ -370,8 +348,7 @@ public class StrictModeTests
     }
 
     // Octal escape sequence tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OctalEscapeSequence_ThrowsSyntaxError(ExecutionMode mode)
     {
         // \1 is an octal escape - not allowed
@@ -382,8 +359,7 @@ public class StrictModeTests
         Assert.Contains("Octal escape sequences are not allowed", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullEscape_WithoutFollowingDigit_Works(ExecutionMode mode)
     {
         // \0 is allowed when not followed by a digit
@@ -397,8 +373,7 @@ public class StrictModeTests
     }
 
     // Getter-only property tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_WriteToGetterOnly_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -413,8 +388,7 @@ public class StrictModeTests
         Assert.Contains("getter", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyMode_WriteToGetterOnly_SilentlyFails(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +404,7 @@ public class StrictModeTests
     }
 
     // Delete from frozen/sealed object tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_DeleteFromFrozen_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -445,8 +418,7 @@ public class StrictModeTests
         Assert.Contains("Cannot delete property", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyMode_DeleteFromFrozen_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -462,8 +434,7 @@ public class StrictModeTests
     }
 
     // Strict mode inheritance tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UseStrict_ArrowFunction_InheritsStrictMode(ExecutionMode mode)
     {
         var source = """

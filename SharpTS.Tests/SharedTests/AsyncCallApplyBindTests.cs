@@ -22,8 +22,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class AsyncCallApplyBindTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_Call_PassesArguments(ExecutionMode mode)
     {
         // The headline repro from the issue: used to throw "undefined is not a function".
@@ -35,8 +34,7 @@ public class AsyncCallApplyBindTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Call_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +45,7 @@ public class AsyncCallApplyBindTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Apply_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class AsyncCallApplyBindTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_Bind_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +68,7 @@ public class AsyncCallApplyBindTests
         Assert.Equal("9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_Bind_IgnoresThisAppliesPartialArgs(ExecutionMode mode)
     {
         // True async arrows ignore the bound `this` (lexical) but still honor partial args.
@@ -85,8 +80,7 @@ public class AsyncCallApplyBindTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionExpression_CallBindsThis_AcrossAwait(ExecutionMode mode)
     {
         // The bound `this` must survive a state-machine suspension/resume.

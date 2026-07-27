@@ -34,8 +34,7 @@ public class TypedArrayIterationParityTests
     private static string Normalize(string s) =>
         string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).Trim();
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
         // Previously (interpreted): "for...of requires an iterable (array, Map, Set, or iterator)."
@@ -63,8 +62,7 @@ public class TypedArrayIterationParityTests
             """, mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayLiteralSpread_OfTypedArrayAndBuffer(ExecutionMode mode)
     {
         Expect("""
@@ -81,8 +79,7 @@ public class TypedArrayIterationParityTests
             """, mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
         Expect("""
@@ -97,8 +94,7 @@ public class TypedArrayIterationParityTests
             """, "[1,2,-1,300,4,5]", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
         Expect("""
@@ -119,8 +115,7 @@ public class TypedArrayIterationParityTests
             "[0,1,2,-1,300,4,5]", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorYieldStar_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
         Expect("""
@@ -151,8 +146,7 @@ public class TypedArrayIterationParityTests
     /// back undefined and <c>ToLength(undefined)</c> made the result empty — a silent
     /// <c>[]</c> rather than an error.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayFrom_OverTypedArrayAndBuffer(ExecutionMode mode)
     {
         Expect("""
@@ -170,8 +164,7 @@ public class TypedArrayIterationParityTests
     /// <summary>
     /// A zero-length typed array contributes nothing rather than throwing.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyTypedArray_IteratesToNothing(ExecutionMode mode)
     {
         Expect("""

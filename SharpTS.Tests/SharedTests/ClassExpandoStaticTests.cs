@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ClassExpandoStaticTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringKeyedExpandoStatic_RoundTrips(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class ClassExpandoStaticTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolKeyedExpandoStatic_RoundTrips(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class ClassExpandoStaticTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpandoStatics_InAsyncContext_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class ClassExpandoStaticTests
 
     // Both modes walk the constructor parent chain for expando statics (#265);
     // Node inherits them via Object.getPrototypeOf(D) === C.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpandoStatics_InheritedThroughSubclassChain(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class ClassExpandoStaticTests
 
     // An own expando static on the subclass shadows the inherited one (#265),
     // and setting it on the subclass must not mutate the base's own value.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpandoStatics_OwnShadowsInherited(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +96,7 @@ public class ClassExpandoStaticTests
     }
 
     // A two-level chain resolves an expando static set on the grandparent (#265).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpandoStatics_InheritedThroughTwoLevels(ExecutionMode mode)
     {
         var source = """

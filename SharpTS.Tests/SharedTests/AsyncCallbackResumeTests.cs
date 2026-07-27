@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncCallbackResumeTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void FsReadFile_Callback_KeepsProcessAlive(ExecutionMode mode)
     {
         // #205: with no other pending work, the process must stay alive until
@@ -36,8 +35,7 @@ public class AsyncCallbackResumeTests
         Assert.Equal("callback fired: hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncCallback_ResumesWithModuleScope_AfterAwait(ExecutionMode mode)
     {
         // #207: an async arrow passed to a built-in (server.listen) suspends at
@@ -64,8 +62,7 @@ public class AsyncCallbackResumeTests
         Assert.Equal("before await\nafter await\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncCallback_FetchAfterAwait_InListenCallback(ExecutionMode mode)
     {
         // The full #207 repro: await fetch() against the just-started server,

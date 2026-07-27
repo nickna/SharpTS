@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 public class ObjectCreateTests
 {
     // Basic Object.create with null prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_NullPrototype_ReturnsEmptyObject(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with object prototype copies properties
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithPrototype_CopiesProperties(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with prototype - new object is independent
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_NewObjectIsIndependent(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with properties object (second argument)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithPropertiesObject(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +75,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with both prototype and properties
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithPrototypeAndProperties(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +92,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with non-writable property
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_NonWritableProperty(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +109,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with accessor property (getter)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithGetter(ExecutionMode mode)
     {
         var source = """
@@ -136,8 +129,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with accessor property (getter and setter)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithGetterAndSetter(ExecutionMode mode)
     {
         var source = """
@@ -160,8 +152,7 @@ public class ObjectCreateTests
     }
 
     // Object.create returns object type
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_ReturnsObjectType(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +165,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with empty prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithEmptyPrototype(ExecutionMode mode)
     {
         var source = """
@@ -190,8 +180,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with nested object in prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithNestedPrototype(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +194,7 @@ public class ObjectCreateTests
     }
 
     // Object.create multiple objects from same prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_MultipleObjectsFromSamePrototype(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +213,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with method in prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithMethodInPrototype(ExecutionMode mode)
     {
         var source = """
@@ -245,8 +232,7 @@ public class ObjectCreateTests
     }
 
     // Object.create - properties object overrides prototype properties
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_PropertiesOverridePrototype(ExecutionMode mode)
     {
         var source = """
@@ -262,8 +248,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with class instance as prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithClassInstancePrototype(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +271,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with array values in prototype
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_WithArrayInPrototype(ExecutionMode mode)
     {
         var source = """
@@ -302,8 +286,7 @@ public class ObjectCreateTests
     }
 
     // Object.create - verify Object.keys works on created object
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_ObjectKeysWorks(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +308,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with undefined second argument (same as not passing it)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_UndefinedPropertiesObject(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +322,7 @@ public class ObjectCreateTests
     }
 
     // Object.create with mixed property types
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_MixedPropertyTypes(ExecutionMode mode)
     {
         var source = """
@@ -365,8 +346,7 @@ public class ObjectCreateTests
     }
 
     // ECMA-262 §20.1.2.2 step 1: prototype must be Object or null (#104).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Create_NonObjectPrototype_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """

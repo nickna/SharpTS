@@ -12,8 +12,7 @@ public class PrivateFieldAsyncTests
 {
     #region Async Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_CanReadPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +33,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_CanWritePrivateField(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +62,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_CanCallPrivateMethod(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +85,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_MultipleAwaitsWithPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +113,7 @@ public class PrivateFieldAsyncTests
 
     #region Generators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CanReadPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -142,8 +137,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CanWritePrivateField(ExecutionMode mode)
     {
         var source = """
@@ -173,8 +167,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CanCallPrivateMethod(ExecutionMode mode)
     {
         var source = """
@@ -207,8 +200,7 @@ public class PrivateFieldAsyncTests
     // NOTE: Async generator class methods work in compiled mode. The interpreter needs
     // additional support for recognizing async generator class methods as async iterables.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_CanReadPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -236,8 +228,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_CanWritePrivateField(ExecutionMode mode)
     {
         var source = """
@@ -275,8 +266,7 @@ public class PrivateFieldAsyncTests
 
     #region Async Arrow Functions (in class methods)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CanReadPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -300,8 +290,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CanWritePrivateField(ExecutionMode mode)
     {
         var source = """
@@ -333,8 +322,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CanCallPrivateMethod(ExecutionMode mode)
     {
         var source = """
@@ -364,8 +352,7 @@ public class PrivateFieldAsyncTests
 
     #region Static Private Fields in Async Contexts
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_StaticPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -401,8 +388,7 @@ public class PrivateFieldAsyncTests
 
     #region Complex Scenarios
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_PrivateFieldWithMultipleInstances(ExecutionMode mode)
     {
         var source = """
@@ -436,8 +422,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n101\n2\n102\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_MixedPublicAndPrivateFields(ExecutionMode mode)
     {
         var source = """

@@ -23,8 +23,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class FunctionReturnValueTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BareReturn_IsUndefined(ExecutionMode mode)
     {
         // Bare `return;` is equivalent to `return undefined` — undefined, not null.
@@ -37,8 +36,7 @@ public class FunctionReturnValueTests
         Assert.Equal("undefined\ntrue\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndCompletion_IsUndefined(ExecutionMode mode)
     {
         // Falling off the end of the body completes with undefined. In compiled mode such a
@@ -52,8 +50,7 @@ public class FunctionReturnValueTests
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowBareReturn_IsUndefined(ExecutionMode mode)
     {
         // A block-bodied arrow shares the same return emission as a function declaration, so a
@@ -66,8 +63,7 @@ public class FunctionReturnValueTests
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnNull_IsNull(ExecutionMode mode)
     {
         // `return null;` is distinct from a bare `return;`: the value is JS null, not undefined.
@@ -79,8 +75,7 @@ public class FunctionReturnValueTests
         Assert.Equal("object\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void AsyncFunction_BareReturn_ResolvesUndefined(ExecutionMode mode)
     {
         // The async return path (ExecuteReturnAsyncVT) got the same fix as the sync VisitReturn:

@@ -11,8 +11,7 @@ public class EnumTests
 {
     #region Numeric Enums
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_ForwardMapping_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class EnumTests
         Assert.Equal("0\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_ReverseMapping_ReturnsName(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class EnumTests
         Assert.Equal("Up\nDown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_CustomStart_AutoIncrements(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +69,7 @@ public class EnumTests
         Assert.Equal("10\n11\n12\n13\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_ExplicitValues_SetsCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +87,7 @@ public class EnumTests
         Assert.Equal("200\n404\n500\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_VariableAssignment_Works(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +103,7 @@ public class EnumTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericEnum_InConditional_ComparesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -133,8 +127,7 @@ public class EnumTests
 
     #region String Enums
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringEnum_ForwardMapping_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -152,8 +145,7 @@ public class EnumTests
         Assert.Equal("success\nerror\npending\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringEnum_VariableAssignment_Works(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +161,7 @@ public class EnumTests
         Assert.Equal("success\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringEnum_InConditional_ComparesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -194,8 +185,7 @@ public class EnumTests
 
     #region Heterogeneous Enums
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HeterogeneousEnum_MixedValues_Works(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +201,7 @@ public class EnumTests
         Assert.Equal("0\nyes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HeterogeneousEnum_NumericReverseMapping_Works(ExecutionMode mode)
     {
         var source = """
@@ -227,8 +216,7 @@ public class EnumTests
         Assert.Equal("No\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Enum_UsedInSwitch_Works(ExecutionMode mode)
     {
         var source = """
@@ -259,8 +247,7 @@ public class EnumTests
 
     #region Const Enums
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_NumericForwardMapping_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -280,8 +267,7 @@ public class EnumTests
         Assert.Equal("0\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_NumericAutoIncrement_Works(ExecutionMode mode)
     {
         var source = """
@@ -299,8 +285,7 @@ public class EnumTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_NumericCustomValues_Works(ExecutionMode mode)
     {
         var source = """
@@ -318,8 +303,7 @@ public class EnumTests
         Assert.Equal("200\n404\n500\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_StringForwardMapping_Works(ExecutionMode mode)
     {
         var source = """
@@ -337,8 +321,7 @@ public class EnumTests
         Assert.Equal("success\nerror\npending\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_ComputedMemberValue_Works(ExecutionMode mode)
     {
         var source = """
@@ -358,8 +341,7 @@ public class EnumTests
         Assert.Equal("1\n2\n12\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_VariableAssignment_Works(ExecutionMode mode)
     {
         var source = """
@@ -375,8 +357,7 @@ public class EnumTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_ConditionalComparison_Works(ExecutionMode mode)
     {
         var source = """
@@ -396,8 +377,7 @@ public class EnumTests
         Assert.Equal("going up\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_SwitchStatement_Works(ExecutionMode mode)
     {
         var source = """
@@ -424,8 +404,7 @@ public class EnumTests
         Assert.Equal("green\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstEnum_ReverseMapping_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """

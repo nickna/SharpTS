@@ -11,8 +11,7 @@ public class IntlPluralRulesTests
 {
     // ========== English Cardinal ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_EnglishCardinal_One(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class IntlPluralRulesTests
         Assert.Equal("one\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_EnglishCardinal_Other(ExecutionMode mode)
     {
         var source = @"
@@ -40,8 +38,7 @@ public class IntlPluralRulesTests
 
     // ========== English Ordinal ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_EnglishOrdinal(ExecutionMode mode)
     {
         var source = @"
@@ -59,8 +56,7 @@ public class IntlPluralRulesTests
 
     // ========== French Cardinal ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_FrenchCardinal(ExecutionMode mode)
     {
         var source = @"
@@ -76,8 +72,7 @@ public class IntlPluralRulesTests
 
     // ========== Arabic Cardinal ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_ArabicCardinal(ExecutionMode mode)
     {
         var source = @"
@@ -95,8 +90,7 @@ public class IntlPluralRulesTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -110,8 +104,7 @@ public class IntlPluralRulesTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -125,8 +118,7 @@ public class IntlPluralRulesTests
 
     // ========== Decimal Numbers ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_DecimalNumber(ExecutionMode mode)
     {
         var source = @"
@@ -140,8 +132,7 @@ public class IntlPluralRulesTests
 
     // ========== Suffix Helper ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlPluralRules_OrdinalSuffixHelper(ExecutionMode mode)
     {
         var source = @"

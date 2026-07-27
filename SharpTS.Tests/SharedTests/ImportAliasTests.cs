@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ImportAliasTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BasicFunctionAlias(ExecutionMode mode)
     {
         var code = @"
@@ -23,8 +22,7 @@ public class ImportAliasTests
         Assert.Equal("Hello\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BasicVariableAlias(ExecutionMode mode)
     {
         var code = @"
@@ -37,8 +35,7 @@ public class ImportAliasTests
         Assert.Equal("3.14\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassAlias(ExecutionMode mode)
     {
         var code = @"
@@ -57,8 +54,7 @@ public class ImportAliasTests
         Assert.Equal("Alice\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespacePath(ExecutionMode mode)
     {
         var code = @"
@@ -75,8 +71,7 @@ public class ImportAliasTests
         Assert.Equal("42\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespacePathFunction(ExecutionMode mode)
     {
         var code = @"
@@ -91,8 +86,7 @@ public class ImportAliasTests
         Assert.Equal("100\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InterfaceAlias_TypeOnly(ExecutionMode mode)
     {
         var code = @"
@@ -110,8 +104,7 @@ public class ImportAliasTests
         Assert.Equal("Bob\n30\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EnumAlias(ExecutionMode mode)
     {
         var code = @"
@@ -125,8 +118,7 @@ public class ImportAliasTests
         Assert.Equal("1\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportAliasInsideNamespace(ExecutionMode mode)
     {
         var code = @"
@@ -142,8 +134,7 @@ public class ImportAliasTests
         Assert.Equal("999\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportedImportAlias(ExecutionMode mode)
     {
         var code = @"
@@ -158,8 +149,7 @@ public class ImportAliasTests
         Assert.Equal("helped\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleAliases(ExecutionMode mode)
     {
         var code = @"
@@ -178,8 +168,7 @@ public class ImportAliasTests
         Assert.Equal("15\n5\n3.14159\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AliasNestedNamespace(ExecutionMode mode)
     {
         var code = @"
@@ -194,8 +183,7 @@ public class ImportAliasTests
         Assert.Equal("leaf value\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClassAlias(ExecutionMode mode)
     {
         var code = @"
@@ -218,8 +206,7 @@ public class ImportAliasTests
 
     #region Error Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_InvalidNamespace(ExecutionMode mode)
     {
         var code = @"
@@ -229,8 +216,7 @@ public class ImportAliasTests
         Assert.Contains("Namespace 'NonExistent' is not defined", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_InvalidMember(ExecutionMode mode)
     {
         var code = @"
@@ -243,8 +229,7 @@ public class ImportAliasTests
         Assert.Contains("does not exist in namespace", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_IntermediateNotNamespace(ExecutionMode mode)
     {
         var code = @"

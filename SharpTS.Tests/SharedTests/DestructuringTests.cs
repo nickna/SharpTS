@@ -11,8 +11,7 @@ public class DestructuringTests
 {
     #region Array Destructuring
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_BasicAssignment(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class DestructuringTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_WithRest(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class DestructuringTests
         Assert.Equal("1\n3\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_WithHoles(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +53,7 @@ public class DestructuringTests
         Assert.Equal("1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_TrailingComma(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class DestructuringTests
 
     #region Object Destructuring
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectDestructuring_BasicAssignment(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +84,7 @@ public class DestructuringTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectDestructuring_WithRename(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +97,7 @@ public class DestructuringTests
         Assert.Equal("Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectDestructuring_WithDefault(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +119,7 @@ public class DestructuringTests
     // desugared `[a, b] = src` to positional index access, which mis-evaluated (and
     // the type checker rejected) generators, Set and Map.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverGenerator(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +133,7 @@ public class DestructuringTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverGeneratorWithRest(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +150,7 @@ public class DestructuringTests
         Assert.Equal("1\n3\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverSet(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +164,7 @@ public class DestructuringTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverSetWithHoleAndDefault(ExecutionMode mode)
     {
         // Set has three values [10, 20, 30]; index 3 is missing → default applies.
@@ -190,8 +179,7 @@ public class DestructuringTests
         Assert.Equal("20\n99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverMapEntry(ExecutionMode mode)
     {
         // Iterating a Map yields [key, value] entries.
@@ -206,8 +194,7 @@ public class DestructuringTests
         Assert.Equal("k\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_NestedOverMapEntries(ExecutionMode mode)
     {
         // Nested pattern destructures each [key, value] entry positionally.
@@ -224,8 +211,7 @@ public class DestructuringTests
         Assert.Equal("a\n1\nb\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_OverCustomIterable(ExecutionMode mode)
     {
         var source = """
@@ -251,8 +237,7 @@ public class DestructuringTests
         Assert.Equal("0\n10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_GeneratorElementTypeIsUsable(ExecutionMode mode)
     {
         // The destructured bindings carry the iterable's element type (number), so
@@ -268,8 +253,7 @@ public class DestructuringTests
         Assert.Equal("12\n35\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_FastPathArrayUnchanged(ExecutionMode mode)
     {
         // Regression guard: the iterator-protocol normalization must not disturb the
@@ -293,8 +277,7 @@ public class DestructuringTests
 
     #region Nested Destructuring
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_Arrays(ExecutionMode mode)
     {
         var source = """
@@ -310,8 +293,7 @@ public class DestructuringTests
         Assert.Equal("1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_Objects(ExecutionMode mode)
     {
         var source = """
@@ -324,8 +306,7 @@ public class DestructuringTests
         Assert.Equal("test@test.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedDestructuring_ObjectWithArray(ExecutionMode mode)
     {
         var source = """
@@ -347,8 +328,7 @@ public class DestructuringTests
     // is a non-indexable union and the nested `[m]` pattern fails to type-check. The binding pattern's
     // shape is threaded as a tuple context so the literal infers as `[number[], number]`.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_MixedArrayLiteral_Declaration(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +341,7 @@ public class DestructuringTests
         Assert.Equal("7\n8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_MixedArrayLiteral_Assignment(ExecutionMode mode)
     {
         var source = """
@@ -377,8 +356,7 @@ public class DestructuringTests
         Assert.Equal("7\n8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_MixedArrayLiteral_ExplicitTupleAnnotation(ExecutionMode mode)
     {
         var source = """
@@ -391,8 +369,7 @@ public class DestructuringTests
         Assert.Equal("7\n8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_MixedArrayLiteral_DeepNesting(ExecutionMode mode)
     {
         var source = """
@@ -407,8 +384,7 @@ public class DestructuringTests
 
     // Bonus: a flat mixed literal source now infers element types positionally (matching tsc), so the
     // element methods (`toFixed`/`toUpperCase`) type-check instead of reporting a spurious error.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Destructuring_FlatMixedArrayLiteral_ElementTypesUsable(ExecutionMode mode)
     {
         var source = """
@@ -423,8 +399,7 @@ public class DestructuringTests
 
     // Regression guard: a UNIFORM nested literal must stay an array (`number[]`), NOT be over-tupled —
     // `a.push(...)` would fail to type-check on a fixed-length tuple.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDestructuring_UniformArrayLiteral_StaysArray(ExecutionMode mode)
     {
         var source = """
@@ -444,8 +419,7 @@ public class DestructuringTests
 
     // #753: a rest element over a STRING source must collect a fresh ARRAY of characters, not bind
     // the trailing substring. Non-rest character bindings are identical either way.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_StringRest_BindsCharArray(ExecutionMode mode)
     {
         var source = """
@@ -460,8 +434,7 @@ public class DestructuringTests
         Assert.Equal("h\ntrue\n4\ne-l-l-o\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_StringNonRest_Unchanged(ExecutionMode mode)
     {
         var source = """
@@ -478,8 +451,7 @@ public class DestructuringTests
     #region Assignment Destructuring (#754)
 
     // #754: destructuring assignment to EXISTING l-values (no const/let), array and object patterns.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_ArrayBasicAndSwap(ExecutionMode mode)
     {
         var source = """
@@ -494,8 +466,7 @@ public class DestructuringTests
         Assert.Equal("1 2\n2 1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_DefaultsHolesAndRest(ExecutionMode mode)
     {
         var source = """
@@ -514,8 +485,7 @@ public class DestructuringTests
         Assert.Equal("5 9\n2 4\n1 true 2,3,4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_MemberTargets(ExecutionMode mode)
     {
         var source = """
@@ -529,8 +499,7 @@ public class DestructuringTests
         Assert.Equal("10 20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_Object_RenameRestAndDefault(ExecutionMode mode)
     {
         var source = """
@@ -549,8 +518,7 @@ public class DestructuringTests
 
     // The right-hand side is normalized through the #685 iterator protocol, so a non-indexable
     // iterable (Set) destructures by assignment just like a declaration.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_IteratorSource(ExecutionMode mode)
     {
         var source = """
@@ -565,8 +533,7 @@ public class DestructuringTests
 
     // An assignment expression evaluates to its right-hand side (the ORIGINAL rhs, not the
     // normalized array), so it composes in expression position and chains.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_ExpressionPositionAndChained(ExecutionMode mode)
     {
         var source = """
@@ -588,8 +555,7 @@ public class DestructuringTests
 
     // #784: a destructuring default applies ONLY when the matched value is `undefined`, never `null`
     // (ECMA-262), unlike `??`. Declaration form, array and object patterns.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaults_AppliedForUndefinedNotNull_Declaration(ExecutionMode mode)
     {
         var source = """
@@ -607,8 +573,7 @@ public class DestructuringTests
     // #784: same undefined-only rule for assignment destructuring (#754 form), AND a value-type default
     // over an ABSENT element must yield the default — not NaN. The lowered spill temp lives inside an
     // expression, so an unboxed numeric slot would coerce the runtime `undefined` sentinel (compiled).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaults_AssignmentDestructuring_UndefinedOnlyAndValueType(ExecutionMode mode)
     {
         var source = """
@@ -627,8 +592,7 @@ public class DestructuringTests
 
     // #784: the default expression is evaluated lazily (only when undefined) and the matched value is
     // read exactly once (a getter is not invoked twice).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaults_LazyAndSingleEvaluation(ExecutionMode mode)
     {
         var source = """
@@ -656,8 +620,7 @@ public class DestructuringTests
     // #781/#1288: typed arrays and Buffers are normalized to a fresh Array before destructuring.
     // This keeps ordinary element bindings working and makes a rest binding a real Array rather
     // than a typed-array/Buffer slice.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayDestructuring_TypedArrayAndBufferSources(ExecutionMode mode)
     {
         var source = """
@@ -681,8 +644,7 @@ public class DestructuringTests
 
     // #780: `({ a = 5 } = src)` — the object-pattern cover-grammar form is now accepted by the parser and
     // routes through the #754 assignment-destructuring lowering (undefined-only default, #784).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_ObjectShorthandDefault(ExecutionMode mode)
     {
         var source = """
@@ -716,8 +678,7 @@ public class DestructuringTests
     #region Nested Pattern with Default in Assignment Destructuring (#779)
 
     // #779: a nested array/object pattern that itself carries a default in an ASSIGNMENT destructuring.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_NestedArrayPatternWithDefault(ExecutionMode mode)
     {
         var source = """
@@ -730,8 +691,7 @@ public class DestructuringTests
         Assert.Equal("1 9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AssignmentDestructuring_NestedObjectPatternWithDefault(ExecutionMode mode)
     {
         var source = """
@@ -754,8 +714,7 @@ public class DestructuringTests
     // not declare that property, must NOT report a spurious "Property does not exist" (TS2339) — the
     // default makes the access safe (tsc accepts these). Covers the declaration form and the shipped
     // #780/#754 assignment forms, with empty/closed object sources.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaulted_OverEmptySource_Declaration(ExecutionMode mode)
     {
         var source = """
@@ -767,8 +726,7 @@ public class DestructuringTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaulted_OverEmptySource_AssignmentShorthandAndRename(ExecutionMode mode)
     {
         var source = """
@@ -781,8 +739,7 @@ public class DestructuringTests
         Assert.Equal("5 5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaulted_NestedPatternDefault_OverEmptyAndPresentSource(ExecutionMode mode)
     {
         // The inner default `{}` lacks `x`; the read must stay tolerant. With a present source the
@@ -799,8 +756,7 @@ public class DestructuringTests
 
     // #796: a source that DECLARES the property (even optional) still narrows the defaulted binding
     // to the property type — the tolerance must not regress the well-typed case.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Defaulted_OverDeclaredOptionalSource_StillWorks(ExecutionMode mode)
     {
         var source = """

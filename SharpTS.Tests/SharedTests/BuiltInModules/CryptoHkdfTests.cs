@@ -10,8 +10,7 @@ public class CryptoHkdfTests
 {
     #region Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_DifferentKeyLengths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -60,8 +58,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_Deterministic(ExecutionMode mode)
     {
         // Same inputs should produce same output
@@ -89,8 +86,7 @@ public class CryptoHkdfTests
 
     #region Different Inputs Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_DifferentInputsProduceDifferentOutput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +110,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_DifferentSalts(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -139,8 +134,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_DifferentInfo(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -168,8 +162,7 @@ public class CryptoHkdfTests
 
     #region Input Variations Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_EmptySaltAndInfo(ExecutionMode mode)
     {
         // Empty salt and info should be valid
@@ -193,8 +186,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_StringInputs(ExecutionMode mode)
     {
         // String inputs should be converted to UTF-8 bytes
@@ -214,8 +206,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_ZeroKeyLength(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -238,8 +229,7 @@ public class CryptoHkdfTests
 
     #region Hash Algorithm Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_SHA1(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -258,8 +248,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_SHA384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -278,8 +267,7 @@ public class CryptoHkdfTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_SHA512(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -302,8 +290,7 @@ public class CryptoHkdfTests
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_InvalidDigest_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -328,8 +315,7 @@ public class CryptoHkdfTests
 
     #region RFC 5869 Test Vectors
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HkdfSync_RFC5869_TestVector1(ExecutionMode mode)
     {
         // RFC 5869 Test Case 1 (SHA-256)

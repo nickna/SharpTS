@@ -16,8 +16,7 @@ public class KeyOfIndexSignatureBuiltInTests
 {
     // ----- keyof string -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_String_AcceptsPropertyName(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("length\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_String_AcceptsMethodName(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("charAt\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_String_AcceptsNumberIndex(ExecutionMode mode)
     {
         // string carries a numeric index signature, so `number` is a valid key.
@@ -50,8 +47,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_String_RejectsNonMember(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class KeyOfIndexSignatureBuiltInTests
 
     // ----- keyof T[] -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Array_AcceptsMethodName(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +68,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("push\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Array_AcceptsLengthAndNumberIndex(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +79,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("length 0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Array_RejectsNonMember(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +90,7 @@ public class KeyOfIndexSignatureBuiltInTests
 
     // ----- keyof [tuple] -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Tuple_AcceptsLiteralIndex(ExecutionMode mode)
     {
         // A tuple is an Array subtype: keyof includes the literal element indices "0" | "1".
@@ -109,8 +101,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Tuple_AcceptsArrayMemberAndNumberIndex(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +112,7 @@ public class KeyOfIndexSignatureBuiltInTests
         Assert.Equal("length 0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Tuple_RejectsOutOfRangeLiteralIndex(ExecutionMode mode)
     {
         // [a, b] has indices "0" and "1" only; "2" is not a literal key (and "2" is a string, so the
@@ -135,8 +125,7 @@ public class KeyOfIndexSignatureBuiltInTests
 
     // ----- keyof feeding a mapped type over an index-signature built-in -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MappedType_OverKeyOfArray_TypeChecks(ExecutionMode mode)
     {
         var source = """

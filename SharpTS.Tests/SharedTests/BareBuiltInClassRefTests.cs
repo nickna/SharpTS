@@ -24,8 +24,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class BareBuiltInClassRefTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promise_BareValue_TypeofIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -36,8 +35,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promise_InstanceOf_ResolvedPromise(ExecutionMode mode)
     {
         var source = @"
@@ -48,8 +46,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_BareValue_TypeofIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -60,8 +57,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_InstanceOf_FromReturnsTrue(ExecutionMode mode)
     {
         var source = @"
@@ -72,8 +68,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextEncoder_BareValue_TypeofIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -84,8 +79,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextEncoder_InstanceOf_NewInstance(ExecutionMode mode)
     {
         var source = @"
@@ -96,8 +90,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_BareValue_TypeofIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -108,8 +101,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_InstanceOf_NewInstance(ExecutionMode mode)
     {
         var source = @"
@@ -120,8 +112,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BareBuiltIn_InstanceOf_NegativeCases(ExecutionMode mode)
     {
         // Negative checks — each bare-referencable class should reject the
@@ -141,8 +132,7 @@ public class BareBuiltInClassRefTests
     // bare-identifier form (`var x = Int8Array`, `typeof Uint8Array`,
     // `x instanceof ArrayBuffer`) threw `Undefined variable` in compiled mode.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArrayCtors_BareValue_TypeofAndTag(ExecutionMode mode)
     {
         // One representative per element width/signedness/kind plus the three
@@ -170,8 +160,7 @@ public class BareBuiltInClassRefTests
     // interp brand-checks each constructor value's instance predicate
     // (IBuiltInTypeConstructor). Both must agree with Node.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArrayCtors_InstanceOf_OwnConstructor(ExecutionMode mode)
     {
         var source = """
@@ -186,8 +175,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArrayCtors_InstanceOf_DistinctElementTypesDoNotMatch(ExecutionMode mode)
     {
         // Each typed array directly extends the abstract %TypedArray%, not each
@@ -202,8 +190,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("false\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BinaryTypes_InstanceOf_Object(ExecutionMode mode)
     {
         // Every typed-array / buffer / view instance is also an Object (#334).
@@ -217,8 +204,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Primitives_InstanceOf_Object_AreFalse(ExecutionMode mode)
     {
         // Per ECMA-262 OrdinaryHasInstance, a primitive (or undefined) operand
@@ -238,8 +224,7 @@ public class BareBuiltInClassRefTests
         Assert.Equal("false\nfalse\nfalse\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Objects_InstanceOf_Object_AreTrue(ExecutionMode mode)
     {
         // Every non-primitive guest value — object/array literals, functions,

@@ -11,8 +11,7 @@ public class DnsResolverTests
 {
     #region Construction and typeof
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_CanBeConstructed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -29,8 +28,7 @@ public class DnsResolverTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_ImportNamed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -50,8 +48,7 @@ public class DnsResolverTests
 
     #region getServers / setServers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_GetServers_InitiallyEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +66,7 @@ public class DnsResolverTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_SetServers_ThenGetServers(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -90,8 +86,7 @@ public class DnsResolverTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_SetServers_InvalidAddress_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -112,8 +107,7 @@ public class DnsResolverTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_SetServers_ReplacesExisting(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -137,8 +131,7 @@ public class DnsResolverTests
 
     #region Resolver has all resolve methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_HasAllMethods(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -175,8 +168,7 @@ public class DnsResolverTests
 
     #region Resolver.resolve4 against a fake server (setServers)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_Resolve4_FakeServer_CallbackStyle(ExecutionMode mode)
     {
         // resolve4 uses the DNS wire protocol; point the Resolver at a loopback fake
@@ -213,8 +205,7 @@ public class DnsResolverTests
 
     #region Multiple resolvers are independent
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_MultipleInstances_IndependentServers(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -240,8 +231,7 @@ public class DnsResolverTests
 
     #region cancel is a no-op
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_Cancel_DoesNotThrow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

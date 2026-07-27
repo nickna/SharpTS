@@ -13,8 +13,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class ArrowFunctionDefaultParameterTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionExpression_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arrow_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +33,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arrow_NumericDefault_ArgPresent_DefaultNotApplied(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +43,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("14\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arrow_BooleanDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +53,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("YN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arrow_StringDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +63,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("AB\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingArrow_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +74,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("107,101\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +84,7 @@ public class ArrowFunctionDefaultParameterTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_DefaultWithAwait_OmittedArg(ExecutionMode mode)
     {
         var source = """

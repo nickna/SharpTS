@@ -13,8 +13,7 @@ public class AsyncIteratorEdgeCaseTests
 {
     #region Async From Sync (#1287)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_SyncBuiltins_AwaitsValues(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +34,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("[1,2,3,4,5,\"o\",\"k\",[\"a\",6]]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_SyncIterators_CloseOnBreak(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +69,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("true true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_SyncIterable_WorksInAsyncArrowAndAsyncGenerator(ExecutionMode mode)
     {
         var source = """
@@ -102,8 +99,7 @@ public class AsyncIteratorEdgeCaseTests
 
     #region Error Handling
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_RejectedPromiseInNext_PropagatesError(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +140,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("got: 1\ncaught: iterator error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_ThrowInForAwaitBody_CatchesError(ExecutionMode mode)
     {
         var source = """
@@ -182,8 +177,7 @@ public class AsyncIteratorEdgeCaseTests
     // spans wrapped in a real IL try that routes a throw to the enclosing flag-based catch. Before the fix
     // the throw escaped the state machine (only an await-free, jump-free body was guarded).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_ThrowInForAwaitBodyThatAwaits_CatchesError(ExecutionMode mode)
     {
         // The exact #691 repro: the body awaits and then throws synchronously.
@@ -203,8 +197,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("caught body error\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_ThrowInForAwaitBodyThatBreaks_CatchesError(ExecutionMode mode)
     {
         // The body contains a top-level break and a synchronous throw; the throw must still be caught, and
@@ -227,8 +220,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("caught boom seen=1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_ThrowInForAwaitBodyThatContinuesAndAwaits_CatchesError(ExecutionMode mode)
     {
         // The body awaits, continues, and throws synchronously — all three in one body.
@@ -251,8 +243,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("caught err3 sum=2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_ForAwaitBodyBreakContinueNoThrow_StillWorks(ExecutionMode mode)
     {
         // Guard against regressing normal break/continue in a for-await body (no enclosing try): the body
@@ -274,8 +265,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("sum=5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_TryFinally_CleanupRuns(ExecutionMode mode)
     {
         var source = """
@@ -310,8 +300,7 @@ public class AsyncIteratorEdgeCaseTests
 
     #region Promise Chains with Iterators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PromiseAll_WithAsyncGenerator_CollectsResults(ExecutionMode mode)
     {
         var source = """
@@ -342,8 +331,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("3\n60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_NestedPromiseResolveInNext_Flattens(ExecutionMode mode)
     {
         // Regression test: nested Promise.resolve in iterator.next() should flatten
@@ -380,8 +368,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_WithAwaitBeforeYield_HandlesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -416,8 +403,7 @@ public class AsyncIteratorEdgeCaseTests
 
     #region State Management
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_MultipleForAwaitLoops_IndependentState(ExecutionMode mode)
     {
         var source = """
@@ -451,8 +437,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("6\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_BreakThenNewLoop_StateReset(ExecutionMode mode)
     {
         var source = """
@@ -489,8 +474,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("first: 2\nsecond: 5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_SharedReference_MaintainsState(ExecutionMode mode)
     {
         var source = """
@@ -531,8 +515,7 @@ public class AsyncIteratorEdgeCaseTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_YieldNull_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -560,8 +543,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("3\nnull\n42\nnull\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_YieldZero_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -583,8 +565,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("0\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_EmptyAsyncIterable_NoIterations(ExecutionMode mode)
     {
         var source = """
@@ -613,8 +594,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("count: 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_SingleValue_IteratesOnce(ExecutionMode mode)
     {
         var source = """
@@ -647,8 +627,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncIterator_WithContinue_SkipsValues(ExecutionMode mode)
     {
         var source = """
@@ -676,8 +655,7 @@ public class AsyncIteratorEdgeCaseTests
         Assert.Equal("9\n", output);  // 1 + 3 + 5 = 9
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomAsyncIterator_WorksCorrectly(ExecutionMode mode)
     {
         // Test that custom async iterators work correctly

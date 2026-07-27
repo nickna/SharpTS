@@ -18,8 +18,7 @@ public class LabeledForAwaitTests
 {
     private const string Gen = "async function* g() { yield 1; yield 2; yield 3; yield 4; }\n";
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForAwait_ContinueOuter(ExecutionMode mode)
     {
         // The exact #728 repro.
@@ -38,8 +37,7 @@ public class LabeledForAwaitTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));  // 1 + 3 + 4 (2 skipped)
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForAwait_BreakOuter(ExecutionMode mode)
     {
         var source = Gen + """
@@ -57,8 +55,7 @@ public class LabeledForAwaitTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));  // 1 + 2, then break at 3
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForAwait_ContinueOuterFromInnerLoop(ExecutionMode mode)
     {
         // `continue outer` from a regular loop nested in the for-await body resumes the for-await.
@@ -79,8 +76,7 @@ public class LabeledForAwaitTests
         Assert.Equal("1:0,2:0,3:0,4:0,\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitAsInnerLoop_BreakToOuterFor(ExecutionMode mode)
     {
         // A for-await nested inside a labeled regular `for`; `break outer` from inside the for-await.

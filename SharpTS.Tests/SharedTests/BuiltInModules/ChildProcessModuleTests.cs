@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ChildProcessModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecSync_EchoCommand_ReturnsOutput(ExecutionMode mode)
     {
         // Use a simple echo command that works on all platforms
@@ -33,8 +32,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecSync_WithEnvironment_PassesEnvVars(ExecutionMode mode)
     {
         // Test that environment variables are passed through
@@ -56,8 +54,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpawnSync_ReturnsStatusObject(ExecutionMode mode)
     {
         // spawnSync should return an object with status, stdout, stderr
@@ -85,8 +82,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpawnSync_WithArgs_PassesArguments(ExecutionMode mode)
     {
         // spawnSync should pass arguments correctly
@@ -111,8 +107,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFileSync_RunsFileDirectly(ExecutionMode mode)
     {
         // execFileSync should execute a file without a shell
@@ -137,8 +132,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFileSync_ThrowsOnNonZeroExit(ExecutionMode mode)
     {
         // execFileSync should throw on non-zero exit code
@@ -167,8 +161,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecSync_ThrowsOnNonZeroExit(ExecutionMode mode)
     {
         // execSync should throw on non-zero exit code
@@ -194,8 +187,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpawnSync_NonZeroExit_ReturnsStatus(ExecutionMode mode)
     {
         // spawnSync should NOT throw but return non-zero status
@@ -219,8 +211,7 @@ public class ChildProcessModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpawnSync_StdoutCapture(ExecutionMode mode)
     {
         // spawnSync should capture stdout content
@@ -244,8 +235,7 @@ public class ChildProcessModuleTests
         Assert.Equal("captured_output\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedImport_AllMethods(ExecutionMode mode)
     {
         // All methods should be importable via named imports

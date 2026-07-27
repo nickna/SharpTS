@@ -17,8 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TopLevelBlockScopeCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockScopedCapture_ClosureInLoopInClosure_SharesEnvironment(ExecutionMode mode)
     {
         // The issue's minimal repro: closures created in a loop inside another closure,
@@ -43,8 +42,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("set=1 n=1\nset=2 n=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockScopedCapture_RelayedThroughIntermediateClosure_NoLoop(ExecutionMode mode)
     {
         // No loop involved: the intermediate closure doesn't reference the captured
@@ -67,8 +65,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("set=1 n=1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockScopedCapture_MutationsSharedBothWays(ExecutionMode mode)
     {
         // Two-way sharing between the block body and a closure: block writes after
@@ -87,8 +84,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevelLoopBody_Capture_StaysPerIteration(ExecutionMode mode)
     {
         // Bindings declared inside a top-level loop body are per-iteration and must
@@ -106,8 +102,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("0,10,20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockInsideTopLevelLoop_Capture_StaysPerIteration(ExecutionMode mode)
     {
         // A block nested inside a loop is still loop territory: its bindings are
@@ -126,8 +121,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("iter0,iter1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SiblingBlocks_SameName_EachClosureReadsOwnBinding(ExecutionMode mode)
     {
         // Same name declared in two sibling blocks fails the declared-exactly-once
@@ -149,8 +143,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("first\nsecond\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchCase_BlockScopedCapture_Relayed(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +164,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("size=1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryBlock_BlockScopedCapture_Relayed(ExecutionMode mode)
     {
         var source = """
@@ -193,8 +185,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("size=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockScopedCapture_InImportedModule(ExecutionMode mode)
     {
         // Module-init methods reach the entry-point display class through its static
@@ -234,8 +225,7 @@ public class TopLevelBlockScopeCaptureTests
     // that local — before the fix, name-keyed routing sent the capture to the module
     // binding's entry-point-DC field, so compiled closures read the OUTER value.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_ClosureCapturesBlockLocal(ExecutionMode mode)
     {
         // The issue's exact reproducer: compiled printed "outer\nouter".
@@ -253,8 +243,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("inner\nouter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_AsyncArrowReadsShadow(ExecutionMode mode)
     {
         // Standalone async arrows deliberately read captured top-level names LIVE from
@@ -274,8 +263,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("async=inner\nmodule=outer\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_AsyncArrowWriteDoesNotClobberModule(ExecutionMode mode)
     {
         // A write to the shadow inside the async arrow must land on the arrow's
@@ -294,8 +282,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("ret=clobbered\nmodule=outer\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_IncrementAndCompoundTargetShadow(ExecutionMode mode)
     {
         // ++ and += store-backs resolved the entry-DC field before locals, so they
@@ -316,8 +303,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("block=4,4\nmodule=100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_FunctionDeclarationInBlock(ExecutionMode mode)
     {
         // Function DECLARATIONS in top-level blocks are lambda-lifted with by-value
@@ -337,8 +323,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("inner\nouter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ShadowedModuleBinding_InImportedModule(ExecutionMode mode)
     {
         // Module-init methods reach the entry-point DC through its static field;
@@ -367,8 +352,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("lib=inner\nmain=outer\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportedArrow_CapturingExportedLet_IsCallableCrossModule(ExecutionMode mode)
     {
         // #1229: an `export const` arrow capturing an `export let` from the same module.
@@ -392,8 +376,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("main=outer\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportedArrow_WithParam_CapturingExportedLet_IsCallableCrossModule(ExecutionMode mode)
     {
         // #1229 variant: a capturing exported arrow that also takes a parameter, exported via a
@@ -414,8 +397,7 @@ public class TopLevelBlockScopeCaptureTests
         Assert.Equal("add=15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockScopedCapture_FunctionExpression_SharesEnvironment(ExecutionMode mode)
     {
         // Function EXPRESSIONS route through the arrow display-class machinery and

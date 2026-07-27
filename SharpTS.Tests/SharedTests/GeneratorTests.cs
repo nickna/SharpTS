@@ -12,8 +12,7 @@ public class GeneratorTests
 {
     #region For...Of Integration
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForOfLoop_IteratesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class GeneratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_WithParameters_UsesParameters(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class GeneratorTests
 
     #region For...In Integration (#547)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForInLoop_YieldsAllKeys(ExecutionMode mode)
     {
         // A for...in whose body yields must continue past the first key: the key list and index
@@ -74,8 +71,7 @@ public class GeneratorTests
         Assert.Equal("a,b,c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForInLoop_TwoYieldsPerKey_AccumulatesAcrossSuspension(ExecutionMode mode)
     {
         // Two yields per iteration force the loop to re-enter mid-body; the index must persist (#547).
@@ -91,8 +87,7 @@ public class GeneratorTests
         Assert.Equal("x,10,y,20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForInLoop_Nested_YieldsCartesianProduct(ExecutionMode mode)
     {
         // Nested for...in loops, each with its own hoisted key-list/index fields.
@@ -113,8 +108,7 @@ public class GeneratorTests
 
     #region Yield* Delegation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarArray_DelegatesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +125,7 @@ public class GeneratorTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarGenerator_DelegatesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -156,8 +149,7 @@ public class GeneratorTests
         Assert.Equal("1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_ForwardsSentValue(ExecutionMode mode)
     {
         // ECMA-262 §14.4.14: the value passed to the outer's next(v) is forwarded
@@ -180,8 +172,7 @@ public class GeneratorTests
         Assert.Equal("inner got 99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_ForwardsAcrossYields_AndYieldsCompletionValue(ExecutionMode mode)
     {
         // Each next(v) feeds the inner's successive yields, and the delegate's
@@ -208,8 +199,7 @@ public class GeneratorTests
         Assert.Equal("a\nb\nret inner:1,2\nafter\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_Nested_ForwardsSentValue(ExecutionMode mode)
     {
         // A resume value must thread through every level of nested delegation.
@@ -229,8 +219,7 @@ public class GeneratorTests
         Assert.Equal("a got 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_InExpression_ForwardsSentValue(ExecutionMode mode)
     {
         // yield* as a sub-expression (operand-spill path) still forwards the resume
@@ -253,8 +242,7 @@ public class GeneratorTests
         Assert.Equal("R:15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_CustomIterator_ForwardsNextSentValue(ExecutionMode mode)
     {
         // ECMA-262 §14.4.14: the value passed to the outer's next(v) must be forwarded
@@ -281,8 +269,7 @@ public class GeneratorTests
         Assert.Equal("start\ngot:42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStar_CustomIterator_ForwardsMultipleSentValues(ExecutionMode mode)
     {
         // Each successive next(v) on the outer must be forwarded to the custom iterator's next(v).
@@ -314,8 +301,7 @@ public class GeneratorTests
 
     #region Control Flow
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_WhileLoop_YieldsMultipleTimes(ExecutionMode mode)
     {
         var source = """
@@ -335,8 +321,7 @@ public class GeneratorTests
         Assert.Equal("3\n2\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_IfStatement_ConditionalYield(ExecutionMode mode)
     {
         var source = """
@@ -367,8 +352,7 @@ public class GeneratorTests
 
     #region Closures
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Closure_CapturesVariables(ExecutionMode mode)
     {
         var source = """
@@ -391,8 +375,7 @@ public class GeneratorTests
 
     #region Iterator Protocol (.next())
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_BasicYield_ReturnsValues(ExecutionMode mode)
     {
         var source = """
@@ -413,8 +396,7 @@ public class GeneratorTests
         Assert.Equal("1\n2\n3\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_EmptyGenerator_ReturnsDoneImmediately(ExecutionMode mode)
     {
         var source = """
@@ -429,8 +411,7 @@ public class GeneratorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_IteratorResult_HasCorrectStructure(ExecutionMode mode)
     {
         var source = """
@@ -451,8 +432,7 @@ public class GeneratorTests
         Assert.Equal("First value: 42\nFirst done: false\nSecond done: true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MultipleInstances_IndependentState(ExecutionMode mode)
     {
         var source = """
@@ -479,8 +459,7 @@ public class GeneratorTests
 
     #region Resume Values (next(v)) — issue #452
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NextWithValue_DeliveredToYield(ExecutionMode mode)
     {
         // ECMA-262 §27.5.3.3: `yield expr` evaluates to the argument of the
@@ -504,8 +483,7 @@ public class GeneratorTests
         Assert.Equal("first 1\ngot 42\nr1 2\ngot 43\nr2 99\ndone true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_AccumulatorPattern_UsesSentValues(ExecutionMode mode)
     {
         // The classic two-way generator: each next(n) feeds the running total.
@@ -528,8 +506,7 @@ public class GeneratorTests
         Assert.Equal("0\n5\n15\n18\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_AccumulatorPattern_CompoundAssignAcrossYield(ExecutionMode mode)
     {
         // #497: the same two-way accumulator, but the running total is read *before* the yield
@@ -556,8 +533,7 @@ public class GeneratorTests
         Assert.Equal("0\n5\n15\n18\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_AccumulatorPattern_CompoundAssignAcrossYield_DoWhile(ExecutionMode mode)
     {
         // #497: do-while is one of the loop forms that lacked loop-body hoisting pre-fix.
@@ -579,8 +555,7 @@ public class GeneratorTests
         Assert.Equal("0\n5\n15\n18\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_AccumulatorPattern_CompoundAssignAcrossYield_For(ExecutionMode mode)
     {
         // #497: an unbounded for(;;) likewise lacked loop-body hoisting pre-fix.
@@ -602,8 +577,7 @@ public class GeneratorTests
         Assert.Equal("0\n5\n15\n18\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_LoopCarriedLocal_ReadBeforeYield_SurvivesAcrossIterations(ExecutionMode mode)
     {
         // #497 (general shape): a counted for-loop whose induction-adjacent local is read in the
@@ -628,8 +602,7 @@ public class GeneratorTests
         Assert.Equal("0\n10\n30\n60\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_BareNext_ResumesWithUndefined(ExecutionMode mode)
     {
         var source = """
@@ -646,8 +619,7 @@ public class GeneratorTests
         Assert.Equal("undefined undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NextWithNull_ResumesWithNull(ExecutionMode mode)
     {
         // next(null) must deliver null (typeof "object"), distinct from a bare
@@ -666,8 +638,7 @@ public class GeneratorTests
         Assert.Equal("null object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ForOf_ResumesYieldWithUndefined(ExecutionMode mode)
     {
         // for...of drives the generator without passing a value, so a yield used
@@ -686,8 +657,7 @@ public class GeneratorTests
         Assert.Equal("yielded 10\nresumed undefined undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_SentValue_UsedInExpression(ExecutionMode mode)
     {
         var source = """
@@ -704,8 +674,7 @@ public class GeneratorTests
         Assert.Equal("doubled 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethod_NextWithValue_AndThis(ExecutionMode mode)
     {
         var source = """
@@ -732,8 +701,7 @@ public class GeneratorTests
 
     #region Yield* with String
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarString_DelegatesCharacters(ExecutionMode mode)
     {
         var source = """
@@ -754,8 +722,7 @@ public class GeneratorTests
 
     #region Yield* with Map and Set
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarMap_DelegatesEntries(ExecutionMode mode)
     {
         var source = """
@@ -775,8 +742,7 @@ public class GeneratorTests
         Assert.Equal("a:1\nb:2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarSet_DelegatesValues(ExecutionMode mode)
     {
         var source = """
@@ -804,8 +770,7 @@ public class GeneratorTests
     // return()/throw() injecting an abrupt completion at the suspended yield, so active try/finally/
     // catch run) landed in #526. They double as a cross-mode parity guard.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Return_RunsFinally_AndReportsValue(ExecutionMode mode)
     {
         // The repro from issue #478: return(v) on a suspended generator resumes it as an
@@ -833,8 +798,7 @@ public class GeneratorTests
         Assert.Equal("1 false\nfinally ran\n99 true\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Throw_CaughtByTryCatch_Continues(ExecutionMode mode)
     {
         // throw(e) injects the error at the yield point; an enclosing catch handles it and
@@ -861,8 +825,7 @@ public class GeneratorTests
         Assert.Equal("1\ncaught boom\n99 false\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Throw_RunsFinally_ThenPropagates(ExecutionMode mode)
     {
         // throw(e) with only a finally (no catch): the finally runs, then the error propagates
@@ -888,8 +851,7 @@ public class GeneratorTests
         Assert.Equal("finally C\nouter caught boomC\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Return_RunsNestedFinallyInnerToOuter(ExecutionMode mode)
     {
         var source = """
@@ -914,8 +876,7 @@ public class GeneratorTests
         Assert.Equal("inner\nouter\n5 true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Return_FinallyThatYields_DefersCompletion(ExecutionMode mode)
     {
         // A finally that yields suspends the pending return; the return value is delivered
@@ -940,8 +901,7 @@ public class GeneratorTests
         Assert.Equal("99 false\n5 true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Return_FinallyReturnOverridesValue(ExecutionMode mode)
     {
         // A finally that returns its own value overrides the value passed to return().
@@ -963,8 +923,7 @@ public class GeneratorTests
         Assert.Equal("7 true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_Return_FinallyThrowOverridesReturn(ExecutionMode mode)
     {
         // A finally that throws overrides the pending return with the thrown error.
@@ -989,8 +948,7 @@ public class GeneratorTests
         Assert.Equal("caught finally-err\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ReturnAndThrow_OnNotStarted_DoNotRunBody(ExecutionMode mode)
     {
         // return()/throw() on a generator that hasn't started close it without running the
@@ -1018,8 +976,7 @@ public class GeneratorTests
         Assert.Equal("8 true\nthrew x\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NextAfterCompletion_ReportsUndefined(ExecutionMode mode)
     {
         // Once a generator finishes, its completion value is delivered exactly once; further
@@ -1041,8 +998,7 @@ public class GeneratorTests
         Assert.Equal("42 true\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_UncaughtThrowInBody_PropagatesToNext(ExecutionMode mode)
     {
         // An uncaught throw inside the body surfaces to the next() caller rather than being
@@ -1065,8 +1021,7 @@ public class GeneratorTests
         Assert.Equal("caught bodyboom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_BareReturn_ReportsUndefinedValue(ExecutionMode mode)
     {
         // A no-argument return() resumes with undefined.
@@ -1093,8 +1048,7 @@ public class GeneratorTests
     // the compiled EmitYieldStar gained the same forwarding (driving the delegate via return()/throw()
     // instead of next()) once the compiled injection landed in #526.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_ForwardsToInnerFinally_ThenOuterReturns(ExecutionMode mode)
     {
         // The repro from #514: return(v) on the outer while suspended inside yield* must run the
@@ -1114,8 +1068,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\n42 true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Throw_NoInnerCatch_RunsInnerFinally_ThenPropagates(ExecutionMode mode)
     {
         // throw(e) is forwarded to the delegate; with only a finally (no catch) the delegate's
@@ -1133,8 +1086,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\ncaught boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Throw_CaughtByInner_KeepsDelegating(ExecutionMode mode)
     {
         // The delegate catches the injected error and yields again; the outer stays in the
@@ -1153,8 +1105,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner caught boom\n99\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Throw_CaughtByInnerThenReturns_OuterContinuesNormally(ExecutionMode mode)
     {
         // The delegate catches the error and returns: per §14.4.14 step b.5 the yield* evaluates
@@ -1177,8 +1128,7 @@ public class GeneratorTests
         Assert.Equal("1\nafter yield* recovered\nouter false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_InnerFinallyYields_DefersCompletion(ExecutionMode mode)
     {
         // The delegate's finally itself yields: the outer suspends there (reporting the
@@ -1205,8 +1155,7 @@ public class GeneratorTests
         Assert.Equal("1\nfrom finally false\nx=7\nundefined true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_InnerFinallyReturnOverridesValue(ExecutionMode mode)
     {
         // A finally in the delegate that returns its own value overrides the value passed to the
@@ -1225,8 +1174,7 @@ public class GeneratorTests
         Assert.Equal("1\n99 true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_RunsInnerThenOuterFinally(ExecutionMode mode)
     {
         // When the outer also wraps the yield* in try/finally, the abrupt return runs the
@@ -1247,8 +1195,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\nouter finally\n5 true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Nested_Return_ReachesInnermostFinally(ExecutionMode mode)
     {
         // Two levels of delegation (outer → middle → inner): return() must thread through both
@@ -1270,8 +1217,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\nmiddle finally\n3 true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Nested_Throw_RunsAllFinallys_ThenPropagates(ExecutionMode mode)
     {
         // throw() through two levels of delegation with no catch anywhere: each finally runs
@@ -1292,8 +1238,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\nmiddle finally\ncaught kaboom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_InnerWithoutFinally_TerminatesCleanly(ExecutionMode mode)
     {
         // return() forwarded to a delegate that has no finally: the delegate just closes, the
@@ -1311,8 +1256,7 @@ public class GeneratorTests
         Assert.Equal("1\n11 true\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_ForwardsIntoGeneratorExpressionDelegate(ExecutionMode mode)
     {
         // The delegate is a generator function EXPRESSION (a distinct runtime type from a
@@ -1331,8 +1275,7 @@ public class GeneratorTests
         Assert.Equal("1\ninner finally\n8 true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Return_FromGeneratorExpressionOuter(ExecutionMode mode)
     {
         // The OUTER is a generator function expression delegating to a declaration; the suspend
@@ -1360,8 +1303,7 @@ public class GeneratorTests
     // the body ahead of the block-scoped (let/const) bindings it closes over, or the type checker
     // (which checks bodies in source order) rejects the reference as "Undefined variable".
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverOuterLet(ExecutionMode mode)
     {
         // The exact repro from issue #522.
@@ -1375,8 +1317,7 @@ public class GeneratorTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverOuterConst(ExecutionMode mode)
     {
         var source = """
@@ -1389,8 +1330,7 @@ public class GeneratorTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_CapturesVariableNotSnapshot(ExecutionMode mode)
     {
         // The closure binds the variable, so a mutation between definition and iteration is observed.
@@ -1405,8 +1345,7 @@ public class GeneratorTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NestedInFunction_ClosesOverModuleLet(ExecutionMode mode)
     {
         // A generator expression nested inside another function may still close over module-scope
@@ -1432,8 +1371,7 @@ public class GeneratorTests
     // The GeneratorArrowLifter must descend through the grouped callee so the expression is lifted
     // (otherwise the type checker rejects its `yield` because the generator context is never set).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_IifeCallPosition(ExecutionMode mode)
     {
         // The exact repro from issue #488.
@@ -1445,8 +1383,7 @@ public class GeneratorTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_IifeSpreadIntoArray(ExecutionMode mode)
     {
         var source = """
@@ -1465,8 +1402,7 @@ public class GeneratorTests
     // try-catch-finally / switch / labeled statement bodies, or a generator function expression
     // declared there is never lifted and its `yield` is rejected at type-check time.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideForLoop(ExecutionMode mode)
     {
         // The exact repro from issue #634.
@@ -1480,8 +1416,7 @@ public class GeneratorTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideForOf(ExecutionMode mode)
     {
         // The generator yields a constant (not the loop variable): #634 is about the lifter reaching
@@ -1497,8 +1432,7 @@ public class GeneratorTests
         Assert.Equal("1\n1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideForIn(ExecutionMode mode)
     {
         var source = """
@@ -1512,8 +1446,7 @@ public class GeneratorTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideLoopClosesOverModuleScope(ExecutionMode mode)
     {
         // A generator expression inside a loop body may still close over a MODULE-scope binding;
@@ -1529,8 +1462,7 @@ public class GeneratorTests
         Assert.Equal("7\n7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideDoWhile(ExecutionMode mode)
     {
         var source = """
@@ -1545,8 +1477,7 @@ public class GeneratorTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideTryCatchFinally(ExecutionMode mode)
     {
         var source = """
@@ -1565,8 +1496,7 @@ public class GeneratorTests
         Assert.Equal("1\n3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideSwitchCase(ExecutionMode mode)
     {
         var source = """
@@ -1584,8 +1514,7 @@ public class GeneratorTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_InsideLabeledStatement(ExecutionMode mode)
     {
         var source = """
@@ -1611,8 +1540,7 @@ public class GeneratorTests
     // (this/arguments, rest/default params, self-recursion) instead stay nested and fail cleanly in
     // compiled mode with "Yield not supported in this context", never a miscompile.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverFunctionLocal(ExecutionMode mode)
     {
         // The exact repro from issue #534.
@@ -1628,8 +1556,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverFunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -1643,8 +1570,7 @@ public class GeneratorTests
         Assert.Equal("[3, 6]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverLocalCapturesByReference(ExecutionMode mode)
     {
         // Closures bind the variable, so a mutation before iteration is observed (not a snapshot). In
@@ -1703,8 +1629,7 @@ public class GeneratorTests
         Assert.Contains("Yield not supported", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverLocal_UsingThis_ThreadsDynamicThis(ExecutionMode mode)
     {
         // #775: a generator function expression that closes over an enclosing-function local AND uses
@@ -1722,8 +1647,7 @@ public class GeneratorTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverLocal_UsingThis_DotCallBindsReceiver(ExecutionMode mode)
     {
         // #775: the generator captures an enclosing-function local (`mult`) AND reads `this` via a bound
@@ -1751,8 +1675,7 @@ public class GeneratorTests
     // reads it LIVE. Class generator-method enclosers (sync/async, static/instance) instead decline
     // cleanly (a compile error, never a stale-value miscompile) — pinned below.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverGeneratorLocal(ExecutionMode mode)
     {
         // The exact repro from issue #945.
@@ -1786,8 +1709,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.RunCompiled(source));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverGeneratorLocal_CapturesByReference(ExecutionMode mode)
     {
         // The forwarder reads the captured local LIVE through the shared function DC, so a write-capturing
@@ -1806,8 +1728,7 @@ public class GeneratorTests
         Assert.Equal("[31]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverGeneratorLocal_MultipleForwarders(ExecutionMode mode)
     {
         // Two generator expressions each capturing a distinct enclosing-generator local → two DC fields.
@@ -1826,8 +1747,7 @@ public class GeneratorTests
         Assert.Equal("[5, 100]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_ClosesOverGeneratorLocal_NestedInPlainFunction(ExecutionMode mode)
     {
         // The enclosing generator is itself nested in a plain function. NestedFunctionLifter relocates it
@@ -1915,8 +1835,7 @@ public class GeneratorTests
 
     #region Generator function expression / object generator method dynamic `this` — issue #775
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectGeneratorMethod_ReadsThis(ExecutionMode mode)
     {
         // The canonical case from the issue: an object generator method reads instance state via `this`.
@@ -1928,8 +1847,7 @@ public class GeneratorTests
         Assert.Equal("5\n6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorFunctionExpression_DotCallBindsThis(ExecutionMode mode)
     {
         var source = """
@@ -1941,8 +1859,7 @@ public class GeneratorTests
         Assert.Equal("9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorFunctionExpression_AssignedAsMethod_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -1954,8 +1871,7 @@ public class GeneratorTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectSymbolIteratorGenerator_ReadsThis(ExecutionMode mode)
     {
         // The canonical MDN iterator pattern: a `[Symbol.iterator]` generator reading `this`.
@@ -1970,8 +1886,7 @@ public class GeneratorTests
         Assert.Equal("10\n20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedGeneratorFunctionExpression_ReadsThis(ExecutionMode mode)
     {
         var source = """
@@ -1983,8 +1898,7 @@ public class GeneratorTests
         Assert.Equal("100,101\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainGeneratorFunctionExpressionCall_ThisIsSloppyGlobal(ExecutionMode mode)
     {
         // A `function*` expression called plainly (no receiver) binds `this` to the sloppy-mode global
@@ -2013,8 +1927,7 @@ public class GeneratorTests
     // local — which is now lambda-lifted and runs in both modes — this cannot be lowered; asserted by
     // the *_CompiledRejectsClearly test).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesForOfLoopVariable(ExecutionMode mode)
     {
         // The exact repro from issue #678.
@@ -2028,8 +1941,7 @@ public class GeneratorTests
         Assert.Equal("10\n20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesNestedBlockLet(ExecutionMode mode)
     {
         // The second repro from issue #678: a let in a nested block within a function.
@@ -2047,8 +1959,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesForLetLoopVariable(ExecutionMode mode)
     {
         var source = """
@@ -2061,8 +1972,7 @@ public class GeneratorTests
         Assert.Equal("10\n20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesForInKey(ExecutionMode mode)
     {
         var source = """
@@ -2076,8 +1986,7 @@ public class GeneratorTests
         Assert.Equal("a\nb\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesCatchParameter(ExecutionMode mode)
     {
         var source = """
@@ -2092,8 +2001,7 @@ public class GeneratorTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesSwitchCaseBinding(ExecutionMode mode)
     {
         var source = """
@@ -2110,8 +2018,7 @@ public class GeneratorTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_LoopVariableCapturedPerIteration(ExecutionMode mode)
     {
         // Each iteration's for-of binding is distinct, so a generator created in one iteration captures
@@ -2128,8 +2035,7 @@ public class GeneratorTests
         Assert.Equal("1,2,3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_CapturesBlockScopedAndModuleScoped(ExecutionMode mode)
     {
         // A capture mixing a block-scoped loop variable with a module-scoped const still works: the
@@ -2146,8 +2052,7 @@ public class GeneratorTests
         Assert.Equal("200\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_NamedSelfRecursionCapturingLoopVariable(ExecutionMode mode)
     {
         // #678 + #679 together: a NAMED generator expression that both closes over a loop variable and
@@ -2194,8 +2099,7 @@ public class GeneratorTests
     // Interpreted-only: the compiler has no generator-expression IL path and reports a clear
     // "Yield not supported in this context" error (asserted by the *_CompiledRejectsClearly test).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void AsyncGeneratorExpression_CapturesForOfLoopVariable(ExecutionMode mode)
     {
         // The exact repro from issue #734.
@@ -2214,8 +2118,7 @@ public class GeneratorTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void AsyncGeneratorExpression_CapturesNestedBlockLet(ExecutionMode mode)
     {
         // A let in a nested block captured by an in-place async generator expression, driven by direct
@@ -2235,8 +2138,7 @@ public class GeneratorTests
         Assert.Equal("5,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void AsyncGeneratorExpression_CapturesLoopVariablePerIteration(ExecutionMode mode)
     {
         // Each iteration's for-of binding is distinct, so an async generator created in one iteration
@@ -2290,8 +2192,7 @@ public class GeneratorTests
     // time, like a plain function), the forwarding binding is HOISTED to the body top so the earlier
     // reference resolves — the async analog of the plain-function #534 hoist. These run in BOTH modes.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorExpression_ClosesOverAsyncFunctionLocal(ExecutionMode mode)
     {
         // The exact repro from issue #924.
@@ -2310,8 +2211,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorExpression_ClosesOverAsyncFunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -2328,8 +2228,7 @@ public class GeneratorTests
         Assert.Equal("[3, 6]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorExpression_ClosesOverLocalCapturesByReference(ExecutionMode mode)
     {
         // Closures bind the variable, so a mutation before iteration is observed (not a snapshot). In
@@ -2375,8 +2274,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.RunCompiled(source));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SyncGeneratorExpression_InAsyncFunction_ClosesOverLocal(ExecutionMode mode)
     {
         // A SYNC generator expression closing over a local of an enclosing ASYNC function — the same
@@ -2405,8 +2303,7 @@ public class GeneratorTests
     // the original name, so it injects `const <name> = __genArrow_N;` at the top of the body to keep
     // the self-reference bound (skipped when a parameter or body-level binding shadows the name).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NamedSelfRecursion(ExecutionMode mode)
     {
         // The exact repro from issue #679.
@@ -2420,8 +2317,7 @@ public class GeneratorTests
         Assert.Equal("[3, 2, 1]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NamedSelfRecursion_ClosesOverModuleConst(ExecutionMode mode)
     {
         // Self-reference plus a capture of a module-scope binding: both must resolve.
@@ -2436,8 +2332,7 @@ public class GeneratorTests
         Assert.Equal("[3, 2, 1]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NamedSelfReference_ParameterShadowsName(ExecutionMode mode)
     {
         // A parameter named the same as the function expression shadows the self-name (the self-binding
@@ -2450,8 +2345,7 @@ public class GeneratorTests
         Assert.Equal("[10, 11]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NamedSelfReference_BodyLetShadowsName(ExecutionMode mode)
     {
         // A body-level `let` of the same name shadows the self-name (no self-binding injected).
@@ -2463,8 +2357,7 @@ public class GeneratorTests
         Assert.Equal("[7]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorExpression_NamedSelfReference_NestedBlockDoesNotShadow(ExecutionMode mode)
     {
         // A nested-block binding of the same name shadows only within that block, so the outer
@@ -2485,8 +2378,7 @@ public class GeneratorTests
 
     #region Block-scope shadowing in compiled generators (#711) and void operator (#712)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockConstShadow_DoesNotLeakToOuter(ExecutionMode mode)
     {
         // A const in a nested block that shadows an outer body-level const must get its own slot
@@ -2503,8 +2395,7 @@ public class GeneratorTests
         Assert.Equal("[100]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockShadow_LiveAcrossYield_GetsOwnField(ExecutionMode mode)
     {
         // The inner shadow is itself read after a yield, so it must hoist to its OWN field, distinct
@@ -2525,8 +2416,7 @@ public class GeneratorTests
         Assert.Equal("[0, 1, 100]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockLetShadow_ReassignedAcrossYield(ExecutionMode mode)
     {
         // A let shadow that is compound-assigned across yields keeps its own value, separate from
@@ -2549,8 +2439,7 @@ public class GeneratorTests
         Assert.Equal("[2, 12, 7]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockShadowsParameter(ExecutionMode mode)
     {
         // An inner block const may shadow a (hoisted) parameter without clobbering it (#711).
@@ -2565,8 +2454,7 @@ public class GeneratorTests
         Assert.Equal("[99, 5]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_DeeplyNestedShadows_EachGetOwnSlot(ExecutionMode mode)
     {
         // Each nesting level that re-declares the name resolves to its own binding (#711).
@@ -2582,8 +2470,7 @@ public class GeneratorTests
         Assert.Equal("[3, 2, 1]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_VoidOperator_InBody(ExecutionMode mode)
     {
         // `void expr` inside a compiled generator body must evaluate the operand for its side effects
@@ -2600,8 +2487,7 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_VoidOperator_WithYieldOperand_Suspends(ExecutionMode mode)
     {
         // `void (yield x)` must still suspend at the inner yield (the operand can suspend), then
@@ -2617,8 +2503,7 @@ public class GeneratorTests
         Assert.Equal("[1, 2]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockShadow_CapturedByArrow_DoesNotLeak(ExecutionMode mode)
     {
         // An inner block const that shadows an outer body-level const AND is read by a nested arrow
@@ -2641,8 +2526,7 @@ public class GeneratorTests
         Assert.Equal("[5, 100]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_OuterBindingCapturedByArrow_StaysCorrect(ExecutionMode mode)
     {
         // The arrow captures the OUTER binding (declared before the shadowing block); the inner shadow
@@ -2661,8 +2545,7 @@ public class GeneratorTests
         Assert.Equal("[5, 100]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_TwoArrows_CaptureInnerAndOuterShadows(ExecutionMode mode)
     {
         // Two arrows in distinct scopes each capture a different binding of the same name. Each arrow's
@@ -2685,8 +2568,7 @@ public class GeneratorTests
         Assert.Equal("[2, 1, 1]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockShadow_WriteCapturedByArrow_DoesNotLeak(ExecutionMode mode)
     {
         // An inner block let that shadows an outer body-level const AND is WRITTEN by a nested arrow must
@@ -2711,8 +2593,7 @@ public class GeneratorTests
         Assert.Equal("6,6,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedBlockShadow_WriteCapturedByArrow_IncrementForms(ExecutionMode mode)
     {
         // The arrow mutates the renamed write-shadow through ++ and += (distinct hand-rolled DC store
@@ -2734,8 +2615,7 @@ public class GeneratorTests
         Assert.Equal("8,8,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_TwoWriteShadows_CapturedByDistinctArrows(ExecutionMode mode)
     {
         // Two independent nested-block write-shadows, each written by its own arrow, must each get their
@@ -2753,8 +2633,7 @@ public class GeneratorTests
         Assert.Equal("6,6,10,10,100,200\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NonShadowWriteCapture_StillShared(ExecutionMode mode)
     {
         // Regression guard: the classic #674 write-capture WITHOUT shadowing must keep sharing the outer
@@ -2776,8 +2655,7 @@ public class GeneratorTests
 
     #region Optional-chain string-method yield short-circuit parity (#709)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_OptionalChainStringMethod_OnNonString_ShortCircuitsBeforeYield(ExecutionMode mode)
     {
         // o?.substring(...) on a non-string object lacking the method short-circuits to undefined
@@ -2798,8 +2676,7 @@ public class GeneratorTests
         Assert.Equal("undefined true undefined true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_OptionalChainStringMethod_OnString_RunsYield(ExecutionMode mode)
     {
         // On a genuine string receiver the method exists, so the yield argument DOES run and the
@@ -2841,8 +2718,7 @@ public class GeneratorTests
     // The yield*-delegation case doesn't rely on the captured self-reference (the inner generator is
     // created after the outer is assigned), so it runs in both modes from a single source.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Generator_ReentrantNext_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         // The re-entrant next() throws a catchable TypeError; once caught, the generator is still
@@ -2863,8 +2739,7 @@ public class GeneratorTests
         Assert.Equal("true TypeError Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Generator_ReentrantNext_UncaughtPropagatesToResumingCaller(ExecutionMode mode)
     {
         // An uncaught re-entrant next() completes the generator abnormally and the TypeError
@@ -2881,8 +2756,7 @@ public class GeneratorTests
         Assert.Equal("outer caught Generator is already running\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Generator_ReentrantReturn_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         var source = """
@@ -2901,8 +2775,7 @@ public class GeneratorTests
         Assert.Equal("return -> Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Generator_ReentrantThrow_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         // The "already running" guard takes precedence over the injected throw(e): the caller's
@@ -2923,8 +2796,7 @@ public class GeneratorTests
         Assert.Equal("throw -> Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ReentrantThroughYieldStar_ThrowsTypeError(ExecutionMode mode)
     {
         // The outer generator is still `executing` while it delegates via yield*, so an inner
@@ -2947,8 +2819,7 @@ public class GeneratorTests
         Assert.Equal("deleg -> Generator is already running\n5 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GeneratorExpression_ReentrantNext_ThrowsTypeError(ExecutionMode mode)
     {
         // A generator function *expression* that closes over a block-scoped binding stays in place and
@@ -2976,8 +2847,7 @@ public class GeneratorTests
     // --- Compiled variants (#521): genuine re-entrancy via a live object-property receiver,
     // so the guard is reached despite the by-value closure capture (#541). ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Generator_ReentrantNext_Compiled_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         // The re-entrant next() throws a catchable TypeError; once caught, the generator is still
@@ -2999,8 +2869,7 @@ public class GeneratorTests
         Assert.Equal("true TypeError Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Generator_ReentrantNext_Compiled_UncaughtPropagatesToResumingCaller(ExecutionMode mode)
     {
         // An uncaught re-entrant next() completes the generator abnormally and the TypeError
@@ -3017,8 +2886,7 @@ public class GeneratorTests
         Assert.Equal("true TypeError Generator is already running\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Generator_ReentrantReturn_Compiled_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         var source = """
@@ -3037,8 +2905,7 @@ public class GeneratorTests
         Assert.Equal("return -> Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Generator_ReentrantThrow_Compiled_ThrowsTypeErrorThenResumes(ExecutionMode mode)
     {
         // The "already running" guard takes precedence over the injected throw(e): the caller's
@@ -3059,8 +2926,7 @@ public class GeneratorTests
         Assert.Equal("throw -> Generator is already running\n1 false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void GeneratorExpression_ReentrantNext_Compiled_ThrowsTypeError(ExecutionMode mode)
     {
         // A generator function *expression* uses the same state-machine builder; its guard is

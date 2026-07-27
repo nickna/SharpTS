@@ -10,8 +10,7 @@ public class StringDecoderModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -26,8 +25,7 @@ public class StringDecoderModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -46,8 +44,7 @@ public class StringDecoderModuleTests
 
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Constructor_DefaultEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -63,8 +60,7 @@ public class StringDecoderModuleTests
         Assert.Equal("utf8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Constructor_Utf8Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -80,8 +76,7 @@ public class StringDecoderModuleTests
         Assert.Equal("utf8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Constructor_Latin1Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -101,8 +96,7 @@ public class StringDecoderModuleTests
 
     #region Write Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Write_SimpleAscii(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -120,8 +114,7 @@ public class StringDecoderModuleTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Write_Utf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -143,8 +136,7 @@ public class StringDecoderModuleTests
 
     #region End Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_End_NoArgument(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +155,7 @@ public class StringDecoderModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_End_WithBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -186,8 +177,7 @@ public class StringDecoderModuleTests
 
     #region Chained Writes Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringDecoder_Write_MultipleChunks(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

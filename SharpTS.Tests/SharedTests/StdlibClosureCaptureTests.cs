@@ -28,8 +28,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class StdlibClosureCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SiblingFunctions_SameParamName_CapturedByClosures(ExecutionMode mode)
     {
         // Minimal repro: two module-level functions with `fn` params, each
@@ -64,8 +63,7 @@ public class StdlibClosureCaptureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedArrow_CapturesParentArrowRestParam(ExecutionMode mode)
     {
         // Second-order repro: a Promise-executor pattern where the innermost
@@ -96,8 +94,7 @@ public class StdlibClosureCaptureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThreeSiblings_SameParamName_AllClosuresWork(ExecutionMode mode)
     {
         // Extends the two-sibling case to three, verifying the resolver still

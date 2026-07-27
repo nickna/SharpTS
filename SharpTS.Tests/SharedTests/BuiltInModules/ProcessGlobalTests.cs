@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ProcessGlobalTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Platform_ReturnsValidPlatform(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Arch_ReturnsValidArchitecture(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +32,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Pid_ReturnsPositiveNumber(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +45,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Version_ReturnsVersionString(ExecutionMode mode)
     {
         var source = """
@@ -63,8 +59,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Cwd_ReturnsCurrentDirectory(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +72,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Env_ReturnsEnvObject(ExecutionMode mode)
     {
         var source = """
@@ -90,8 +84,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Env_ContainsPathVariable(ExecutionMode mode)
     {
         // PATH is typically set on most systems (PATH on Windows/Unix, or Path on some systems)
@@ -106,8 +99,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Argv_ReturnsArray(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +111,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Argv_ContainsElements(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +123,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MultipleProperties_WorkTogether(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +139,7 @@ public class ProcessGlobalTests
 
     // ============ PROCESS ENHANCEMENT TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Hrtime_ReturnsArray(ExecutionMode mode)
     {
         var source = """
@@ -163,8 +152,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Hrtime_ReturnsPositiveSeconds(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +164,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Hrtime_ReturnsValidNanoseconds(ExecutionMode mode)
     {
         var source = """
@@ -191,8 +178,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Hrtime_WithPrevious_ReturnsDiff(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +199,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Uptime_ReturnsPositiveNumber(ExecutionMode mode)
     {
         var source = """
@@ -227,8 +212,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Uptime_IsSmallForNewProcess(ExecutionMode mode)
     {
         // Compiled mode uses Process.StartTime, which in our in-process test runner is
@@ -245,8 +229,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_ReturnsObject(ExecutionMode mode)
     {
         var source = """
@@ -258,8 +241,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_HasRss(ExecutionMode mode)
     {
         var source = """
@@ -272,8 +254,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_HasHeapTotal(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +267,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_HasHeapUsed(ExecutionMode mode)
     {
         var source = """
@@ -300,8 +280,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_HeapUsedLessThanTotal(ExecutionMode mode)
     {
         var source = """
@@ -313,8 +292,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_AllEnhancements_WorkTogether(ExecutionMode mode)
     {
         var source = """
@@ -332,8 +310,7 @@ public class ProcessGlobalTests
 
     // ============ ENHANCED VALIDATION TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Cwd_IsAbsolutePath(ExecutionMode mode)
     {
         // Current working directory should be an absolute path
@@ -350,8 +327,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Argv_FirstElementIsPath(ExecutionMode mode)
     {
         // argv[0] should be a path (the executable)
@@ -370,8 +346,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Hrtime_MeasuresRealTime(ExecutionMode mode)
     {
         // Two calls to hrtime should show time elapsed
@@ -392,8 +367,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Uptime_IncreasesOverTime(ExecutionMode mode)
     {
         // Two calls to uptime should show increasing values
@@ -412,8 +386,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MemoryUsage_AllPropertiesPresent(ExecutionMode mode)
     {
         // memoryUsage should have all expected properties
@@ -430,8 +403,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Env_HasCommonVariables(ExecutionMode mode)
     {
         // PATH (or Path on some systems) should exist
@@ -446,8 +418,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Platform_MatchesOs(ExecutionMode mode)
     {
         // process.platform should match os.platform()
@@ -463,8 +434,7 @@ public class ProcessGlobalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Arch_MatchesOs(ExecutionMode mode)
     {
         // process.arch should match os.arch()

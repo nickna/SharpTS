@@ -17,8 +17,7 @@ public class CryptoKeyEcdhParityTests
 {
     // ----- Dual-mode (compiled + interpreted) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ecdh_TwoParty_RawPoint_Agreement(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -40,8 +39,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ecdh_GetPrivateKey_RawScalar(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -59,8 +57,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ecdh_GetPublicKey_CompressedFormat(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -79,8 +76,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsymmetricKeyDetails_NamedCurve_P384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -96,8 +92,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenerateKeySync_Aes256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -112,8 +107,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenerateKey_Callback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -130,8 +124,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fips_Shims(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -147,8 +140,7 @@ public class CryptoKeyEcdhParityTests
 
     // ----- Interpreter-only (compiled-deferred surface) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void KeyObject_JwkRoundTrip_Rsa(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +159,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void KeyObject_Equals(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -186,8 +177,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void CreatePublicKey_FromPrivateKeyObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -204,8 +194,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Ecdh_ConvertKey_And_OneShotDiffieHellman(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

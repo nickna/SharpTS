@@ -46,8 +46,7 @@ public class SpreadIntoRestParameterTests
     /// Every callable shape that can declare a rest parameter, each called three ways:
     /// plain args, a bare spread, and a leading arg followed by a spread.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_AllCallableShapes(ExecutionMode mode)
     {
         AssertLines("""
@@ -82,8 +81,7 @@ public class SpreadIntoRestParameterTests
     /// The rest parameter's declared element type must not change dispatch. Before the
     /// fix <c>...p: string[]</c> worked by accident and <c>...p: any[]</c> did not.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_ElementTypeDoesNotChangeDispatch(ExecutionMode mode)
     {
         AssertLines("""
@@ -113,8 +111,7 @@ public class SpreadIntoRestParameterTests
     /// follows, an empty spread must contribute nothing, and a spread may also supply
     /// the leading parameters.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_RegularParamsAndEmptySpread(ExecutionMode mode)
     {
         AssertLines("""
@@ -150,8 +147,7 @@ public class SpreadIntoRestParameterTests
     /// rejected tuples, and typed arrays/Buffers were missing from the interpreter's
     /// iterable switch even though the compiled path expanded them.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_AcceptsEveryIterableKind(ExecutionMode mode)
     {
         AssertLines("""
@@ -200,8 +196,7 @@ public class SpreadIntoRestParameterTests
     /// A genuinely non-iterable spread operand must still be rejected — the fix widened the
     /// check to "iterable", not "anything".
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_RejectsNonIterable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -223,8 +218,7 @@ public class SpreadIntoRestParameterTests
     /// the IL stack), so they get their own coverage — including a spread that follows
     /// an awaited leading argument.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_InsideAsyncBody(ExecutionMode mode)
     {
         AssertLines("""
@@ -256,8 +250,7 @@ public class SpreadIntoRestParameterTests
     /// stdlib object-literal namespace method with a rest parameter, and the spread
     /// form crashed compiled output with an InvalidCastException.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadIntoRest_StdlibNamespaceMethod(ExecutionMode mode)
     {
         AssertLines("""

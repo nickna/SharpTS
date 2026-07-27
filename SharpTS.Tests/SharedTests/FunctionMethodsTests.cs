@@ -10,8 +10,7 @@ public class FunctionMethodsTests
 {
     #region Bind Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Bind_PartialApplication_PrependArgs(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class FunctionMethodsTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Bind_ArrowFunction_IgnoresThisArg(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class FunctionMethodsTests
         Assert.Equal("arrow\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Bind_ChainedBind_PreservesFirstThis(ExecutionMode mode)
     {
         // Test that chained bind preserves the first 'this' binding
@@ -66,8 +63,7 @@ public class FunctionMethodsTests
 
     #region Call Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Call_WithMultipleArgs(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +77,7 @@ public class FunctionMethodsTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Call_ArrowFunction_IgnoresThisArg(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +94,7 @@ public class FunctionMethodsTests
 
     #region Apply Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Apply_SpreadArrayArgs(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +109,7 @@ public class FunctionMethodsTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Apply_NullArgs_CallsWithNoArgs(ExecutionMode mode)
     {
         var source = """
@@ -130,8 +123,7 @@ public class FunctionMethodsTests
         Assert.Equal("Hi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Apply_EmptyArgs_CallsWithNoArgs(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +141,7 @@ public class FunctionMethodsTests
 
     #region Function Length Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionLength_ReturnsArity(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +155,7 @@ public class FunctionMethodsTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionLength_ZeroParams(ExecutionMode mode)
     {
         var source = """
@@ -183,8 +173,7 @@ public class FunctionMethodsTests
 
     #region Function Name Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionName_ReturnsName(ExecutionMode mode)
     {
         var source = """
@@ -196,8 +185,7 @@ public class FunctionMethodsTests
         Assert.Equal("myFunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BoundFunctionName_PrefixedWithBound(ExecutionMode mode)
     {
         var source = """
@@ -214,8 +202,7 @@ public class FunctionMethodsTests
 
     #region Type Error Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void FunctionInvalidMember_ReturnsUndefined(ExecutionMode mode)
     {
         // JS functions are objects and support arbitrary property access —
@@ -241,8 +228,7 @@ public class FunctionMethodsTests
 
     #region Bound Function Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BoundFunction_CannotBeUsedAsConstructor(ExecutionMode mode)
     {
         // In JavaScript, bound functions cannot be used with 'new' for class constructors

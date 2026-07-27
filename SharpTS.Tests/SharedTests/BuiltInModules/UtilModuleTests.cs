@@ -15,8 +15,7 @@ public class UtilModuleTests
 {
     #region Format Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_StringPlaceholder(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_NumberPlaceholder(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -49,8 +47,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_FloatPlaceholder(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -66,8 +63,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_MultiplePlaceholders(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -83,8 +79,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_ExtraArguments(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +95,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Format_EscapedPercent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -122,8 +116,7 @@ public class UtilModuleTests
 
     #region Inspect Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_ReturnsString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -139,8 +132,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_ObjectContent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -157,8 +149,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_ArrayContent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -180,8 +171,7 @@ public class UtilModuleTests
 
     #region Types Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsArray_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -196,8 +186,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsArray_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -213,8 +202,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsFunction_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -229,8 +217,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsFunction_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -246,8 +233,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsNull_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -262,8 +248,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsNull_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -280,8 +265,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsUndefined_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -296,8 +280,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsUndefined_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -313,8 +296,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsPromise_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -330,8 +312,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsPromise_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -347,8 +328,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsRegExp_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -364,8 +344,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsRegExp_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -381,8 +360,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsMap_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -397,8 +375,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsMap_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -414,8 +391,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsSet_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -430,8 +406,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsSet_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -448,8 +423,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsTypedArray_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -465,8 +439,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsTypedArray_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -482,8 +455,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsDate_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -498,8 +470,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsDate_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -514,8 +485,7 @@ public class UtilModuleTests
         Assert.Contains("false", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsNativeError_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -530,8 +500,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsNativeError_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -547,8 +516,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsBoxedPrimitive_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -564,8 +532,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsWeakMap_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -580,8 +547,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsWeakMap_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -596,8 +562,7 @@ public class UtilModuleTests
         Assert.Contains("false", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsWeakSet_False_ForSet(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -612,8 +577,7 @@ public class UtilModuleTests
         Assert.Contains("false", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsArrayBuffer_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -628,8 +592,7 @@ public class UtilModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsArrayBuffer_False(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -648,8 +611,7 @@ public class UtilModuleTests
 
     #region Deprecate Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Deprecate_ReturnsWrappedFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -667,8 +629,7 @@ public class UtilModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Deprecate_WarnsOnFirstCallOnly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -692,8 +653,7 @@ public class UtilModuleTests
 
     #region Callbackify Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Callbackify_CallsCallbackWithResult(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -713,8 +673,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Callbackify_CallsCallbackWithErrorOnThrow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -738,8 +697,7 @@ public class UtilModuleTests
 
     #region Promisify Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promisify_ReturnsPromise(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -759,8 +717,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promisify_ResolvesWithValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -783,8 +740,7 @@ public class UtilModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promisify_RejectsOnError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -811,8 +767,7 @@ public class UtilModuleTests
         Assert.Equal("caught error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promisify_PassesArgumentsToOriginalFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -839,8 +794,7 @@ public class UtilModuleTests
 
     #region Inherits Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inherits_SetsSuperProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -862,8 +816,7 @@ public class UtilModuleTests
 
     #region TextEncoder Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextEncoder_EncodingPropertyIsUtf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -879,8 +832,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextEncoder_EncodesUnicodeCorrectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -901,8 +853,7 @@ public class UtilModuleTests
 
     #region TextDecoder Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_DefaultEncodingIsUtf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -918,8 +869,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_DecodesUtf8Buffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -937,8 +887,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextEncoder_TextDecoder_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -962,8 +911,7 @@ public class UtilModuleTests
 
     #region IsDeepStrictEqual Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_PrimitivesEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -980,8 +928,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_PrimitivesNotEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -998,8 +945,7 @@ public class UtilModuleTests
         Assert.Equal("false\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_NaNEqualsNaN(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1014,8 +960,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_ArraysEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1031,8 +976,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_ArraysNotEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1047,8 +991,7 @@ public class UtilModuleTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_ObjectsEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1064,8 +1007,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsDeepStrictEqual_ObjectsNotEqual(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1084,8 +1026,7 @@ public class UtilModuleTests
 
     #region ParseArgs Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_BooleanOption(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1106,8 +1047,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_StringOption(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1128,8 +1068,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_ShortOption(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1150,8 +1089,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_Positionals(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1175,8 +1113,7 @@ public class UtilModuleTests
 
     #region ToUSVString Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ToUSVString_RegularString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1191,8 +1128,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ToUSVString_Emoji(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1208,8 +1144,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ToUSVString_LoneSurrogate(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1230,8 +1165,7 @@ public class UtilModuleTests
 
     #region StripVTControlCharacters Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StripVTControlCharacters_RemovesAnsiColors(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1247,8 +1181,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StripVTControlCharacters_PreservesPlainText(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1268,8 +1201,7 @@ public class UtilModuleTests
 
     #region GetSystemErrorName Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorName_ReturnsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1284,8 +1216,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorName_ReturnsEACCES(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1300,8 +1231,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorName_ReturnsEPERM(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1320,8 +1250,7 @@ public class UtilModuleTests
 
     #region GetSystemErrorMap Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorMap_ReturnsMap(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1338,8 +1267,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorMap_ContainsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1362,8 +1290,7 @@ public class UtilModuleTests
 
     #region Interpreted-Only Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Typeof_BuiltInMethod_ReturnsFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1380,8 +1307,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsFunction_AllTypes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1402,8 +1328,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Types_IsWeakSet_True(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1418,8 +1343,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_SupportsLatin1(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1438,8 +1362,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TextDecoder_SupportsUtf16le(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1455,8 +1378,7 @@ public class UtilModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_OptionTerminator(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1479,8 +1401,7 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ParseArgs_MultipleValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1638,8 +1559,7 @@ public class UtilModuleTests
 
     #endregion
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Util_DefaultImport_ExposesNamespace(ExecutionMode mode)
     {
         // #66: default import from `node:util` needs to yield the namespace

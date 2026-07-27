@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StateMachineUndefinedEqualityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_AwaitNullResolvedPromise_IsNotUndefined(ExecutionMode mode)
     {
         // The exact repro from #600: awaiting a promise that resolves null must yield a value that is
@@ -32,8 +31,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("object\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_UndefinedLiteralAndStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("undefined\nundefined\nfalse\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ReturnNull_ResolvesNullNotUndefined(ExecutionMode mode)
     {
         // `return null` in an async function still resolves with null (distinct from undefined).
@@ -69,8 +66,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("object null true false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ThrowUndefined_StringifiesAsUndefined(ExecutionMode mode)
     {
         // #629: the undefined literal was Ldnull in state machines, so a caught `throw undefined`
@@ -87,8 +83,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("u=undefined isUndef=true\nn=null isNull=true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_UndefinedLiteralAndStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +99,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("undefined\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_UndefinedLiteralAndStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -120,8 +114,7 @@ public class StateMachineUndefinedEqualityTests
         Assert.Equal("undefined\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_UndefinedLiteralAndStrictEquality(ExecutionMode mode)
     {
         var source = """

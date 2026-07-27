@@ -35,8 +35,7 @@ public class NullishMemberAccessTests
 
     // ----- undefined receiver: dot read (#676 / #701 core) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotRead_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -49,8 +48,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedBracketRead_StringKey_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -63,8 +61,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedBracketRead_NumericKey_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -79,8 +76,7 @@ public class NullishMemberAccessTests
 
     // ----- null receiver: dot + bracket read (#735) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullDotRead_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -93,8 +89,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullBracketRead_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -109,8 +104,7 @@ public class NullishMemberAccessTests
 
     // ----- null/undefined receiver: method call (the #676 repro shape) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedMethodCall_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -121,8 +115,7 @@ public class NullishMemberAccessTests
         Assert.Equal("object true TypeError\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullMethodCall_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -135,8 +128,7 @@ public class NullishMemberAccessTests
 
     // ----- writes on null/undefined (#733) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotWrite_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -149,8 +141,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullDotWrite_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -163,8 +154,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullBracketWrite_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -178,8 +168,7 @@ public class NullishMemberAccessTests
     }
 
     // PutValue follows RHS evaluation: the RHS side effect must run before the throw.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullWrite_RHS_SideEffect_Runs_BeforeThrow(ExecutionMode mode)
     {
         var source = """
@@ -195,8 +184,7 @@ public class NullishMemberAccessTests
     // These read the property first (GetValue), so per spec they throw the
     // *read*-worded message, NOT the "setting" wording of a plain `o.x = v`.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotCompound_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -209,8 +197,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullDotCompound_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -223,8 +210,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotLogicalNullish_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -237,8 +223,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullDotLogicalOr_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -251,8 +236,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedIndexCompound_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -265,8 +249,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullIndexLogicalNullish_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -280,8 +263,7 @@ public class NullishMemberAccessTests
     }
 
     // Exercises the base (state-machine) compound/logical emitter + EvaluateLogicalSetAsync.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotLogical_InsideAsync_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -298,8 +280,7 @@ public class NullishMemberAccessTests
     }
 
     // Regression: compound/logical assignment on a real receiver still works.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefinedReceiver_CompoundAndLogical_StillWork(ExecutionMode mode)
     {
         var source = """
@@ -314,8 +295,7 @@ public class NullishMemberAccessTests
 
     // ----- async context exercises the base (state-machine) emitter -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UndefinedDotRead_InsideAsync_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -331,8 +311,7 @@ public class NullishMemberAccessTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullDotRead_InsideAsync_ThrowsTypeError(ExecutionMode mode)
     {
         var source = $$"""
@@ -354,8 +333,7 @@ public class NullishMemberAccessTests
     // the new null/undefined guard, and writes via `this.x = v` round-trip through
     // the global object.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyThis_Read_DoesNotThrow(ExecutionMode mode)
     {
         var source = """
@@ -365,8 +343,7 @@ public class NullishMemberAccessTests
         Assert.Equal("ok-undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SloppyThis_Write_RoutesToGlobalThis(ExecutionMode mode)
     {
         var source = """
@@ -394,8 +371,7 @@ public class NullishMemberAccessTests
 
     // ----- regression: optional chaining still short-circuits (does NOT throw) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalDotChain_OnUndefined_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -406,8 +382,7 @@ public class NullishMemberAccessTests
         Assert.Equal("undefined-ok\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalBracketChain_OnUndefined_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -418,8 +393,7 @@ public class NullishMemberAccessTests
         Assert.Equal("undefined-ok\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalDotChain_OnNull_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +404,7 @@ public class NullishMemberAccessTests
         Assert.Equal("undefined-ok\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalDotChain_OnUndefined_InsideAsync_ReturnsUndefined(ExecutionMode mode)
     {
         // Exercises the base EmitGet optional short-circuit added for the
@@ -449,8 +422,7 @@ public class NullishMemberAccessTests
 
     // ----- regression: real reads still work after the guard -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefinedReceiver_DotAndBracketRead_StillWork(ExecutionMode mode)
     {
         var source = """
@@ -460,8 +432,7 @@ public class NullishMemberAccessTests
         Assert.Equal("42 42 one\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefinedReceiver_DotWrite_StillWorks(ExecutionMode mode)
     {
         var source = """

@@ -10,8 +10,7 @@ public class ClassExpressionTests
 {
     #region Anonymous Class Expressions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnonymousClassExpression_Basic(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ClassExpressionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnonymousClassExpression_WithMethod(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class ClassExpressionTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnonymousClassExpression_WithConstructor(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +71,7 @@ public class ClassExpressionTests
 
     #region Named Class Expressions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedClassExpression_Basic(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +93,7 @@ public class ClassExpressionTests
 
     #region Inheritance
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_WithInheritance(ExecutionMode mode)
     {
         var source = """
@@ -118,8 +113,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_SuperCall(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +137,7 @@ public class ClassExpressionTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_InheritedMethod_NotOverridden(ExecutionMode mode)
     {
         // A child class expression that does NOT override a parent method must
@@ -169,8 +162,7 @@ public class ClassExpressionTests
         Assert.Equal("Fido makes a sound\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_MultiLevelInheritedMethod(ExecutionMode mode)
     {
         // Three-level class-expression chain: the grandchild inherits the
@@ -199,8 +191,7 @@ public class ClassExpressionTests
 
     #region Arrays and Variables
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_MultipleClassesInArray(ExecutionMode mode)
     {
         // Note: new <expression>() syntax isn't supported yet.
@@ -219,8 +210,7 @@ public class ClassExpressionTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_AssignedToVariable(ExecutionMode mode)
     {
         // Class expressions can be assigned to variables and instantiated
@@ -240,8 +230,7 @@ public class ClassExpressionTests
 
     #region Static Members
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticField(ExecutionMode mode)
     {
         var source = """
@@ -255,8 +244,7 @@ public class ClassExpressionTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticMethod(ExecutionMode mode)
     {
         var source = """
@@ -276,8 +264,7 @@ public class ClassExpressionTests
 
     #region Accessors (get / set)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_Getter(ExecutionMode mode)
     {
         // Regression for #283: a named getter on a class expression returned undefined
@@ -298,8 +285,7 @@ public class ClassExpressionTests
         Assert.Equal("3\nhi\nw3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_Getter_DynamicAccess(ExecutionMode mode)
     {
         // Dynamic (bracket) access also routes through the class-expr GetProperty body (#283).
@@ -316,8 +302,7 @@ public class ClassExpressionTests
         Assert.Equal("w7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_Setter(ExecutionMode mode)
     {
         // Symmetric gap (#283): the class-expr SetProperty body never dispatched setters,
@@ -337,8 +322,7 @@ public class ClassExpressionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_Setter_DynamicAccess(ExecutionMode mode)
     {
         // Dynamic (bracket) assignment must invoke the setter in both modes. Compiled mode is
@@ -358,8 +342,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_MethodBody_ResolvesCapturedTopLevelVariable(ExecutionMode mode)
     {
         // Regression for #300: a class-expression method or accessor body
@@ -386,8 +369,7 @@ public class ClassExpressionTests
 
     #region Generic Class Expressions (#291)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClassExpression_InferredConstructorArg(ExecutionMode mode)
     {
         // Regression for #291: a generic class EXPRESSION rejected constructor
@@ -407,8 +389,7 @@ public class ClassExpressionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericClassExpression_ExplicitTypeArg(ExecutionMode mode)
     {
         // Explicit type argument on a generic class expression (`new Box<number>(42)`).
@@ -429,8 +410,7 @@ public class ClassExpressionTests
 
     #region Generator Methods (#765)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_GeneratorMethod_Works(ExecutionMode mode)
     {
         // #765: a generator method in a class expression was emitted on the linear path and its
@@ -444,8 +424,7 @@ public class ClassExpressionTests
         Assert.Equal("1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_GeneratorMethod_CapturesThis(ExecutionMode mode)
     {
         // Exercises `this`/constructor-parameter access and a loop inside a class-expression generator.
@@ -460,8 +439,7 @@ public class ClassExpressionTests
         Assert.Equal("1,2,3,4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_GeneratorMethod_YieldStar(ExecutionMode mode)
     {
         var source = """
@@ -472,8 +450,7 @@ public class ClassExpressionTests
         Assert.Equal("1,2,3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticGeneratorMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -484,8 +461,7 @@ public class ClassExpressionTests
         Assert.Equal("7,8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_AsyncGeneratorMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -497,8 +473,7 @@ public class ClassExpressionTests
         Assert.Equal("1\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticAsyncGeneratorMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -514,8 +489,7 @@ public class ClassExpressionTests
     // machine returning a Promise. The compiled path previously emitted a synchronous stub that
     // returned the raw value, so `.then` threw (Double is not a Task) and an `await` in the body
     // emitted invalid IL. The interpreter and type-checker (#793) already handled these.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_AsyncMethod_ThenReceivesValue(ExecutionMode mode)
     {
         var source = """
@@ -526,8 +500,7 @@ public class ClassExpressionTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticAsyncMethod_ThenReceivesValue(ExecutionMode mode)
     {
         var source = """
@@ -538,8 +511,7 @@ public class ClassExpressionTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_AsyncMethod_AwaitsAndReadsInstanceField(ExecutionMode mode)
     {
         // A real suspension point (await) plus a `this` field read proves the state machine and
@@ -565,8 +537,7 @@ public class ClassExpressionTests
     // back as Generator<Void>, so `for (const n of new C(...).gen()) sum += n` failed type-check
     // with "Compound assignment requires numeric operands".
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_InferredGeneratorMethodReturn_ReachesCallSite(ExecutionMode mode)
     {
         var source = """
@@ -582,8 +553,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_InferredPlainMethodReturn_ReachesCallSite(ExecutionMode mode)
     {
         var source = """
@@ -597,8 +567,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_InferredAsyncMethodReturn_ReachesCallSite(ExecutionMode mode)
     {
         var source = """

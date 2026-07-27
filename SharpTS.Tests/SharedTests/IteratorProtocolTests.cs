@@ -12,8 +12,7 @@ public class IteratorProtocolTests
 {
     #region Sync Iterator Protocol (Symbol.iterator)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_BasicObject_IteratesValues(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +46,7 @@ public class IteratorProtocolTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_EmptyIterator_NoIterations(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +72,7 @@ public class IteratorProtocolTests
         Assert.Equal("count: 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_SingleValue_IteratesOnce(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +101,7 @@ public class IteratorProtocolTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_WithBreak_StopsEarly(ExecutionMode mode)
     {
         var source = """
@@ -136,8 +132,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n3\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_WithContinue_SkipsValues(ExecutionMode mode)
     {
         var source = """
@@ -167,8 +162,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n3\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_YieldingNull_Works(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +191,7 @@ public class IteratorProtocolTests
         Assert.Equal("null\n42\nnull\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomIterator_MultipleIterations_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -237,8 +230,7 @@ public class IteratorProtocolTests
 
     #region Async Iterator Protocol (Symbol.asyncIterator)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomAsyncIterator_BasicObject_IteratesValues(ExecutionMode mode)
     {
         var source = """
@@ -276,8 +268,7 @@ public class IteratorProtocolTests
         Assert.Equal("600\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomAsyncIterator_EmptyIterator_NoIterations(ExecutionMode mode)
     {
         var source = """
@@ -307,8 +298,7 @@ public class IteratorProtocolTests
         Assert.Equal("count: 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomAsyncIterator_WithBreak_StopsEarly(ExecutionMode mode)
     {
         var source = """
@@ -343,8 +333,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n3\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CustomAsyncIterator_WithContinue_SkipsValues(ExecutionMode mode)
     {
         var source = """
@@ -382,8 +371,7 @@ public class IteratorProtocolTests
 
     #region Fallback to Built-in Iteration
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayWithoutSymbolIterator_StillIterates(ExecutionMode mode)
     {
         var source = """
@@ -399,8 +387,7 @@ public class IteratorProtocolTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainObject_UsesIndexBasedIteration(ExecutionMode mode)
     {
         var source = """
@@ -418,8 +405,7 @@ public class IteratorProtocolTests
 
     #region Spread with Custom Iterator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadCustomIterator_InArrayLiteral_CollectsAllValues(ExecutionMode mode)
     {
         var source = """
@@ -455,8 +441,7 @@ public class IteratorProtocolTests
         Assert.Equal("5\n1\n10\n20\n30\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadEmptyIterator_InArrayLiteral_AddsNothing(ExecutionMode mode)
     {
         var source = """
@@ -481,8 +466,7 @@ public class IteratorProtocolTests
         Assert.Equal("2\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadCustomIterator_InFunctionCall_ExpandsArguments(ExecutionMode mode)
     {
         var source = """
@@ -520,8 +504,7 @@ public class IteratorProtocolTests
         Assert.Equal("161\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadGenerator_InArrayLiteral_CollectsAllValues(ExecutionMode mode)
     {
         var source = """
@@ -547,8 +530,7 @@ public class IteratorProtocolTests
 
     #region Yield* with Custom Iterator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_CustomIterator_DelegatesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -586,8 +568,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n10\n20\n30\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_EmptyIterator_YieldsNothing(ExecutionMode mode)
     {
         var source = """
@@ -617,8 +598,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_Generator_DelegatesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -647,8 +627,7 @@ public class IteratorProtocolTests
 
     #region Generator Variable Capture
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesOuterVariable_ReadsCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -666,8 +645,7 @@ public class IteratorProtocolTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesOuterObject_AccessesProperty(ExecutionMode mode)
     {
         var source = """
@@ -685,8 +663,7 @@ public class IteratorProtocolTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesMultipleVariables_AllAccessible(ExecutionMode mode)
     {
         var source = """
@@ -710,8 +687,7 @@ public class IteratorProtocolTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesVariable_UsedMultipleTimes(ExecutionMode mode)
     {
         var source = """
@@ -731,8 +707,7 @@ public class IteratorProtocolTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesArrayFromOuter_AccessesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -753,8 +728,7 @@ public class IteratorProtocolTests
         Assert.Equal("3\n10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesAndUsesParameter_BothWork(ExecutionMode mode)
     {
         var source = """
@@ -778,8 +752,7 @@ public class IteratorProtocolTests
 
     #region For...Of with Yield Inside Generators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_BasicLoop_IteratesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -798,8 +771,7 @@ public class IteratorProtocolTests
         Assert.Equal("2\n4\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_ParameterArray_IteratesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -818,8 +790,7 @@ public class IteratorProtocolTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_CapturedArray_IteratesAllValues(ExecutionMode mode)
     {
         var source = """
@@ -839,8 +810,7 @@ public class IteratorProtocolTests
         Assert.Equal("5\n10\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_NestedLoops_IteratesAllCombinations(ExecutionMode mode)
     {
         var source = """
@@ -861,8 +831,7 @@ public class IteratorProtocolTests
         Assert.Equal("11\n21\n12\n22\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_MultipleLoops_IteratesAllSequentially(ExecutionMode mode)
     {
         var source = """
@@ -884,8 +853,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_WithBreak_StopsEarly(ExecutionMode mode)
     {
         var source = """
@@ -906,8 +874,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n3\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithYield_WithContinue_SkipsValues(ExecutionMode mode)
     {
         var source = """

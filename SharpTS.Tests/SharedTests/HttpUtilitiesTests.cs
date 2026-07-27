@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class HttpUtilitiesTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MaxHeaderSize_Is16384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -25,8 +24,7 @@ public class HttpUtilitiesTests
         Assert.Equal("16384\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValidateHeaderName_AcceptsValid_RejectsInvalid(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -49,8 +47,7 @@ public class HttpUtilitiesTests
         Assert.DoesNotContain("NO-THROW", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValidateHeaderValue_AcceptsValid_RejectsInvalid(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -73,8 +70,7 @@ public class HttpUtilitiesTests
         Assert.DoesNotContain("NO-THROW", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Methods_IncludesFullList(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -92,8 +88,7 @@ public class HttpUtilitiesTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetMaxIdleHTTPParsers_IsCallable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -108,8 +103,7 @@ public class HttpUtilitiesTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Https_MirrorsUtilities(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ImportMetaTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_UrlProperty_ReturnsString(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class ImportMetaTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_DirectAccess_Works(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +32,7 @@ public class ImportMetaTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_DirnameProperty_ReturnsString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -51,8 +48,7 @@ public class ImportMetaTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_FilenameProperty_ReturnsString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -68,8 +64,7 @@ public class ImportMetaTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_AllProperties_AreConsistent(ExecutionMode mode)
     {
         // All import.meta properties should be accessible and consistent
@@ -89,8 +84,7 @@ public class ImportMetaTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportMeta_UrlStartsWithFile_InSingleFileMode(ExecutionMode mode)
     {
         var source = """

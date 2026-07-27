@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ModuleGlobalsTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dirname_ReturnsString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -24,8 +23,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Filename_ReturnsString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -39,8 +37,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dirname_ContainsPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -54,8 +51,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Filename_EndsWithTs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +65,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Filename_ContainsMainTs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -84,8 +79,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dirname_MatchesImportMetaDirname(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -99,8 +93,7 @@ public class ModuleGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Filename_MatchesImportMetaFilename(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

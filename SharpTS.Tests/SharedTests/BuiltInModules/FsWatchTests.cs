@@ -12,8 +12,7 @@ public class FsWatchTests
 
     #region fs.watch()
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Watch_DetectsFileChange(ExecutionMode mode)
     {
         var tempFile = Path.GetTempFileName();
@@ -48,8 +47,7 @@ public class FsWatchTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Watch_CloseStopsWatching(ExecutionMode mode)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "sharpts_watch_test_" + Guid.NewGuid().ToString("N"));
@@ -76,8 +74,7 @@ public class FsWatchTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Watch_OnMethodForEvents(ExecutionMode mode)
     {
         var tempFile = Path.GetTempFileName();
@@ -117,8 +114,7 @@ public class FsWatchTests
 
     #region fs.watchFile()
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WatchFile_DetectsStatChange(ExecutionMode mode)
     {
         var tempFile = Path.GetTempFileName();
@@ -153,8 +149,7 @@ public class FsWatchTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnwatchFile_StopsWatching(ExecutionMode mode)
     {
         var tempFile = Path.GetTempFileName();
@@ -187,8 +182,7 @@ public class FsWatchTests
 
     #region Flowing Streams
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadStream_FlowingMode_AutoDrainsOnDataListener(ExecutionMode mode)
     {
         var tempFile = Path.GetTempFileName();
@@ -216,8 +210,7 @@ public class FsWatchTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_PauseResume_FlowControl(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -238,8 +231,7 @@ public class FsWatchTests
         Assert.Contains("chunks:a,b,c", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_ResumeAfterPause(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

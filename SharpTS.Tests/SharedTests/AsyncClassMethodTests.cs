@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncClassMethodTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_ReadThisProperty(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class AsyncClassMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_WriteThisProperty(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +55,7 @@ public class AsyncClassMethodTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_IncrementThisProperty(ExecutionMode mode)
     {
         var source = """
@@ -84,8 +81,7 @@ public class AsyncClassMethodTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_MultipleProperties(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +111,7 @@ public class AsyncClassMethodTests
         Assert.Equal("(0,0)\n(5,10)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_PropertyWithAwait(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +138,7 @@ public class AsyncClassMethodTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_AssignmentExpression(ExecutionMode mode)
     {
         // Tests that property assignment returns the assigned value
@@ -169,8 +163,7 @@ public class AsyncClassMethodTests
         Assert.Equal("returned: 42\nproperty: 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_ChainedPropertyAccess(ExecutionMode mode)
     {
         var source = """

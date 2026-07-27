@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncArrowFunctionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_BasicReturn(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ExpressionBody(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_WithAwait(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +65,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_WithParameters(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +83,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CaptureLocal(ExecutionMode mode)
     {
         var source = """
@@ -107,8 +102,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CaptureParameter(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +120,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ModifyOuter(ExecutionMode mode)
     {
         // Tests by-reference capture - arrow modifies outer variable
@@ -147,8 +140,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_OuterModifiesAfter(ExecutionMode mode)
     {
         // Tests by-reference capture - outer modifies after arrow creation
@@ -173,8 +165,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_MultipleAwaits(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +191,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_InClassMethod(ExecutionMode mode)
     {
         // Test async arrow capturing 'this' in class method
@@ -228,8 +218,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CaptureThis(ExecutionMode mode)
     {
         var source = """
@@ -259,8 +248,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestedBasic(ExecutionMode mode)
     {
         var source = """
@@ -282,8 +270,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestedWithMutation(ExecutionMode mode)
     {
         // Test nested arrows with by-reference capture and mutation
@@ -308,8 +295,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("10\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ChainedCalls(ExecutionMode mode)
     {
         // Note: Nested await in call arguments (await f(await g(x))) is a known limitation
@@ -330,8 +316,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ImmediatelyInvoked(ExecutionMode mode)
     {
         var source = """
@@ -348,8 +333,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ReturnString(ExecutionMode mode)
     {
         var source = """
@@ -367,8 +351,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_MultipleArrows(ExecutionMode mode)
     {
         var source = """
@@ -389,8 +372,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_SyncArrowInside_CapturesLocal(ExecutionMode mode)
     {
         // Non-async arrow inside async arrow capturing outer variable
@@ -411,8 +393,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_SyncArrowInside_MultipleSyncArrows(ExecutionMode mode)
     {
         // Multiple non-async arrows inside async arrow
@@ -435,8 +416,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_SyncArrowInside_NonCapturing(ExecutionMode mode)
     {
         // Non-capturing non-async arrow inside async arrow
@@ -456,8 +436,7 @@ public class AsyncArrowFunctionTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_SyncArrowInside_CapturesParameter(ExecutionMode mode)
     {
         // Non-async arrow capturing async arrow's parameter
@@ -481,8 +460,7 @@ public class AsyncArrowFunctionTests
     // (e.g. an immediately-invoked async arrow) failed to compile with "Async arrow with nested
     // arrows does not have SelfBoxedField set." — the standalone arrow never provisioned the
     // <>__selfBoxed field the nested-arrow emit requires. The interpreter was always correct.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestsAsyncArrowIife_Compiles(ExecutionMode mode)
     {
         var source = """
@@ -496,8 +474,7 @@ public class AsyncArrowFunctionTests
 
     // #615: deeper and repeated nesting of self-contained async arrows inside a standalone async
     // arrow.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestsAsyncArrows_DeepAndRepeated(ExecutionMode mode)
     {
         var source = """
@@ -517,8 +494,7 @@ public class AsyncArrowFunctionTests
     // is emitted as an independent TSFunction over its own stub (null target); passing the
     // enclosing arrow's boxed state machine as the target would clobber the first parameter
     // (InvalidCastException at the call site).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NestsParameterizedAsyncArrow(ExecutionMode mode)
     {
         var source = """
@@ -538,8 +514,7 @@ public class AsyncArrowFunctionTests
     // async-iterator protocol. Previously the arrow emitter had no EmitForOf override, so the loop
     // fell through to the synchronous for-of path and threw InvalidCastException casting the
     // async-generator state machine to IEnumerable in compiled mode.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ForAwaitOfAsyncGenerator(ExecutionMode mode)
     {
         var source = """
@@ -558,8 +533,7 @@ public class AsyncArrowFunctionTests
 
     // #430/#645: breaking out of a `for await` inside an async arrow must run the loop's cleanup
     // (iterator.return()) path without corrupting the loop variable binding.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ForAwaitBreakRunsCleanup(ExecutionMode mode)
     {
         var source = """
@@ -580,8 +554,7 @@ public class AsyncArrowFunctionTests
 
     // #430/#645: the async-arrow `for await` must also honor the custom Symbol.asyncIterator
     // protocol (not only the $IAsyncGenerator fast path).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ForAwaitCustomAsyncIterator(ExecutionMode mode)
     {
         var source = """
@@ -610,8 +583,7 @@ public class AsyncArrowFunctionTests
     // #430/#645: the loop variable bound inside an async-arrow `for await` must resolve to the
     // arrow's own local store. The original fix landed `null` values here because the binding was
     // registered in Ctx.Locals while the arrow's resolver reads its private local map.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_ForAwaitAccumulatesCapturedVariable(ExecutionMode mode)
     {
         var source = """

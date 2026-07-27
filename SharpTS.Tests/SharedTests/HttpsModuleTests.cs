@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpsModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Https_Exports_Exist(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class HttpsModuleTests
         Assert.Equal("function\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Https_ServerClient_RoundTrip(ExecutionMode mode)
     {
         var (certPem, keyPem) = TlsModuleTestsCertHelper.GenerateSelfSignedCert();
@@ -66,8 +64,7 @@ public class HttpsModuleTests
         Assert.Contains("body=secure:/hello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Https_ServerClient_PostBody(ExecutionMode mode)
     {
         var (certPem, keyPem) = TlsModuleTestsCertHelper.GenerateSelfSignedCert();

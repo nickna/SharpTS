@@ -5,8 +5,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 public class OsModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Platform_ReturnsValidPlatform(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -21,8 +20,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Arch_ReturnsValidArchitecture(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -37,8 +35,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Hostname_ReturnsNonEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -53,8 +50,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Homedir_ReturnsNonEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +65,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Tmpdir_ReturnsNonEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -85,8 +80,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Type_ReturnsValidType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -101,8 +95,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Release_ReturnsNonEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -117,8 +110,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Cpus_ReturnsNonEmptyArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -133,8 +125,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Totalmem_ReturnsPositiveNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -149,8 +140,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Freemem_ReturnsPositiveNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -165,8 +155,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_EOL_ReturnsValidLineEnding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -181,8 +170,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_UserInfo_ReturnsValidObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -200,8 +188,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Freemem_IsLessThanTotalmem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -217,8 +204,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Freemem_IsReasonableAmount(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -234,8 +220,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Totalmem_IsReasonableAmount(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -251,8 +236,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Memory_ValuesAreRealistic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -274,8 +258,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Cpus_HaveValidProperties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -293,8 +276,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Homedir_IsAbsolutePath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -311,8 +293,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Tmpdir_IsAbsolutePath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -329,8 +310,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Platform_MatchesType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -350,8 +330,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Loadavg_ReturnsArrayOfThreeNumbers(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -373,8 +352,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_Loadavg_WindowsReturnsZeros(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -394,8 +372,7 @@ public class OsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_NetworkInterfaces_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -411,8 +388,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_NetworkInterfaces_IsValidObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -430,8 +406,7 @@ public class OsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Os_DefaultImport_ExposesNamespace(ExecutionMode mode)
     {
         // #66: `import os from 'node:os'` used to fail type-checking with

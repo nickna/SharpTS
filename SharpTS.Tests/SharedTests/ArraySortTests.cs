@@ -10,8 +10,7 @@ public class ArraySortTests
 {
     #region Default Lexicographic Sort
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_DefaultLexicographic_NumbersAsStrings(ExecutionMode mode)
     {
         // JavaScript: [10, 2, 1].sort() -> [1, 10, 2] (lexicographic)
@@ -25,8 +24,7 @@ public class ArraySortTests
         Assert.Equal("1,10,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_DefaultLexicographic_Strings(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class ArraySortTests
         Assert.Equal("apple,banana,cherry\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_ReturnsReferenceToSameArray(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +50,7 @@ public class ArraySortTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_MutatesOriginalArray(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +69,7 @@ public class ArraySortTests
 
     #region Sort With Compare Function
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_NumericAscending(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class ArraySortTests
         Assert.Equal("1,2,10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_NumericDescending(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +95,7 @@ public class ArraySortTests
         Assert.Equal("10,2,1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_CustomObjectProperty(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +119,7 @@ public class ArraySortTests
 
     #region Stability
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_IsStable(ExecutionMode mode)
     {
         // Objects with same key should preserve original order
@@ -153,8 +145,7 @@ public class ArraySortTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -167,8 +158,7 @@ public class ArraySortTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_SingleElement(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +171,7 @@ public class ArraySortTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_LargerArray(ExecutionMode mode)
     {
         var source = """
@@ -195,8 +184,7 @@ public class ArraySortTests
         Assert.Equal("1,2,3,4,5,6,7,8,9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_UndefinedMovedToEnd(ExecutionMode mode)
     {
         // JavaScript spec: undefined values are always sorted to end
@@ -220,8 +208,7 @@ public class ArraySortTests
 
     #region ToSorted
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_ReturnsNewArray(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +221,7 @@ public class ArraySortTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_OriginalUnchanged(ExecutionMode mode)
     {
         var source = """
@@ -248,8 +234,7 @@ public class ArraySortTests
         Assert.Equal("3,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_DefaultLexicographic(ExecutionMode mode)
     {
         var source = """
@@ -262,8 +247,7 @@ public class ArraySortTests
         Assert.Equal("1,10,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_WithCompareFn(ExecutionMode mode)
     {
         var source = """
@@ -276,8 +260,7 @@ public class ArraySortTests
         Assert.Equal("1,2,10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_Chained(ExecutionMode mode)
     {
         var source = """
@@ -297,8 +280,7 @@ public class ArraySortTests
 
     #region Frozen Array Behavior
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_FrozenArray_ReturnsUnchanged(ExecutionMode mode)
     {
         var source = """
@@ -314,8 +296,7 @@ public class ArraySortTests
         Assert.Equal("true\n3,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_FrozenArray_Works(ExecutionMode mode)
     {
         var source = """
@@ -334,8 +315,7 @@ public class ArraySortTests
 
     #region Comparator Throws (#921)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_ComparatorThrow_ReachesGuestCatchAsError(ExecutionMode mode)
     {
         // A guest throw from the comparator must surface verbatim to the guest catch, not be
@@ -357,8 +337,7 @@ public class ArraySortTests
         Assert.Equal("object\ntrue\nfrom comparator\nTypeError\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToSorted_ComparatorThrow_ReachesGuestCatchAsError(ExecutionMode mode)
     {
         var source = """
@@ -377,8 +356,7 @@ public class ArraySortTests
         Assert.Equal("object\ntrue\nfrom comparator\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Sort_ComparatorThrowRawString_PreservesGuestIdentity(ExecutionMode mode)
     {
         // A raw string throw keeps its guest identity (string, not Error) — consistent with #694.

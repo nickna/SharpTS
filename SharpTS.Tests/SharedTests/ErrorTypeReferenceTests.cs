@@ -15,8 +15,7 @@ public class ErrorTypeReferenceTests
 {
     // ----- member access is typed (the core fix) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorAnnotation_MessageIsString(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorAnnotation_MessageNotAssignableToNumber(ExecutionMode mode)
     {
         // Before #528 `e.message` was `any`, so this was wrongly accepted; now it is a TS2322.
@@ -39,8 +37,7 @@ public class ErrorTypeReferenceTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeErrorAnnotation_IsAlsoStructured(ExecutionMode mode)
     {
         // The fix covers every built-in error subtype, not just `Error`.
@@ -51,8 +48,7 @@ public class ErrorTypeReferenceTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorAnnotation_UnknownMemberRejected(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +60,7 @@ public class ErrorTypeReferenceTests
 
     // ----- assignability -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_AcceptsSpecificErrorSubtype(ExecutionMode mode)
     {
         // A specific error is assignable to the base Error target.
@@ -76,8 +71,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SiblingErrors_AreMutuallyAssignable(ExecutionMode mode)
     {
         // The built-in error subtypes add no members over Error (tsc models them as empty
@@ -90,8 +84,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Error_AssignableToMatchingStructuralShape(ExecutionMode mode)
     {
         // A built-in error structurally satisfies an object type spelling out its members.
@@ -102,8 +95,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserSubclassOfError_AssignableToError(ExecutionMode mode)
     {
         // `class X extends Error` is a nominal subtype of Error.
@@ -117,8 +109,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AggregateError_HasErrorsProperty(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +119,7 @@ public class ErrorTypeReferenceTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainError_NotAssignableToAggregateError(ExecutionMode mode)
     {
         // AggregateError adds `errors`, which a plain Error lacks — so the reverse assignment fails.
@@ -139,8 +129,7 @@ public class ErrorTypeReferenceTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorParameter_TypesArgument(ExecutionMode mode)
     {
         var source = """

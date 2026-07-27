@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,14 +12,6 @@ public class StatementParsingTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     #endregion
 
     #region If Statements
@@ -26,7 +19,7 @@ public class StatementParsingTests
     [Fact]
     public void If_Simple()
     {
-        var statements = Parse("if (true) x = 1;");
+        var statements = TestHarness.ParseOrThrow("if (true) x = 1;");
         Assert.Single(statements);
         var ifStmt = Assert.IsType<Stmt.If>(statements[0]);
         Assert.IsType<Expr.Literal>(ifStmt.Condition);
@@ -36,7 +29,7 @@ public class StatementParsingTests
     [Fact]
     public void If_WithBlock()
     {
-        var statements = Parse("if (true) { x = 1; }");
+        var statements = TestHarness.ParseOrThrow("if (true) { x = 1; }");
         var ifStmt = Assert.IsType<Stmt.If>(statements[0]);
         Assert.IsType<Stmt.Block>(ifStmt.ThenBranch);
     }
@@ -44,7 +37,7 @@ public class StatementParsingTests
     [Fact]
     public void If_WithElse()
     {
-        var statements = Parse("if (true) x = 1; else x = 2;");
+        var statements = TestHarness.ParseOrThrow("if (true) x = 1; else x = 2;");
         var ifStmt = Assert.IsType<Stmt.If>(statements[0]);
         Assert.NotNull(ifStmt.ElseBranch);
     }
@@ -52,7 +45,7 @@ public class StatementParsingTests
     [Fact]
     public void If_ElseIf()
     {
-        var statements = Parse("if (a) x = 1; else if (b) x = 2; else x = 3;");
+        var statements = TestHarness.ParseOrThrow("if (a) x = 1; else if (b) x = 2; else x = 3;");
         var ifStmt = Assert.IsType<Stmt.If>(statements[0]);
         Assert.NotNull(ifStmt.ElseBranch);
         var elseIf = Assert.IsType<Stmt.If>(ifStmt.ElseBranch);
@@ -62,7 +55,7 @@ public class StatementParsingTests
     [Fact]
     public void If_NestedCondition()
     {
-        var statements = Parse("if (x > 5 && y < 10) { z = 1; }");
+        var statements = TestHarness.ParseOrThrow("if (x > 5 && y < 10) { z = 1; }");
         var ifStmt = Assert.IsType<Stmt.If>(statements[0]);
         Assert.IsType<Expr.Logical>(ifStmt.Condition);
     }
@@ -74,7 +67,7 @@ public class StatementParsingTests
     [Fact]
     public void While_Simple()
     {
-        var statements = Parse("while (true) x++;");
+        var statements = TestHarness.ParseOrThrow("while (true) x++;");
         Assert.Single(statements);
         var whileStmt = Assert.IsType<Stmt.While>(statements[0]);
         Assert.IsType<Expr.Literal>(whileStmt.Condition);
@@ -83,7 +76,7 @@ public class StatementParsingTests
     [Fact]
     public void While_WithBlock()
     {
-        var statements = Parse("while (i < 10) { i++; }");
+        var statements = TestHarness.ParseOrThrow("while (i < 10) { i++; }");
         var whileStmt = Assert.IsType<Stmt.While>(statements[0]);
         Assert.IsType<Stmt.Block>(whileStmt.Body);
     }
@@ -95,7 +88,7 @@ public class StatementParsingTests
     [Fact]
     public void DoWhile_Simple()
     {
-        var statements = Parse("do x++; while (x < 10);");
+        var statements = TestHarness.ParseOrThrow("do x++; while (x < 10);");
         Assert.Single(statements);
         var doWhile = Assert.IsType<Stmt.DoWhile>(statements[0]);
         Assert.IsType<Expr.Binary>(doWhile.Condition);
@@ -104,7 +97,7 @@ public class StatementParsingTests
     [Fact]
     public void DoWhile_WithBlock()
     {
-        var statements = Parse("do { x++; } while (x < 10);");
+        var statements = TestHarness.ParseOrThrow("do { x++; } while (x < 10);");
         var doWhile = Assert.IsType<Stmt.DoWhile>(statements[0]);
         Assert.IsType<Stmt.Block>(doWhile.Body);
     }
@@ -117,7 +110,7 @@ public class StatementParsingTests
     public void For_Traditional()
     {
         // Note: Parser desugars for loops into while loops
-        var statements = Parse("for (let i = 0; i < 10; i++) { }");
+        var statements = TestHarness.ParseOrThrow("for (let i = 0; i < 10; i++) { }");
         // After desugaring, this becomes a block or sequence
         Assert.Single(statements);
     }
@@ -129,7 +122,7 @@ public class StatementParsingTests
     [Fact]
     public void ForOf_Simple()
     {
-        var statements = Parse("for (let x of arr) { }");
+        var statements = TestHarness.ParseOrThrow("for (let x of arr) { }");
         Assert.Single(statements);
         var forOf = Assert.IsType<Stmt.ForOf>(statements[0]);
         Assert.Equal("x", forOf.Variable.Lexeme);
@@ -142,7 +135,7 @@ public class StatementParsingTests
     [Fact]
     public void ForIn_Simple()
     {
-        var statements = Parse("for (let key in obj) { }");
+        var statements = TestHarness.ParseOrThrow("for (let key in obj) { }");
         Assert.Single(statements);
         var forIn = Assert.IsType<Stmt.ForIn>(statements[0]);
         Assert.Equal("key", forIn.Variable.Lexeme);
@@ -162,7 +155,7 @@ public class StatementParsingTests
                     break;
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
         Assert.Single(switchStmt.Cases);
     }
@@ -178,7 +171,7 @@ public class StatementParsingTests
                     break;
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
         Assert.Equal(2, switchStmt.Cases.Count);
     }
@@ -192,7 +185,7 @@ public class StatementParsingTests
                     y = 0;
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var switchStmt = Assert.IsType<Stmt.Switch>(statements[0]);
         Assert.NotNull(switchStmt.DefaultBody);
     }
@@ -211,7 +204,7 @@ public class StatementParsingTests
                 console.log(e);
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var tryStmt = Assert.IsType<Stmt.TryCatch>(statements[0]);
         Assert.NotNull(tryStmt.CatchBlock);
         Assert.Null(tryStmt.FinallyBlock);
@@ -227,7 +220,7 @@ public class StatementParsingTests
                 cleanup();
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var tryStmt = Assert.IsType<Stmt.TryCatch>(statements[0]);
         Assert.Null(tryStmt.CatchBlock);
         Assert.NotNull(tryStmt.FinallyBlock);
@@ -245,7 +238,7 @@ public class StatementParsingTests
                 cleanup();
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var tryStmt = Assert.IsType<Stmt.TryCatch>(statements[0]);
         Assert.NotNull(tryStmt.CatchBlock);
         Assert.NotNull(tryStmt.FinallyBlock);
@@ -261,7 +254,7 @@ public class StatementParsingTests
                 console.log(error);
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var tryStmt = Assert.IsType<Stmt.TryCatch>(statements[0]);
         Assert.Equal("error", tryStmt.CatchParam!.Lexeme);
     }
@@ -273,7 +266,7 @@ public class StatementParsingTests
     [Fact]
     public void Break_Simple()
     {
-        var statements = Parse("break;");
+        var statements = TestHarness.ParseOrThrow("break;");
         var breakStmt = Assert.IsType<Stmt.Break>(statements[0]);
         Assert.Null(breakStmt.Label);
     }
@@ -281,7 +274,7 @@ public class StatementParsingTests
     [Fact]
     public void Break_WithLabel()
     {
-        var statements = Parse("break outer;");
+        var statements = TestHarness.ParseOrThrow("break outer;");
         var breakStmt = Assert.IsType<Stmt.Break>(statements[0]);
         Assert.Equal("outer", breakStmt.Label!.Lexeme);
     }
@@ -289,7 +282,7 @@ public class StatementParsingTests
     [Fact]
     public void Continue_Simple()
     {
-        var statements = Parse("continue;");
+        var statements = TestHarness.ParseOrThrow("continue;");
         var continueStmt = Assert.IsType<Stmt.Continue>(statements[0]);
         Assert.Null(continueStmt.Label);
     }
@@ -297,7 +290,7 @@ public class StatementParsingTests
     [Fact]
     public void Continue_WithLabel()
     {
-        var statements = Parse("continue loop;");
+        var statements = TestHarness.ParseOrThrow("continue loop;");
         var continueStmt = Assert.IsType<Stmt.Continue>(statements[0]);
         Assert.Equal("loop", continueStmt.Label!.Lexeme);
     }
@@ -305,7 +298,7 @@ public class StatementParsingTests
     [Fact]
     public void Return_Empty()
     {
-        var statements = Parse("return;");
+        var statements = TestHarness.ParseOrThrow("return;");
         var returnStmt = Assert.IsType<Stmt.Return>(statements[0]);
         Assert.Null(returnStmt.Value);
     }
@@ -313,7 +306,7 @@ public class StatementParsingTests
     [Fact]
     public void Return_WithValue()
     {
-        var statements = Parse("return 42;");
+        var statements = TestHarness.ParseOrThrow("return 42;");
         var returnStmt = Assert.IsType<Stmt.Return>(statements[0]);
         Assert.NotNull(returnStmt.Value);
         Assert.IsType<Expr.Literal>(returnStmt.Value);
@@ -322,7 +315,7 @@ public class StatementParsingTests
     [Fact]
     public void Throw_Simple()
     {
-        var statements = Parse("throw new Error();");
+        var statements = TestHarness.ParseOrThrow("throw new Error();");
         var throwStmt = Assert.IsType<Stmt.Throw>(statements[0]);
         Assert.IsType<Expr.New>(throwStmt.Value);
     }
@@ -334,7 +327,7 @@ public class StatementParsingTests
     [Fact]
     public void Labeled_Simple()
     {
-        var statements = Parse("outer: while (true) { }");
+        var statements = TestHarness.ParseOrThrow("outer: while (true) { }");
         var labeled = Assert.IsType<Stmt.LabeledStatement>(statements[0]);
         Assert.Equal("outer", labeled.Label.Lexeme);
         Assert.IsType<Stmt.While>(labeled.Statement);
@@ -347,7 +340,7 @@ public class StatementParsingTests
     [Fact]
     public void Block_Empty()
     {
-        var statements = Parse("{ }");
+        var statements = TestHarness.ParseOrThrow("{ }");
         var block = Assert.IsType<Stmt.Block>(statements[0]);
         Assert.Empty(block.Statements);
     }
@@ -355,7 +348,7 @@ public class StatementParsingTests
     [Fact]
     public void Block_SingleStatement()
     {
-        var statements = Parse("{ x = 1; }");
+        var statements = TestHarness.ParseOrThrow("{ x = 1; }");
         var block = Assert.IsType<Stmt.Block>(statements[0]);
         Assert.Single(block.Statements);
     }
@@ -363,7 +356,7 @@ public class StatementParsingTests
     [Fact]
     public void Block_MultipleStatements()
     {
-        var statements = Parse("{ x = 1; y = 2; z = 3; }");
+        var statements = TestHarness.ParseOrThrow("{ x = 1; y = 2; z = 3; }");
         var block = Assert.IsType<Stmt.Block>(statements[0]);
         Assert.Equal(3, block.Statements.Count);
     }
@@ -375,7 +368,7 @@ public class StatementParsingTests
     [Fact]
     public void Var_Let()
     {
-        var statements = Parse("let x = 5;");
+        var statements = TestHarness.ParseOrThrow("let x = 5;");
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Equal("x", varStmt.Name.Lexeme);
     }
@@ -383,7 +376,7 @@ public class StatementParsingTests
     [Fact]
     public void Var_Const()
     {
-        var statements = Parse("const x = 5;");
+        var statements = TestHarness.ParseOrThrow("const x = 5;");
         var constStmt = Assert.IsType<Stmt.Const>(statements[0]);
         Assert.NotNull(constStmt.Initializer);
     }
@@ -391,7 +384,7 @@ public class StatementParsingTests
     [Fact]
     public void Var_WithType()
     {
-        var statements = Parse("let x: number = 5;");
+        var statements = TestHarness.ParseOrThrow("let x: number = 5;");
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Equal("number", varStmt.TypeAnnotation);
     }
@@ -399,7 +392,7 @@ public class StatementParsingTests
     [Fact]
     public void Var_NoInitializer()
     {
-        var statements = Parse("let x: number;");
+        var statements = TestHarness.ParseOrThrow("let x: number;");
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Null(varStmt.Initializer);
     }
@@ -412,7 +405,7 @@ public class StatementParsingTests
     [Fact]
     public void ExportConst_ParsesAsConst()
     {
-        var statements = Parse("export const x = 5;");
+        var statements = TestHarness.ParseOrThrow("export const x = 5;");
         var export = Assert.IsType<Stmt.Export>(statements[0]);
         var constStmt = Assert.IsType<Stmt.Const>(export.Declaration);
         Assert.Equal("x", constStmt.Name.Lexeme);
@@ -423,7 +416,7 @@ public class StatementParsingTests
     public void ExportLet_StaysMutableVar()
     {
         // Regression guard: `let` is mutable, so it must remain a Stmt.Var.
-        var statements = Parse("export let x = 5;");
+        var statements = TestHarness.ParseOrThrow("export let x = 5;");
         var export = Assert.IsType<Stmt.Export>(statements[0]);
         var varStmt = Assert.IsType<Stmt.Var>(export.Declaration);
         Assert.Equal("x", varStmt.Name.Lexeme);
@@ -432,7 +425,7 @@ public class StatementParsingTests
     [Fact]
     public void ExportVar_StaysMutableVar()
     {
-        var statements = Parse("export var x = 5;");
+        var statements = TestHarness.ParseOrThrow("export var x = 5;");
         var export = Assert.IsType<Stmt.Export>(statements[0]);
         var varStmt = Assert.IsType<Stmt.Var>(export.Declaration);
         Assert.True(varStmt.IsVar);
@@ -444,7 +437,7 @@ public class StatementParsingTests
         // `export const x;` (non-ambient) is a parse error, consistent with bare `const x;`
         // and matching tsc's TS1155 "'const' declarations must be initialized." Before #428
         // this was silently accepted as a mutable Stmt.Var.
-        Assert.ThrowsAny<System.Exception>(() => Parse("export const x;"));
+        Assert.ThrowsAny<System.Exception>(() => TestHarness.ParseOrThrow("export const x;"));
     }
 
     #endregion
@@ -454,7 +447,7 @@ public class StatementParsingTests
     [Fact]
     public void ExpressionStatement_Call()
     {
-        var statements = Parse("console.log(\"hello\");");
+        var statements = TestHarness.ParseOrThrow("console.log(\"hello\");");
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         Assert.IsType<Expr.Call>(exprStmt.Expr);
     }
@@ -462,7 +455,7 @@ public class StatementParsingTests
     [Fact]
     public void ExpressionStatement_Assignment()
     {
-        var statements = Parse("x = 5;");
+        var statements = TestHarness.ParseOrThrow("x = 5;");
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         Assert.IsType<Expr.Assign>(exprStmt.Expr);
     }

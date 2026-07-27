@@ -20,8 +20,7 @@ public class HarnessModuleDiagnosticGateTests
         ["main.ts"] = "export {};\nconst x: number = \"not a number\";\nconsole.log(1);\n",
     };
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RunModules_ThrowsOnTypeError(ExecutionMode mode)
     {
         var ex = Assert.Throws<TypeCheckDiagnosticException>(
@@ -29,8 +28,7 @@ public class HarnessModuleDiagnosticGateTests
         Assert.NotEmpty(ex.Diagnostics);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RunModules_AllowTypeErrors_RunsIllTypedProgram(ExecutionMode mode)
     {
         // Opt-out escape hatch for tests that intentionally exercise ill-typed programs.

@@ -10,8 +10,7 @@ public class MathBuiltInTests
 {
     #region Math Constants
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_PI_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class MathBuiltInTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_E_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class MathBuiltInTests
 
     #region Math Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Abs_ReturnsAbsoluteValue(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class MathBuiltInTests
         Assert.Equal("5\n5\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Floor_RoundsDown(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +64,7 @@ public class MathBuiltInTests
         Assert.Equal("4\n4\n-5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Ceil_RoundsUp(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +77,7 @@ public class MathBuiltInTests
         Assert.Equal("5\n5\n-4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Round_RoundsToNearest(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +90,7 @@ public class MathBuiltInTests
         Assert.Equal("4\n5\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Round_JSParity_NegativeHalfValues(ExecutionMode mode)
     {
         // JavaScript rounds half-values toward +infinity
@@ -116,8 +109,7 @@ public class MathBuiltInTests
         Assert.Equal("3\n-2\n2\n-1\n1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Sqrt_ReturnsSquareRoot(ExecutionMode mode)
     {
         var source = """
@@ -130,8 +122,7 @@ public class MathBuiltInTests
         Assert.Equal("4\n3\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Pow_ReturnsPower(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +135,7 @@ public class MathBuiltInTests
         Assert.Equal("8\n9\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Min_ReturnsMinimum(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +148,7 @@ public class MathBuiltInTests
         Assert.Equal("1\n2\n-5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Max_ReturnsMaximum(ExecutionMode mode)
     {
         var source = """
@@ -172,8 +161,7 @@ public class MathBuiltInTests
         Assert.Equal("3\n8\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Sign_ReturnsSign(ExecutionMode mode)
     {
         var source = """
@@ -186,8 +174,7 @@ public class MathBuiltInTests
         Assert.Equal("-1\n0\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Trunc_RemovesDecimal(ExecutionMode mode)
     {
         var source = """
@@ -204,8 +191,7 @@ public class MathBuiltInTests
 
     #region Trigonometric Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Sin_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -216,8 +202,7 @@ public class MathBuiltInTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Cos_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -228,8 +213,7 @@ public class MathBuiltInTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Tan_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = """
@@ -244,8 +228,7 @@ public class MathBuiltInTests
 
     #region Exponential and Logarithmic Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Log_ReturnsNaturalLog(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +239,7 @@ public class MathBuiltInTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Exp_ReturnsExponential(ExecutionMode mode)
     {
         var source = """
@@ -272,8 +254,7 @@ public class MathBuiltInTests
 
     #region Random
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Random_ReturnsValueInRange(ExecutionMode mode)
     {
         var source = """

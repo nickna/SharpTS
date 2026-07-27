@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NullishEqualityFastPathTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StrictNull_DistinguishesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +36,7 @@ public class NullishEqualityFastPathTests
         Assert.Equal("true,false\nfalse,true\nfalse,true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StrictUndefined_DistinguishesNull(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +53,7 @@ public class NullishEqualityFastPathTests
         Assert.Equal("false,true\ntrue,false\nfalse,true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LooseNullish_NullAndUndefinedInterchangeable(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +74,7 @@ public class NullishEqualityFastPathTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NaN_IsNotNullish(ExecutionMode mode)
     {
         // A NaN value operand must compare unequal to null/undefined (and the fast path
@@ -90,8 +86,7 @@ public class NullishEqualityFastPathTests
         Assert.Equal("false false false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullVsUndefinedLiterals(ExecutionMode mode)
     {
         // Both-literal comparisons (handled by the fall-through boxed path, not the fast
@@ -104,8 +99,7 @@ public class NullishEqualityFastPathTests
         Assert.Equal("true true\nfalse true\ntrue false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReversedOperandOrder(ExecutionMode mode)
     {
         // The literal may be on either side.
@@ -117,8 +111,7 @@ public class NullishEqualityFastPathTests
         Assert.Equal("false false true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullGuardedTreeTraversal(ExecutionMode mode)
     {
         // The binary-trees idiom: `node === null` driving recursion. Exercises the fast

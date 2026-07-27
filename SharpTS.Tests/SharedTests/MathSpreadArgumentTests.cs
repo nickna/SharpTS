@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class MathSpreadArgumentTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Max_Min_Hypot_BasicSpread(ExecutionMode mode)
     {
         var source = @"
@@ -28,8 +27,7 @@ public class MathSpreadArgumentTests
         Assert.Equal("3\n1\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Spread_MixedWithRegularArgs(ExecutionMode mode)
     {
         var source = @"
@@ -41,8 +39,7 @@ public class MathSpreadArgumentTests
         Assert.Equal("5\n13\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Spread_EmptyArray(ExecutionMode mode)
     {
         // Spreading an empty array yields the no-argument result: max → -Infinity,
@@ -56,8 +53,7 @@ public class MathSpreadArgumentTests
         Assert.Equal("-Infinity\nInfinity\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Spread_BoxedAnyArray(ExecutionMode mode)
     {
         // A spread of an `any[]` (boxed-element representation) must expand the
@@ -71,8 +67,7 @@ public class MathSpreadArgumentTests
         Assert.Equal("20\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Spread_NaNAndInfinitySemantics(ExecutionMode mode)
     {
         // max/min short-circuit to NaN on any NaN; hypot's Infinity check fires
@@ -86,8 +81,7 @@ public class MathSpreadArgumentTests
         Assert.Equal("NaN\nNaN\nInfinity\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_Spread_InsideAsyncFunction(ExecutionMode mode)
     {
         // Exercises the async built-in call path (CallBuiltInWithPooledArgs /

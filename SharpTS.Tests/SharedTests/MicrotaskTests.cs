@@ -12,8 +12,7 @@ public class MicrotaskTests
 {
     #region Basic Functionality Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_ExecutesCallback(ExecutionMode mode)
     {
         // queueMicrotask should execute the callback
@@ -29,8 +28,7 @@ public class MicrotaskTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_ExecutesCallbackWithConsoleLog(ExecutionMode mode)
     {
         // queueMicrotask should execute callback that logs output
@@ -46,8 +44,7 @@ public class MicrotaskTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_ReturnsUndefined(ExecutionMode mode)
     {
         // queueMicrotask should return undefined
@@ -63,8 +60,7 @@ public class MicrotaskTests
 
     #region Ordering Tests - Microtasks Before Macrotasks
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_ExecutesBeforeSetTimeout(ExecutionMode mode)
     {
         // Microtasks should execute before macrotasks (setTimeout with 0 delay)
@@ -81,8 +77,7 @@ public class MicrotaskTests
         Assert.Equal("microtask,timeout\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_ExecutesInFIFOOrder(ExecutionMode mode)
     {
         // Multiple microtasks should execute in FIFO order
@@ -100,8 +95,7 @@ public class MicrotaskTests
         Assert.Equal("first,second,third\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_NestedMicrotasksExecuteBeforeMacrotasks(ExecutionMode mode)
     {
         // Microtasks queued from within microtasks should still execute before macrotasks
@@ -126,8 +120,7 @@ public class MicrotaskTests
 
     #region Type Checking Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_RequiresCallback(ExecutionMode mode)
     {
         // queueMicrotask without callback should fail type checking
@@ -138,8 +131,7 @@ public class MicrotaskTests
         Assert.Contains("queueMicrotask", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_CallbackMustBeFunction(ExecutionMode mode)
     {
         // queueMicrotask with non-function callback should fail type checking
@@ -154,8 +146,7 @@ public class MicrotaskTests
 
     #region Variable Capture Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_CapturesClosureVariables(ExecutionMode mode)
     {
         // Callback should capture closure variables correctly
@@ -172,8 +163,7 @@ public class MicrotaskTests
         Assert.Equal("captured\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QueueMicrotask_MutatesClosureVariables(ExecutionMode mode)
     {
         // Callback should be able to mutate closure variables

@@ -10,8 +10,7 @@ public class OverloadTests
 {
     #region Function Overloads
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Overload_ArityBased(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class OverloadTests
         Assert.Equal("Hello Alice\nBob is 30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Overload_TypeBased(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class OverloadTests
 
     #region Method Overloads
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_Overload_Basic(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +77,7 @@ public class OverloadTests
         Assert.Equal("6\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_Overload_ThreeSignatures(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +110,7 @@ public class OverloadTests
 
     #region Constructor Overloads
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_Overload(ExecutionMode mode)
     {
         var source = """
@@ -148,8 +143,7 @@ public class OverloadTests
 
     #region Static Method Overloads
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_Overload(ExecutionMode mode)
     {
         var source = """
@@ -175,8 +169,7 @@ public class OverloadTests
 
     #region Overload with Inheritance
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Overload_WithInheritance(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +202,7 @@ public class OverloadTests
 
     #region Method Chaining with Overloads
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Overload_MethodChaining(ExecutionMode mode)
     {
         var source = """

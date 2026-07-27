@@ -13,8 +13,7 @@ public class ConsoleTests
 {
     #region Basic Output
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_OutputsToStdout(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ConsoleTests
         Assert.Equal("Hello\nWorld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_MultipleArguments(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class ConsoleTests
         Assert.Equal("Hello World 123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +49,7 @@ public class ConsoleTests
         Assert.Equal("Line1\n\nLine2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Info_AliasForLog(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +61,7 @@ public class ConsoleTests
         Assert.Equal("Info message\nMultiple args 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Debug_AliasForLog(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +73,7 @@ public class ConsoleTests
         Assert.Equal("Debug message\nMultiple args\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Info_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +86,7 @@ public class ConsoleTests
         Assert.Equal("Line1\n\nLine2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Debug_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +103,7 @@ public class ConsoleTests
 
     #region Stderr Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Error_DoesNotCrash(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +117,7 @@ public class ConsoleTests
         Assert.Contains("After\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Warn_DoesNotCrash(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +135,7 @@ public class ConsoleTests
 
     #region Timing Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Time_And_TimeEnd_WorkTogether(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +154,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Time_DefaultLabel(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +170,7 @@ public class ConsoleTests
         Assert.Contains("Finished\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Time_CaseSensitiveLabels(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +188,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_TimeLog_PrintsWithoutStopping(ExecutionMode mode)
     {
         var source = """
@@ -219,8 +206,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_TimeEnd_NoMatchingTimer_DoesNotCrash(ExecutionMode mode)
     {
         var source = """
@@ -232,8 +218,7 @@ public class ConsoleTests
         Assert.Contains("Still running\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_TimeLog_NoMatchingTimer_DoesNotCrash(ExecutionMode mode)
     {
         var source = """
@@ -245,8 +230,7 @@ public class ConsoleTests
         Assert.Contains("Still running\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Time_MultipleLabeledTimers(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +251,7 @@ public class ConsoleTests
 
     #region Assert
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Assert_TruthyCondition_NoOutput(ExecutionMode mode)
     {
         var source = """
@@ -283,8 +266,7 @@ public class ConsoleTests
         Assert.Equal("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Assert_FalsyCondition_DoesNotCrash(ExecutionMode mode)
     {
         var source = """
@@ -296,8 +278,7 @@ public class ConsoleTests
         Assert.Contains("Still running\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Assert_MultipleFalsyConditions(ExecutionMode mode)
     {
         var source = """
@@ -316,8 +297,7 @@ public class ConsoleTests
 
     #region Count
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Count_IncrementsCounter(ExecutionMode mode)
     {
         var source = """
@@ -332,8 +312,7 @@ public class ConsoleTests
         Assert.Contains("calls: 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Count_DefaultLabel(ExecutionMode mode)
     {
         var source = """
@@ -346,8 +325,7 @@ public class ConsoleTests
         Assert.Contains("default: 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_CountReset_ResetsCounter(ExecutionMode mode)
     {
         var source = """
@@ -370,8 +348,7 @@ public class ConsoleTests
 
     #region Table
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Table_ArrayOfObjects(ExecutionMode mode)
     {
         var source = """
@@ -383,8 +360,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Table_ArrayOfObjects_HasTableBorders(ExecutionMode mode)
     {
         var source = """
@@ -399,8 +375,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Table_WithColumnFilter(ExecutionMode mode)
     {
         var source = """
@@ -412,8 +387,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Table_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +404,7 @@ public class ConsoleTests
 
     #region Dir
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Dir_Object(ExecutionMode mode)
     {
         var source = """
@@ -443,8 +416,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Dir_Object_ShowsProperties(ExecutionMode mode)
     {
         var source = """
@@ -462,8 +434,7 @@ public class ConsoleTests
 
     #region Group
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Group_IncreasesIndentation(ExecutionMode mode)
     {
         var source = """
@@ -482,8 +453,7 @@ public class ConsoleTests
         Assert.Contains("Outside again\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Group_PrintsLabel(ExecutionMode mode)
     {
         var source = """
@@ -499,8 +469,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_GroupCollapsed_SameAsGroup(ExecutionMode mode)
     {
         var source = """
@@ -516,8 +485,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_GroupEnd_DecreasesIndentation(ExecutionMode mode)
     {
         var source = """
@@ -538,8 +506,7 @@ public class ConsoleTests
         Assert.Contains("Back to 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_GroupEnd_ExtraCallsIgnored(ExecutionMode mode)
     {
         var source = """
@@ -556,8 +523,7 @@ public class ConsoleTests
 
     #region Trace
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Trace_PrintsMessage(ExecutionMode mode)
     {
         var source = """
@@ -570,8 +536,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Trace_NoMessage(ExecutionMode mode)
     {
         var source = """
@@ -584,8 +549,7 @@ public class ConsoleTests
         Assert.Contains("Done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Trace_MultipleArguments(ExecutionMode mode)
     {
         var source = """
@@ -602,8 +566,7 @@ public class ConsoleTests
 
     #region Format Specifiers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_String(ExecutionMode mode)
     {
         var source = """
@@ -614,8 +577,7 @@ public class ConsoleTests
         Assert.Equal("Hello World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_Integer(ExecutionMode mode)
     {
         var source = """
@@ -628,8 +590,7 @@ public class ConsoleTests
         Assert.Contains("Negative: -3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_Object(ExecutionMode mode)
     {
         var source = """
@@ -640,8 +601,7 @@ public class ConsoleTests
         Assert.Contains("Object: { a: 1, b: 2 }\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_Float(ExecutionMode mode)
     {
         var source = """
@@ -652,8 +612,7 @@ public class ConsoleTests
         Assert.Contains("Float: 3.14159\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_Json(ExecutionMode mode)
     {
         var source = """
@@ -664,8 +623,7 @@ public class ConsoleTests
         Assert.Contains("JSON: {\"name\":\"test\",\"value\":42}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_MultipleSpecifiers(ExecutionMode mode)
     {
         var source = """
@@ -676,8 +634,7 @@ public class ConsoleTests
         Assert.Equal("Name: Alice, Age: 30, Score: 95.5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_EscapedPercent(ExecutionMode mode)
     {
         var source = """
@@ -688,8 +645,7 @@ public class ConsoleTests
         Assert.Equal("100% complete\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_ExtraArgs(ExecutionMode mode)
     {
         var source = """
@@ -700,8 +656,7 @@ public class ConsoleTests
         Assert.Equal("Value: one two three\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_MissingArgs(ExecutionMode mode)
     {
         var source = """
@@ -713,8 +668,7 @@ public class ConsoleTests
         Assert.Equal("Hello World %s\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_Integer_SpecialValues(ExecutionMode mode)
     {
         var source = """
@@ -737,8 +691,7 @@ public class ConsoleTests
         Assert.Contains("Bool false: 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Console_Log_FormatSpecifier_NoSpecifiers_NoFormatting(ExecutionMode mode)
     {
         // Ensure strings without format specifiers are not treated as format strings

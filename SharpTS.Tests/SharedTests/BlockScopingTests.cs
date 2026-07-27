@@ -13,8 +13,7 @@ public class BlockScopingTests
 {
     #region For Loop Block Scoping
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForLoop_LetVariable_AccessibleWithinLoop(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class BlockScopingTests
         Assert.Equal("012\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForLoop_LetVariable_ShadowsOuterVariable(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class BlockScopingTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForLoop_NestedLoops_IndependentScopes(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +61,7 @@ public class BlockScopingTests
 
     #region Block Statement Scoping
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockStatement_LetVariable_AccessibleWithinBlock(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +76,7 @@ public class BlockScopingTests
         Assert.Equal("inside\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockStatement_LetVariable_ShadowsOuterVariable(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +91,7 @@ public class BlockScopingTests
         Assert.Equal("inner\nouter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedBlocks_EachHasOwnScope(ExecutionMode mode)
     {
         var source = """
@@ -120,8 +114,7 @@ public class BlockScopingTests
 
     #region If/Else Block Scoping
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfElse_SeparateScopes(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +136,7 @@ public class BlockScopingTests
 
     #region While Loop Block Scoping
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WhileLoop_LetVariable_AccessibleWithinLoop(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +157,7 @@ public class BlockScopingTests
 
     #region Const Block Scoping
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForLoop_ConstVariable_NewBindingEachIteration(ExecutionMode mode)
     {
         var source = """
@@ -185,8 +176,7 @@ public class BlockScopingTests
 
     #region Multiple Variables Same Name Different Scopes
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SameVariableName_DifferentScopes_Independent(ExecutionMode mode)
     {
         var source = """

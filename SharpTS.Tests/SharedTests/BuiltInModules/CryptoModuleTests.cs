@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CryptoModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateHash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -89,8 +88,7 @@ public class CryptoModuleTests
         Assert.Equal(expected, output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_RandomBytes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -134,8 +132,7 @@ public class CryptoModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_RandomFillSync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -190,8 +187,7 @@ public class CryptoModuleTests
         Assert.Equal(expected, output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_RandomUUID(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -236,8 +232,7 @@ public class CryptoModuleTests
         Assert.Equal(expected, output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_RandomInt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -278,8 +273,7 @@ public class CryptoModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateHmac(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

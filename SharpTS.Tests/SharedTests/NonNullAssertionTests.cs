@@ -11,8 +11,7 @@ public class NonNullAssertionTests
 {
     #region Basic Syntax
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnVariable(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class NonNullAssertionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnNullableString(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +35,7 @@ public class NonNullAssertionTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnPropertyAccess(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +48,7 @@ public class NonNullAssertionTests
         Assert.Equal("Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnMethodResult(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +66,7 @@ public class NonNullAssertionTests
 
     #region Chained Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_ChainedPropertyAccess(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +80,7 @@ public class NonNullAssertionTests
         Assert.Equal("Charlie\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_ChainedMethodCall(ExecutionMode mode)
     {
         var source = """
@@ -98,8 +92,7 @@ public class NonNullAssertionTests
         Assert.Equal("HELLO\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_MultipleInChain(ExecutionMode mode)
     {
         var source = """
@@ -118,8 +111,7 @@ public class NonNullAssertionTests
 
     #region Array Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_ArrayElement(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +123,7 @@ public class NonNullAssertionTests
         Assert.Equal("b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_ArrayElement_WithMethodCall(ExecutionMode mode)
     {
         var source = """
@@ -148,8 +139,7 @@ public class NonNullAssertionTests
 
     #region Object Literal
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InObjectProperty(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +155,7 @@ public class NonNullAssertionTests
 
     #region Function Arguments
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InFunctionArgument(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +169,7 @@ public class NonNullAssertionTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_MultipleArguments(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +188,7 @@ public class NonNullAssertionTests
 
     #region Class Methods and Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnClassProperty(ExecutionMode mode)
     {
         var source = """
@@ -218,8 +205,7 @@ public class NonNullAssertionTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnClassMethodResult(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +225,7 @@ public class NonNullAssertionTests
 
     #region Arithmetic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InArithmeticExpression(ExecutionMode mode)
     {
         var source = """
@@ -253,8 +238,7 @@ public class NonNullAssertionTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InComparison(ExecutionMode mode)
     {
         var source = """
@@ -270,8 +254,7 @@ public class NonNullAssertionTests
 
     #region Combined with Other Operators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_BeforeTernary(ExecutionMode mode)
     {
         var source = """
@@ -283,8 +266,7 @@ public class NonNullAssertionTests
         Assert.Equal("big\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_AfterOptionalChaining(ExecutionMode mode)
     {
         var source = """
@@ -297,8 +279,7 @@ public class NonNullAssertionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InStringConcatenation(ExecutionMode mode)
     {
         var source = """
@@ -314,8 +295,7 @@ public class NonNullAssertionTests
 
     #region Type Narrowing
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_NarrowsUnionType(ExecutionMode mode)
     {
         var source = """
@@ -327,8 +307,7 @@ public class NonNullAssertionTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnMultiTypeUnion(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +319,7 @@ public class NonNullAssertionTests
         Assert.Equal("string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnAlreadyNonNull(ExecutionMode mode)
     {
         var source = """
@@ -357,8 +335,7 @@ public class NonNullAssertionTests
 
     #region Nested Expressions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InNestedExpression(ExecutionMode mode)
     {
         var source = """
@@ -371,8 +348,7 @@ public class NonNullAssertionTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnGroupedExpression(ExecutionMode mode)
     {
         var source = """
@@ -388,8 +364,7 @@ public class NonNullAssertionTests
 
     #region Template Literals
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InTemplateLiteral(ExecutionMode mode)
     {
         var source = """
@@ -405,8 +380,7 @@ public class NonNullAssertionTests
 
     #region Arrow Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InArrowFunction(ExecutionMode mode)
     {
         var source = """
@@ -417,8 +391,7 @@ public class NonNullAssertionTests
         Assert.Equal("TEST\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_InArrowFunctionReturn(ExecutionMode mode)
     {
         var source = """
@@ -432,8 +405,7 @@ public class NonNullAssertionTests
         Assert.Equal("HELLO\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_SingleParamArrowWithoutParens(ExecutionMode mode)
     {
         // Single-parameter arrow function without parentheses
@@ -446,8 +418,7 @@ public class NonNullAssertionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_SingleParamArrowWithBinaryOp(ExecutionMode mode)
     {
         // Single-parameter arrow with non-null assertion followed by comparison
@@ -460,8 +431,7 @@ public class NonNullAssertionTests
         Assert.Equal("[3, 4, 5]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_SingleParamArrowWithArithmetic(ExecutionMode mode)
     {
         // Single-parameter arrow with non-null assertion followed by arithmetic
@@ -474,8 +444,7 @@ public class NonNullAssertionTests
         Assert.Equal("[2, 4, 6]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_ChainedSingleParamArrows(ExecutionMode mode)
     {
         // Chained array methods with single-parameter arrows
@@ -492,8 +461,7 @@ public class NonNullAssertionTests
 
     #region With Type Assertions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_CombinedWithTypeAssertion(ExecutionMode mode)
     {
         var source = """
@@ -509,8 +477,7 @@ public class NonNullAssertionTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnNumberZero(ExecutionMode mode)
     {
         // Zero is falsy but not null - assertion should pass
@@ -522,8 +489,7 @@ public class NonNullAssertionTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnEmptyString(ExecutionMode mode)
     {
         // Empty string is falsy but not null - assertion should pass
@@ -535,8 +501,7 @@ public class NonNullAssertionTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_OnBoolean(ExecutionMode mode)
     {
         var source = """
@@ -547,8 +512,7 @@ public class NonNullAssertionTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullAssertion_Consecutive(ExecutionMode mode)
     {
         // Multiple ! in a row (redundant but valid)

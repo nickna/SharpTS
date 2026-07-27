@@ -11,8 +11,7 @@ public class OperatorTests
 {
     #region Bitwise Operators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseAnd_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class OperatorTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseOr_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -35,8 +33,7 @@ public class OperatorTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseXor_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +44,7 @@ public class OperatorTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseNot_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +55,7 @@ public class OperatorTests
         Assert.Equal("-6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LeftShift_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +66,7 @@ public class OperatorTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RightShift_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +77,7 @@ public class OperatorTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnsignedRightShift_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +90,7 @@ public class OperatorTests
 
     // ECMA-262 ToInt32/ToUint32 wraps operands modulo 2^32 before bitwise ops.
     // Regression for uuid.parse() which uses `v >>> 24 & 0xff` on a 48-bit number.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnsignedRightShift_OperandAbove2Pow32_UsesLow32Bits(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +105,7 @@ public class OperatorTests
         Assert.Equal("86\n120\n154\n188\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseOr_OperandAbove2Pow32_WrapsModulo(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +117,7 @@ public class OperatorTests
         Assert.Equal("5\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BitwiseOr_NonFiniteOperand_ReturnsZero(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +130,7 @@ public class OperatorTests
         Assert.Equal("0\n0\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnsignedRightShiftCompound_OperandAbove2Pow32_UsesLow32Bits(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +147,7 @@ public class OperatorTests
 
     #region Nullish Coalescing
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithNull_ReturnsDefault(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +159,7 @@ public class OperatorTests
         Assert.Equal("default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithValue_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -184,8 +171,7 @@ public class OperatorTests
         Assert.Equal("value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithZero_ReturnsZero(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +183,7 @@ public class OperatorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithEmptyString_ReturnsEmptyString(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +196,7 @@ public class OperatorTests
         Assert.Equal("\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_Chained_ReturnsFirstNonNull(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +214,7 @@ public class OperatorTests
 
     #region Optional Chaining
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_WithValue_ReturnsProperty(ExecutionMode mode)
     {
         var source = """
@@ -243,8 +226,7 @@ public class OperatorTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_WithNull_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +238,7 @@ public class OperatorTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_Nested_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -269,8 +250,7 @@ public class OperatorTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_CombinedWithNullish_ReturnsDefault(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +266,7 @@ public class OperatorTests
 
     #region Ternary Operator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_TrueCondition_ReturnsTrueValue(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +277,7 @@ public class OperatorTests
         Assert.Equal("yes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_FalseCondition_ReturnsFalseValue(ExecutionMode mode)
     {
         var source = """
@@ -310,8 +288,7 @@ public class OperatorTests
         Assert.Equal("no\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_WithComparison_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -323,8 +300,7 @@ public class OperatorTests
         Assert.Equal("big\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_Nested_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -341,8 +317,7 @@ public class OperatorTests
 
     #region Increment/Decrement Operators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixIncrement_ReturnsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -355,8 +330,7 @@ public class OperatorTests
         Assert.Equal("6\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_ReturnsOldValue(ExecutionMode mode)
     {
         var source = """
@@ -369,8 +343,7 @@ public class OperatorTests
         Assert.Equal("5\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixDecrement_ReturnsNewValue(ExecutionMode mode)
     {
         var source = """
@@ -383,8 +356,7 @@ public class OperatorTests
         Assert.Equal("4\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixDecrement_ReturnsOldValue(ExecutionMode mode)
     {
         var source = """
@@ -397,8 +369,7 @@ public class OperatorTests
         Assert.Equal("5\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IncrementInExpression_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -414,8 +385,7 @@ public class OperatorTests
 
     #region Compound Assignment Operators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_Add_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -428,8 +398,7 @@ public class OperatorTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_Subtract_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -442,8 +411,7 @@ public class OperatorTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_Multiply_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -456,8 +424,7 @@ public class OperatorTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_Divide_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -470,8 +437,7 @@ public class OperatorTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_Modulo_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -484,8 +450,7 @@ public class OperatorTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_StringConcat_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -498,8 +463,7 @@ public class OperatorTests
         Assert.Equal("Hello World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_OnArrayElement_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -512,8 +476,7 @@ public class OperatorTests
         Assert.Equal("12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_OnObjectProperty_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -530,8 +493,7 @@ public class OperatorTests
 
     #region Bitwise Compound Assignment
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_BitwiseAnd_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -544,8 +506,7 @@ public class OperatorTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_BitwiseOr_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -558,8 +519,7 @@ public class OperatorTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_LeftShift_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -572,8 +532,7 @@ public class OperatorTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssignment_RightShift_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """

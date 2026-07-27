@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class VoidOperatorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -20,8 +19,7 @@ public class VoidOperatorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_EvaluatesExpressionForSideEffects(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +32,7 @@ public class VoidOperatorTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_WithFunctionCall(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +49,7 @@ public class VoidOperatorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_WithNumber(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +60,7 @@ public class VoidOperatorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_WithExpression(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +71,7 @@ public class VoidOperatorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Void_InConditional(ExecutionMode mode)
     {
         var source = """

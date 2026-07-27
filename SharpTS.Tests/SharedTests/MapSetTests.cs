@@ -10,8 +10,7 @@ public class MapSetTests
 {
     #region Map Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_EmptyConstructor_CreatesEmptyMap(ExecutionMode mode)
     {
         var source = @"
@@ -22,8 +21,7 @@ public class MapSetTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_FromEntries_CreatesMapWithValues(ExecutionMode mode)
     {
         var source = @"
@@ -41,8 +39,7 @@ public class MapSetTests
 
     #region Map Basic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_SetAndGet_WorksCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -56,8 +53,7 @@ public class MapSetTests
         Assert.Equal("100\n200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Has_ChecksKeyExistence(ExecutionMode mode)
     {
         var source = @"
@@ -70,8 +66,7 @@ public class MapSetTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Delete_RemovesKey(ExecutionMode mode)
     {
         var source = @"
@@ -86,8 +81,7 @@ public class MapSetTests
         Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Clear_RemovesAllEntries(ExecutionMode mode)
     {
         var source = @"
@@ -102,8 +96,7 @@ public class MapSetTests
         Assert.Equal("2\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Set_ReturnsMapForChaining(ExecutionMode mode)
     {
         var source = @"
@@ -123,8 +116,7 @@ public class MapSetTests
     // previously collapsed both onto a single null-sentinel, so set(undefined) overwrote
     // set(null) and size was undercounted. These run in both modes to pin parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_NullAndUndefinedKeys_AreDistinct(ExecutionMode mode)
     {
         // Exact repro from issue #960.
@@ -140,8 +132,7 @@ public class MapSetTests
         Assert.Equal("2\n9\n8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_NullAndUndefinedKeys_HasAndDeleteIndependently(ExecutionMode mode)
     {
         var source = @"
@@ -159,8 +150,7 @@ public class MapSetTests
         Assert.Equal("true\ntrue\ntrue\nfalse\ntrue\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_NullAndUndefinedKeys_ConstructorAndIteration(ExecutionMode mode)
     {
         // Guards the entries-constructor (CreateMapFromEntries) and the
@@ -180,8 +170,7 @@ public class MapSetTests
 
     #region Map Iteration
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_ForEach_IteratesAllEntries(ExecutionMode mode)
     {
         var source = @"
@@ -197,8 +186,7 @@ public class MapSetTests
         Assert.Contains("b: 2", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_ForOf_IteratesEntries(ExecutionMode mode)
     {
         var source = @"
@@ -214,8 +202,7 @@ public class MapSetTests
         Assert.Contains("y=20", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Keys_ReturnsKeyIterator(ExecutionMode mode)
     {
         var source = @"
@@ -231,8 +218,7 @@ public class MapSetTests
         Assert.Contains("second", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Values_ReturnsValueIterator(ExecutionMode mode)
     {
         var source = @"
@@ -248,8 +234,7 @@ public class MapSetTests
         Assert.Contains("200", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Entries_ReturnsEntryIterator(ExecutionMode mode)
     {
         var source = @"
@@ -269,8 +254,7 @@ public class MapSetTests
 
     #region Map Object Key Reference Equality
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_ObjectKeys_UseReferenceEquality(ExecutionMode mode)
     {
         var source = @"
@@ -286,8 +270,7 @@ public class MapSetTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_StringKeys_UseValueEquality(ExecutionMode mode)
     {
         var source = @"
@@ -307,8 +290,7 @@ public class MapSetTests
 
     #region Set Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_EmptyConstructor_CreatesEmptySet(ExecutionMode mode)
     {
         var source = @"
@@ -319,8 +301,7 @@ public class MapSetTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_FromArray_CreatesSetWithValues(ExecutionMode mode)
     {
         var source = @"
@@ -335,8 +316,7 @@ public class MapSetTests
 
     #region Set Basic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Add_InsertsValues(ExecutionMode mode)
     {
         var source = @"
@@ -351,8 +331,7 @@ public class MapSetTests
         Assert.Equal("2\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Add_IgnoresDuplicates(ExecutionMode mode)
     {
         var source = @"
@@ -367,8 +346,7 @@ public class MapSetTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Delete_RemovesValue(ExecutionMode mode)
     {
         var source = @"
@@ -382,8 +360,7 @@ public class MapSetTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Clear_RemovesAllValues(ExecutionMode mode)
     {
         var source = @"
@@ -399,8 +376,7 @@ public class MapSetTests
         Assert.Equal("3\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Add_ReturnsSetForChaining(ExecutionMode mode)
     {
         var source = @"
@@ -416,8 +392,7 @@ public class MapSetTests
 
     #region Set Iteration
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_ForEach_IteratesAllValues(ExecutionMode mode)
     {
         var source = @"
@@ -435,8 +410,7 @@ public class MapSetTests
         Assert.Contains("30", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_ForOf_IteratesValues(ExecutionMode mode)
     {
         var source = @"
@@ -454,8 +428,7 @@ public class MapSetTests
         Assert.Contains("c", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Values_ReturnsValueIterator(ExecutionMode mode)
     {
         var source = @"
@@ -471,8 +444,7 @@ public class MapSetTests
         Assert.Contains("10", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Keys_IsSameAsValues(ExecutionMode mode)
     {
         var source = @"
@@ -488,8 +460,7 @@ public class MapSetTests
         Assert.Contains("2", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Entries_ReturnsPairs(ExecutionMode mode)
     {
         var source = @"
@@ -509,8 +480,7 @@ public class MapSetTests
 
     #region Set Object Reference Equality
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_ObjectValues_UseReferenceEquality(ExecutionMode mode)
     {
         var source = @"
@@ -530,8 +500,7 @@ public class MapSetTests
 
     #region Type Inference Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_WithoutTypeArgs_DefaultsToAny(ExecutionMode mode)
     {
         var source = @"
@@ -544,8 +513,7 @@ public class MapSetTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_WithoutTypeArgs_DefaultsToAny(ExecutionMode mode)
     {
         var source = @"

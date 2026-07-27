@@ -10,8 +10,7 @@ public class ErrorHandlingTests
 {
     #region Basic Try/Catch
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_CatchesThrow(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ErrorHandlingTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_CatchesStringThrow(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class ErrorHandlingTests
         Assert.Equal("error message\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_CatchesNumberThrow(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +59,7 @@ public class ErrorHandlingTests
 
     #region Finally Clause
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryFinally_FinallyAlwaysRuns(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class ErrorHandlingTests
         Assert.Equal("try\nfinally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatchFinally_AllBlocksExecute(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +92,7 @@ public class ErrorHandlingTests
         Assert.Equal("try\ncatch\nfinally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_FinallyRunsWithoutError(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +109,7 @@ public class ErrorHandlingTests
         Assert.Equal("no error\nfinally runs\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Finally_RunsWithReturn(ExecutionMode mode)
     {
         var source = """
@@ -138,8 +131,7 @@ public class ErrorHandlingTests
 
     #region Nested Try/Catch
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_NestedBlocks(ExecutionMode mode)
     {
         var source = """
@@ -163,8 +155,7 @@ public class ErrorHandlingTests
 
     #region Function Call Exceptions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_CatchFromFunctionCall(ExecutionMode mode)
     {
         var source = """
@@ -186,8 +177,7 @@ public class ErrorHandlingTests
 
     #region Code After Catch
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_CodeAfterCatchExecutes(ExecutionMode mode)
     {
         var source = """
@@ -207,8 +197,7 @@ public class ErrorHandlingTests
 
     #region Optional Catch Binding
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_OptionalCatchBinding_CatchesThrow(ExecutionMode mode)
     {
         var source = """
@@ -223,8 +212,7 @@ public class ErrorHandlingTests
         Assert.Equal("caught without param\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_OptionalCatchBinding_WithFinally(ExecutionMode mode)
     {
         var source = """
@@ -241,8 +229,7 @@ public class ErrorHandlingTests
         Assert.Equal("caught\nfinally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_OptionalCatchBinding_NoError(ExecutionMode mode)
     {
         var source = """
@@ -258,8 +245,7 @@ public class ErrorHandlingTests
         Assert.Equal("no error\nafter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_NestedOptionalCatchBinding(ExecutionMode mode)
     {
         var source = """

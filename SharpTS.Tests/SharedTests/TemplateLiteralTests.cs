@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TemplateLiteralTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_SimpleString_Works(ExecutionMode mode)
     {
         var source = """
@@ -20,8 +19,7 @@ public class TemplateLiteralTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_SingleInterpolation_Works(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +31,7 @@ public class TemplateLiteralTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_MultipleInterpolations_Works(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +44,7 @@ public class TemplateLiteralTests
         Assert.Equal("5 + 3 = 8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_ExpressionEvaluation_Works(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +55,7 @@ public class TemplateLiteralTests
         Assert.Equal("Double of 5 is 10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_PropertyAccess_Works(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +67,7 @@ public class TemplateLiteralTests
         Assert.Equal("Name: Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_FunctionCall_Works(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +81,7 @@ public class TemplateLiteralTests
         Assert.Equal("Result: Hello, Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_NumberCoercion_Works(ExecutionMode mode)
     {
         var source = """
@@ -100,8 +93,7 @@ public class TemplateLiteralTests
         Assert.Equal("The answer is 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_BooleanCoercion_Works(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +105,7 @@ public class TemplateLiteralTests
         Assert.Equal("Value is true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_NestedInterpolation_Works(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +118,7 @@ public class TemplateLiteralTests
         Assert.Equal("Result: 6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_EmptyInterpolation_Works(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +130,7 @@ public class TemplateLiteralTests
         Assert.Equal("beforeafter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_ConditionalExpression_Works(ExecutionMode mode)
     {
         var source = """
@@ -153,8 +142,7 @@ public class TemplateLiteralTests
         Assert.Equal("x is big\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_MultilineInReturn_DoesNotTriggerAsi(ExecutionMode mode)
     {
         // Regression for issue #44: a multi-line template literal started on
@@ -172,8 +160,7 @@ public class TemplateLiteralTests
         Assert.Equal("a\nb\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Template_MultilineInYield_DoesNotTriggerAsi(ExecutionMode mode)
     {
         // Same restricted production as `return`: `yield [no LT here] Expression`.

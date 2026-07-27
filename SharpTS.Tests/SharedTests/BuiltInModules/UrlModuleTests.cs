@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class UrlModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_ParsesFullUrl(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -31,8 +30,7 @@ public class UrlModuleTests
         Assert.Contains("/path", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_ParsesQueryString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -50,8 +48,7 @@ public class UrlModuleTests
         Assert.Contains("foo=bar", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_ParsesHash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -67,8 +64,7 @@ public class UrlModuleTests
         Assert.Contains("#section", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_HandlesDefaultPort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -86,8 +82,7 @@ public class UrlModuleTests
         Assert.Contains("example.com", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Format_CreatesUrlString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -108,8 +103,7 @@ public class UrlModuleTests
         Assert.Contains("https://example.com/path?key=value", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Format_HandlesPort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -130,8 +124,7 @@ public class UrlModuleTests
         Assert.Contains("localhost:3000", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Resolve_ResolvesRelativeUrl(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -147,8 +140,7 @@ public class UrlModuleTests
         Assert.Contains("example.com/other/path", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Resolve_ResolvesAbsoluteUrl(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -164,8 +156,7 @@ public class UrlModuleTests
         Assert.Contains("example.com/absolute", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Resolve_KeepsFullUrl(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -181,8 +172,7 @@ public class UrlModuleTests
         Assert.Contains("other.com/path", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_NamespaceImport_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -201,8 +191,7 @@ public class UrlModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_ParseFormat_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -222,8 +211,7 @@ public class UrlModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_HandlesHttpProtocol(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -245,8 +233,7 @@ public class UrlModuleTests
         Assert.Contains("/api/users", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Url_Parse_HandlesFileProtocol(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

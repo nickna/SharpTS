@@ -454,8 +454,7 @@ public class StructuralIterableTypingTests
 
     // ---- Runtime regression guard: the new type modeling does not perturb execution in either mode ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StructuralIterable_IteratesAndSpreads(ExecutionMode mode)
     {
         var source = """
@@ -536,8 +535,7 @@ public class StructuralIterableTypingTests
         TestHarness.RunInterpreted(source);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_ForOf_BindsElementType_RunsInBothModes(ExecutionMode mode)
     {
         // The inherited element type is number (recovered from the dropped `extends Array<number>` arg), and

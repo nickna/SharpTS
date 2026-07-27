@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class StreamPromisesTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_Import_Pipeline(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -24,8 +23,7 @@ public class StreamPromisesTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_Import_Finished(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -40,8 +38,7 @@ public class StreamPromisesTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_PropertyAccess(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -57,8 +54,7 @@ public class StreamPromisesTests
         Assert.Equal("function\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_Pipeline_ReturnsPromise(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -81,8 +77,7 @@ public class StreamPromisesTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_Pipeline_ConnectsStreams(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -104,8 +99,7 @@ public class StreamPromisesTests
         Assert.Contains("function", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StreamPromises_Finished_ReturnsCleanupFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

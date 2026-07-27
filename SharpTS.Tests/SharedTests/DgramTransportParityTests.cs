@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class DgramTransportParityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_MulticastControls_LoopbackInterfaceMembership(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -42,8 +41,7 @@ public class DgramTransportParityTests
         Assert.Equal("loopback on\nloopback off\niface set\njoined\ndropped\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_SourceSpecificMembership_JoinAndLeave(ExecutionMode mode)
     {
         // SSM support varies by platform — assert only that both modes agree
@@ -79,8 +77,7 @@ public class DgramTransportParityTests
         Assert.Contains("udp6 ssm rejected", actual);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Dgram_ConnectedSend_ValidatesDestination(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

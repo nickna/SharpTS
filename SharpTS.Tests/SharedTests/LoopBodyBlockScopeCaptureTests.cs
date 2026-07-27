@@ -33,8 +33,7 @@ public class LoopBodyBlockScopeCaptureTests
 {
     // ---- Headline #1223 shape: body const captured inside an arrow ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowBody_ForLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +50,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionBody_ForLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +71,7 @@ public class LoopBodyBlockScopeCaptureTests
     // The closure captures BOTH a module-level mutable counter (stays on the entry-point DC)
     // and the per-iteration body const; each handler must destroy ITS OWN object.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedCapture_ModuleCounterPlusBodyConst_DestroysOwnObject(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +94,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // ---- Other loop kinds ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WhileLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +113,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoWhileLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +132,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfLoopVariable_CapturedInFunction_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +148,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("10,20,30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForInLoopVariable_CapturedInFunction_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +164,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("a,b\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -191,8 +183,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // ---- State machines: async function and generator bodies ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +204,7 @@ public class LoopBodyBlockScopeCaptureTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +224,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // ---- Nested loops: body const of the inner loop sees both indices ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoopBodyConst_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -258,8 +247,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // A `let` the closure itself mutates must keep shared mutation visibility
     // within the iteration (the closure's writes reach the outer read).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WriteCapturedBodyLet_MutationVisibleWithinIteration(ExecutionMode mode)
     {
         var source = """
@@ -280,8 +268,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // A body const shadow-adjacent to a function-level binding: the outer binding
     // keeps its shared slot; the body binding is still per-iteration.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BodyConstNextToFunctionLevelCapture_BothCorrect(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +290,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // Same name declared BOTH as a function-level local and in a loop body of a
     // sibling function: per-function tracking keeps them independent.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SameNameAcrossSiblingFunctions_Independent(ExecutionMode mode)
     {
         var source = """
@@ -332,8 +318,7 @@ public class LoopBodyBlockScopeCaptureTests
     // closure read null (top-level / for-initializer) or the fused last value (function body).
 
     // Top-level loop-body const through a two-arrow chain (#1231 shape 1).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevel_LoopBodyConst_ChainedCapture_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -348,8 +333,7 @@ public class LoopBodyBlockScopeCaptureTests
     }
 
     // Top-level for-initializer binding through a chain (#1231 shape 2 / #649 exclusion).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevel_ForInitializer_ChainedCapture_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -363,8 +347,7 @@ public class LoopBodyBlockScopeCaptureTests
     }
 
     // Function-local loop-body const through a chain (was fused to the last iteration).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionBody_LoopBodyConst_ChainedCapture_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -382,8 +365,7 @@ public class LoopBodyBlockScopeCaptureTests
     }
 
     // Function-local for-initializer binding through a chain (was null compiled).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionBody_ForInitializer_ChainedCapture_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -402,8 +384,7 @@ public class LoopBodyBlockScopeCaptureTests
     // A binding captured BOTH directly and through a chain in the same loop: both closures
     // must observe the same per-iteration value (previously the chained capture forced even
     // the direct one onto the shared fused slot).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DirectAndChainedCapture_SameLoop_BothPerIteration(ExecutionMode mode)
     {
         var source = """
@@ -422,8 +403,7 @@ public class LoopBodyBlockScopeCaptureTests
     }
 
     // Deeper chain (four arrows) still forwards the per-iteration value all the way in.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevel_LoopBodyConst_DeepChain_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -438,8 +418,7 @@ public class LoopBodyBlockScopeCaptureTests
     }
 
     // Top-level for-of loop variable through a chain.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevel_ForOfVariable_ChainedCapture_PerIteration(ExecutionMode mode)
     {
         var source = """
@@ -454,8 +433,7 @@ public class LoopBodyBlockScopeCaptureTests
 
     // A chained capture that also references the enclosing class `this`: the per-iteration
     // binding forwards by value while `this` still relays through the arrow chain.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedCapture_WithThis_PerIteration(ExecutionMode mode)
     {
         var source = """

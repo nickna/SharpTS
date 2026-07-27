@@ -26,8 +26,7 @@ public class VmModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +43,7 @@ public class VmModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -66,8 +64,7 @@ public class VmModuleTests
 
     #region runInNewContext Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_BasicExpression(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -83,8 +80,7 @@ public class VmModuleTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_MultiStatement(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +96,7 @@ public class VmModuleTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_ContextSeeding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -117,8 +112,7 @@ public class VmModuleTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_ContextMutation(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -135,8 +129,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_Isolation(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -158,8 +151,7 @@ public class VmModuleTests
         Assert.Equal("isolated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_WithConsoleLog(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -174,8 +166,7 @@ public class VmModuleTests
         Assert.Equal("hello from vm\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_EmptyCode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -195,8 +186,7 @@ public class VmModuleTests
 
     #region runInThisContext Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_RunInThisContext_SharesScope(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -217,8 +207,7 @@ public class VmModuleTests
 
     #region createContext / isContext Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_IsContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -236,8 +225,7 @@ public class VmModuleTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_Empty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -258,8 +246,7 @@ public class VmModuleTests
 
     #region runInContext (module-level) / constants Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInContext_Basic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -275,8 +262,7 @@ public class VmModuleTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInContext_WritesBack(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -293,8 +279,7 @@ public class VmModuleTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInContext_NonContext_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -314,8 +299,7 @@ public class VmModuleTests
         Assert.Equal("caught error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Constants_Exist(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -335,8 +319,7 @@ public class VmModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_Constants_AreSymbols(ExecutionMode mode)
     {
         // typeof reports 'symbol' in the interpreter; compiled-mode typeof of a
@@ -359,8 +342,7 @@ public class VmModuleTests
 
     #region createContext options + measureMemory Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_MicrotaskMode_AfterEvaluate(ExecutionMode mode)
     {
         // With microtaskMode:'afterEvaluate', the queued .then microtask runs before
@@ -379,8 +361,7 @@ public class VmModuleTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_CodeGeneration_StringsFalse_BlocksEval(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -401,8 +382,7 @@ public class VmModuleTests
         Assert.Equal("blocked\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_CodeGeneration_Default_AllowsEval(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -418,8 +398,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CreateContext_NameOrigin_Accepted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -435,8 +414,7 @@ public class VmModuleTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_MeasureMemory_ResolvesShape(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -456,8 +434,7 @@ public class VmModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_MeasureMemory_RangeIsArray(ExecutionMode mode)
     {
         // jsMemoryRange is a 2-element Array; Array.isArray/.length only fully recognize it
@@ -484,8 +461,7 @@ public class VmModuleTests
 
     #region Script Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_RunInNewContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -504,8 +480,7 @@ public class VmModuleTests
         Assert.Equal("3\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_Script_RunInThisContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -523,8 +498,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_RunInContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -542,8 +516,7 @@ public class VmModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_MultipleRuns(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -565,8 +538,7 @@ public class VmModuleTests
 
     #region Script/compileFunction options + cachedData Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_Filename_InSyntaxError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -586,8 +558,7 @@ public class VmModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_OffsetsAndDisplayErrors_Accepted(ExecutionMode mode)
     {
         // filename/lineOffset/columnOffset/displayErrors are honored without altering
@@ -607,8 +578,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_CreateCachedData_ReturnsValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -625,8 +595,7 @@ public class VmModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_Script_CreateCachedData_IsBuffer(ExecutionMode mode)
     {
         // The marker is a real Buffer; Buffer.isBuffer/length only recognize it within
@@ -647,8 +616,7 @@ public class VmModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_ProduceCachedData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -665,8 +633,7 @@ public class VmModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_CachedData_RoundTrips_NotRejected(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -684,8 +651,7 @@ public class VmModuleTests
         Assert.Equal("false\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_Script_Filename_InTimeoutErrorStack(ExecutionMode mode)
     {
         // The origin frame is attached to errors that propagate as a live guest error
@@ -710,8 +676,7 @@ public class VmModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_Filename_InSyntaxError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -735,8 +700,7 @@ public class VmModuleTests
 
     #region SourceTextModule (ESM-in-vm) Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SourceTextModule_LinkEvaluate_ImportsDependency(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -760,8 +724,7 @@ public class VmModuleTests
         Assert.Equal("43\nhi42\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SourceTextModule_StatusTransitions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -784,8 +747,7 @@ public class VmModuleTests
         Assert.Equal("unlinked\nlinked\nevaluated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SourceTextModule_DependencySpecifiers_Count(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -801,8 +763,7 @@ public class VmModuleTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_SourceTextModule_DependencySpecifiers_Indexing(ExecutionMode mode)
     {
         // dependencySpecifiers is an Array; element indexing is observable within the
@@ -822,8 +783,7 @@ public class VmModuleTests
         Assert.Equal("x\ny\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SourceTextModule_LinkerError_SetsErrored(ExecutionMode mode)
     {
         // The error path is exercised synchronously (link/evaluate complete synchronously in
@@ -846,8 +806,7 @@ public class VmModuleTests
         Assert.Equal("errored\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SourceTextModule_DefaultExport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -873,8 +832,7 @@ public class VmModuleTests
 
     #region SyntheticModule Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SyntheticModule_ImportedBySourceTextModule_LiveBinding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -902,8 +860,7 @@ public class VmModuleTests
         Assert.Equal("43\nhello!\n42\nevaluated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_SyntheticModule_SetExportBeforeLink_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -928,8 +885,7 @@ public class VmModuleTests
 
     #region importModuleDynamically Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_ImportModuleDynamically_ResolvesViaHook(ExecutionMode mode)
     {
         // The result of the in-vm dynamic import is written back to a context scalar to
@@ -954,8 +910,7 @@ public class VmModuleTests
         Assert.Equal("123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_Script_ImportModuleDynamically_UseMainContextDefaultLoader_Accepted(ExecutionMode mode)
     {
         // Passing the USE_MAIN_CONTEXT_DEFAULT_LOADER sentinel falls back to the default
@@ -979,8 +934,7 @@ public class VmModuleTests
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_SyntaxError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1000,8 +954,7 @@ public class VmModuleTests
         Assert.Equal("caught error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_RuntimeError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1025,8 +978,7 @@ public class VmModuleTests
 
     #region Context Functions Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_RunInNewContext_FunctionInContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1049,8 +1001,7 @@ public class VmModuleTests
 
     #region compileFunction Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_BasicReturn(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1066,8 +1017,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_WithParams(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1083,8 +1033,7 @@ public class VmModuleTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_NoParams(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1100,8 +1049,7 @@ public class VmModuleTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_MultiStatement(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1117,8 +1065,7 @@ public class VmModuleTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_Reusable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1136,8 +1083,7 @@ public class VmModuleTests
         Assert.Equal("9\n25\n49\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_ConsoleLog(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1153,8 +1099,7 @@ public class VmModuleTests
         Assert.Equal("from compiled fn\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_SyntaxError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1174,8 +1119,7 @@ public class VmModuleTests
         Assert.Equal("caught error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_NamespaceImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1191,8 +1135,7 @@ public class VmModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_ParsingContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1209,8 +1152,7 @@ public class VmModuleTests
         Assert.Equal("50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_ContextExtensions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1228,8 +1170,7 @@ public class VmModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Vm_CompileFunction_ContextWithFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1250,8 +1191,7 @@ public class VmModuleTests
 
     #region timeout
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_RunInNewContext_Timeout_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1271,8 +1211,7 @@ public class VmModuleTests
         Assert.Contains("caught:Script execution timed out", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_RunInNewContext_NoTimeout_Completes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1288,8 +1227,7 @@ public class VmModuleTests
         Assert.Contains("4950", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_RunInThisContext_Timeout_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1309,8 +1247,7 @@ public class VmModuleTests
         Assert.Contains("caught:Script execution timed out", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Vm_Script_RunInNewContext_Timeout_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

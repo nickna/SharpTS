@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ClassTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassDeclaration_CreatesInstance(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class ClassTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedMethod_ResolvesUnderDynamicDispatch(ExecutionMode mode)
     {
         // Accessing an inherited method through an `any`-typed receiver forces
@@ -53,8 +51,7 @@ public class ClassTests
         Assert.Equal("Fido sound\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassMethod_CanBeInvoked(ExecutionMode mode)
     {
         var source = """
@@ -75,8 +72,7 @@ public class ClassTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInheritance_ExtendsParent(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +101,7 @@ public class ClassTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SuperCall_InvokesParentMethod(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +127,7 @@ public class ClassTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleFields_InitializedCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +148,7 @@ public class ClassTests
         Assert.Equal("3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodWithParameters_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +169,7 @@ public class ClassTests
         Assert.Equal("8\n24\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodCallingOtherMethod_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +189,7 @@ public class ClassTests
         Assert.Equal("25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FieldModification_PersistsChanges(ExecutionMode mode)
     {
         var source = """
@@ -222,8 +213,7 @@ public class ClassTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedField_AccessibleFromChild(ExecutionMode mode)
     {
         var source = """
@@ -249,8 +239,7 @@ public class ClassTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleInstances_IndependentState(ExecutionMode mode)
     {
         var source = """
@@ -273,8 +262,7 @@ public class ClassTests
         Assert.Equal("1\n2\n10\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_Basic(ExecutionMode mode)
     {
         // Dog extends Animal with no explicit constructor - should inherit Animal's constructor
@@ -301,8 +289,7 @@ public class ClassTests
         Assert.Equal("Rex barks!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_MultiLevel(ExecutionMode mode)
     {
         // C extends B extends A - C should inherit A's constructor through B
@@ -327,8 +314,7 @@ public class ClassTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_MultipleParameters(ExecutionMode mode)
     {
         // Child inherits parent's constructor with multiple parameters
@@ -354,8 +340,7 @@ public class ClassTests
         Assert.Equal("(3, 4)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_GenericParent(ExecutionMode mode)
     {
         // StringBox extends Box<string> - should inherit Box's constructor
@@ -379,8 +364,7 @@ public class ClassTests
         Assert.Equal("HELLO\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_GenericParent_MultipleTypeParams(ExecutionMode mode)
     {
         // StringNumberPair extends Pair<string, number>
@@ -406,8 +390,7 @@ public class ClassTests
         Assert.Equal("count = 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_GenericParent_TypeParamForwarding(ExecutionMode mode)
     {
         // Derived<T> extends Base<T> - forwards type parameter
@@ -431,8 +414,7 @@ public class ClassTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_GenericParent_MixedTypeArgs(ExecutionMode mode)
     {
         // Mixed<X> extends Triple<string, X, number> - some concrete, some forwarded
@@ -462,8 +444,7 @@ public class ClassTests
         Assert.Equal("hello\ntrue\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_GenericParent_WithOwnMethod(ExecutionMode mode)
     {
         // NumberBox extends Box<number> with its own method
@@ -487,8 +468,7 @@ public class ClassTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_TypeError_WrongArgCount(ExecutionMode mode)
     {
         // Should get a type error when wrong number of arguments passed
@@ -508,8 +488,7 @@ public class ClassTests
         Assert.Contains("expected at least 1 argument", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedConstructor_TypeError_WrongArgType(ExecutionMode mode)
     {
         // Should get a type error when wrong argument type passed
@@ -529,8 +508,7 @@ public class ClassTests
         Assert.Contains("expected type 'string'", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_ThisBindsToClass(ExecutionMode mode)
     {
         var source = """
@@ -551,8 +529,7 @@ public class ClassTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGetter_ReturnsLiteral(ExecutionMode mode)
     {
         var source = """
@@ -566,8 +543,7 @@ public class ClassTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGetter_CanReadStaticField(ExecutionMode mode)
     {
         var source = """
@@ -582,8 +558,7 @@ public class ClassTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticSetter_MutatesStaticField(ExecutionMode mode)
     {
         var source = """
@@ -601,8 +576,7 @@ public class ClassTests
         Assert.Equal("12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticGetter_NewThisConstructsClass(ExecutionMode mode)
     {
         // Canonical semver pattern: `static get ANY() { return new this("any"); }`
@@ -621,8 +595,7 @@ public class ClassTests
         Assert.Equal("any\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceofGenericClass_Works(ExecutionMode mode)
     {
         // Regression: compiled `b instanceof Box` emitted the OPEN generic
@@ -643,8 +616,7 @@ public class ClassTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceofUserClass_InsideAsyncFunction(ExecutionMode mode)
     {
         // Regression: state-machine emitters resolved user class identifiers

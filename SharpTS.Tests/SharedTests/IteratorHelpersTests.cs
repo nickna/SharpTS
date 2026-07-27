@@ -12,8 +12,7 @@ public class IteratorHelpersTests
 {
     #region map
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Map_TransformsElements(ExecutionMode mode)
     {
         var source = @"
@@ -31,8 +30,7 @@ public class IteratorHelpersTests
 
     #region filter
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Filter_SelectsMatchingElements(ExecutionMode mode)
     {
         var source = @"
@@ -49,8 +47,7 @@ public class IteratorHelpersTests
 
     #region take
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Take_LimitsElements(ExecutionMode mode)
     {
         var source = @"
@@ -68,8 +65,7 @@ public class IteratorHelpersTests
 
     #region drop
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Drop_SkipsElements(ExecutionMode mode)
     {
         var source = @"
@@ -87,8 +83,7 @@ public class IteratorHelpersTests
 
     #region flatMap
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_FlatMap_FlattensResults(ExecutionMode mode)
     {
         var source = @"
@@ -109,8 +104,7 @@ public class IteratorHelpersTests
 
     #region reduce
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Reduce_WithInitialValue(ExecutionMode mode)
     {
         var source = @"
@@ -121,8 +115,7 @@ public class IteratorHelpersTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Reduce_WithoutInitialValue(ExecutionMode mode)
     {
         var source = @"
@@ -137,8 +130,7 @@ public class IteratorHelpersTests
 
     #region forEach
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_ForEach_CallsForEachElement(ExecutionMode mode)
     {
         var source = @"
@@ -152,8 +144,7 @@ public class IteratorHelpersTests
 
     #region some
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Some_TruthyCase(ExecutionMode mode)
     {
         var source = @"
@@ -164,8 +155,7 @@ public class IteratorHelpersTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Some_FalsyCase(ExecutionMode mode)
     {
         var source = @"
@@ -180,8 +170,7 @@ public class IteratorHelpersTests
 
     #region every
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Every_TruthyCase(ExecutionMode mode)
     {
         var source = @"
@@ -192,8 +181,7 @@ public class IteratorHelpersTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Every_FalsyCase(ExecutionMode mode)
     {
         var source = @"
@@ -208,8 +196,7 @@ public class IteratorHelpersTests
 
     #region find
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Find_FoundCase(ExecutionMode mode)
     {
         var source = @"
@@ -220,8 +207,7 @@ public class IteratorHelpersTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Find_NotFoundCase(ExecutionMode mode)
     {
         var source = @"
@@ -237,8 +223,7 @@ public class IteratorHelpersTests
 
     #region toArray
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_ToArray_CollectsElements(ExecutionMode mode)
     {
         var source = @"
@@ -256,8 +241,7 @@ public class IteratorHelpersTests
 
     #region Chaining
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Chaining_MapFilterTake(ExecutionMode mode)
     {
         var source = @"
@@ -280,8 +264,7 @@ public class IteratorHelpersTests
 
     #region Generator + iterator helpers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_GeneratorWithTake_IsLazy(ExecutionMode mode)
     {
         // Both modes support lazy generators:
@@ -307,8 +290,7 @@ public class IteratorHelpersTests
         Assert.Equal("1\n2\n3\n4\n5\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_GeneratorMapFilter(ExecutionMode mode)
     {
         var source = @"
@@ -337,8 +319,7 @@ public class IteratorHelpersTests
 
     #region Map/Set iterators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_MapKeys_WithHelpers(ExecutionMode mode)
     {
         var source = @"
@@ -357,8 +338,7 @@ public class IteratorHelpersTests
 
     #region Iterator.from
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_From_Array(ExecutionMode mode)
     {
         var source = @"
@@ -376,8 +356,7 @@ public class IteratorHelpersTests
 
     #region next() protocol
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_Next_ManualProtocol(ExecutionMode mode)
     {
         var source = @"
@@ -402,8 +381,7 @@ public class IteratorHelpersTests
 
     #region for...of on helper result
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_ForOf_OnMapResult(ExecutionMode mode)
     {
         var source = @"
@@ -415,8 +393,7 @@ public class IteratorHelpersTests
         Assert.Equal("11\n12\n13\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_ForOf_OnFilterResult(ExecutionMode mode)
     {
         var source = @"
@@ -432,8 +409,7 @@ public class IteratorHelpersTests
 
     #region drop + take combined
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Iterator_DropAndTake_SlicesBehavior(ExecutionMode mode)
     {
         var source = @"

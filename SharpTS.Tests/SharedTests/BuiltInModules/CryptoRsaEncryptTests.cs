@@ -54,8 +54,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Basic Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -76,8 +75,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_PrivateDecrypt_Roundtrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +98,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_PrivateDecrypt_WithGeneratedKeyPair(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -123,8 +120,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_StringInput(ExecutionMode mode)
     {
         // publicEncrypt should also accept string input (UTF-8 encoded)
@@ -151,8 +147,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Security Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PrivateDecrypt_FailsWithWrongKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -181,8 +176,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_EncryptionProducesDifferentOutputEachTime(ExecutionMode mode)
     {
         // OAEP padding includes randomness, so encrypting the same message twice
@@ -214,8 +208,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_ThrowsOnInvalidKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -236,8 +229,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_PublicEncrypt_MessageSizeLimit(ExecutionMode mode)
     {
         // RSA-2048 with OAEP-SHA1 can encrypt at most 214 bytes
