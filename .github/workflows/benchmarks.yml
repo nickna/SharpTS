@@ -38,8 +38,10 @@ jobs:
       - name: Publish results to job summary
         shell: pwsh
         run: |
+          $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
+          "BENCH_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
           ./benchmarks/format-results.ps1 `
-            -ResultsFile (Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results/results.txt') `
+            -ResultsFile (Join-Path $resultsDir 'results.txt') `
             -DotNetVersion (dotnet --version) `
             -NodeVersion (node -v) `
             -BunVersion (bun --version) `
@@ -49,4 +51,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: /tmp/bench-results/
+          path: ${{ env.BENCH_RESULTS_DIR }}

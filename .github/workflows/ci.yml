@@ -31,20 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner's hostname is an mDNS-only `.local` name that nothing on the
-      # network answers for, so the Dns.GetHostEntry call inside the managed
-      # HttpListener's Prefixes.Add (Kerberos SPN setup) burns mDNSResponder's
-      # full 5s timeout for every guest program that calls http server.listen().
-      # Resolving it from /etc/hosts short-circuits that — saves ~2min of test time.
-      # Both address families are required: with only the 127.0.0.1 entry, the
-      # AAAA half of the dual-stack lookup still goes to mDNS and waits out the
-      # same 5s (measured on macos-latest: A-only 5053ms, A+AAAA 10ms).
-      - name: Register hostname in /etc/hosts (macOS mDNS workaround)
-        if: runner.os == 'macOS'
-        run: |
-          echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
-          echo "::1 $(hostname)" | sudo tee -a /etc/hosts
-
+      # NOTE: if macOS is ever restored to the matrix, resurrect the
+      # "Register hostname in /etc/hosts (macOS mDNS workaround)" step removed in
+      # the 2026-07 cleanup (git history) — without it, every http server.listen()
+      # burns mDNSResponder's 5s timeout (measured: A-only 5053ms, A+AAAA 10ms).
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -55,6 +45,17 @@ jobs:
 
       - name: Build
         run: dotnet build --no-restore --configuration Release
+
+      # The conformance harnesses live outside SharpTS.sln (running them needs the
+      # external/ submodules, absent here), but each references SharpTS.csproj — so
+      # compile them to catch API rot that would otherwise only surface when someone
+      # runs them manually.
+      - name: Build conformance harnesses (compile-only)
+        shell: bash
+        run: |
+          dotnet build SharpTS.Test262/SharpTS.Test262.csproj --configuration Release
+          dotnet build SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj --configuration Release
+          dotnet build SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release
 
       # Category!=LiveNetwork excludes the opt-in tests that make real outbound
       # DNS/HTTP calls (tagged [Trait("Category","LiveNetwork")]); those depend on
