@@ -47,40 +47,6 @@ public class EscapeAnalyzer
     }
 
     /// <summary>
-    /// Checks if a variable has escaped.
-    /// </summary>
-    public bool IsEscaped(string variableName)
-    {
-        return _escapedVariables.Contains(variableName);
-    }
-
-    /// <summary>
-    /// Records that a global/outer-scope variable might alias a local variable.
-    /// Called when we detect an assignment like `globalVar = localVar` inside a function.
-    /// </summary>
-    public void RecordGlobalAlias(string globalVar, string localVar)
-    {
-        if (!_globalAliases.TryGetValue(globalVar, out var aliases))
-        {
-            aliases = new HashSet<string>();
-            _globalAliases[globalVar] = aliases;
-        }
-        aliases.Add(localVar);
-    }
-
-    /// <summary>
-    /// Gets all local variables that a global variable might be aliasing.
-    /// </summary>
-    public IEnumerable<string> GetAliasedLocals(string globalVar)
-    {
-        if (_globalAliases.TryGetValue(globalVar, out var aliases))
-        {
-            return aliases;
-        }
-        return [];
-    }
-
-    /// <summary>
     /// Gets all escaped variables that might be affected by a mutation on the given variable.
     /// </summary>
     /// <remarks>
