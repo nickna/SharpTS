@@ -550,9 +550,6 @@ public partial class ILCompiler
             case Stmt.Throw th:
                 AnalyzeArrowExprForAwaits(th.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
-            case Stmt.Print p:
-                AnalyzeArrowExprForAwaits(p.Expr, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
-                break;
         }
     }
 

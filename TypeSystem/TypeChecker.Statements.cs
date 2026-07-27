@@ -1164,12 +1164,6 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    internal VoidResult VisitPrint(Stmt.Print stmt)
-    {
-        CheckExpr(stmt.Expr);
-        return VoidResult.Instance;
-    }
-
     internal VoidResult VisitImport(Stmt.Import stmt)
     {
         if (_currentModule == null)

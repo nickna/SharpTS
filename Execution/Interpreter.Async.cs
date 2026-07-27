@@ -630,12 +630,6 @@ public partial class Interpreter
         return ExecutionResult.Return((await EvaluateAsync(returnStmt.Value)).ToObject());
     }
 
-    internal async ValueTask<ExecutionResult> ExecutePrintAsyncVT(Stmt.Print printStmt)
-    {
-        Out.WriteLine(Stringify((await EvaluateAsync(printStmt.Expr)).ToObject()));
-        return ExecutionResult.Success();
-    }
-
     // ===================== Async Expression Helpers =====================
 
     private async Task<RuntimeValue> EvaluateBinaryAsync(Expr.Binary binary)

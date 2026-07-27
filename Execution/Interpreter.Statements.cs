@@ -2325,12 +2325,6 @@ public partial class Interpreter
         return ExecutionResult.Return(Evaluate(returnStmt.Value));
     }
 
-    internal ExecutionResult VisitPrint(Stmt.Print printStmt)
-    {
-        Out.WriteLine(Stringify(Evaluate(printStmt.Expr)));
-        return ExecutionResult.Success();
-    }
-
     internal ExecutionResult VisitImport(Stmt.Import import) =>
         // Imports are handled in BindModuleImports before execution
         // In single-file mode, imports are a no-op (type checker would have errored)

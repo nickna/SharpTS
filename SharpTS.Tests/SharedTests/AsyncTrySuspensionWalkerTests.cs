@@ -74,7 +74,7 @@ public class AsyncTrySuspensionWalkerTests
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncTry_AwaitInsideConsoleLog(ExecutionMode mode)
     {
-        // console.log(...) lowers to a Stmt.Print, whose arm was missing.
+        // console.log(...) is an ordinary expression statement; its call arm was missing.
         var source = """
             async function val(): Promise<string> { return "hi"; }
             async function main(): Promise<void> {

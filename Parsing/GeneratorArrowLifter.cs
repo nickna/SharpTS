@@ -221,7 +221,6 @@ internal sealed class GeneratorArrowLifter
             Stmt.Var v => v.Initializer is null ? v : ReplaceIfChanged(v, v.Initializer, RewriteExpr(v.Initializer), (s, x) => s with { Initializer = x }),
             Stmt.Const c => ReplaceIfChanged(c, c.Initializer, RewriteExpr(c.Initializer), (s, x) => s with { Initializer = x }),
             Stmt.Throw t => ReplaceIfChanged(t, t.Value, RewriteExpr(t.Value), (s, x) => new Stmt.Throw(s.Keyword, x)),
-            Stmt.Print p => ReplaceIfChanged(p, p.Expr, RewriteExpr(p.Expr), (_, x) => new Stmt.Print(x)),
             Stmt.Block b => RewriteBlock(b),
             Stmt.Sequence sq => RewriteSequence(sq),
             Stmt.If i => RewriteIf(i),

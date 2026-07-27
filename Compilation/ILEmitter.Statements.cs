@@ -1892,11 +1892,4 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Throw);
     }
 
-    protected override void EmitPrint(Stmt.Print p)
-    {
-        EmitExpression(p.Expr);
-        EmitBoxIfNeeded(p.Expr);
-        // Call Console.WriteLine(object) directly
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Console, "WriteLine", _ctx.Types.Object));
-    }
 }

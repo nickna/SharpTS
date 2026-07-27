@@ -598,10 +598,6 @@ public sealed class RuntimeFeatureDetector
                 foreach (var s in seq.Statements) VisitStmt(s);
                 break;
 
-            case Stmt.Print pr:
-                VisitExpr(pr.Expr);
-                break;
-
             case Stmt.Using usg:
                 // `using` statement walks an iterable; visit the initializer expression.
                 // (AST shape: Using(declarations, etc.) — be defensive about field access.)

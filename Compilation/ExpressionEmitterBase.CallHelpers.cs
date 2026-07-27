@@ -960,7 +960,6 @@ public abstract partial class ExpressionEmitterBase
             || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
             || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock)),
         Stmt.Throw th => ExprContainsSuspension(th.Value),
-        Stmt.Print p => ExprContainsSuspension(p.Expr),
         _ => false
     };
 

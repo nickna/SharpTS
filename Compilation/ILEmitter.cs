@@ -212,10 +212,6 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitThrow(t);
                 break;
 
-            case Stmt.Print p:
-                EmitPrint(p);
-                break;
-
             case Stmt.Function fn:
                 // A `function` declaration nested in a block/loop/if is materialized in place at its
                 // textual position so a closure over a per-iteration binding captures that iteration's

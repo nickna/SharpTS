@@ -116,7 +116,6 @@ public class DeadCodeAnalyzer
             case Stmt.Continue:
             case Stmt.Var:
             case Stmt.Const:
-            case Stmt.Print:
             case Stmt.Interface:
             case Stmt.TypeAlias:
             case Stmt.Enum:
