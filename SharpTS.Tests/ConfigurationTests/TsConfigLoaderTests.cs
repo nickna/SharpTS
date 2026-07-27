@@ -236,6 +236,129 @@ public class TsConfigLoaderTests
         Assert.Equal(DecoratorMode.Legacy, TsConfigLoader.Load(path).DecoratorMode);
     }
 
+    [Fact]
+    public void IncludeAndExclude_SelectRootFiles()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src/main.ts", "export {};");
+        dir.CreateFile("src/main.spec.ts", "export {};");
+        dir.CreateFile("other.ts", "export {};");
+        var path = dir.CreateFile("tsconfig.json", """
+            { "include": ["src/**/*.ts"], "exclude": ["**/*.spec.ts"] }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal([Path.GetFullPath(dir.GetPath("src/main.ts"))], result.RootFiles);
+    }
+
+    [Fact]
+    public void FilesAreUnionedWithIncludeAndNotFilteredByExclude()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("forced.ts", "export {};");
+        dir.CreateFile("src/included.ts", "export {};");
+        var path = dir.CreateFile("tsconfig.json", """
+            {
+              "files": ["forced.ts"],
+              "include": ["src"],
+              "exclude": ["forced.ts"]
+            }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(2, result.RootFiles.Count);
+        Assert.Contains(Path.GetFullPath(dir.GetPath("forced.ts")), result.RootFiles);
+        Assert.Contains(Path.GetFullPath(dir.GetPath("src/included.ts")), result.RootFiles);
+    }
+
+    [Fact]
+    public void IncludeSupportsWildcardsInDirectorySegments()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src-a/one.ts", "export {};");
+        dir.CreateFile("src-b/two.ts", "export {};");
+        var path = dir.CreateFile(
+            "tsconfig.json",
+            """{ "include": ["src-*/*.ts"] }""");
+
+        Assert.Equal(2, TsConfigLoader.Load(path).RootFiles.Count);
+    }
+
+    [Fact]
+    public void EmptyFilesArrayIsPreserved()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("ignored.ts", "export {};");
+        var path = dir.CreateFile("tsconfig.json", """{ "files": [] }""");
+
+        Assert.Empty(TsConfigLoader.Load(path).RootFiles);
+    }
+
+    [Fact]
+    public void PathsAndBaseUrlResolveAgainstDeclaringConfig()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("configs/base.json", """
+            {
+              "compilerOptions": {
+                "baseUrl": "../src",
+                "paths": { "@app/*": ["app/*"] },
+                "moduleResolution": "bundler"
+              }
+            }
+            """);
+        var path = dir.CreateFile("tsconfig.json", """
+            { "extends": "./configs/base.json", "files": [] }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(ModuleResolutionMode.Bundler, result.ModuleResolution.Mode);
+        Assert.Equal(Path.GetFullPath(dir.GetPath("src")), result.ModuleResolution.BaseUrl);
+        Assert.Equal(
+            Path.GetFullPath(dir.GetPath("src/app/*")),
+            Assert.Single(result.ModuleResolution.Paths["@app/*"]));
+    }
+
+    [Fact]
+    public void TypesAndTypeRootsResolveDeclarationEntries()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        string declaration = dir.CreateFile(
+            "typings/custom/index.d.ts",
+            "declare const customGlobal: string;");
+        var path = dir.CreateFile("tsconfig.json", """
+            {
+              "files": [],
+              "compilerOptions": {
+                "typeRoots": ["./typings"],
+                "types": ["custom"]
+              }
+            }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(Path.GetFullPath(declaration), Assert.Single(result.DeclarationFiles));
+        Assert.Equal(Path.GetFullPath(dir.GetPath("typings")), Assert.Single(result.TypeRoots!));
+    }
+
+    [Fact]
+    public void ProjectReferencesResolveToConfigPaths()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        string referenced = dir.CreateFile("packages/core/tsconfig.json", """{ "files": [] }""");
+        var path = dir.CreateFile("tsconfig.json", """
+            { "files": [], "references": [{ "path": "./packages/core" }] }
+            """);
+
+        var result = TsConfigLoader.Load(path);
+
+        Assert.Equal(Path.GetFullPath(referenced), Assert.Single(result.ProjectReferences));
+    }
+
     #endregion
 
     #region Unknown-key diagnosis

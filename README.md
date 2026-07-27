@@ -177,16 +177,47 @@ chains included. Command-line flags win over it.
 
 ```bash
 sharpts -p ./configs/tsconfig.json script.ts  # explicit config (file or directory)
+sharpts -p .                                  # check every selected project root
+sharpts -p . --watch                          # recheck after source/config changes
+sharpts --build                               # check references in dependency order
+sharpts --build packages/app --force          # rebuild a reference graph
 sharpts --no-tsconfig script.ts               # skip discovery entirely
 sharpts --showConfig script.ts                # print the resolved config as JSON, then exit
 ```
 
-SharpTS reads the strictness options, `checkJs`, the decorator options, `preserveConstEnums`,
-`outDir`, and `files[0]`. Emit options such as `target`, `module`, `jsx` and `sourceMap` do not
-apply — SharpTS compiles to .NET IL, not JavaScript — and are ignored silently; set
-`SHARPTS_TSCONFIG_VERBOSE=1` to list them. An unrecognized key is reported with a suggestion.
-`include`/`exclude` do not select inputs: SharpTS compiles the entry file and everything it
-imports.
+Project commands implement TypeScript's root-selection rules: `files` and `include` are unioned,
+`exclude` filters only files found through `include`, and imports can still pull excluded files
+into the semantic program. An explicit `files: []` remains empty. JavaScript roots are selected
+when `allowJs` or `checkJs` is enabled.
+
+The project model also supports:
+
+- `references` plus `--build`/`-b`, with referenced projects checked first and required to set
+  `composite`;
+- `incremental`, `composite`, `tsBuildInfoFile`, `--incremental`, `--force`, and `--watch`;
+- `baseUrl` and `paths`, including exact mappings, longest-prefix wildcard matching, and target
+  fallbacks;
+- `moduleResolution` values `classic`, `node`/`node10`, `node16`, `nodenext`, and `bundler`;
+- `lib`, `types`, and `typeRoots`, loaded as type-only declaration inputs. Named `lib` entries
+  come from an installed `typescript` package under `node_modules/typescript/lib`.
+
+Reference ordering and the `composite` requirement follow the
+[TypeScript project-reference model](https://www.typescriptlang.org/docs/handbook/project-references).
+
+SharpTS build state uses its own `.sharptsbuildinfo` format. If `tsBuildInfoFile` is set, SharpTS
+adds a `.sharpts` suffix rather than overwriting tsc's incompatible file. Watch mode currently
+re-evaluates the graph after a relevant change and uses that state to skip unchanged projects;
+parsed module and package caches are reused within each affected project check.
+
+`-p` without a script and `--build` are type-check-only. Script and `--compile` commands retain
+an explicit runtime entry point, but use the loaded project's module-resolution and declaration
+settings. Project-reference edges currently orchestrate semantic checks and build ordering; they
+do not yet emit or consume cross-project `.d.ts`/CLR artifacts, so imports between projects must
+still resolve through normal `paths` or package mappings.
+
+Emit options such as `target`, `module`, `jsx` and `sourceMap` do not apply — SharpTS compiles to
+.NET IL, not JavaScript — and are ignored silently; set `SHARPTS_TSCONFIG_VERBOSE=1` to list
+them. An unrecognized key is reported with a suggestion.
 
 ## Examples
 

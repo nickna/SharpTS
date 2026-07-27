@@ -141,22 +141,25 @@ The SDK automatically reads `tsconfig.json` if present in the project directory.
 |--------------------|---------|-------|
 | `compilerOptions.preserveConstEnums` | `SharpTSPreserveConstEnums` | |
 | `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` | Use Legacy (Stage 2) decorators |
+| `compilerOptions.decorators` | `SharpTSDecorators` | Use TC39 Stage 3 decorators |
 | `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` | |
+| `files[0]` | `SharpTSEntryPoint` | First file used as runtime entry point |
 
-> **MSBuild reads tsconfig.json; the CLI's own discovery is suppressed.** The `sharpts` CLI
-> normally discovers `tsconfig.json` by walking up from the entry script, but an SDK build
-> already reads `$(SharpTSTsConfigPath)` here and translates it into explicit flags — so
-> `Sdk.targets` passes `--no-tsconfig` to keep MSBuild the single source of truth and avoid
-> reading the file twice. A consequence: the **strictness** options (`strict`,
-> `strictNullChecks`, `strictFunctionTypes`, `noImplicitAny`), which the CLI honors from
-> `tsconfig.json`, are **not** currently forwarded by the SDK. Pass them via
-> `SharpTSExtraArgs`-style customization or set them on the command line until the SDK grows
-> matching properties.
+> **The CLI is the project-system authority.** `Sdk.targets` passes
+> `--project "$(SharpTSTsConfigPath)"`, so SDK compilation applies the same `extends` chain,
+> strictness, module resolution, and declaration inputs as direct CLI use. The MSBuild task
+> still extracts the entry point and options that have explicit MSBuild overrides; those
+> command-line flags take precedence over values in the config.
+
+The CLI-applied project settings include `baseUrl`, `paths`, `moduleResolution`, `lib`, `types`,
+and `typeRoots`. `files`/`include`/`exclude` select roots for `sharpts -p`; SDK IL compilation
+still requires one `SharpTSEntryPoint` because a .NET assembly has a single runtime entry graph.
+Use `sharpts -p` or `sharpts --build` as a separate check when every project root must be
+validated.
 
 The bool merge below is a one-way OR — a `tsconfig.json` value of `false` cannot turn off an
 MSBuild property that is `true`. The CLI's own merge is fully tri-state for the strictness
 options; this asymmetry is deliberate, to avoid changing behavior for shipped SDK consumers.
-| `files[0]` | `SharpTSEntryPoint` | First file used as entry point |
 
 ### Priority Order
 

@@ -417,6 +417,35 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_ProjectWithoutScript_ReturnsProjectCommand()
+    {
+        var result = _parser.Parse(["-p", "tsconfig.json", "--incremental"]);
+
+        var project = Assert.IsType<ParsedCommand.Project>(result);
+        Assert.Equal("tsconfig.json", project.Options.ProjectPath);
+        Assert.True(project.Options.Incremental);
+    }
+
+    [Fact]
+    public void Parse_BuildCollectsProjectsAndFlags()
+    {
+        var result = _parser.Parse(["--build", "packages/a", "packages/b", "--force"]);
+
+        var build = Assert.IsType<ParsedCommand.Build>(result);
+        Assert.Equal(["packages/a", "packages/b"], build.ProjectPaths);
+        Assert.True(build.Options.Force);
+    }
+
+    [Fact]
+    public void Parse_BuildDefaultsToCurrentDirectory()
+    {
+        var result = _parser.Parse(["-b"]);
+
+        var build = Assert.IsType<ParsedCommand.Build>(result);
+        Assert.Equal(["."], build.ProjectPaths);
+    }
+
+    [Fact]
     public void Parse_OutputTarget_CaseInsensitive()
     {
         var result = _parser.Parse(["-c", "file.ts", "-t", "DLL"]);

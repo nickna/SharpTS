@@ -46,7 +46,7 @@ dotnet build
 
 ## tsconfig.json Integration
 
-The SDK automatically reads `tsconfig.json` if present. Supported options:
+The SDK automatically reads `tsconfig.json` if present. The MSBuild task extracts:
 
 | tsconfig.json | Maps to |
 |---------------|---------|
@@ -57,6 +57,11 @@ The SDK automatically reads `tsconfig.json` if present. Supported options:
 | `files[0]` | `SharpTSEntryPoint` (if not set) |
 
 MSBuild properties take precedence over tsconfig.json values.
+
+The compiler also receives the config through `--project`, so `extends`, strictness,
+`baseUrl`/`paths`, selectable `moduleResolution`, and `lib`/`types`/`typeRoots` use the same
+project model as the CLI. `files[0]` remains the default runtime entry point for SDK IL output;
+use `sharpts -p` or `sharpts --build` to type-check every `files`/`include` root.
 
 ## Example Projects
 

@@ -30,7 +30,8 @@ internal static class TsConfigKeyCatalog
     [
         "strict", "strictNullChecks", "strictFunctionTypes", "noImplicitAny", "checkJs",
         "preserveConstEnums", "experimentalDecorators", "decorators", "emitDecoratorMetadata",
-        "rootDir", "outDir",
+        "rootDir", "outDir", "allowJs", "moduleResolution", "lib", "baseUrl", "paths",
+        "typeRoots", "types", "incremental", "composite", "tsBuildInfoFile",
     ];
 
     /// <summary>
@@ -39,13 +40,12 @@ internal static class TsConfigKeyCatalog
     /// </summary>
     private static readonly HashSet<string> EmitOptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "target", "module", "moduleResolution", "moduleDetection", "lib", "jsx", "jsxFactory",
+        "target", "module", "moduleDetection", "jsx", "jsxFactory",
         "jsxFragmentFactory", "jsxImportSource", "declaration", "declarationMap", "declarationDir",
         "sourceMap", "inlineSourceMap", "inlineSources", "sourceRoot", "mapRoot", "outFile", "out",
         "removeComments", "importHelpers", "downlevelIteration", "isolatedModules",
         "verbatimModuleSyntax", "esModuleInterop", "allowSyntheticDefaultImports",
-        "resolveJsonModule", "allowJs", "baseUrl", "paths", "typeRoots", "types", "incremental",
-        "composite", "tsBuildInfoFile", "skipLibCheck", "skipDefaultLibCheck", "noEmit",
+        "resolveJsonModule", "skipLibCheck", "skipDefaultLibCheck", "noEmit",
         "noEmitOnError", "noEmitHelpers", "newLine", "pretty", "plugins", "noResolve",
         "preserveSymlinks", "forceConsistentCasingInFileNames", "useDefineForClassFields",
         "emitBOM", "charset", "watchOptions", "allowImportingTsExtensions", "allowArbitraryExtensions",
@@ -62,10 +62,10 @@ internal static class TsConfigKeyCatalog
     };
 
     private static readonly string[] AppliedTopLevel =
-        ["compilerOptions", "files", "include", "exclude", "extends"];
+        ["compilerOptions", "files", "include", "exclude", "extends", "references"];
 
     private static readonly HashSet<string> KnownTopLevel = new(StringComparer.OrdinalIgnoreCase)
-        { "references", "compileOnSave", "typeAcquisition", "ts-node", "watchOptions", "$schema" };
+        { "compileOnSave", "typeAcquisition", "ts-node", "watchOptions", "$schema" };
 
     /// <summary>Formats every note for one file in an extends chain.</summary>
     public static IEnumerable<string> Diagnose(string configPath, TsConfigJson json)

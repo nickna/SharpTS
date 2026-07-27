@@ -26,6 +26,9 @@ internal sealed partial class TsConfigJson
     [JsonPropertyName("exclude")]
     public string[]? Exclude { get; set; }
 
+    [JsonPropertyName("references")]
+    public TsConfigProjectReference[]? References { get; set; }
+
     /// <summary>
     /// Top-level keys SharpTS did not bind. Drives the "unknown key / did you mean" warnings;
     /// keys keep the casing the user wrote so the message can echo it back.
@@ -51,6 +54,36 @@ internal sealed partial class TsConfigCompilerOptions
     [JsonPropertyName("checkJs")]
     public bool? CheckJs { get; set; }
 
+    [JsonPropertyName("allowJs")]
+    public bool? AllowJs { get; set; }
+
+    [JsonPropertyName("baseUrl")]
+    public string? BaseUrl { get; set; }
+
+    [JsonPropertyName("paths")]
+    public Dictionary<string, string[]>? Paths { get; set; }
+
+    [JsonPropertyName("moduleResolution")]
+    public string? ModuleResolution { get; set; }
+
+    [JsonPropertyName("lib")]
+    public string[]? Lib { get; set; }
+
+    [JsonPropertyName("types")]
+    public string[]? Types { get; set; }
+
+    [JsonPropertyName("typeRoots")]
+    public string[]? TypeRoots { get; set; }
+
+    [JsonPropertyName("incremental")]
+    public bool? Incremental { get; set; }
+
+    [JsonPropertyName("composite")]
+    public bool? Composite { get; set; }
+
+    [JsonPropertyName("tsBuildInfoFile")]
+    public string? TsBuildInfoFile { get; set; }
+
     /// <summary>See <see cref="TsConfigJson.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }
@@ -63,4 +96,10 @@ internal sealed partial class TsConfigCompilerOptions
         StrictFunctionTypes = StrictFunctionTypes,
         NoImplicitAny = NoImplicitAny,
     };
+}
+
+internal sealed class TsConfigProjectReference
+{
+    [JsonPropertyName("path")]
+    public string? Path { get; set; }
 }

@@ -190,9 +190,16 @@ public static class TsConfigLoader
     private static TsConfigResult Fold(List<(string Path, TsConfigJson Json)> chain)
     {
         var strictness = new StrictnessOptions();
-        bool? checkJs = null, preserveConstEnums = null, emitDecoratorMetadata = null;
+        bool? checkJs = null, allowJs = null, preserveConstEnums = null, emitDecoratorMetadata = null;
+        bool? incremental = null, composite = null;
         DecoratorMode? decoratorMode = null;
-        string? outDir = null, entryFile = null;
+        string? rootDir = null, outDir = null, baseUrl = null, buildInfoFile = null;
+        IReadOnlyList<string>? files = null, includes = null, excludes = null;
+        IReadOnlyList<string>? libs = null, types = null, typeRoots = null;
+        IReadOnlyDictionary<string, IReadOnlyList<string>> paths =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        // Preserve SharpTS's pre-project-system resolver behavior (package exports/imports).
+        ModuleResolutionMode resolutionMode = ModuleResolutionMode.Node16;
         var warnings = new List<string>();
 
         foreach (var (path, json) in chain)
@@ -213,8 +220,11 @@ public static class TsConfigLoader
                 };
 
                 checkJs = opts.CheckJs ?? checkJs;
+                allowJs = opts.AllowJs ?? allowJs;
                 preserveConstEnums = opts.PreserveConstEnums ?? preserveConstEnums;
                 emitDecoratorMetadata = opts.EmitDecoratorMetadata ?? emitDecoratorMetadata;
+                incremental = opts.Incremental ?? incremental;
+                composite = opts.Composite ?? composite;
 
                 // `decorators` (Stage 3) wins over `experimentalDecorators` (Legacy) when both
                 // are set — the same precedence the CLI's last-wins switch gives the arguments
@@ -222,16 +232,57 @@ public static class TsConfigLoader
                 if (opts.ExperimentalDecorators == true) decoratorMode = Parsing.DecoratorMode.Legacy;
                 if (opts.Decorators == true) decoratorMode = Parsing.DecoratorMode.Stage3;
 
+                if (!string.IsNullOrWhiteSpace(opts.RootDir))
+                    rootDir = Path.GetFullPath(Path.Combine(dir, opts.RootDir!));
                 if (!string.IsNullOrWhiteSpace(opts.OutDir))
                     outDir = Path.GetFullPath(Path.Combine(dir, opts.OutDir!));
+                if (!string.IsNullOrWhiteSpace(opts.BaseUrl))
+                    baseUrl = Path.GetFullPath(Path.Combine(dir, opts.BaseUrl!));
+                if (!string.IsNullOrWhiteSpace(opts.TsBuildInfoFile))
+                    buildInfoFile = Path.GetFullPath(Path.Combine(dir, opts.TsBuildInfoFile!));
+
+                if (!string.IsNullOrWhiteSpace(opts.ModuleResolution))
+                    resolutionMode = ParseModuleResolution(opts.ModuleResolution!, path);
+
+                if (opts.Paths is not null)
+                {
+                    string pathsBase = baseUrl ?? dir;
+                    paths = opts.Paths.ToDictionary(
+                        pair => pair.Key,
+                        pair => (IReadOnlyList<string>)pair.Value
+                            .Select(value => Path.GetFullPath(Path.Combine(pathsBase, value)))
+                            .ToArray(),
+                        StringComparer.Ordinal);
+                }
+
+                if (opts.Lib is not null)
+                    libs = opts.Lib.ToArray();
+                if (opts.Types is not null)
+                    types = opts.Types.ToArray();
+                if (opts.TypeRoots is not null)
+                    typeRoots = opts.TypeRoots
+                        .Select(value => Path.GetFullPath(Path.Combine(dir, value)))
+                        .ToArray();
             }
 
             // `files`/`include`/`exclude` replace rather than merge (tsc's rule).
-            if (json.Files is { Length: > 0 })
-                entryFile = Path.GetFullPath(Path.Combine(dir, json.Files[0]));
+            if (json.Files is not null)
+                files = json.Files.Select(value => Path.GetFullPath(Path.Combine(dir, value))).ToArray();
+            if (json.Include is not null)
+                includes = json.Include.Select(value => Path.GetFullPath(Path.Combine(dir, value))).ToArray();
+            if (json.Exclude is not null)
+                excludes = json.Exclude.Select(value => Path.GetFullPath(Path.Combine(dir, value))).ToArray();
         }
 
         var leaf = chain[^1];
+        string configDirectory = Path.GetDirectoryName(leaf.Path)!;
+        bool effectiveAllowJs = allowJs == true || checkJs == true;
+        var rootFiles = TsConfigFileMatcher.Resolve(
+            files, includes, excludes, configDirectory, outDir, effectiveAllowJs);
+        var declarationFiles = TsConfigDeclarationResolver.Resolve(
+            configDirectory, libs, types, typeRoots);
+        var references = ResolveProjectReferences(leaf.Json.References, configDirectory, leaf.Path);
+
         return new TsConfigResult(
             ConfigPath: leaf.Path,
             ExtendsChain: chain.Select(c => c.Path).ToArray(),
@@ -240,9 +291,62 @@ public static class TsConfigLoader
             PreserveConstEnums: preserveConstEnums,
             DecoratorMode: decoratorMode,
             EmitDecoratorMetadata: emitDecoratorMetadata,
+            RootDir: rootDir,
             OutDir: outDir,
-            EntryFile: entryFile,
+            EntryFile: files?.FirstOrDefault(),
+            RootFiles: rootFiles,
+            DeclarationFiles: declarationFiles,
+            ProjectReferences: references,
+            ModuleResolution: new ModuleResolutionOptions(resolutionMode, baseUrl, paths, typeRoots),
+            Lib: libs,
+            Types: types,
+            TypeRoots: typeRoots,
+            Incremental: incremental,
+            Composite: composite,
+            BuildInfoFile: ResolveBuildInfoFile(buildInfoFile, outDir, leaf.Path),
             Warnings: warnings);
+    }
+
+    private static ModuleResolutionMode ParseModuleResolution(string value, string configPath) =>
+        value.ToLowerInvariant() switch
+        {
+            "classic" => ModuleResolutionMode.Classic,
+            "node" or "node10" => ModuleResolutionMode.Node10,
+            "node16" => ModuleResolutionMode.Node16,
+            "nodenext" => ModuleResolutionMode.NodeNext,
+            "bundler" => ModuleResolutionMode.Bundler,
+            _ => throw new Exception(
+                $"Error: {FileName} ('{configPath}'): unsupported moduleResolution '{value}'. " +
+                "Use classic, node10, node16, nodenext, or bundler."),
+        };
+
+    private static IReadOnlyList<string> ResolveProjectReferences(
+        IReadOnlyList<TsConfigProjectReference>? references,
+        string configDirectory,
+        string configPath)
+    {
+        if (references is null)
+            return [];
+
+        var result = new List<string>();
+        foreach (var reference in references)
+        {
+            if (string.IsNullOrWhiteSpace(reference.Path))
+                throw new Exception($"Error: {FileName} ('{configPath}'): every project reference requires a 'path'.");
+            string candidate = Path.GetFullPath(Path.Combine(configDirectory, reference.Path));
+            result.Add(ResolveProjectPath(candidate));
+        }
+        return result;
+    }
+
+    private static string ResolveBuildInfoFile(string? configured, string? outDir, string configPath)
+    {
+        // SharpTS build-state data is deliberately kept separate from tsc's incompatible
+        // .tsbuildinfo format, even when both tools share tsBuildInfoFile.
+        if (configured is not null)
+            return configured + ".sharpts";
+        string directory = outDir ?? Path.GetDirectoryName(configPath)!;
+        return Path.Combine(directory, Path.GetFileNameWithoutExtension(configPath) + ".sharptsbuildinfo");
     }
 
     private static StringComparison PathComparison =>
@@ -256,8 +360,8 @@ public static class TsConfigLoader
 /// <param name="ConfigPath">Absolute path of the tsconfig.json that was loaded.</param>
 /// <param name="ExtendsChain">Every file in the chain, base first, ending with <paramref name="ConfigPath"/>.</param>
 /// <param name="EntryFile">
-/// <c>files[0]</c>, absolute. Used as the entry point only for <c>-p</c>/<c>--project</c> with no
-/// script argument — mirroring <c>ReadTsConfigTask</c> so the CLI and MSBuild pick the same file.
+/// <c>files[0]</c>, absolute. Retained as the default runtime entry point for the MSBuild SDK;
+/// project checks use every file in <see cref="TsConfigResult.RootFiles"/>.
 /// </param>
 /// <param name="Warnings">Unknown/inapplicable-key notes, already formatted for display.</param>
 public sealed record TsConfigResult(
@@ -268,6 +372,17 @@ public sealed record TsConfigResult(
     bool? PreserveConstEnums,
     DecoratorMode? DecoratorMode,
     bool? EmitDecoratorMetadata,
+    string? RootDir,
     string? OutDir,
     string? EntryFile,
+    IReadOnlyList<string> RootFiles,
+    IReadOnlyList<string> DeclarationFiles,
+    IReadOnlyList<string> ProjectReferences,
+    ModuleResolutionOptions ModuleResolution,
+    IReadOnlyList<string>? Lib,
+    IReadOnlyList<string>? Types,
+    IReadOnlyList<string>? TypeRoots,
+    bool? Incremental,
+    bool? Composite,
+    string BuildInfoFile,
     IReadOnlyList<string> Warnings);
