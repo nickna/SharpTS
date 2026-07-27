@@ -99,7 +99,7 @@ public enum ValidationMode
 }
 
 /// <summary>
-/// IL emission wrapper that validates label usage, stack balance, and exception blocks
+/// IL emission wrapper that validates label usage and exception-block pairing
 /// at emit time to catch errors before runtime PEVerify failures.
 /// </summary>
 /// <remarks>
@@ -107,13 +107,14 @@ public enum ValidationMode
 /// compile-time validation. It does not modify the emitted IL; it only checks that
 /// the emission sequence is valid.
 ///
-/// <para>Validated operations:</para>
-/// <list type="bullet">
-/// <item>Labels: All defined labels must be marked before method ends</item>
-/// <item>Stack: Branch targets must have consistent stack depth</item>
-/// <item>Exception blocks: Br not allowed inside try/catch; use Leave instead</item>
-/// <item>Boxing: Box requires value type on stack</item>
-/// </list>
+/// <para>Live surface (2026-07 cleanup): the branch ops
+/// (<c>Emit_Br</c>/<c>Emit_Brfalse</c>/<c>Emit_Brtrue</c>/<c>Emit_Leave</c>),
+/// label ops, and exception-block ops used by <c>ILEmitter</c>'s loop and
+/// try/catch emission. A full per-opcode wrapper surface (~100 members across
+/// Arithmetic/Calls/LoadStore partials) existed but had zero call sites, so its
+/// stack-type validation never ran; those partials were deleted. If full
+/// stack-type validation is ever wanted, it must be reintroduced as the
+/// mandated emit path, not an optional wrapper.</para>
 /// </remarks>
 public sealed partial class ValidatedILBuilder
 {

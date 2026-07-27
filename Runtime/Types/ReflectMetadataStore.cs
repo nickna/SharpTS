@@ -130,18 +130,4 @@ public class ReflectMetadataStore
         _metadata.Clear();
     }
 
-    /// <summary>
-    /// Standard metadata keys used by TypeScript when emitDecoratorMetadata is enabled.
-    /// </summary>
-    public static class StandardKeys
-    {
-        /// <summary>Type of the decorated property/parameter</summary>
-        public const string DesignType = "design:type";
-
-        /// <summary>Parameter types for methods/constructors</summary>
-        public const string DesignParamTypes = "design:paramtypes";
-
-        /// <summary>Return type for methods</summary>
-        public const string DesignReturnType = "design:returntype";
-    }
 }

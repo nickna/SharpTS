@@ -27,7 +27,6 @@ public partial class RuntimeEmitter
         // Emit the spec-compliant toString helper before the populate body
         // that wires it up.
         var errorToStringSpec = EmitErrorToStringSpecHelper(typeBuilder, runtime);
-        runtime.ErrorToStringSpec = errorToStringSpec;
 
         var method = runtime.ErrorPrototypePopulateMethod;
         var il = method.GetILGenerator();

@@ -172,7 +172,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
             [runtime.AsyncGeneratorInterfaceType]);
-        runtime.AsyncFromSyncIteratorType = typeBuilder;
 
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var isProtocolField = typeBuilder.DefineField("_isProtocol", _types.Boolean, FieldAttributes.Private);

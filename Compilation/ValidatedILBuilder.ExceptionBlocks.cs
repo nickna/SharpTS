@@ -97,37 +97,13 @@ public sealed partial class ValidatedILBuilder
         _il.EndExceptionBlock();
     }
 
-    /// <summary>
-    /// Throws an exception.
-    /// </summary>
-    public void Emit_Throw()
-    {
-
-        RequireStackDepth(1, "Throw");
-        PopStack();
-        _il.Emit(OpCodes.Throw);
-        _unreachable = true;
-    }
-
-    /// <summary>
-    /// Rethrows the current exception (in catch handler).
-    /// </summary>
-    public void Emit_Rethrow()
-    {
-
-        _il.Emit(OpCodes.Rethrow);
-        _unreachable = true;
-    }
-
-    /// <summary>
-    /// Emits endfinally/endfault.
-    /// </summary>
-    public void Emit_Endfinally()
-    {
-
-        _il.Emit(OpCodes.Endfinally);
-        _unreachable = true;
-    }
-
     #endregion
+
+    /// <summary>
+    /// Declares a local variable (passthrough to ILGenerator).
+    /// </summary>
+    public LocalBuilder DeclareLocal(Type type)
+    {
+        return _il.DeclareLocal(type);
+    }
 }

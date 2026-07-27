@@ -821,7 +821,6 @@ public partial class RuntimeEmitter
             EmitReflectConstruct(typeBuilder, runtime);
         }
         EmitIsArray(typeBuilder, runtime);
-        EmitSpreadArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
         EmitExpandCallArgs(typeBuilder, runtime);
         EmitArrayPop(typeBuilder, runtime);
@@ -929,7 +928,6 @@ public partial class RuntimeEmitter
         EmitStringIndexOf(typeBuilder, runtime);
         EmitStringIndexOfFrom(typeBuilder, runtime);
         EmitStringReplace(typeBuilder, runtime);
-        EmitStringSplit(typeBuilder, runtime);
         EmitStringIncludes(typeBuilder, runtime);
         EmitStringStartsWith(typeBuilder, runtime);
         EmitStringEndsWith(typeBuilder, runtime);
