@@ -293,16 +293,6 @@ public partial class RuntimeEmitter
         // are available to the wrapper bodies (for dispatching .call/.apply/.bind on
         // bound methods).
 
-        // util.promisify family — gated on UsesUtilPromisify. Matching dispatch
-        // arms in EmitInvokeValue / EmitInvokeMethodValue / EmitTypeOf are gated
-        // on the same flag.
-        if (features.UsesUtilPromisify)
-        {
-            EmitTSDeprecatedFunctionClass(moduleBuilder, runtime);
-            EmitTSCallbackifiedFunctionClass(moduleBuilder, runtime);
-            EmitPromisifyCallbackClass(moduleBuilder, runtime);  // Must come before PromisifiedFunction
-            EmitTSPromisifiedFunctionClass(moduleBuilder, runtime);
-        }
         // TextEncoder/Decoder — gated on UsesTextEncoding. $TextDecoderDecodeMethod
         // is referenced from EmitInvokeValue's dispatch, gated on the same flag.
         if (features.UsesTextEncoding)

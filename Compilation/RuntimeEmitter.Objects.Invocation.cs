@@ -124,8 +124,6 @@ public partial class RuntimeEmitter
         var bindWrapperLabel = il.DefineLabel();
         var callWrapperLabel = il.DefineLabel();
         var applyWrapperLabel = il.DefineLabel();
-        var deprecatedLabel = il.DefineLabel();
-        var promisifiedLabel = il.DefineLabel();
         var textDecoderDecodeLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
@@ -163,30 +161,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
         il.Emit(OpCodes.Brtrue, applyWrapperLabel);
 
-        if (_features.UsesUtilPromisify)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDeprecatedFunctionType);
-            il.Emit(OpCodes.Brtrue, deprecatedLabel);
-
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromisifiedFunctionType);
-            il.Emit(OpCodes.Brtrue, promisifiedLabel);
-        }
-
         if (_features.UsesTextEncoding)
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.TSTextDecoderDecodeMethodType);
             il.Emit(OpCodes.Brtrue, textDecoderDecodeLabel);
-        }
-
-        var callbackifiedLabel = il.DefineLabel();
-        if (_features.UsesUtilPromisify)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSCallbackifiedFunctionType);
-            il.Emit(OpCodes.Brtrue, callbackifiedLabel);
         }
 
         // Stream callback wrappers — only meaningful when Node streams emit.
@@ -212,14 +191,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brtrue, rejectCallbackLabel);
-
-        var promisifyCallbackLabel = il.DefineLabel();
-        if (_features.UsesUtilPromisify)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromisifyCallbackType);
-            il.Emit(OpCodes.Brtrue, promisifyCallbackLabel);
-        }
 
         var boundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -420,23 +391,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.FunctionApplyWrapperInvoke);
         il.Emit(OpCodes.Ret);
 
-        if (_features.UsesUtilPromisify)
-        {
-            il.MarkLabel(deprecatedLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSDeprecatedFunctionType);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSDeprecatedFunctionInvoke);
-            il.Emit(OpCodes.Ret);
-
-            il.MarkLabel(promisifiedLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSPromisifiedFunctionType);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSPromisifiedFunctionInvoke);
-            il.Emit(OpCodes.Ret);
-        }
-
         if (_features.UsesTextEncoding)
         {
             il.MarkLabel(textDecoderDecodeLabel);
@@ -444,16 +398,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, runtime.TSTextDecoderDecodeMethodType);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Callvirt, runtime.TSTextDecoderDecodeMethodInvoke);
-            il.Emit(OpCodes.Ret);
-        }
-
-        if (_features.UsesUtilPromisify)
-        {
-            il.MarkLabel(callbackifiedLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSCallbackifiedFunctionType);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSCallbackifiedFunctionInvoke);
             il.Emit(OpCodes.Ret);
         }
 
@@ -487,16 +431,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
         il.Emit(OpCodes.Ret);
-
-        if (_features.UsesUtilPromisify)
-        {
-            il.MarkLabel(promisifyCallbackLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSPromisifyCallbackType);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, runtime.TSPromisifyCallbackInvoke);
-            il.Emit(OpCodes.Ret);
-        }
 
         il.MarkLabel(boundArrayMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -701,12 +635,6 @@ public partial class RuntimeEmitter
             currentReject = nextReject;
         }
 
-        if (_features.UsesUtilPromisify)
-            EmitWrapperCheck(runtime.TSDeprecatedFunctionType, runtime.TSDeprecatedFunctionInvoke);
-        if (_features.UsesUtilPromisify)
-            EmitWrapperCheck(runtime.TSPromisifiedFunctionType, runtime.TSPromisifiedFunctionInvoke);
-        if (_features.UsesUtilPromisify)
-            EmitWrapperCheck(runtime.TSCallbackifiedFunctionType, runtime.TSCallbackifiedFunctionInvoke);
         if (_features.UsesTextEncoding)
             EmitWrapperCheck(runtime.TSTextDecoderDecodeMethodType, runtime.TSTextDecoderDecodeMethodInvoke);
         // Stream callback wrappers — gated on UsesNodeStreams.
@@ -718,8 +646,6 @@ public partial class RuntimeEmitter
         // Promise callbacks — always emitted (Promise infrastructure is core).
         EmitWrapperCheck(runtime.PromiseResolveCallbackType, runtime.PromiseResolveCallbackInvoke);
         EmitWrapperCheck(runtime.PromiseRejectCallbackType, runtime.PromiseRejectCallbackInvoke);
-        if (_features.UsesUtilPromisify)
-            EmitWrapperCheck(runtime.TSPromisifyCallbackType, runtime.TSPromisifyCallbackInvoke);
 
         // After the chain, mark the final reject label so the fall-through code
         // below has somewhere to land.

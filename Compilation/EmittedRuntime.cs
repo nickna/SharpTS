@@ -2096,61 +2096,6 @@ public class EmittedRuntime
     public MethodBuilder TSBufferSwap32 { get; set; } = null!;
     public MethodBuilder TSBufferSwap64 { get; set; } = null!;
 
-    // Util module methods
-    public MethodBuilder UtilFormat { get; set; } = null!;
-    public MethodBuilder UtilInspect { get; set; } = null!;
-    public MethodBuilder UtilIsDeepStrictEqual { get; set; } = null!;
-    public MethodBuilder UtilParseArgs { get; set; } = null!;
-    public MethodBuilder UtilToUSVString { get; set; } = null!;
-
-    // util.types.* methods
-    public MethodBuilder UtilTypesIsArray { get; set; } = null!;
-    public MethodBuilder UtilTypesIsFunction { get; set; } = null!;
-    public MethodBuilder UtilTypesIsNull { get; set; } = null!;
-    public MethodBuilder UtilTypesIsUndefined { get; set; } = null!;
-    public MethodBuilder UtilTypesIsDate { get; set; } = null!;
-    public MethodBuilder UtilTypesIsPromise { get; set; } = null!;
-    public MethodBuilder UtilTypesIsRegExp { get; set; } = null!;
-    public MethodBuilder UtilTypesIsMap { get; set; } = null!;
-    public MethodBuilder UtilTypesIsSet { get; set; } = null!;
-    public MethodBuilder UtilTypesIsTypedArray { get; set; } = null!;
-    public MethodBuilder UtilTypesIsNativeError { get; set; } = null!;
-    public MethodBuilder UtilTypesIsBoxedPrimitive { get; set; } = null!;
-    public MethodBuilder UtilTypesIsWeakMap { get; set; } = null!;
-    public MethodBuilder UtilTypesIsWeakSet { get; set; } = null!;
-    public MethodBuilder UtilTypesIsArrayBuffer { get; set; } = null!;
-
-    // util module additional methods
-    public MethodBuilder UtilStripVTControlCharacters { get; set; } = null!;
-    public MethodBuilder UtilGetSystemErrorName { get; set; } = null!;
-    public MethodBuilder UtilGetSystemErrorMap { get; set; } = null!;
-
-    // util.deprecate support
-    public MethodBuilder UtilDeprecate { get; set; } = null!;
-    public TypeBuilder TSDeprecatedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSDeprecatedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSDeprecatedFunctionInvoke { get; set; } = null!;
-
-    // util.callbackify support
-    public MethodBuilder UtilCallbackify { get; set; } = null!;
-    public TypeBuilder TSCallbackifiedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSCallbackifiedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSCallbackifiedFunctionInvoke { get; set; } = null!;
-
-    // util.promisify support
-    public MethodBuilder UtilPromisify { get; set; } = null!;
-    public TypeBuilder TSPromisifiedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSPromisifiedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSPromisifiedFunctionInvoke { get; set; } = null!;
-
-    // $PromisifyCallback type - emitted for standalone promisify support
-    public Type TSPromisifyCallbackType { get; set; } = null!;
-    public ConstructorBuilder TSPromisifyCallbackCtor { get; set; } = null!;
-    public MethodBuilder TSPromisifyCallbackInvoke { get; set; } = null!;
-
-    // util.inherits support
-    public MethodBuilder UtilInherits { get; set; } = null!;
-
     // $TextEncoder type - emitted for standalone util support
     public TypeBuilder TSTextEncoderType { get; set; } = null!;
     public ConstructorBuilder TSTextEncoderCtor { get; set; } = null!;
@@ -2168,16 +2113,6 @@ public class EmittedRuntime
     public MethodBuilder UtilInspectValue { get; set; } = null!;
     public MethodBuilder UtilInspectArray { get; set; } = null!;
     public MethodBuilder UtilInspectObject { get; set; } = null!;
-
-    // Util isDeepStrictEqual helper method (emitted for standalone)
-    public MethodBuilder UtilDeepEqualImpl { get; set; } = null!;
-
-    // ParseArgs helper methods (emitted for standalone)
-    public MethodBuilder UtilParseArgsGetArgsArray { get; set; } = null!;
-    public MethodBuilder UtilParseArgsGetOptionsDef { get; set; } = null!;
-    public MethodBuilder UtilParseArgsGetBoolOption { get; set; } = null!;
-    public MethodBuilder UtilParseLongOption { get; set; } = null!;
-    public MethodBuilder UtilParseShortOptions { get; set; } = null!;
 
     // Readline module methods
     public MethodBuilder ReadlineQuestionSync { get; set; } = null!;
