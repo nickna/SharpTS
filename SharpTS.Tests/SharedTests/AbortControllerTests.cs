@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AbortControllerTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortController_CreateAndAccessSignal(ExecutionMode mode)
     {
         var source = @"
@@ -20,8 +19,7 @@ public class AbortControllerTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortController_AbortSetsAborted(ExecutionMode mode)
     {
         var source = @"
@@ -33,8 +31,7 @@ public class AbortControllerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortController_AbortWithReason(ExecutionMode mode)
     {
         var source = @"
@@ -46,8 +43,7 @@ public class AbortControllerTests
         Assert.Equal("custom reason\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortController_AbortWithDefaultReason(ExecutionMode mode)
     {
         var source = @"
@@ -60,8 +56,7 @@ public class AbortControllerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_AddEventListener(ExecutionMode mode)
     {
         var source = @"
@@ -77,8 +72,7 @@ public class AbortControllerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_MultipleListeners(ExecutionMode mode)
     {
         var source = @"
@@ -94,8 +88,7 @@ public class AbortControllerTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_RemoveEventListener(ExecutionMode mode)
     {
         var source = @"
@@ -111,8 +104,7 @@ public class AbortControllerTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_OnAbortProperty(ExecutionMode mode)
     {
         var source = @"
@@ -126,8 +118,7 @@ public class AbortControllerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_ThrowIfAborted_NotAborted(ExecutionMode mode)
     {
         var source = @"
@@ -143,8 +134,7 @@ public class AbortControllerTests
         Assert.Equal("no throw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_ThrowIfAborted_Aborted(ExecutionMode mode)
     {
         var source = @"
@@ -161,8 +151,7 @@ public class AbortControllerTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_StaticAbort(ExecutionMode mode)
     {
         var source = @"
@@ -173,8 +162,7 @@ public class AbortControllerTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_StaticAbortWithReason(ExecutionMode mode)
     {
         var source = @"
@@ -186,8 +174,7 @@ public class AbortControllerTests
         Assert.Equal("true\nmy reason\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_StaticTimeout(ExecutionMode mode)
     {
         var source = @"
@@ -198,8 +185,7 @@ public class AbortControllerTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_Any_AbortsWhenAnyAborts(ExecutionMode mode)
     {
         var source = @"
@@ -214,8 +200,7 @@ public class AbortControllerTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_Any_AlreadyAborted(ExecutionMode mode)
     {
         var source = @"
@@ -229,8 +214,7 @@ public class AbortControllerTests
         Assert.Equal("true\nalready done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortController_AbortIdempotent(ExecutionMode mode)
     {
         var source = @"
@@ -245,8 +229,7 @@ public class AbortControllerTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_InstanceOf_BrandChecks(ExecutionMode mode)
     {
         // #246: interpreter returned false for real signals (no brand linkage
@@ -270,8 +253,7 @@ public class AbortControllerTests
     // the fix, compiled mode wrote a plain "onabort" dict key (never fired) and threw
     // "undefined is not a function" for addEventListener.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_OnAbort_DynamicReceiver_Fires(ExecutionMode mode)
     {
         var source = @"
@@ -285,8 +267,7 @@ public class AbortControllerTests
         Assert.Equal("yes\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_AddEventListener_DynamicReceiver_Fires(ExecutionMode mode)
     {
         var source = @"
@@ -300,8 +281,7 @@ public class AbortControllerTests
         Assert.Equal("yes\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_RemoveEventListener_DynamicReceiver(ExecutionMode mode)
     {
         var source = @"
@@ -318,8 +298,7 @@ public class AbortControllerTests
         Assert.Equal("0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_ThrowIfAborted_DynamicReceiver(ExecutionMode mode)
     {
         var source = @"
@@ -334,8 +313,7 @@ public class AbortControllerTests
         Assert.Equal("noThrow\nthrew\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbortSignal_AbortedAndReason_DynamicReceiver(ExecutionMode mode)
     {
         // The property reads on an `any` receiver (#224) must keep working alongside

@@ -10,8 +10,7 @@ public class ArrayStaticTests
 {
     #region Array.isArray Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsTrue_ForArray(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class ArrayStaticTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsTrue_ForEmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class ArrayStaticTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsFalse_ForNumber(ExecutionMode mode)
     {
         var source = """
@@ -49,8 +46,7 @@ public class ArrayStaticTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsFalse_ForString(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class ArrayStaticTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsFalse_ForObject(ExecutionMode mode)
     {
         var source = """
@@ -75,8 +70,7 @@ public class ArrayStaticTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IsArray_ReturnsFalse_ForNull(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +86,7 @@ public class ArrayStaticTests
 
     #region Array.from Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_CreatesArrayFromArray(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +101,7 @@ public class ArrayStaticTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_CreatesArrayFromString(ExecutionMode mode)
     {
         var source = """
@@ -124,8 +116,7 @@ public class ArrayStaticTests
         Assert.Equal("3\na\nb\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_WithMapFunction(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +131,7 @@ public class ArrayStaticTests
         Assert.Equal("3\n2\n4\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_MapFunctionWithIndex(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +145,7 @@ public class ArrayStaticTests
         Assert.Equal("10\n21\n32\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +158,7 @@ public class ArrayStaticTests
         Assert.Equal("0\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_FromSet(ExecutionMode mode)
     {
         var source = """
@@ -186,8 +174,7 @@ public class ArrayStaticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_WithGenerator(ExecutionMode mode)
     {
         var source = """
@@ -207,8 +194,7 @@ public class ArrayStaticTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_From_CustomIterator(ExecutionMode mode)
     {
         var source = """
@@ -240,8 +226,7 @@ public class ArrayStaticTests
 
     #region Array.of Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Of_CreatesArrayFromArguments(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +241,7 @@ public class ArrayStaticTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Of_SingleNumber(ExecutionMode mode)
     {
         var source = """
@@ -270,8 +254,7 @@ public class ArrayStaticTests
         Assert.Equal("1\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Of_NoArguments(ExecutionMode mode)
     {
         var source = """
@@ -284,8 +267,7 @@ public class ArrayStaticTests
         Assert.Equal("0\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Of_MixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -301,8 +283,7 @@ public class ArrayStaticTests
         Assert.Equal("4\n1\ntwo\ntrue\nnull\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Of_WithStrings(ExecutionMode mode)
     {
         var source = """

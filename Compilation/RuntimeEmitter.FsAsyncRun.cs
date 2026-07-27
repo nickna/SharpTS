@@ -11,7 +11,6 @@ public partial class RuntimeEmitter
     // loop, runs the sync op on the thread pool via $FsAsyncOp.Worker (reflection),
     // and Unrefs on completion — so the loop stays alive until the op drains
     // (mirrors fetch/DNS/timers and the interpreter's refsEventLoopWhileInFlight).
-    private TypeBuilder _fsAsyncOpType = null!;
     private ConstructorBuilder _fsAsyncOpCtor = null!;
     private MethodBuilder _fsAsyncOpWorker = null!;
     private MethodBuilder _fsRunAsync = null!;
@@ -75,7 +74,6 @@ public partial class RuntimeEmitter
         }
 
         t.CreateType();
-        _fsAsyncOpType = t;
         _fsAsyncOpCtor = ctor;
         _fsAsyncOpWorker = worker;
     }

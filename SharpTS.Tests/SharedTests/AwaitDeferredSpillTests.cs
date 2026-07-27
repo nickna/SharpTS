@@ -23,30 +23,26 @@ public class AwaitDeferredSpillTests
     private static string Run(string body, ExecutionMode mode)
         => TestHarness.Run(Defer + "class C { x: any = 0; }\nasync function m() {\n" + body + "\n}\nm();\n", mode);
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BinaryConcat_PrefixSurvivesDeferredAwait(ExecutionMode mode)
     {
         // The exact shape from the issue: the "concat: " prefix is pushed before the await.
         Assert.Equal("concat: 6\n", Run("""console.log("concat: " + (await defer(6, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BinaryConcat_TwoDeferredAwaits(ExecutionMode mode)
     {
         Assert.Equal("L-R\n", Run("""console.log((await defer("L", 5)) + "-" + (await defer("R", 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TemplateLiteral_TwoDeferredAwaits(ExecutionMode mode)
     {
         Assert.Equal("a1-2\n", Run("""console.log(`${"a"}${await defer(1, 5)}-${await defer(2, 5)}`);""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TaggedTemplate_DeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("p|7\n", Run(
@@ -56,30 +52,26 @@ public class AwaitDeferredSpillTests
             """, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConsoleLog_MultiArg_DeferredAwaitBetweenArgs(ExecutionMode mode)
     {
         Assert.Equal("A B C\n", Run("""console.log("A", await defer("B", 5), "C");""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayLiteral_DeferredAwaitBetweenElements(ExecutionMode mode)
     {
         Assert.Equal("[x, 9, y]\n", Run("""console.log(["x", await defer(9, 5), "y"]);""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteral_DeferredAwaitAfterEarlierProperty(ExecutionMode mode)
     {
         Assert.Equal("""{"a":"x","b":10}""" + "\n", Run(
             """console.log(JSON.stringify({ a: "x", b: await defer(10, 5) }));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComputedKeyObjectLiteral_DeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("""{"dyn":12,"other":99}""" + "\n", Run(
@@ -89,8 +81,7 @@ public class AwaitDeferredSpillTests
             """, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexSet_DeferredAwaitInIndexAndValue(ExecutionMode mode)
     {
         Assert.Equal("8\nZ\n", Run(
@@ -103,8 +94,7 @@ public class AwaitDeferredSpillTests
             """, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssign_DeferredAwaitRhs(ExecutionMode mode)
     {
         Assert.Equal("17\n17\n", Run(
@@ -119,8 +109,7 @@ public class AwaitDeferredSpillTests
             """, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_DeferredAwaitRhs(ExecutionMode mode)
     {
         Assert.Equal("11\n11\n", Run(
@@ -135,8 +124,7 @@ public class AwaitDeferredSpillTests
             """, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertySet_DeferredAwaitValue(ExecutionMode mode)
     {
         Assert.Equal("5\n", Run(
@@ -161,16 +149,14 @@ public class AwaitDeferredSpillTests
     private static string RunRest(string body, ExecutionMode mode)
         => TestHarness.Run(Defer + RestScaffold + "async function m() {\n" + body + "\n}\nm();\n", mode);
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RestParamCall_DeferredAwaitArg(ExecutionMode mode)
     {
         // The exact issue repro shape: await in the second (rest) argument.
         Assert.Equal("x,1\n", RunRest("""console.log(g("x", await defer(1, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RestParamCall_RegularParamSurvivesDeferredAwait(ExecutionMode mode)
     {
         // `h`'s typed regular param "X" is spilled before the deferred await in the rest arg;
@@ -178,15 +164,13 @@ public class AwaitDeferredSpillTests
         Assert.Equal("X|y,Z\n", RunRest("""console.log(h("X", "y", await defer("Z", 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RestParamCall_TwoDeferredAwaits(ExecutionMode mode)
     {
         Assert.Equal("p,q\n", RunRest("""console.log(g(await defer("p", 5), await defer("q", 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RestParamCall_SpreadBetweenDeferredAwaits(ExecutionMode mode)
     {
         // Spread element plus deferred awaits on both sides — exercises the spread/ExpandCallArgs
@@ -195,8 +179,7 @@ public class AwaitDeferredSpillTests
             """const arr = [10, 20]; console.log(g(await defer(0, 5), ...arr, await defer(30, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeferredThenableSpecies_PrefixSurvives(ExecutionMode mode)
     {
         // The original issue repro: a Promise subclass whose @@species is a general
@@ -239,31 +222,27 @@ public class AwaitDeferredSpillTests
     private static string RunFns(string body, ExecutionMode mode)
         => TestHarness.Run(Defer + FixedArityScaffold + "async function m() {\n" + body + "\n}\nm();\n", mode);
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FixedArityCall_EarlierStringArgSurvivesDeferredAwait(ExecutionMode mode)
     {
         // The exact #436 repro shape: f("A", await ...) lost "A" → "nullB".
         Assert.Equal("AB\n", RunFns("""console.log(concat2("A", await defer("B", 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FixedArityCall_NumericArgsSurviveDeferredAwait(ExecutionMode mode)
     {
         // Numeric (double) parameters: earlier args boxed across the await, unboxed back on load.
         Assert.Equal("6\n", RunFns("""console.log(add3(1, await defer(2, 5), 3));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FixedArityCall_TwoDeferredAwaitArgs(ExecutionMode mode)
     {
         Assert.Equal("12\n", RunFns("""console.log(add3(await defer(3, 5), 4, await defer(5, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FixedArityCall_BooleanArgBeforeDeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("yes\n", RunFns("""console.log(pick(true, await defer("yes", 5), "no"));""", mode));
@@ -282,22 +261,19 @@ public class AwaitDeferredSpillTests
     private static string RunMethods(string body, ExecutionMode mode)
         => TestHarness.Run(Defer + MethodScaffold + "async function m() {\n" + body + "\n}\nm();\n", mode);
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethodCall_EarlierArgSurvivesDeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("AB\n", RunMethods("""const c = new Calc(); console.log(c.join("A", await defer("B", 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethodCall_EarlierArgSurvivesDeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("42\n", RunMethods("""console.log(Calc.mul(6, await defer(7, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainMethodCall_EarlierArgSurvivesDeferredAwait(ExecutionMode mode)
     {
         Assert.Equal("AB\n", RunMethods(
@@ -312,23 +288,20 @@ public class AwaitDeferredSpillTests
     // await-state counter and crashing the compiler with "The given key 'N' was not present in the
     // dictionary." The arguments are now spilled once before the string-vs-generic split.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_DeferredAwaitArg(ExecutionMode mode)
     {
         // The exact #614 repro shape: substring (a direct runtime string method) on `any?.`.
         Assert.Equal("ell\n", Run("""const s: any = "hello"; console.log(s?.substring(await defer(1, 5), 4));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_TwoDeferredAwaits(ExecutionMode mode)
     {
         Assert.Equal("hel\n", Run("""const s: any = "hello"; console.log(s?.substring(await defer(0, 5), await defer(3, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_DefaultCasePath_DeferredAwaitArg(ExecutionMode mode)
     {
         // charAt is dispatchable but not one of the direct switch cases, so it routes through the
@@ -336,8 +309,7 @@ public class AwaitDeferredSpillTests
         Assert.Equal("e\n", Run("""const s: any = "hello"; console.log(s?.charAt(await defer(1, 5)));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DynamicDispatchStringMethod_DeferredAwaitArg(ExecutionMode mode)
     {
         // Non-optional dynamic dispatch (EmitDynamicMethodCallPreservingThis) has the same
@@ -345,8 +317,7 @@ public class AwaitDeferredSpillTests
         Assert.Equal("ell\n", Run("""const s: any = "hello"; console.log(s.substring(await defer(1, 5), 4));""", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_NonStringReceiverWithOwnMethod_DeferredAwaitArg(ExecutionMode mode)
     {
         // Receiver is not a string at runtime, so the generic (non-string) branch runs, reading the
@@ -356,8 +327,7 @@ public class AwaitDeferredSpillTests
             mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_NullishReceiverShortCircuits(ExecutionMode mode)
     {
         Assert.Equal("undefined\n", Run("""const n: any = null; console.log(n?.substring(await defer(1, 5), 4));""", mode));
@@ -383,8 +353,7 @@ public class AwaitDeferredSpillTests
             "m();\n",
             mode);
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_MissingOnNonStringReceiver_DoesNotEvaluateAwaitArg(ExecutionMode mode)
     {
         // The #627 repro: substring on a non-string object that lacks it. Both modes short-circuit to
@@ -393,8 +362,7 @@ public class AwaitDeferredSpillTests
             "const o: any = { foo: 1 };", "o?.substring(mark() + (await defer(0, 5)), 4)", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainNonStringMethod_MissingOnReceiver_DoesNotEvaluateAwaitArg(ExecutionMode mode)
     {
         // The non-dispatchable-name sibling (slice) was already consistent — it never had a string
@@ -404,8 +372,7 @@ public class AwaitDeferredSpillTests
             "const o: any = { foo: 1 };", "o?.slice(mark() + (await defer(0, 5)), 4)", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChainStringMethod_StringReceiver_EvaluatesAwaitArg(ExecutionMode mode)
     {
         // A string receiver DOES have the method, so the argument must evaluate (side effect runs) and

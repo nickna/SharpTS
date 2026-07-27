@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class HttpServerEventTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_On_RegistersListener(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -35,8 +34,7 @@ public class HttpServerEventTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Once_FiresOnlyOnce(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -66,8 +64,7 @@ public class HttpServerEventTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Off_RemovesListener(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -96,8 +93,7 @@ public class HttpServerEventTests
         Assert.Equal("1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_RemoveAllListeners_ClearsAllForEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -126,8 +122,7 @@ public class HttpServerEventTests
         Assert.Equal("3\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_ListenerCount_ReturnsCorrectCount(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -153,8 +148,7 @@ public class HttpServerEventTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_EventNames_ReturnsRegisteredEvents(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -179,8 +173,7 @@ public class HttpServerEventTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_MultipleListeners_ReceiveSameEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -213,8 +206,7 @@ public class HttpServerEventTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Emit_CustomEvent_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -241,8 +233,7 @@ public class HttpServerEventTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Listeners_ReturnsListenerArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -269,8 +260,7 @@ public class HttpServerEventTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_SetMaxListeners_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -291,8 +281,7 @@ public class HttpServerEventTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_PrependListener_AddsToFront(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -320,8 +309,7 @@ public class HttpServerEventTests
         Assert.Equal("0,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_AddListener_IsAliasForOn(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -347,8 +335,7 @@ public class HttpServerEventTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_RemoveListener_IsAliasForOff(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -376,8 +363,7 @@ public class HttpServerEventTests
         Assert.Equal("1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_MethodChaining_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -403,8 +389,7 @@ public class HttpServerEventTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_TypeCheck_EventEmitterMethods(ExecutionMode mode)
     {
         // This test verifies that type checking passes for EventEmitter methods
@@ -435,8 +420,7 @@ public class HttpServerEventTests
         Assert.Equal("type check passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Emit_ReturnsBoolean(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -463,8 +447,7 @@ public class HttpServerEventTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_RawListeners_ReturnsListenerArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -488,8 +471,7 @@ public class HttpServerEventTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_PrependOnceListener_AddsOnceListenerToFront(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

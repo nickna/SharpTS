@@ -11,8 +11,7 @@ public class TimersModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class TimersModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -54,8 +52,7 @@ public class TimersModuleTests
 
     #region setTimeout Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetTimeout_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -72,8 +69,7 @@ public class TimersModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetTimeout_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -93,8 +89,7 @@ public class TimersModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetTimeout_ExecutesCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +109,7 @@ public class TimersModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_ClearTimeout_CancelsCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -140,8 +134,7 @@ public class TimersModuleTests
 
     #region setInterval Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetInterval_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +156,7 @@ public class TimersModuleTests
 
     #region setImmediate Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetImmediate_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -181,8 +173,7 @@ public class TimersModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetImmediate_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -202,8 +193,7 @@ public class TimersModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetImmediate_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -223,8 +213,7 @@ public class TimersModuleTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_ClearImmediate_CancelsCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -252,8 +241,7 @@ public class TimersModuleTests
     // Regression for #1149: the timers facade forwards `...args` to the primitive
     // instead of hand-unrolling an arity ladder, so more than 8 trailing args now
     // survive in both interpreter and compiled modes (the old ladder capped at 8).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetTimeout_ForwardsBeyondEightArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -275,8 +263,7 @@ public class TimersModuleTests
     }
 
     // Regression for #1149: setImmediate forwards a caller-side spread (`...payload`).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Timers_SetImmediate_ForwardsCallerSpread(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

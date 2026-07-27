@@ -72,8 +72,7 @@ public class ClusterModuleTests : IDisposable
 
     #region Import and Basic Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsPrimary_InMainThread_ReturnsTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -89,8 +88,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IsMaster_AliasForIsPrimary(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -105,8 +103,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -123,8 +120,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetupPrimary_StoresSettings(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -144,8 +140,7 @@ public class ClusterModuleTests : IDisposable
 
     #region Fork and Worker Lifecycle (dual-mode: compiled fork bridges to interpreted workers, #1171)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_WorkerExitsSuccessfully(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -169,8 +164,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("worker exited:", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_WorkerSeesIsWorkerTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -193,8 +187,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("worker isWorker: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_WorkerToParentMessaging(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -220,8 +213,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("received: hello from worker", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_ParentToWorkerMessaging(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -252,8 +244,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("echo: hello from primary", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_WorkerExitEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -276,8 +267,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("exit code: 0", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_ClusterWorkersDict(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -306,8 +296,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("different: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Disconnect(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -337,8 +326,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("disconnected", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_Kill(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -364,8 +352,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("worker killed", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cluster_DisconnectAll(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -411,8 +398,7 @@ public class ClusterModuleTests : IDisposable
 
     #region Cluster Port Sharing
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_WorkersShareNetPort(ExecutionMode mode)
     {
         var port = GetFreePort();
@@ -480,8 +466,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("responses: 4", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Fork_WorkerExitReleasesSlot(ExecutionMode mode)
     {
         var port = GetFreePort();
@@ -536,8 +521,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("after kill: worker-", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Fork_LastWorkerExitStopsListener(ExecutionMode mode)
     {
         var port = GetFreePort();
@@ -585,8 +569,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("worker exited", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Fork_WorkersShareHttpPort(ExecutionMode mode)
     {
         var port = GetFreePort();
@@ -641,8 +624,7 @@ public class ClusterModuleTests : IDisposable
 
     #region Live State, Events, Worker + Settings Completeness (#1166)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LiveWorkers_ReflectedThroughImportedBinding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -669,8 +651,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("after exit: 0", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Setup_EventFiresOnSetupPrimary(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -691,8 +672,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Listening_EventFiresWithAddress(ExecutionMode mode)
     {
         var port = GetFreePort();
@@ -724,8 +704,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains($"worker-level listening: {port}", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WorkerProcess_PidConnectedAndMessageForwarding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -754,8 +733,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("connected: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Worker_DestroyEmitsExitWithSignal(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -781,8 +759,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("exit: code=null signal=SIGTERM ead=true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Settings_DefaultsAndMergeSemantics(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -808,8 +785,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("silent after merge: false", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SchedulingPolicy_ConstantsAndRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -833,8 +809,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("rr round-trips: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WorkerArgv_HonorsSettingsArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -860,8 +835,7 @@ public class ClusterModuleTests : IDisposable
         Assert.Contains("argv2: alpha", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Silent_SuppressesWorkerConsoleOutput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -887,8 +861,7 @@ public class ClusterModuleTests : IDisposable
         Assert.DoesNotContain("WORKER_NOISE", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RoundRobin_DistributesConnectionsAcrossWorkers(ExecutionMode mode)
     {
         var port = GetFreePort();

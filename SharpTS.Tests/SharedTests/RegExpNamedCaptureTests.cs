@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class RegExpNamedCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_NamedGroups_PopulatesGroupsObject(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("2024\n03\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_NamedGroups_IndexAndInput(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("hello\n0\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_NoNamedGroups_GroupsIsNull(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Match_NamedGroups_NonGlobal(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("2024\n03\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_NamedGroups(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("2\n2024\n03\n2025\n12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_NoMatch_ReturnsNull(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +95,7 @@ public class RegExpNamedCaptureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_MixedNamedAndUnnamed(ExecutionMode mode)
     {
         var source = """

@@ -123,6 +123,19 @@ public static class TestHarness
     }
 
     /// <summary>
+    /// Parses source and throws on the first parse error. The throwing twin of
+    /// <see cref="Parse"/>; replaces the byte-identical private helper that had
+    /// spread across the parser test files (2026-07 cleanup).
+    /// </summary>
+    public static List<Stmt> ParseOrThrow(string source)
+    {
+        var lexer = new Lexer(source);
+        var tokens = lexer.ScanTokens();
+        var parser = new Parser(tokens);
+        return parser.ParseOrThrow();
+    }
+
+    /// <summary>
     /// Runs TypeScript source through the interpreter and captures console output.
     /// Uses default timeout to prevent infinite loops from hanging tests.
     /// </summary>
@@ -1218,7 +1231,7 @@ public static class TestHarness
     /// Verifies IL from in-memory PE bytes (no disk roundtrip). Used by the opt-in
     /// suite-wide verification guardrail in <see cref="RunCompiledInProcess"/>.
     /// </summary>
-    public static List<string> VerifyILBytes(byte[] bytes)
+    private static List<string> VerifyILBytes(byte[] bytes)
     {
         using var verifier = new ILVerifier();
         using var stream = new MemoryStream(bytes);

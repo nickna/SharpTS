@@ -28,8 +28,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncNaNStrictEqualityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NaNStrictEquality(ExecutionMode mode)
     {
         // The exact repro from #642.
@@ -45,8 +44,7 @@ public class AsyncNaNStrictEqualityTests
         Assert.Equal("false\nfalse\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_ComputedNaN_NotEqual(ExecutionMode mode)
     {
         // A NaN produced at runtime (not the literal) — exercises the same fast path.
@@ -61,8 +59,7 @@ public class AsyncNaNStrictEqualityTests
         Assert.Equal("false\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_AfterAwait_NaNStillNotEqual(ExecutionMode mode)
     {
         // Equality evaluated after a suspension point still runs through the async fast path.
@@ -79,8 +76,7 @@ public class AsyncNaNStrictEqualityTests
     // #648: previously interpreted-only because a bare NaN/Infinity inside a compiled async arrow
     // resolved to null (NaN === NaN → null === null → true). Now cross-mode after the
     // AsyncArrowMoveNextEmitter global-constant fix.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_NaNStrictEquality(ExecutionMode mode)
     {
         // The exact repro from #648.
@@ -98,8 +94,7 @@ public class AsyncNaNStrictEqualityTests
     // must resolve to real values inside a compiled async arrow, not a null load. A param named
     // `NaN` must still shadow the global (resolver runs before the constant check), matching
     // ECMA-262 lexical lookup.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_GlobalConstantsResolve(ExecutionMode mode)
     {
         var source = """
@@ -122,8 +117,7 @@ public class AsyncNaNStrictEqualityTests
     // After an await the arrow body runs from a resumed state-machine label; the global constants
     // must still resolve there too (the suspend/resume path is where #648's null load was most
     // surprising).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_AfterAwait_NaNStillNotEqual(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +131,7 @@ public class AsyncNaNStrictEqualityTests
         Assert.Equal("false\nNaN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NaNStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -156,8 +149,7 @@ public class AsyncNaNStrictEqualityTests
 
     // ---- Already-correct contexts: assert cross-mode parity so they don't regress ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevel_NaNStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -167,8 +159,7 @@ public class AsyncNaNStrictEqualityTests
         Assert.Equal("false\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NaNStrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -183,8 +174,7 @@ public class AsyncNaNStrictEqualityTests
 
     // ---- Guard: ordinary number equality is unaffected by the Double.Equals -> == change ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_OrdinaryNumberEquality_Unaffected(ExecutionMode mode)
     {
         var source = """

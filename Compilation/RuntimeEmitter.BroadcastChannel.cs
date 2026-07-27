@@ -47,9 +47,6 @@ public partial class RuntimeEmitter
     private MethodBuilder _broadcastChannelRef = null!;
     private MethodBuilder _broadcastChannelUnref = null!;
     private MethodBuilder _broadcastChannelDrain = null!;
-    private MethodBuilder _broadcastChannelGetName = null!;
-    private MethodBuilder _broadcastChannelAddEventListener = null!;
-    private MethodBuilder _broadcastChannelRemoveEventListener = null!;
 
     private Type _bcInnerDictType = null!;   // ConcurrentDictionary<long, object>
     private Type _bcRegistryDictType = null!; // ConcurrentDictionary<string, object>
@@ -638,7 +635,6 @@ public partial class RuntimeEmitter
 
         var prop = typeBuilder.DefineProperty("Name", PropertyAttributes.None, _types.String, Type.EmptyTypes);
         prop.SetGetMethod(getter);
-        _broadcastChannelGetName = getter;
     }
 
     /// <summary>
@@ -746,7 +742,6 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String, _types.Object]
         );
-        _broadcastChannelAddEventListener = method;
 
         var il = method.GetILGenerator();
         // this.On(type, listener); discard return
@@ -769,7 +764,6 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.String, _types.Object]
         );
-        _broadcastChannelRemoveEventListener = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);

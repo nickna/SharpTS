@@ -11,8 +11,7 @@ public class SetOperationsTests
 {
     #region Union Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Union_CombinesTwoSets(ExecutionMode mode)
     {
         var source = @"
@@ -30,8 +29,7 @@ public class SetOperationsTests
         Assert.Equal("5\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Union_WithEmptySet(ExecutionMode mode)
     {
         var source = @"
@@ -44,8 +42,7 @@ public class SetOperationsTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Union_DoesNotMutateOriginal(ExecutionMode mode)
     {
         var source = @"
@@ -64,8 +61,7 @@ public class SetOperationsTests
 
     #region Intersection Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Intersection_ReturnsCommonElements(ExecutionMode mode)
     {
         var source = @"
@@ -82,8 +78,7 @@ public class SetOperationsTests
         Assert.Equal("2\ntrue\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Intersection_NoCommonElements(ExecutionMode mode)
     {
         var source = @"
@@ -96,8 +91,7 @@ public class SetOperationsTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Intersection_WithEmptySet(ExecutionMode mode)
     {
         var source = @"
@@ -114,8 +108,7 @@ public class SetOperationsTests
 
     #region Difference Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Difference_ReturnsElementsOnlyInFirst(ExecutionMode mode)
     {
         var source = @"
@@ -131,8 +124,7 @@ public class SetOperationsTests
         Assert.Equal("2\ntrue\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Difference_WithEmptySet(ExecutionMode mode)
     {
         var source = @"
@@ -145,8 +137,7 @@ public class SetOperationsTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Difference_FromEmptySet(ExecutionMode mode)
     {
         var source = @"
@@ -163,8 +154,7 @@ public class SetOperationsTests
 
     #region Symmetric Difference Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SymmetricDifference_ReturnsElementsInEitherButNotBoth(ExecutionMode mode)
     {
         var source = @"
@@ -181,8 +171,7 @@ public class SetOperationsTests
         Assert.Equal("2\ntrue\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SymmetricDifference_IdenticalSets(ExecutionMode mode)
     {
         var source = @"
@@ -195,8 +184,7 @@ public class SetOperationsTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SymmetricDifference_DisjointSets(ExecutionMode mode)
     {
         var source = @"
@@ -213,8 +201,7 @@ public class SetOperationsTests
 
     #region IsSubsetOf Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSubsetOf_ReturnsTrueForSubset(ExecutionMode mode)
     {
         var source = @"
@@ -226,8 +213,7 @@ public class SetOperationsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSubsetOf_ReturnsFalseForNonSubset(ExecutionMode mode)
     {
         var source = @"
@@ -239,8 +225,7 @@ public class SetOperationsTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSubsetOf_EmptySetIsSubsetOfAll(ExecutionMode mode)
     {
         var source = @"
@@ -252,8 +237,7 @@ public class SetOperationsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSubsetOf_SetIsSubsetOfItself(ExecutionMode mode)
     {
         var source = @"
@@ -268,8 +252,7 @@ public class SetOperationsTests
 
     #region IsSupersetOf Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSupersetOf_ReturnsTrueForSuperset(ExecutionMode mode)
     {
         var source = @"
@@ -281,8 +264,7 @@ public class SetOperationsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSupersetOf_ReturnsFalseForNonSuperset(ExecutionMode mode)
     {
         var source = @"
@@ -294,8 +276,7 @@ public class SetOperationsTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsSupersetOf_AllAreSupersetOfEmpty(ExecutionMode mode)
     {
         var source = @"
@@ -311,8 +292,7 @@ public class SetOperationsTests
 
     #region IsDisjointFrom Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsDisjointFrom_ReturnsTrueForDisjointSets(ExecutionMode mode)
     {
         var source = @"
@@ -324,8 +304,7 @@ public class SetOperationsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsDisjointFrom_ReturnsFalseForOverlappingSets(ExecutionMode mode)
     {
         var source = @"
@@ -337,8 +316,7 @@ public class SetOperationsTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_IsDisjointFrom_EmptySetIsDisjointFromAll(ExecutionMode mode)
     {
         var source = @"
@@ -355,8 +333,7 @@ public class SetOperationsTests
 
     #region String Set Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Operations_WithStrings(ExecutionMode mode)
     {
         var source = @"
@@ -380,8 +357,7 @@ public class SetOperationsTests
 
     #region Chaining Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_Operations_CanBeChained(ExecutionMode mode)
     {
         var source = @"

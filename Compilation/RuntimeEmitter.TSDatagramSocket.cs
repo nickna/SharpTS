@@ -34,7 +34,6 @@ public partial class RuntimeEmitter
     private MethodBuilder _dgramEmitConnectMethod = null!;
     private MethodBuilder _dgramFireCloseCallbackMethod = null!;
     private MethodBuilder _dgramFireBindErrorMethod = null!;
-    private TypeBuilder _dgramMessageClosureType = null!;
     private ConstructorBuilder _dgramMessageClosureCtor = null!;
     private MethodBuilder _dgramMessageClosureRun = null!;
 

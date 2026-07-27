@@ -10,8 +10,7 @@ public class ArrayBufferTests
 {
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Constructor_CreatesBufferWithSize(ExecutionMode mode)
     {
         var source = @"
@@ -22,8 +21,7 @@ public class ArrayBufferTests
         Assert.Equal("16\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Constructor_ZeroLength(ExecutionMode mode)
     {
         var source = @"
@@ -34,8 +32,7 @@ public class ArrayBufferTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Constructor_NegativeLength_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -54,8 +51,7 @@ public class ArrayBufferTests
 
     #region ByteLength Property Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_ByteLength_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = @"
@@ -72,8 +68,7 @@ public class ArrayBufferTests
 
     #region Slice Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Slice_CreatesNewBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -85,8 +80,7 @@ public class ArrayBufferTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Slice_WithNegativeIndices(ExecutionMode mode)
     {
         var source = @"
@@ -98,8 +92,7 @@ public class ArrayBufferTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Slice_CopiesDataIndependently(ExecutionMode mode)
     {
         var source = @"
@@ -122,8 +115,7 @@ public class ArrayBufferTests
         Assert.Equal("100\n200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_Slice_DefaultEnd(ExecutionMode mode)
     {
         var source = @"
@@ -139,8 +131,7 @@ public class ArrayBufferTests
 
     #region IsView Static Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_IsView_ReturnsTrueForTypedArray(ExecutionMode mode)
     {
         var source = @"
@@ -151,8 +142,7 @@ public class ArrayBufferTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_IsView_ReturnsFalseForNonView(ExecutionMode mode)
     {
         var source = @"
@@ -168,8 +158,7 @@ public class ArrayBufferTests
         Assert.Equal("false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_IsView_AllTypedArrays(ExecutionMode mode)
     {
         var source = @"
@@ -193,8 +182,7 @@ public class ArrayBufferTests
 
     #region TypedArray over ArrayBuffer Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Int32Array_OverArrayBuffer_SharesMemory(ExecutionMode mode)
     {
         var source = @"
@@ -208,8 +196,7 @@ public class ArrayBufferTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_OverArrayBuffer_WithByteOffset(ExecutionMode mode)
     {
         var source = @"
@@ -222,8 +209,7 @@ public class ArrayBufferTests
         Assert.Equal("4\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Uint8Array_OverArrayBuffer_WorksCorrectly(ExecutionMode mode)
     {
         var source = @"
@@ -238,8 +224,7 @@ public class ArrayBufferTests
         Assert.Equal("255\n128\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllTypedArrays_OverArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -285,8 +270,7 @@ public class ArrayBufferTests
         Assert.Equal("4294967295", lines[6]);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_Buffer_ReturnsArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -303,8 +287,7 @@ public class ArrayBufferTests
 
     #region TypedArray Array-literal Constructor Tests (#782)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_FromArrayLiteral_CopiesElements(ExecutionMode mode)
     {
         var source = @"
@@ -315,8 +298,7 @@ public class ArrayBufferTests
         Assert.Equal("1 2 3 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_Int32_FromArrayLiteral_CopiesElements(ExecutionMode mode)
     {
         var source = @"
@@ -327,8 +309,7 @@ public class ArrayBufferTests
         Assert.Equal("100 -300 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedArray_CopyFromTypedArray(ExecutionMode mode)
     {
         var source = @"
@@ -340,8 +321,7 @@ public class ArrayBufferTests
         Assert.Equal("10 20 30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void TypedArray_Spread_ProducesArray(ExecutionMode mode)
     {
         var source = @"
@@ -357,8 +337,7 @@ public class ArrayBufferTests
 
     #region Mixed ArrayBuffer and SharedArrayBuffer Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_IsNotShared(ExecutionMode mode)
     {
         var source = @"

@@ -25,8 +25,7 @@ public class ClassMethodDefaultParameterTests
 {
     // ---- Constructors (parameter properties, value-type + reference) -------
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_ParameterProperty_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +35,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_ParameterProperty_NumericDefault_ExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +45,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_ParameterProperty_NumericDefault_Present(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +55,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_StringDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("anon\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_BooleanDefault_ExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +78,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- Private methods (instance + static, value-type + reference) -------
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +91,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_NumericDefault_ExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -111,8 +104,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_MultipleDefaults_AllOmitted(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +117,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_PartialApplication_RemainingDefaults(ExecutionMode mode)
     {
         var source = """
@@ -139,8 +130,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateMethod_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +145,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- Free functions (value-type default + explicit undefined, #705 (a)) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FreeFunction_NumericDefault_ExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -166,8 +155,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FreeFunction_NumericDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +168,7 @@ public class ClassMethodDefaultParameterTests
     // ---- Reference-type defaults on (virtual) instance & static methods ----
     // These fire without changing the slot type, so override matching is preserved.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_StringDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +179,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("Hi World\nHi Bob\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_StringDefault_OmittedArg(ExecutionMode mode)
     {
         var source = """
@@ -203,8 +189,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("Hi World\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_ArgPresent_DefaultNotApplied(ExecutionMode mode)
     {
         // Argument present: no default-firing needed; value-type slot stays fast and correct.
@@ -217,8 +202,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- Override safety: widening must NOT change a virtual method's signature ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsDefault_StillOverrides(ExecutionMode mode)
     {
         // Regression guard: a derived override that adds a default to a value-type param the base
@@ -233,8 +217,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_BothDefault_DispatchesToDerived(ExecutionMode mode)
     {
         var source = """
@@ -250,8 +233,7 @@ public class ClassMethodDefaultParameterTests
     // A base-typed call must reach the derived override even though its wider CLR arity would
     // otherwise take a new vtable slot. Fixed by emitting a base-arity override bridge.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsValueTypeDefault_BaseTypedDispatchesToDerived(ExecutionMode mode)
     {
         var source = """
@@ -263,8 +245,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("103\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsReferenceTypeDefault_BaseTypedDispatchesToDerived(ExecutionMode mode)
     {
         // Reference-type added default proves the gap is dispatch, not default-firing.
@@ -277,8 +258,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("x3Z\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsNoDefaultOptional_BaseTypedDispatchesToDerived(ExecutionMode mode)
     {
         // Added optional with no default: the derived runs with the param undefined.
@@ -291,8 +271,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("D:3:u\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsMultipleDefaults_BaseTypedDispatchesToDerived(ExecutionMode mode)
     {
         var source = """
@@ -304,8 +283,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("Q:1:7:z\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_ThreeLevelChain_BaseAndMidTypedReachMostDerived(ExecutionMode mode)
     {
         // Each level adds an arity; both a base-typed and a mid-typed call must land on L2.
@@ -321,8 +299,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("L2:3:1:2\nL2:3:1:2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsDefault_DirectCallStillWorks(ExecutionMode mode)
     {
         // Regression: the direct (derived-typed) call path is unaffected by the bridge.
@@ -337,8 +314,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- Value-type defaults on (virtual) instance & static methods (#723/#737) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -348,8 +324,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_NumericDefault_ExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -359,8 +334,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -371,8 +345,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("15\n15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_BooleanDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -383,8 +356,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("true\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_DerivedAddsDefault_OmittedFiresDerivedDefault(ExecutionMode mode)
     {
         // The derived override adds a value-type default the base declares as required; calling it
@@ -400,8 +372,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- Generator / async-generator method defaults (#737) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorMethod_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -413,8 +384,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("1,10\n1,2\n1,10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FreeGenerator_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -424,8 +394,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("3,7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorMethod_NumericDefault_Omitted(ExecutionMode mode)
     {
         var source = """
@@ -441,8 +410,7 @@ public class ClassMethodDefaultParameterTests
 
     // ---- #739: direct call pads omitted optional with `undefined`, not null ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethod_OmittedOptional_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -452,8 +420,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_OmittedOptional_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -463,8 +430,7 @@ public class ClassMethodDefaultParameterTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Constructor_OmittedOptional_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -477,8 +443,7 @@ public class ClassMethodDefaultParameterTests
     // ---- Generator `??` over an omitted optional (regression: #739 padding exposed a latent
     //      state-machine nullish-coalescing bug that ignored the `$Undefined` sentinel) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorNullishCoalescing_OmittedOptional_EvaluatesRight(ExecutionMode mode)
     {
         // `pop(error?)` does `error ?? this.arr.pop()`. With `error` omitted (→ `undefined`), the

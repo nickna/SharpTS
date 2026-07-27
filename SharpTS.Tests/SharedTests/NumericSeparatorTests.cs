@@ -10,8 +10,7 @@ public class NumericSeparatorTests
 {
     #region Valid Numeric Separators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_IntegerLiteral_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class NumericSeparatorTests
         Assert.Equal("1000000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_DecimalLiteral_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class NumericSeparatorTests
         Assert.Equal("1234.56789\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_MultipleSeparators_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -49,8 +46,7 @@ public class NumericSeparatorTests
         Assert.Equal("12345\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_BigInt_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class NumericSeparatorTests
         Assert.Equal("1000000n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_Arithmetic_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +71,7 @@ public class NumericSeparatorTests
         Assert.Equal("3000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_InExpression_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +87,7 @@ public class NumericSeparatorTests
 
     #region Invalid Numeric Separators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_LeadingUnderscore_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -107,8 +100,7 @@ public class NumericSeparatorTests
         Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_TrailingUnderscore_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +111,7 @@ public class NumericSeparatorTests
         Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_AdjacentUnderscores_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +122,7 @@ public class NumericSeparatorTests
         Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_BeforeDecimalPoint_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +133,7 @@ public class NumericSeparatorTests
         Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericSeparator_AfterDecimalPoint_ThrowsError(ExecutionMode mode)
     {
         var source = """

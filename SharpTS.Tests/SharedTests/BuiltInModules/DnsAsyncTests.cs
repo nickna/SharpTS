@@ -47,8 +47,7 @@ public class DnsAsyncTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_FakeServer(ExecutionMode mode)
     {
         using var server = CreateAddressServer();
@@ -64,8 +63,7 @@ public class DnsAsyncTests
         Assert.Equal("true\ntrue\n127.0.0.1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_DefaultRrtypeA_FakeServer(ExecutionMode mode)
     {
         using var server = CreateAddressServer();
@@ -81,8 +79,7 @@ public class DnsAsyncTests
         Assert.Equal("true\ntrue\n127.0.0.1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_NestedInsideCallback_CallbackFires(ExecutionMode mode)
     {
         // #239: in compiled mode, dns.* calls inside another callback (or any
@@ -102,8 +99,7 @@ public class DnsAsyncTests
         Assert.Equal("outer true\ninner true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_InsideTimerCallback_CallbackFires(ExecutionMode mode)
     {
         using var server = CreateAddressServer();
@@ -119,8 +115,7 @@ public class DnsAsyncTests
         Assert.Equal("dns-in-timer true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_InsideFunctionBody_CallbackFires(ExecutionMode mode)
     {
         using var server = CreateAddressServer();
@@ -137,8 +132,7 @@ public class DnsAsyncTests
         Assert.Equal("fn true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reverse_Loopback(ExecutionMode mode)
     {
         // dns.reverse uses the OS resolver (getaddrinfo); 127.0.0.1 reverse-resolves
@@ -159,8 +153,7 @@ public class DnsAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsConstants_Defined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -179,8 +172,7 @@ public class DnsAsyncTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsPromises_Resolve4_FakeServer(ExecutionMode mode)
     {
         using var server = CreateAddressServer();
@@ -197,8 +189,7 @@ public class DnsAsyncTests
         Assert.Equal("true\n127.0.0.1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsPromises_Lookup(ExecutionMode mode)
     {
         // dns.lookup uses the OS resolver (hosts file) rather than a live DNS query, so
@@ -220,8 +211,7 @@ public class DnsAsyncTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsPromises_ViaModule_FakeServer(ExecutionMode mode)
     {
         using var server = CreateAddressServer();

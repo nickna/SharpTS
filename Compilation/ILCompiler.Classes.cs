@@ -63,7 +63,7 @@ public partial class ILCompiler
             else
             {
                 // Warning: type not found but continue compilation
-                Console.WriteLine($"Warning: External .NET type '{clrTypeName}' not found in loaded assemblies.");
+                AddWarning($"External .NET type '{clrTypeName}' not found in loaded assemblies.");
             }
 
             // Skip DefineType - don't emit TypeBuilder for external types

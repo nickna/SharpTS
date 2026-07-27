@@ -8,8 +8,7 @@ namespace SharpTS.Tests;
 /// </summary>
 public class GlobalThisTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_Math_MatchesDirect(ExecutionMode mode)
     {
         var result1 = TestHarness.Run("""
@@ -25,8 +24,7 @@ public class GlobalThisTests
         Assert.Contains("3", result2);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_Console_Works(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -36,8 +34,7 @@ public class GlobalThisTests
         Assert.Contains("Hello from globalThis", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_SelfReference(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -47,8 +44,7 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_Assignment(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -59,8 +55,7 @@ public class GlobalThisTests
         Assert.Contains("42", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -71,8 +66,7 @@ public class GlobalThisTests
         Assert.Contains("hello", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_DynamicIndex(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -83,8 +77,7 @@ public class GlobalThisTests
         Assert.Contains("object", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_BuiltInConstants(ExecutionMode mode)
     {
         var r1 = TestHarness.Run("""
@@ -106,8 +99,7 @@ public class GlobalThisTests
         Assert.Contains("true", r3);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ModuleScopedVarsNotAccessible(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -118,8 +110,7 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ChainedSelfReference(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -129,8 +120,7 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_Process(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -140,8 +130,7 @@ public class GlobalThisTests
         Assert.Contains("object", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ParseInt(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -155,8 +144,7 @@ public class GlobalThisTests
     // dereferenced) must be a real object, not null. Before the fix compiled
     // mode emitted null, so root/context detection in lodash-style packages got
     // a null root and could not initialize.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ValuePosition_IsRealObject(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -169,8 +157,7 @@ public class GlobalThisTests
     }
 
     // Cross-mode: typeof checks and Object identity hold in both modes.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ValuePosition_ResolvesConstructorTypeofs(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -188,8 +175,7 @@ public class GlobalThisTests
     // Type tokens, so `root.Error === Error` holds (#271). The interpreter's
     // SharpTSGlobalThis returns a distinct Error representation for this identity,
     // which is an independent pre-existing quirk outside this fix's scope.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void GlobalThis_ValuePosition_ResolvesErrorConstructorIdentity(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -202,8 +188,7 @@ public class GlobalThisTests
 
     // #271: writes through a value-position globalThis reference round-trip to
     // subsequent reads (the lodash `root.foo = ...` pattern).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThis_ValuePosition_WriteRoundTrips(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -219,8 +204,7 @@ public class GlobalThisTests
     // #271: the lodash/core-js `Function('return this')()` global probe yields
     // the same real globalThis value (compiled mode; the interpreter rejects the
     // dynamic Function constructor, so this is compiled-only).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void GlobalThis_FunctionReturnThisProbe_IsGlobalThis(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

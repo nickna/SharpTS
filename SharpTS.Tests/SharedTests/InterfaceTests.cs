@@ -11,8 +11,7 @@ public class InterfaceTests
 {
     #region Structural Typing
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ObjectLiteralMatches_Works(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class InterfaceTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ExcessProperties_FreshLiteral_Rejected(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class InterfaceTests
         Assert.Contains("Excess property: 'extra'", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ExcessProperties_NonFreshLiteral_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class InterfaceTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_AsParameter_Works(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +75,7 @@ public class InterfaceTests
 
     #region Implements Clause
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Implements_SingleInterface_Works(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +96,7 @@ public class InterfaceTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Implements_MultipleInterfaces_Works(ExecutionMode mode)
     {
         var source = """
@@ -129,8 +123,7 @@ public class InterfaceTests
         Assert.Equal("Bob\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Implements_WithExtends_Works(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +152,7 @@ public class InterfaceTests
         Assert.Equal("1\nA product\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Implements_GetterSatisfiesProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -184,8 +176,7 @@ public class InterfaceTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_WithMethods_Works(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +196,7 @@ public class InterfaceTests
         Assert.Equal("Hello!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_PolymorphicUse_Works(ExecutionMode mode)
     {
         var source = """
@@ -238,8 +228,7 @@ public class InterfaceTests
 
     #region Optional Interface Members
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_OptionalProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -262,8 +251,7 @@ public class InterfaceTests
 
     #region Interface-to-Interface Compatibility
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ToInterface_SameStructure_Compatible(ExecutionMode mode)
     {
         var source = """
@@ -284,8 +272,7 @@ public class InterfaceTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ToInterface_ReturnedFromFunction_Compatible(ExecutionMode mode)
     {
         var source = """
@@ -306,8 +293,7 @@ public class InterfaceTests
         Assert.Equal("test.txt\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_ToInterface_WithArrayPush_Compatible(ExecutionMode mode)
     {
         var source = """

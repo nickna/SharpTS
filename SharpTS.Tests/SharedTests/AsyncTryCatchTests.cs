@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncTryCatchTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_AwaitInTry_ExceptionCaught(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught: async error!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_AwaitInTry_NoException(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +53,7 @@ public class AsyncTryCatchTests
         Assert.Equal("got: 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_MultipleAwaitsInTry(ExecutionMode mode)
     {
         var source = """
@@ -84,8 +81,7 @@ public class AsyncTryCatchTests
         Assert.Equal("a: 10\ncaught: error on second\nafter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_NestedTryCatch(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +108,7 @@ public class AsyncTryCatchTests
         Assert.Equal("inner caught: inner error\nouter caught: rethrow from inner\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_SyncExceptionBeforeAwait(ExecutionMode mode)
     {
         var source = """
@@ -136,8 +131,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught: sync error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_SyncExceptionAfterAwait(ExecutionMode mode)
     {
         var source = """
@@ -160,8 +154,7 @@ public class AsyncTryCatchTests
         Assert.Equal("got: 42\ncaught: sync error after\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_CatchParameter(ExecutionMode mode)
     {
         var source = """
@@ -182,8 +175,7 @@ public class AsyncTryCatchTests
         Assert.Equal("error was: the error message\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_CodeAfterCatch(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +201,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught\nafter: 99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_TryWithoutAwait_CatchAfterTry(ExecutionMode mode)
     {
         // Try block has no await, but there's await after the try/catch
@@ -234,8 +225,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught: sync error\ngot: 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_InnerCatchRethrows(ExecutionMode mode)
     {
         var source = """
@@ -265,8 +255,7 @@ public class AsyncTryCatchTests
         Assert.Equal("inner: original\nouter: wrapped: original\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_AwaitEmbeddedInCallArgument_RejectionSkipsStatement(ExecutionMode mode)
     {
         // Regression: when the await is embedded in a larger statement
@@ -292,8 +281,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_AwaitEmbeddedInConcat_RejectionSkipsStatement(ExecutionMode mode)
     {
         // The await must be the FIRST operand: `"v:" + (await ...)` inside a
@@ -318,8 +306,7 @@ public class AsyncTryCatchTests
         Assert.Equal("caught boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncTryCatch_AwaitAfterNestedTry_RejectionStillCaught(ExecutionMode mode)
     {
         // Regression: emitting a nested try-with-awaits cleared the outer

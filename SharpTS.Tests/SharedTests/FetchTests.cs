@@ -33,8 +33,7 @@ public class FetchTests : IDisposable
 
     // ========== Headers API tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Get_ReturnsValue(ExecutionMode mode)
     {
         var source = @"
@@ -45,8 +44,7 @@ public class FetchTests : IDisposable
         Assert.Equal("text/html\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Get_ReturnsNull(ExecutionMode mode)
     {
         var source = @"
@@ -57,8 +55,7 @@ public class FetchTests : IDisposable
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Has_ReturnsBool(ExecutionMode mode)
     {
         var source = @"
@@ -70,8 +67,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Set_OverwritesValue(ExecutionMode mode)
     {
         var source = @"
@@ -83,8 +79,7 @@ public class FetchTests : IDisposable
         Assert.Equal("application/json\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Delete_RemovesHeader(ExecutionMode mode)
     {
         var source = @"
@@ -96,8 +91,7 @@ public class FetchTests : IDisposable
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Append_AddsMultipleValues(ExecutionMode mode)
     {
         var source = @"
@@ -110,8 +104,7 @@ public class FetchTests : IDisposable
         Assert.Equal("text/html, application/json\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_ForEach_IteratesAll(ExecutionMode mode)
     {
         var source = @"
@@ -127,8 +120,7 @@ public class FetchTests : IDisposable
         Assert.Equal("accept: text/html; content-type: application/json\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_CaseInsensitive(ExecutionMode mode)
     {
         var source = @"
@@ -141,8 +133,7 @@ public class FetchTests : IDisposable
         Assert.Equal("text/html\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Entries_ReturnsIterator(ExecutionMode mode)
     {
         var source = @"
@@ -157,8 +148,7 @@ public class FetchTests : IDisposable
         Assert.Equal("accept=text/html,host=example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Keys_ReturnsIterator(ExecutionMode mode)
     {
         var source = @"
@@ -173,8 +163,7 @@ public class FetchTests : IDisposable
         Assert.Equal("accept,host\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Headers_Values_ReturnsIterator(ExecutionMode mode)
     {
         var source = @"
@@ -191,8 +180,7 @@ public class FetchTests : IDisposable
 
     // ========== Response Headers from fetch ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_Headers_Get(ExecutionMode mode)
     {
         var source = $$"""
@@ -207,8 +195,7 @@ public class FetchTests : IDisposable
         Assert.Contains("application/json", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_Headers_Has(ExecutionMode mode)
     {
         var source = $$"""
@@ -222,8 +209,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_Headers_ForEach(ExecutionMode mode)
     {
         var source = $$"""
@@ -243,8 +229,7 @@ public class FetchTests : IDisposable
 
     // ========== AbortSignal integration tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_AbortSignal_AbortBeforeFetch(ExecutionMode mode)
     {
         var source = $$"""
@@ -269,8 +254,7 @@ public class FetchTests : IDisposable
 
     // ========== Error handling tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_NoArguments_Throws(ExecutionMode mode)
     {
         var source = @"
@@ -290,8 +274,7 @@ public class FetchTests : IDisposable
 
     // ========== Response methods ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_StatusText_ReturnsText(ExecutionMode mode)
     {
         var source = $$"""
@@ -306,8 +289,7 @@ public class FetchTests : IDisposable
         Assert.Equal("404\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_Url_ReturnsUrl(ExecutionMode mode)
     {
         var source = $$"""
@@ -321,8 +303,7 @@ public class FetchTests : IDisposable
         Assert.Contains("json", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_BodyUsed_TracksConsumption(ExecutionMode mode)
     {
         var source = $$"""
@@ -338,8 +319,7 @@ public class FetchTests : IDisposable
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponse_Clone_Works(ExecutionMode mode)
     {
         var source = $$"""
@@ -358,8 +338,7 @@ public class FetchTests : IDisposable
 
     // ========== HTTP methods ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_PatchMethod(ExecutionMode mode)
     {
         var source = $$"""
@@ -377,8 +356,7 @@ public class FetchTests : IDisposable
         Assert.Equal("PATCH\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_HeadMethod(ExecutionMode mode)
     {
         var source = $$"""
@@ -395,8 +373,7 @@ public class FetchTests : IDisposable
         Assert.Equal("200\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_JsonBody(ExecutionMode mode)
     {
         var source = $$"""
@@ -419,8 +396,7 @@ public class FetchTests : IDisposable
 
     // ========== Headers with fetch options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_WithHeadersObject(ExecutionMode mode)
     {
         var source = $$"""
@@ -443,8 +419,7 @@ public class FetchTests : IDisposable
 
     // ========== Fetch integration tests (migrated from CompilerTests/FetchIntegrationTests.cs) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchJson_ParsesResponse(ExecutionMode mode)
     {
         var source = $$"""
@@ -460,8 +435,7 @@ public class FetchTests : IDisposable
         Assert.Equal("Hello\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchText_ReturnsBody(ExecutionMode mode)
     {
         var source = $$"""
@@ -476,8 +450,7 @@ public class FetchTests : IDisposable
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchPost_SendsBody(ExecutionMode mode)
     {
         var source = $$"""
@@ -496,8 +469,7 @@ public class FetchTests : IDisposable
         Assert.Equal("POST\ntest body\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchWithCustomHeaders_SendsHeaders(ExecutionMode mode)
     {
         var source = $$"""
@@ -518,8 +490,7 @@ public class FetchTests : IDisposable
         Assert.Equal("CustomValue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchArrayBuffer_ReturnsBinary(ExecutionMode mode)
     {
         var source = $$"""
@@ -535,8 +506,7 @@ public class FetchTests : IDisposable
         Assert.Equal("5\nHello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchResponseHeaders_TypeofIsObject(ExecutionMode mode)
     {
         var source = $$"""
@@ -550,8 +520,7 @@ public class FetchTests : IDisposable
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchPutMethod_SendsCorrectMethod(ExecutionMode mode)
     {
         var source = $$"""
@@ -569,8 +538,7 @@ public class FetchTests : IDisposable
         Assert.Equal("PUT\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FetchDeleteMethod_SendsCorrectMethod(ExecutionMode mode)
     {
         var source = $$"""
@@ -589,8 +557,7 @@ public class FetchTests : IDisposable
 
     // ========== Response.body (ReadableStream) tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_ResponseBody_Exists(ExecutionMode mode)
     {
         var source = $$"""
@@ -606,8 +573,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_ResponseBody_IsReadable(ExecutionMode mode)
     {
         var source = $$"""
@@ -624,8 +590,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_ResponseBody_ReadData(ExecutionMode mode)
     {
         var source = $$"""
@@ -642,8 +607,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_ResponseBody_BodyUsedAfterAccess(ExecutionMode mode)
     {
         var source = $$"""
@@ -660,8 +624,7 @@ public class FetchTests : IDisposable
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_ResponseBody_ReadBinaryData(ExecutionMode mode)
     {
         var source = $$"""

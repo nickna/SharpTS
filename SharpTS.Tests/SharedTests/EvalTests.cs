@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EvalTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Eval_WhitespaceTolerance_ResolvesGlobals(ExecutionMode mode)
     {
         // Test262 S11.2.1_A1.1-style: eval tolerates interior whitespace and resolves globals.
@@ -27,8 +26,7 @@ public class EvalTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Eval_ReturnsCompletionValueOfExpression(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class EvalTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Eval_NonStringArgument_ReturnedUnchanged(ExecutionMode mode)
     {
         // ECMA-262 §19.2.1: eval(non-string) returns the argument unchanged.
@@ -52,8 +49,7 @@ public class EvalTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Eval_StatementsThenCompletionValue(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +60,7 @@ public class EvalTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Eval_BuiltinMethodCalls(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +72,7 @@ public class EvalTests
         Assert.Equal("ABC\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Eval_DirectEval_SeesCallerLocals(ExecutionMode mode)
     {
         // Direct-eval semantics: the evaluated source resolves against the caller's scope.

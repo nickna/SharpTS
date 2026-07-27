@@ -1091,38 +1091,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitSpreadArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "SpreadArray",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
-            [_types.Object]
-        );
-        runtime.SpreadArray = method;
-
-        var il = method.GetILGenerator();
-        var listLabel = il.DefineLabel();
-
-        // number[] unboxing: f(...arr) spread copies the base list, so materialize a numeric $Array first.
-        EmitDeoptArgIfNumericArray(il, runtime, 0);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brtrue, listLabel);
-
-        // Not a list - return empty
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(listLabel);
-        // Return new list with same elements
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));
-        il.Emit(OpCodes.Ret);
-    }
-
     /// <summary>
     /// Emits ConcatArrays: concatenates multiple iterables into a single $Array.
     /// Supports arrays, strings, and custom iterables with Symbol.iterator.

@@ -11,8 +11,7 @@ public class TimersPromisesModuleTests
 {
     #region Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -30,8 +29,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -47,8 +45,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_Import_NodePrefix(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -67,8 +64,7 @@ public class TimersPromisesModuleTests
 
     #region setTimeout Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_ReturnsPromise(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -84,8 +80,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_ResolvesWithValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -104,8 +99,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_ResolvesWithNumericValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -124,8 +118,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_DefaultValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -144,8 +137,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_ZeroDelay(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -164,8 +156,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("immediate\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_ThenChaining(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -186,8 +177,7 @@ public class TimersPromisesModuleTests
 
     #region setImmediate Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetImmediate_ReturnsPromise(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -203,8 +193,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetImmediate_ResolvesWithValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -223,8 +212,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("quick\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetImmediate_DefaultValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -247,8 +235,7 @@ public class TimersPromisesModuleTests
 
     #region Multiple Timers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_MultipleSetTimeout_Sequential(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -269,8 +256,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("first\nsecond\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_MixedWithSetImmediate(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -295,8 +281,7 @@ public class TimersPromisesModuleTests
 
     #region setInterval AsyncIterable Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_ForAwaitOf_Basic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -320,8 +305,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("tick\ntick\ntick\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_ForAwaitOf_NumericValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -344,8 +328,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_ForAwaitOf_BreakCleanup(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -366,8 +349,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("after break\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_ForAwaitOf_DefaultValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -392,8 +374,7 @@ public class TimersPromisesModuleTests
 
     #region AbortSignal Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_AbortSignal_PreAborted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -419,8 +400,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("AbortError: The operation was aborted\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetImmediate_AbortSignal_PreAborted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -446,8 +426,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("AbortError: The operation was aborted\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_AbortSignal_PreAborted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -475,8 +454,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("AbortError: The operation was aborted\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetTimeout_AbortSignal_MidDelay(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -506,8 +484,7 @@ public class TimersPromisesModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TimersPromises_SetInterval_AbortSignal_MidIteration(ExecutionMode mode)
     {
         // Aborts the signal from within the loop after 3 iterations.

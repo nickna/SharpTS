@@ -19,9 +19,9 @@ internal sealed class ModulePackageJson
     /// <summary>
     /// The owning JsonDocument — must be kept alive while Exports/Imports JsonElements are used.
     /// </summary>
-#pragma warning disable CS0414 // Assigned but never read — prevents GC of JsonDocument while JsonElements are in use
+#pragma warning disable CS0414, IDE0052 // Assigned but never read — prevents GC of JsonDocument while JsonElements are in use
     private JsonDocument? _document;
-#pragma warning restore CS0414
+#pragma warning restore CS0414, IDE0052
 
     /// <summary>
     /// Tries to load and parse a package.json file. Returns null on missing or malformed file.

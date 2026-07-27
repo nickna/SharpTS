@@ -11,8 +11,7 @@ public class UtilityTypesTests
 {
     #region Partial<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_AllPropertiesOptional_EmptyObjectValid(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class UtilityTypesTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_SomePropertiesProvided(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +35,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_AllPropertiesProvided(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +48,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +58,7 @@ public class UtilityTypesTests
         Assert.Contains("Partial<T> requires exactly 1 type argument", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_OnRecord(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +74,7 @@ public class UtilityTypesTests
 
     #region Required<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Required_AllPropertiesRequired(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +87,7 @@ public class UtilityTypesTests
         Assert.Equal("app\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Required_MissingProperty_Throws(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +98,7 @@ public class UtilityTypesTests
         Assert.Contains("debug", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Required_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -120,8 +112,7 @@ public class UtilityTypesTests
 
     #region Readonly<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_PropertiesAccessible(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +125,7 @@ public class UtilityTypesTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_PreservesOptionalProperties(ExecutionMode mode)
     {
         var source = """
@@ -147,8 +137,7 @@ public class UtilityTypesTests
         Assert.Equal("app\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -162,8 +151,7 @@ public class UtilityTypesTests
 
     #region Record<K, V>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_StringLiteralKeys(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +164,7 @@ public class UtilityTypesTests
         Assert.Equal("1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_SingleStringLiteral(ExecutionMode mode)
     {
         // Use type alias to avoid parser issue with string literal in generic type argument
@@ -190,8 +177,7 @@ public class UtilityTypesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_StringIndexSignature(ExecutionMode mode)
     {
         var source = """
@@ -203,8 +189,7 @@ public class UtilityTypesTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -214,8 +199,7 @@ public class UtilityTypesTests
         Assert.Contains("Record<K, V> requires exactly 2 type arguments", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_MissingKey_Throws(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +214,7 @@ public class UtilityTypesTests
 
     #region Pick<T, K>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_SelectsSingleKey(ExecutionMode mode)
     {
         var source = """
@@ -243,8 +226,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_SelectsMultipleKeys(ExecutionMode mode)
     {
         var source = """
@@ -257,8 +239,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_ExtraProperty_Throws(ExecutionMode mode)
     {
         var source = """
@@ -269,8 +250,7 @@ public class UtilityTypesTests
         Assert.Contains("age", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_PreservesOptional(ExecutionMode mode)
     {
         var source = """
@@ -282,8 +262,7 @@ public class UtilityTypesTests
         Assert.Equal("app\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -297,8 +276,7 @@ public class UtilityTypesTests
 
     #region Omit<T, K>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_ExcludesSingleKey(ExecutionMode mode)
     {
         var source = """
@@ -311,8 +289,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_ExcludesMultipleKeys(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +302,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_ExcludedKeyNotAllowed(ExecutionMode mode)
     {
         var source = """
@@ -337,8 +313,7 @@ public class UtilityTypesTests
         Assert.Contains("email", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_MissingRequiredKey_Throws(ExecutionMode mode)
     {
         var source = """
@@ -349,8 +324,7 @@ public class UtilityTypesTests
         Assert.Contains("age", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_PreservesOptional(ExecutionMode mode)
     {
         var source = """
@@ -362,8 +336,7 @@ public class UtilityTypesTests
         Assert.Equal("app\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -377,8 +350,7 @@ public class UtilityTypesTests
 
     #region Composition
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_Readonly_Composed(ExecutionMode mode)
     {
         var source = """
@@ -390,8 +362,7 @@ public class UtilityTypesTests
         Assert.Equal("Test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_Partial_Composed(ExecutionMode mode)
     {
         var source = """
@@ -403,8 +374,7 @@ public class UtilityTypesTests
         Assert.Equal("25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_Then_Partial(ExecutionMode mode)
     {
         var source = """
@@ -416,8 +386,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_Then_Required(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +399,7 @@ public class UtilityTypesTests
         Assert.Equal("app\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TripleNestedGenerics_ClosingBrackets(ExecutionMode mode)
     {
         // Tests parsing of >>> which the lexer tokenizes as a single GREATER_GREATER_GREATER token
@@ -448,8 +416,7 @@ public class UtilityTypesTests
 
     #region With Classes
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_FromClass(ExecutionMode mode)
     {
         var source = """
@@ -468,8 +435,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_FromClass(ExecutionMode mode)
     {
         var source = """
@@ -490,8 +456,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_FromClass(ExecutionMode mode)
     {
         var source = """
@@ -516,8 +481,7 @@ public class UtilityTypesTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_EmptyInterface(ExecutionMode mode)
     {
         var source = """
@@ -529,8 +493,7 @@ public class UtilityTypesTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_WithObjectValue(ExecutionMode mode)
     {
         var source = """
@@ -546,8 +509,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\nBob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_KeyofPattern(ExecutionMode mode)
     {
         var source = """
@@ -564,8 +526,7 @@ public class UtilityTypesTests
 
     #region Array Suffix
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -582,8 +543,7 @@ public class UtilityTypesTests
         Assert.Equal("3\nfirst\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Partial_WithMultiDimensionalArray(ExecutionMode mode)
     {
         var source = """
@@ -600,8 +560,7 @@ public class UtilityTypesTests
         Assert.Equal("2\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedUtilityType_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -617,8 +576,7 @@ public class UtilityTypesTests
         Assert.Equal("2\nlocalhost\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promise_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -632,8 +590,7 @@ public class UtilityTypesTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserDefinedGeneric_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -650,8 +607,7 @@ public class UtilityTypesTests
         Assert.Equal("3\n1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Record_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -668,8 +624,7 @@ public class UtilityTypesTests
         Assert.Equal("2\n1\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pick_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -685,8 +640,7 @@ public class UtilityTypesTests
         Assert.Equal("2\nBob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Omit_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -703,8 +657,7 @@ public class UtilityTypesTests
         Assert.Equal("2\nAlice\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Required_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -721,8 +674,7 @@ public class UtilityTypesTests
         Assert.Equal("2\napp1\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_WithArraySuffix(ExecutionMode mode)
     {
         var source = """
@@ -739,8 +691,7 @@ public class UtilityTypesTests
         Assert.Equal("2\n1\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericArray_TypeErrorStillDetected(ExecutionMode mode)
     {
         var source = """
@@ -755,8 +706,7 @@ public class UtilityTypesTests
 
     #region ReturnType<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnType_ExtractsFromSimpleFunction(ExecutionMode mode)
     {
         var source = """
@@ -769,8 +719,7 @@ public class UtilityTypesTests
         Assert.Equal("world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnType_ExtractsFromFunctionType(ExecutionMode mode)
     {
         var source = """
@@ -783,8 +732,7 @@ public class UtilityTypesTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnType_ExtractsFromArrowFunction(ExecutionMode mode)
     {
         var source = """
@@ -797,8 +745,7 @@ public class UtilityTypesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnType_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -812,8 +759,7 @@ public class UtilityTypesTests
 
     #region Parameters<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parameters_ExtractsFromSimpleFunction(ExecutionMode mode)
     {
         var source = """
@@ -827,8 +773,7 @@ public class UtilityTypesTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parameters_ExtractsFromFunctionType(ExecutionMode mode)
     {
         var source = """
@@ -842,8 +787,7 @@ public class UtilityTypesTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parameters_EmptyForNoArgs(ExecutionMode mode)
     {
         var source = """
@@ -856,8 +800,7 @@ public class UtilityTypesTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parameters_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -871,8 +814,7 @@ public class UtilityTypesTests
 
     #region ConstructorParameters<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorParameters_ExtractsFromClass(ExecutionMode mode)
     {
         var source = """
@@ -888,8 +830,7 @@ public class UtilityTypesTests
         Assert.Equal("Bob\n25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorParameters_EmptyForNoArgs(ExecutionMode mode)
     {
         var source = """
@@ -902,8 +843,7 @@ public class UtilityTypesTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorParameters_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -917,8 +857,7 @@ public class UtilityTypesTests
 
     #region InstanceType<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceType_ExtractsFromClass(ExecutionMode mode)
     {
         var source = """
@@ -934,8 +873,7 @@ public class UtilityTypesTests
         Assert.Equal("unknown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceType_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -949,8 +887,7 @@ public class UtilityTypesTests
 
     #region ThisType<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisType_AcceptsType(ExecutionMode mode)
     {
         // ThisType<T> is a marker type that just returns T
@@ -963,8 +900,7 @@ public class UtilityTypesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisType_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -978,8 +914,7 @@ public class UtilityTypesTests
 
     #region Awaited<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Awaited_UnwrapsPromise(ExecutionMode mode)
     {
         var source = """
@@ -991,8 +926,7 @@ public class UtilityTypesTests
         Assert.Equal("resolved\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Awaited_UnwrapsNestedPromise(ExecutionMode mode)
     {
         var source = """
@@ -1004,8 +938,7 @@ public class UtilityTypesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Awaited_PassesThroughNonPromise(ExecutionMode mode)
     {
         var source = """
@@ -1017,8 +950,7 @@ public class UtilityTypesTests
         Assert.Equal("direct\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Awaited_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -1032,8 +964,7 @@ public class UtilityTypesTests
 
     #region NonNullable<T>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_RemovesNull(ExecutionMode mode)
     {
         var source = """
@@ -1045,8 +976,7 @@ public class UtilityTypesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_RemovesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -1058,8 +988,7 @@ public class UtilityTypesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_RemovesBothNullAndUndefined(ExecutionMode mode)
     {
         var source = """
@@ -1071,8 +1000,7 @@ public class UtilityTypesTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_PassesThroughNonNullable(ExecutionMode mode)
     {
         var source = """
@@ -1084,8 +1012,7 @@ public class UtilityTypesTests
         Assert.Equal("direct\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -1099,8 +1026,7 @@ public class UtilityTypesTests
 
     #region Extract<T, U>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Extract_FiltersByType(ExecutionMode mode)
     {
         var source = """
@@ -1112,8 +1038,7 @@ public class UtilityTypesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Extract_FiltersByLiteral(ExecutionMode mode)
     {
         var source = """
@@ -1126,8 +1051,7 @@ public class UtilityTypesTests
         Assert.Equal("success\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Extract_CanExtractBoolean(ExecutionMode mode)
     {
         var source = """
@@ -1139,8 +1063,7 @@ public class UtilityTypesTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Extract_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -1154,8 +1077,7 @@ public class UtilityTypesTests
 
     #region Exclude<T, U>
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exclude_RemovesByType(ExecutionMode mode)
     {
         var source = """
@@ -1167,8 +1089,7 @@ public class UtilityTypesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exclude_RemovesByLiteral(ExecutionMode mode)
     {
         var source = """
@@ -1181,8 +1102,7 @@ public class UtilityTypesTests
         Assert.Equal("pending\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exclude_RemovesNull(ExecutionMode mode)
     {
         var source = """
@@ -1194,8 +1114,7 @@ public class UtilityTypesTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exclude_WrongArgCount_Throws(ExecutionMode mode)
     {
         var source = """
@@ -1209,8 +1128,7 @@ public class UtilityTypesTests
 
     #region Utility Type Composition
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonNullable_Extract_Composed(ExecutionMode mode)
     {
         var source = """
@@ -1223,8 +1141,7 @@ public class UtilityTypesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exclude_NonNullable_Composed(ExecutionMode mode)
     {
         var source = """

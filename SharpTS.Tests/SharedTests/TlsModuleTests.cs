@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TlsModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -23,8 +22,7 @@ public class TlsModuleTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsModuleNodePrefix(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -38,8 +36,7 @@ public class TlsModuleTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsModuleExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -57,8 +54,7 @@ public class TlsModuleTests
         Assert.Equal("true\ntrue\ntrue\nTLSv1.2\nTLSv1.3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsModuleConstants(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -73,8 +69,7 @@ public class TlsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsCreateServerReturnsServer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -108,8 +103,7 @@ public class TlsModuleTests
         Assert.Equal("function\nfunction\nfunction\nfunction\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsConnectReturnsSocket(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -128,8 +122,7 @@ public class TlsModuleTests
         Assert.Equal("function\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsSocketProperties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -145,8 +138,7 @@ public class TlsModuleTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsCreateSecureContext(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -369,8 +361,7 @@ public class TlsModuleTests
 
     #region ALPN and SNI Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsSocket_Servername_Property(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -385,8 +376,7 @@ public class TlsModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsConnect_ALPNProtocols(ExecutionMode mode)
     {
         var (certPem, keyPem) = GenerateSelfSignedCert();
@@ -416,8 +406,7 @@ public class TlsModuleTests
         Assert.Contains("alpn:h2", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsServer_ALPNProtocols(ExecutionMode mode)
     {
         var (certPem, keyPem) = GenerateSelfSignedCert();
@@ -447,8 +436,7 @@ public class TlsModuleTests
         Assert.Contains("server-alpn:http/1.1", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsClient_AlpnProtocol_Exposed(ExecutionMode mode)
     {
         // The client sends ALPNProtocols and exposes the negotiated client.alpnProtocol — both modes.
@@ -479,8 +467,7 @@ public class TlsModuleTests
         Assert.Contains("client-alpn:h2", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsServer_SNICallback_Accepted(ExecutionMode mode)
     {
         var (certPem, keyPem) = GenerateSelfSignedCert();
@@ -507,8 +494,7 @@ public class TlsModuleTests
 
     #region rejectUnauthorized parity (#1040)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsRejectUnauthorized_Parity(ExecutionMode mode)
     {
         // rejectUnauthorized:true against a self-signed peer fails the handshake ('error'),
@@ -533,8 +519,7 @@ public class TlsModuleTests
         Assert.Equal("rejected\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsRoundTrip_ServerToClientData_Parity(ExecutionMode mode)
     {
         // Full client↔server round trip: server writes, client receives, identical in both modes.
@@ -568,8 +553,7 @@ public class TlsModuleTests
 
     #region Introspection parity (#1034)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsSocket_Introspection_Parity(ExecutionMode mode)
     {
         // After a real handshake, getCipher/getProtocol/getPeerCertificate/authorized/encrypted
@@ -609,8 +593,7 @@ public class TlsModuleTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsSocket_PeerCertSubjectAltName_Parity(ExecutionMode mode)
     {
         // getPeerCertificate().subjectaltname is formatted "DNS:…, IP Address:…" identically in
@@ -645,8 +628,7 @@ public class TlsModuleTests
 
     #region I/O + renegotiate parity (#1035)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TlsSocket_WriteEchoAndClose_Parity(ExecutionMode mode)
     {
         // Bidirectional write-through over the negotiated SslStream + close lifecycle,

@@ -15,8 +15,7 @@ public class SyncAsyncEquivalenceTests
 {
     // ===================== Basic Expressions =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Binary_Expression_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("8 6 42 5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Binary_Expression_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +48,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("8 6 42 5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Logical_Expression_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("false true default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Logical_Expression_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +79,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("false true default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_Expression_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -97,8 +92,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("yes no\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Ternary_Expression_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -116,8 +110,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Object and Array Literals =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Literal_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -129,8 +122,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("test 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Literal_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -145,8 +137,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("test 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Literal_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +149,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1 2 3 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Literal_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +164,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1 2 3 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_In_Object_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -188,8 +177,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1 2 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_In_Object_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +193,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1 2 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_In_Array_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -219,8 +206,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1,2,3,4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_In_Array_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -238,8 +224,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Function Calls =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Call_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -253,8 +238,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Call_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -271,8 +255,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_Call_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -289,8 +272,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Method_Call_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -312,8 +294,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Class Instantiation (EvaluateNew) =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void New_Expression_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -331,8 +312,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void New_Expression_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -353,8 +333,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void New_BuiltIn_Date_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -366,8 +345,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("2023\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void New_BuiltIn_Date_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -384,8 +362,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Switch Statement =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_Statement_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -403,8 +380,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("one two other\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_Statement_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -428,8 +404,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("one two other\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_FallThrough_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -454,8 +429,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("ab b c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Switch_FallThrough_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -488,8 +462,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Try/Catch/Finally =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -507,8 +480,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("caught: error!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatch_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -529,8 +501,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("caught: error!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatchFinally_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -554,8 +525,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("result try,catch,finally\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TryCatchFinally_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -584,8 +554,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== For...of Loop =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_Array_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -601,8 +570,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_Array_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -621,8 +589,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_String_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -638,8 +605,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("a,b,c,\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_String_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -660,8 +626,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Property Access (EvaluateGet) =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_Instance_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -676,8 +641,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_Instance_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -695,8 +659,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_Static_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -710,8 +673,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1.0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_Static_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -728,8 +690,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1.0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_BuiltIn_Number_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -742,8 +703,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_BuiltIn_Number_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -759,8 +719,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_BuiltIn_Math_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -773,8 +732,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("true\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAccess_BuiltIn_Math_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -792,8 +750,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Compound Assignment =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssign_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -808,8 +765,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("24\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssign_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -829,8 +785,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Logical Assignment =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -849,8 +804,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("default value default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -874,8 +828,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Compound/Logical Assignment on Captured Top-Level Vars =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssign_CapturedTopLevel_AsyncArrow(ExecutionMode mode)
     {
         var source = """
@@ -893,8 +846,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("39\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAssign_CapturedTopLevel_AsyncArrow(ExecutionMode mode)
     {
         var source = """
@@ -912,8 +864,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("filled existing\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAssign_CapturedTopLevel_AsyncFunction(ExecutionMode mode)
     {
         var source = """
@@ -932,8 +883,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Template Literals =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TemplateLiteral_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -946,8 +896,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TemplateLiteral_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -965,8 +914,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Index Operations =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexGet_Array_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -978,8 +926,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("10 20 30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexGet_Array_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -994,8 +941,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("10 20 30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexSet_Array_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1008,8 +954,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1,99,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexSet_Array_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1025,8 +970,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1,99,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexGet_Object_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1038,8 +982,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("1 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexGet_Object_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1056,8 +999,7 @@ public class SyncAsyncEquivalenceTests
 
     // ===================== Class Inheritance =====================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInheritance_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1083,8 +1025,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassInheritance_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1113,8 +1054,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SuperCall_SyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1137,8 +1077,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SuperCall_AsyncPath(ExecutionMode mode)
     {
         var source = """
@@ -1164,8 +1103,7 @@ public class SyncAsyncEquivalenceTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClosureMutation_InsideAsyncFunction(ExecutionMode mode)
     {
         var source = """

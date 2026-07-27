@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GeneratorErrorIdentityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void RuntimeTypeError_CaughtInGeneratorBody_InstanceofHolds(ExecutionMode mode)
     {
         // The exact #543 repro: a "not a function" TypeError caught inside the generator body.
@@ -37,8 +36,7 @@ public class GeneratorErrorIdentityTests
         Assert.Equal("true TypeError\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void RuntimeTypeError_CaughtInGeneratorBody_AfterYield_InstanceofHolds(ExecutionMode mode)
     {
         // The flag-based shape: a yield before the throwing call forces the try into the flag-based
@@ -55,8 +53,7 @@ public class GeneratorErrorIdentityTests
         Assert.Equal("true TypeError\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExplicitlyThrownError_CaughtInGeneratorBody_InstanceofHolds(ExecutionMode mode)
     {
         // Explicit `throw new RangeError(...)` caught in-body keeps its identity in both modes.

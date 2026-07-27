@@ -177,11 +177,6 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     }
 
     /// <summary>
-    /// Gets all user-assigned property names.
-    /// </summary>
-    public IEnumerable<string> GetUserPropertyNames() => _properties.Keys;
-
-    /// <summary>
     /// Gets all property names (ISharpTSPropertyAccessor).
     /// Returns user-assigned properties plus some well-known built-in globals.
     /// </summary>

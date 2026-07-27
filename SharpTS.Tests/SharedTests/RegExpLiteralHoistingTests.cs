@@ -16,8 +16,7 @@ public class RegExpLiteralHoistingTests
     // shared instance would advance lastIndex across evaluations. Fresh-per-eval
     // resets lastIndex each call, so every test of "aaa" matches → all true. A
     // shared instance would walk 0,1,2 then fail on the 4th.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalTestInLoop_NotHoisted_ResetsEachEvaluation(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class RegExpLiteralHoistingTests
 
     // A non-global, non-sticky literal as a `.test` receiver in a loop IS hoisted;
     // result must be unchanged (lastIndex is irrelevant without g/y).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainTestInLoop_Hoisted_CountsCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +53,7 @@ public class RegExpLiteralHoistingTests
     // Stateless String.prototype consumers (match/replace/search/split) scan from
     // 0 and never read instance lastIndex, so the literal arg is hoisted even with
     // g — repeated calls must give identical results.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StatelessStringConsumersInLoop_Hoisted_StableResults(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +74,7 @@ public class RegExpLiteralHoistingTests
     // independent instance (the analyzer keys by node identity, not value). Here
     // `/a/` is hoisted via `.test`; the value-equal `const r = /a/` is mutated and
     // must keep its own lastIndex.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EscapingLiteral_ValueEqualToHoisted_StaysIndependent(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +92,7 @@ public class RegExpLiteralHoistingTests
     // Two evaluations of the same source literal are distinct objects (===
     // false). The literals appear in === position (not a consuming position), so
     // they are never hoisted — identity is preserved.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RegexLiteralIdentity_NotHoistedInComparison(ExecutionMode mode)
     {
         var source = """

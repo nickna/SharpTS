@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class EventsRejectionMonitorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CaptureRejections_RoutesAsyncListenerRejectionToError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -37,8 +36,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("routed:boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CaptureRejections_Off_DoesNotRouteToError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -62,8 +60,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("not-routed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorMonitor_ObservesAndStillThrowsWhenUnhandled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -87,8 +84,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("boom|true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorMonitor_WithRegularListener_DoesNotThrow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +110,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("mr|false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnhandledError_OnDirectEmitter_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -139,8 +134,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("true:unhandled\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnhandledNonErrorEvent_DoesNotThrow(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -156,8 +150,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ErrorMonitor_And_CaptureRejectionSymbol_AreSymbols(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -173,8 +166,7 @@ public class EventsRejectionMonitorTests
         Assert.Equal("symbol\nsymbol\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitterAsyncResource_Surface(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -10,8 +10,7 @@ public class EventsModuleTests
 {
     #region Import Patterns
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Events_NamedImport_EventEmitter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class EventsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Events_NamespaceImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -48,8 +46,7 @@ public class EventsModuleTests
 
     #region Constructor
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Constructor_CreatesInstance(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -70,8 +67,7 @@ public class EventsModuleTests
 
     #region On / Emit
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_On_Emit_BasicUsage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -92,8 +88,7 @@ public class EventsModuleTests
         Assert.Equal("received: hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Emit_MultipleArguments(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +109,7 @@ public class EventsModuleTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Emit_MultipleListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -136,8 +130,7 @@ public class EventsModuleTests
         Assert.Equal("first\nsecond\nthird\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Emit_ReturnsTrue_WhenHasListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -161,8 +154,7 @@ public class EventsModuleTests
 
     #region Once
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Once_FiresOnlyOnce(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -184,8 +176,7 @@ public class EventsModuleTests
         Assert.Equal("fired\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Once_WithArguments(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -209,8 +200,7 @@ public class EventsModuleTests
 
     #region Off / RemoveListener
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Off_RemovesListener(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -234,8 +224,7 @@ public class EventsModuleTests
         Assert.Equal("called\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_RemoveListener_Alias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -260,8 +249,7 @@ public class EventsModuleTests
 
     #region RemoveAllListeners
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_RemoveAllListeners_SpecificEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -284,8 +272,7 @@ public class EventsModuleTests
         Assert.Equal("other\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_RemoveAllListeners_AllEvents(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -312,8 +299,7 @@ public class EventsModuleTests
 
     #region Listener Inspection
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_ListenerCount(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -336,8 +322,7 @@ public class EventsModuleTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_EventNames(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -360,8 +345,7 @@ public class EventsModuleTests
         Assert.Equal("3\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_Listeners_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -390,8 +374,7 @@ public class EventsModuleTests
 
     #region Prepend Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_PrependListener(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -411,8 +394,7 @@ public class EventsModuleTests
         Assert.Equal("first\nsecond\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_PrependOnceListener_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -434,8 +416,7 @@ public class EventsModuleTests
         Assert.Equal("prepended once\nregular\n---\nregular\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_PrependOnceListener_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -463,8 +444,7 @@ public class EventsModuleTests
 
     #region Max Listeners
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_GetMaxListeners_DefaultValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -480,8 +460,7 @@ public class EventsModuleTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_SetMaxListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -499,8 +478,7 @@ public class EventsModuleTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_DefaultMaxListeners_StaticProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -519,8 +497,7 @@ public class EventsModuleTests
 
     #region Method Chaining
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_MethodChaining(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -548,8 +525,7 @@ public class EventsModuleTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_RemoveDuringEmit_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -581,8 +557,7 @@ public class EventsModuleTests
         Assert.Equal("listener1\nlistener2\n---\nlistener1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_RemoveDuringEmit_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -618,8 +593,7 @@ public class EventsModuleTests
         Assert.Equal("1,2,3,---,1,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_AddDuringEmit_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -649,8 +623,7 @@ public class EventsModuleTests
         Assert.Equal("listener1: 0\n---\nlistener1: 1\nadded\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_AddDuringEmit_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -684,8 +657,7 @@ public class EventsModuleTests
         Assert.Equal("1,2,---,1,2,new\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_SameListenerMultipleTimes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -710,8 +682,7 @@ public class EventsModuleTests
         Assert.Equal("3\nfired\nfired\nfired\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_AddListener_Alias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -729,8 +700,7 @@ public class EventsModuleTests
         Assert.Equal("addListener works\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventEmitter_MultipleEmitters(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

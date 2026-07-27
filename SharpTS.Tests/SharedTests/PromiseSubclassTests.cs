@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PromiseSubclassTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_ExecutorConstructionAndBrand(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ntrue\n41\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_MethodsAndFields(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class PromiseSubclassTests
         Assert.Equal("mine\nMyPromise:mine\nMyPromise:updated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_StaticSideInheritance_Resolve(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +67,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ntrue\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_ThenReturnsSubclass(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +85,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_RejectAndCatch(ExecutionMode mode)
     {
         var source = """
@@ -107,8 +102,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ncaught:boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_UserConstructorWithSuper(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +126,7 @@ public class PromiseSubclassTests
         Assert.Equal("yes\ntrue true\nv\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_TransitiveSubclass(ExecutionMode mode)
     {
         var source = """
@@ -156,8 +149,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n7\ntrue\ntrue\ntrue\nx\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_Combinators(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +170,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n7\ntrue\nfirst\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_WithResolvers(ExecutionMode mode)
     {
         var source = """
@@ -196,8 +187,7 @@ public class PromiseSubclassTests
         Assert.Equal("9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_DynamicDispatch_ThenKeepsBrand(ExecutionMode mode)
     {
         var source = """
@@ -215,8 +205,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_BasePromiseUnaffected(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +223,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\ntrue\n14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_TopLevelStaticThen(ExecutionMode mode)
     {
         // #309: the exact repro — inherited static + derived `then` dispatched
@@ -253,8 +241,7 @@ public class PromiseSubclassTests
         Assert.Equal("got 1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_TopLevelRejectCatch(ExecutionMode mode)
     {
         // #309 sibling: reject/catch on a non-generic subclass from the
@@ -268,8 +255,7 @@ public class PromiseSubclassTests
         Assert.Equal("caught boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsPromise_ConstructorIdentity(ExecutionMode mode)
     {
         // ECMA-262 §27.2.5.1 / #221: subclass instances report the subclass
@@ -292,8 +278,7 @@ public class PromiseSubclassTests
 
     #region SpeciesConstructor (#221) — then/catch/finally consult @@species
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ThenRedirectsToPlainPromise(ExecutionMode mode)
     {
         // ECMA-262 §27.2.5.4 / §7.3.22: then builds its result through
@@ -317,8 +302,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\ntrue\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_DefaultIsReceiverClass(ExecutionMode mode)
     {
         // No @@species override: the inherited Promise[@@species] returns the
@@ -337,8 +321,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ThenRedirectsToOtherSubclass(ExecutionMode mode)
     {
         // @@species may name a different Promise subclass; then constructs
@@ -361,8 +344,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nfalse\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_UndefinedFallsBackToPromise(ExecutionMode mode)
     {
         // SpeciesConstructor: an @@species of undefined/null defaults to
@@ -383,8 +365,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_CatchAndFinallyFollowSpecies(ExecutionMode mode)
     {
         // catch (= then(undefined, onRejected)) and finally also route their
@@ -407,8 +388,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\nfalse\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_CombinatorsUseReceiverConstructorDirectly(ExecutionMode mode)
     {
         // Static methods (resolve/all/race) build through the receiver
@@ -430,8 +410,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_GenericSubclassOverride(ExecutionMode mode)
     {
         // A GENERIC Promise subclass with a @@species override resolves in both
@@ -454,8 +433,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_GenericSubclassRedirectsToOtherGenericSubclass(ExecutionMode mode)
     {
         // A generic subclass whose @@species names ANOTHER generic Promise
@@ -480,8 +458,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nfalse\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_GenericSubclassStaticReadResolvesOverride(ExecutionMode mode)
     {
         // The guest-visible static read `(MyP as any)[Symbol.species]` of a
@@ -499,8 +476,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoOverrideRedirectsToPlainPromise(ExecutionMode mode)
     {
         // A dynamically-assigned static @@species ((C as any)[Symbol.species] =
@@ -524,8 +500,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\ntrue\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoOverrideRedirectsToOtherSubclass(ExecutionMode mode)
     {
         // The expando @@species may name another Promise subclass; then must
@@ -547,8 +522,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nfalse\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoOverrideInheritedThroughSubclass(ExecutionMode mode)
     {
         // An expando @@species set on a base class is visible on a subclass
@@ -573,8 +547,7 @@ public class PromiseSubclassTests
         Assert.Equal("false\nfalse\ntrue\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoOverrideOnGenericSubclass(ExecutionMode mode)
     {
         // An expando @@species on a GENERIC subclass: the assignment keys the
@@ -602,8 +575,7 @@ public class PromiseSubclassTests
 
     #region General NewPromiseCapability (#349) — non-Promise species + thenable await
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_NonPromiseConstructor_BuildsThroughIt(ExecutionMode mode)
     {
         // ECMA-262 §27.2.5.4 step 7 / §27.2.4.5: when @@species resolves to a
@@ -642,8 +614,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nfalse\n11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_NonPromiseConstructor_AdoptsRejection(ExecutionMode mode)
     {
         // The captured capability's reject is driven when the source task faults
@@ -669,8 +640,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nrethrow:boom undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoNonPromiseConstructor_BuildsThroughIt(ExecutionMode mode)
     {
         // The general NewPromiseCapability path is reached through an EXPANDO
@@ -703,8 +673,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\nfalse\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_AdoptsPlainThenable(ExecutionMode mode)
     {
         // `await` on an ordinary object whose `then` is callable adopts it
@@ -727,8 +696,7 @@ public class PromiseSubclassTests
         Assert.Equal("hello\ncaught:nope\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_NonThenableObjectPassesThrough(ExecutionMode mode)
     {
         // An object WITHOUT a callable `then` is not a thenable: `await` returns
@@ -751,8 +719,7 @@ public class PromiseSubclassTests
 
     #region SpeciesConstructor IsConstructor (#390) — non-constructor throws, function species constructs
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_NonConstructor_ThrowsTypeErrorSynchronously(ExecutionMode mode)
     {
         // ECMA-262 §7.3.22 SpeciesConstructor step 5: if C[@@species] is neither
@@ -778,8 +745,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_ExpandoNonConstructor_ThrowsTypeError(ExecutionMode mode)
     {
         // The IsConstructor check applies to an expando @@species
@@ -802,8 +768,7 @@ public class PromiseSubclassTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Species_PlainFunctionConstructor_BuildsThroughNewProtocol(ExecutionMode mode)
     {
         // A @@species that resolves to a plain FUNCTION (constructible via the
@@ -853,8 +818,7 @@ public class PromiseSubclassTests
 
     #region Poisoned constructor getter (#350) — then/catch/finally throw synchronously
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PoisonedConstructor_ThenThrowsSynchronously(ExecutionMode mode)
     {
         // ECMA-262 §27.2.5.4 step 3 resolves SpeciesConstructor(promise, %Promise%)
@@ -882,8 +846,7 @@ public class PromiseSubclassTests
         Assert.Equal("poisoned\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PoisonedConstructor_CatchThrowsSynchronously(ExecutionMode mode)
     {
         // catch delegates to then, so the same synchronous SpeciesConstructor
@@ -907,8 +870,7 @@ public class PromiseSubclassTests
         Assert.Equal("poisoned-catch\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PoisonedConstructor_FinallyThrowsSynchronously(ExecutionMode mode)
     {
         // finally also resolves SpeciesConstructor for its result promise.
@@ -931,8 +893,7 @@ public class PromiseSubclassTests
         Assert.Equal("poisoned-finally\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PoisonedConstructor_DoesNotAffectNormalThen(ExecutionMode mode)
     {
         // Regression guard: a promise WITHOUT a poisoned `constructor` accessor
@@ -949,8 +910,7 @@ public class PromiseSubclassTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PoisonedConstructor_OwnAccessorWinsOverSubclassConstructor(ExecutionMode mode)
     {
         // An own `constructor` accessor on a Promise SUBCLASS instance shadows the

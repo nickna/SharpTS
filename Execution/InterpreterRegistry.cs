@@ -45,7 +45,6 @@ public static class InterpreterRegistry
             .RegisterStmtAsync<Stmt.Var>((s, i) => i.ExecuteVarAsyncVT(s))
             .RegisterStmtAsync<Stmt.Const>((s, i) => i.ExecuteConstAsyncVT(s))
             .RegisterStmtAsync<Stmt.Return>((s, i) => i.ExecuteReturnAsyncVT(s))
-            .RegisterStmtAsync<Stmt.Print>((s, i) => i.ExecutePrintAsyncVT(s))
             // Register async expression handlers for all expression types (#930).
             // Routes EvaluateAsync through NodeRegistry.DispatchExprAsync so the async
             // dispatch path gets the same exhaustiveness guarantees as the sync path.

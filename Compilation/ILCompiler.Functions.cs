@@ -354,7 +354,7 @@ public partial class ILCompiler
         ApplyCommonJsModuleAccess(ctx);
         ctx.UnionGenerator = _unionGenerator;
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body);
         // Entry-point display class for captured top-level variables. TopLevelStaticVars uses
         // the pre-computed per-function map rather than the module-wide default.
         ApplyCapturedTopLevelVariableAccess(ctx);
@@ -1302,7 +1302,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || CheckForUseStrict(funcStmt.Body));
+            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body));
             var emitter = new ILEmitter(ctx);
 
             // Make the provided parameters resolvable so a default value that references an

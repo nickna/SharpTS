@@ -33,8 +33,7 @@ public class EventLoopContinuationTests : IDisposable
 
     public void Dispose() => _server.Dispose();
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TopLevelAsync_SequentialFetches_RunsContinuationAfterAwait(ExecutionMode mode)
     {
         // The continuation after each await (and the closure capture of `tag`)

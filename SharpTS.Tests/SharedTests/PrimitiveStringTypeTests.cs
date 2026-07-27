@@ -56,8 +56,7 @@ public class PrimitiveStringTypeTests
         Assert.Equal("string\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringFieldObjectLocal_PromotesAndRoundTrips(ExecutionMode mode)
     {
         // The compiled ObjectLocalPromotionAnalyzer classifies a string field by TypeInfo.String now

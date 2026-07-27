@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CallSignatureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallSignature_BasicInterface(ExecutionMode mode)
     {
         var code = """
@@ -26,8 +25,7 @@ public class CallSignatureTests
         Assert.Equal("HELLO\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallSignature_WithMultipleParameters(ExecutionMode mode)
     {
         var code = """
@@ -43,8 +41,7 @@ public class CallSignatureTests
         Assert.Equal("8\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallSignature_WithTwoParameters(ExecutionMode mode)
     {
         var code = """
@@ -63,8 +60,7 @@ public class CallSignatureTests
         Assert.Equal("Hello World\nHi World\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallSignature_ReturnsVoid(ExecutionMode mode)
     {
         var code = """
@@ -82,8 +78,7 @@ public class CallSignatureTests
         Assert.Equal("LOG: test\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CallSignature_MultipleSignatures(ExecutionMode mode)
     {
         var code = """

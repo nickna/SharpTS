@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ProxyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_GetTrap(ExecutionMode mode)
     {
         var source = @"
@@ -28,8 +27,7 @@ public class ProxyTests
         Assert.Equal("intercepted\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_SetTrap(ExecutionMode mode)
     {
         var source = @"
@@ -48,8 +46,7 @@ public class ProxyTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_HasTrap(ExecutionMode mode)
     {
         var source = @"
@@ -69,8 +66,7 @@ public class ProxyTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_DeletePropertyTrap(ExecutionMode mode)
     {
         var source = @"
@@ -92,8 +88,7 @@ public class ProxyTests
         Assert.Equal("x\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_DefaultForwarding_Get(ExecutionMode mode)
     {
         var source = @"
@@ -106,8 +101,7 @@ public class ProxyTests
         Assert.Equal("original\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_DefaultForwarding_Set(ExecutionMode mode)
     {
         var source = @"
@@ -121,8 +115,7 @@ public class ProxyTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_Typeof(ExecutionMode mode)
     {
         var source = @"
@@ -135,8 +128,7 @@ public class ProxyTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_ApplyTrap(ExecutionMode mode)
     {
         var source = @"
@@ -155,8 +147,7 @@ public class ProxyTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_TypeofFunction(ExecutionMode mode)
     {
         var source = @"
@@ -169,8 +160,7 @@ public class ProxyTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_HasTrap_TruthyCoercion(ExecutionMode mode)
     {
         var source = @"
@@ -193,8 +183,7 @@ public class ProxyTests
         Assert.Equal("true\nfalse\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_Revocable(ExecutionMode mode)
     {
         var source = @"
@@ -214,8 +203,7 @@ public class ProxyTests
         Assert.Equal("42\nrevoked\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_RevokedThrows(ExecutionMode mode)
     {
         var source = @"
@@ -236,8 +224,7 @@ public class ProxyTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_GetTrap_MultipleProperties(ExecutionMode mode)
     {
         var source = @"
@@ -258,8 +245,7 @@ public class ProxyTests
         Assert.Equal("a,b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_SetTrap_ReturnsValue(ExecutionMode mode)
     {
         var source = @"
@@ -278,8 +264,7 @@ public class ProxyTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Proxy_NestedTraps(ExecutionMode mode)
     {
         var source = @"

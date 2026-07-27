@@ -18,20 +18,10 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpClientRequestTests
 {
-    private static int GetAvailablePort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ClientRequest_IsWritable_WithHeaderManipulation(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -69,11 +59,10 @@ public class HttpClientRequestTests
         Assert.Contains("afterRemove=false", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ClientRequest_PostStreamedBody_ResponseCallback(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -120,11 +109,10 @@ public class HttpClientRequestTests
         Assert.Contains("complete=true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ClientRequest_ResponseEvent_FiresWithIncomingMessage(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -149,12 +137,11 @@ public class HttpClientRequestTests
         Assert.Contains("got response event 200", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ClientRequest_ConnectionFailure_EmitsError(ExecutionMode mode)
     {
         // Nothing listening on this port → ECONNREFUSED → 'error' event.
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -171,11 +158,10 @@ public class HttpClientRequestTests
         Assert.Contains("hasCode=true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ClientRequest_GetHeaders_ReturnsObject(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""

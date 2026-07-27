@@ -204,7 +204,6 @@ public class EmittedRuntime
     // tokens (issue #63). Returns a $TSFunction wrapper matching what the
     // compile-time ArrayStaticEmitter / NumberStaticEmitter / etc. would emit.
     public MethodBuilder LookupBuiltInStaticMember { get; set; } = null!;
-    public MethodBuilder SpreadArray { get; set; } = null!;
     public MethodBuilder ConcatArrays { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
     public MethodBuilder ArrayPop { get; set; } = null!;
@@ -319,7 +318,6 @@ public class EmittedRuntime
     public MethodBuilder StringToLowerCase { get; set; } = null!;
     public MethodBuilder StringTrim { get; set; } = null!;
     public MethodBuilder StringReplace { get; set; } = null!;
-    public MethodBuilder StringSplit { get; set; } = null!;
     public MethodBuilder StringIncludes { get; set; } = null!;
     public MethodBuilder StringStartsWith { get; set; } = null!;
     public MethodBuilder StringEndsWith { get; set; } = null!;
@@ -540,7 +538,7 @@ public class EmittedRuntime
     public FieldBuilder ObjectPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="ObjectPrototypeField"/>.</summary>
     public MethodBuilder ObjectPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>Error.prototype singleton dict — populated with a $TSFunction wrapping the spec-compliant <see cref="ErrorToStringSpec"/>. Returned by GetProperty's Type-receiver branch when receiver is typeof($Error). Required so <c>Error.prototype.toString.call(non-error)</c> hits the brand-checking helper instead of generic .NET reflection on $Error.</summary>
+    /// <summary>Error.prototype singleton dict — populated with a $TSFunction wrapping the spec-compliant ErrorToStringSpec IL helper. Returned by GetProperty's Type-receiver branch when receiver is typeof($Error). Required so <c>Error.prototype.toString.call(non-error)</c> hits the brand-checking helper instead of generic .NET reflection on $Error.</summary>
     public FieldBuilder ErrorPrototypeField { get; set; } = null!;
     /// <summary>Idempotent populate for <see cref="ErrorPrototypeField"/>.</summary>
     public MethodBuilder ErrorPrototypePopulateMethod { get; set; } = null!;
@@ -559,8 +557,6 @@ public class EmittedRuntime
     public MethodBuilder EvalErrorPrototypePopulateMethod { get; set; } = null!;
     public FieldBuilder AggregateErrorPrototypeField { get; set; } = null!;
     public MethodBuilder AggregateErrorPrototypePopulateMethod { get; set; } = null!;
-    /// <summary>$Runtime.ErrorToStringSpec(this) — ECMA-262 20.5.3.4 Error.prototype.toString. Throws TypeError on non-object receiver; otherwise reads name/message via Get and returns the formatted string.</summary>
-    public MethodBuilder ErrorToStringSpec { get; set; } = null!;
 
     /// <summary>Function.prototype singleton dict, populated lazily with $TSFunction wrappers for call/apply/bind/toString/constructor (ECMA-262 §20.2.3).</summary>
     public FieldBuilder FunctionPrototypeField { get; set; } = null!;
@@ -908,8 +904,6 @@ public class EmittedRuntime
     public MethodBuilder InvokeCallback { get; set; } = null!;
     public MethodBuilder InvokeCallbackNoArgs { get; set; } = null!;
 
-    // PromiseAllSettled helper
-    public MethodBuilder ProcessElementSettled { get; set; } = null!;
 
     // Timer support ($TSTimeout type and global functions)
     public TypeBuilder TSTimeoutType { get; set; } = null!;
@@ -1143,7 +1137,6 @@ public class EmittedRuntime
     public MethodBuilder RegExpFromArgs { get; set; } = null!;
     public MethodBuilder RegExpTest { get; set; } = null!;
     public MethodBuilder RegExpExec { get; set; } = null!;
-    public MethodBuilder RegExpToString { get; set; } = null!;
     public MethodBuilder RegExpGetSource { get; set; } = null!;
     public MethodBuilder RegExpGetFlags { get; set; } = null!;
     public MethodBuilder RegExpGetGlobal { get; set; } = null!;
@@ -1322,7 +1315,6 @@ public class EmittedRuntime
     public MethodBuilder TSArrayFreeze { get; set; } = null!;
     public MethodBuilder TSArrayGet { get; set; } = null!;
     public MethodBuilder TSArraySet { get; set; } = null!;
-    public MethodBuilder TSArraySetStrict { get; set; } = null!;
 
     // Stage E.2 additions (long-indexed sparse/hole-aware API).
     // Mirrors SharpTSArray public surface. Legacy int-indexed Get/Set above
@@ -1412,8 +1404,6 @@ public class EmittedRuntime
     public MethodBuilder AsyncGeneratorReturnMethod { get; set; } = null!;
     public MethodBuilder AsyncGeneratorThrowMethod { get; set; } = null!;
 
-    // Async-from-sync iterator adapter (for await...of over synchronous iterables)
-    public TypeBuilder AsyncFromSyncIteratorType { get; set; } = null!;
     public ConstructorBuilder AsyncFromSyncIteratorCtor { get; set; } = null!;
     public MethodBuilder AdaptSyncIterableToAsyncGenerator { get; set; } = null!;
 
@@ -1696,7 +1686,6 @@ public class EmittedRuntime
     public Dictionary<string, MethodBuilder> FsPromisesWrapperMethods { get; set; } = new();
 
     // Helper to convert Task to Task<object?> (for void-returning async methods)
-    public MethodBuilder WrapVoidTaskAsObjectTask { get; set; } = null!;
 
     // NodeError conversion helpers
     public MethodBuilder ThrowNodeError { get; set; } = null!;
@@ -1714,15 +1703,12 @@ public class EmittedRuntime
 
     public MethodBuilder ProcessMemoryUsage { get; set; } = null!;
     public MethodBuilder ProcessGetNextTick { get; set; } = null!;
-    public MethodBuilder ProcessEventEmitterCall { get; set; } = null!;
-    public MethodBuilder ProcessEmitExit { get; set; } = null!;
     public MethodBuilder GetProcessEventEmitter { get; set; } = null!;
 
     // $Process — the live compiled process object (epic #1078). GetProcessObject
     // returns the singleton; the value helpers back both the $Process instance
     // members and the static-receiver emitters (ProcessStaticEmitter /
     // ProcessModuleEmitter).
-    public TypeBuilder ProcessType { get; set; } = null!;
     public MethodBuilder GetProcessObject { get; set; } = null!;
     public MethodBuilder ProcessExit { get; set; } = null!;
     public MethodBuilder ProcessKill { get; set; } = null!;
@@ -1749,7 +1735,6 @@ public class EmittedRuntime
     public MethodBuilder ProcessGetHrtimeFn { get; set; } = null!;
     public MethodBuilder ProcessGetMemoryUsageFn { get; set; } = null!;
     public MethodBuilder ProcessUmask { get; set; } = null!;
-    public MethodBuilder ProcessBuildReport { get; set; } = null!;
     public MethodBuilder ProcessGetReport { get; set; } = null!;
 
     // Process stdin/stdout/stderr stream methods
@@ -2111,61 +2096,6 @@ public class EmittedRuntime
     public MethodBuilder TSBufferSwap32 { get; set; } = null!;
     public MethodBuilder TSBufferSwap64 { get; set; } = null!;
 
-    // Util module methods
-    public MethodBuilder UtilFormat { get; set; } = null!;
-    public MethodBuilder UtilInspect { get; set; } = null!;
-    public MethodBuilder UtilIsDeepStrictEqual { get; set; } = null!;
-    public MethodBuilder UtilParseArgs { get; set; } = null!;
-    public MethodBuilder UtilToUSVString { get; set; } = null!;
-
-    // util.types.* methods
-    public MethodBuilder UtilTypesIsArray { get; set; } = null!;
-    public MethodBuilder UtilTypesIsFunction { get; set; } = null!;
-    public MethodBuilder UtilTypesIsNull { get; set; } = null!;
-    public MethodBuilder UtilTypesIsUndefined { get; set; } = null!;
-    public MethodBuilder UtilTypesIsDate { get; set; } = null!;
-    public MethodBuilder UtilTypesIsPromise { get; set; } = null!;
-    public MethodBuilder UtilTypesIsRegExp { get; set; } = null!;
-    public MethodBuilder UtilTypesIsMap { get; set; } = null!;
-    public MethodBuilder UtilTypesIsSet { get; set; } = null!;
-    public MethodBuilder UtilTypesIsTypedArray { get; set; } = null!;
-    public MethodBuilder UtilTypesIsNativeError { get; set; } = null!;
-    public MethodBuilder UtilTypesIsBoxedPrimitive { get; set; } = null!;
-    public MethodBuilder UtilTypesIsWeakMap { get; set; } = null!;
-    public MethodBuilder UtilTypesIsWeakSet { get; set; } = null!;
-    public MethodBuilder UtilTypesIsArrayBuffer { get; set; } = null!;
-
-    // util module additional methods
-    public MethodBuilder UtilStripVTControlCharacters { get; set; } = null!;
-    public MethodBuilder UtilGetSystemErrorName { get; set; } = null!;
-    public MethodBuilder UtilGetSystemErrorMap { get; set; } = null!;
-
-    // util.deprecate support
-    public MethodBuilder UtilDeprecate { get; set; } = null!;
-    public TypeBuilder TSDeprecatedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSDeprecatedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSDeprecatedFunctionInvoke { get; set; } = null!;
-
-    // util.callbackify support
-    public MethodBuilder UtilCallbackify { get; set; } = null!;
-    public TypeBuilder TSCallbackifiedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSCallbackifiedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSCallbackifiedFunctionInvoke { get; set; } = null!;
-
-    // util.promisify support
-    public MethodBuilder UtilPromisify { get; set; } = null!;
-    public TypeBuilder TSPromisifiedFunctionType { get; set; } = null!;
-    public ConstructorBuilder TSPromisifiedFunctionCtor { get; set; } = null!;
-    public MethodBuilder TSPromisifiedFunctionInvoke { get; set; } = null!;
-
-    // $PromisifyCallback type - emitted for standalone promisify support
-    public Type TSPromisifyCallbackType { get; set; } = null!;
-    public ConstructorBuilder TSPromisifyCallbackCtor { get; set; } = null!;
-    public MethodBuilder TSPromisifyCallbackInvoke { get; set; } = null!;
-
-    // util.inherits support
-    public MethodBuilder UtilInherits { get; set; } = null!;
-
     // $TextEncoder type - emitted for standalone util support
     public TypeBuilder TSTextEncoderType { get; set; } = null!;
     public ConstructorBuilder TSTextEncoderCtor { get; set; } = null!;
@@ -2183,16 +2113,6 @@ public class EmittedRuntime
     public MethodBuilder UtilInspectValue { get; set; } = null!;
     public MethodBuilder UtilInspectArray { get; set; } = null!;
     public MethodBuilder UtilInspectObject { get; set; } = null!;
-
-    // Util isDeepStrictEqual helper method (emitted for standalone)
-    public MethodBuilder UtilDeepEqualImpl { get; set; } = null!;
-
-    // ParseArgs helper methods (emitted for standalone)
-    public MethodBuilder UtilParseArgsGetArgsArray { get; set; } = null!;
-    public MethodBuilder UtilParseArgsGetOptionsDef { get; set; } = null!;
-    public MethodBuilder UtilParseArgsGetBoolOption { get; set; } = null!;
-    public MethodBuilder UtilParseLongOption { get; set; } = null!;
-    public MethodBuilder UtilParseShortOptions { get; set; } = null!;
 
     // Readline module methods
     public MethodBuilder ReadlineQuestionSync { get; set; } = null!;
@@ -2787,9 +2707,6 @@ public class EmittedRuntime
     /// <summary>Encodes an ECPoint per Node point-conversion format (uncompressed/compressed/hybrid).</summary>
     public MethodBuilder EcdhEncodePoint { get; set; } = null!;
 
-    // crypto.X509Certificate (#1064). Null when UsesCrypto is off — the
-    // `new X509Certificate(...)` constructor case guards on the ctor being present.
-    public TypeBuilder? X509CertificateType { get; set; }
     public ConstructorBuilder? X509CertificateCtor { get; set; }
 
     // WebCrypto (#1063) — GetWebCryptoObject() → the $WebCrypto singleton

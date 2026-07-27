@@ -11,8 +11,7 @@ public class ArrayCopyWithinTests
 {
     #region Basic CopyWithin Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_BasicCopy(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("4,5,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_ReturnsSameArray(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_WithStartAndEnd(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +50,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("4,2,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_CopyToMiddle(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +67,7 @@ public class ArrayCopyWithinTests
 
     #region Negative Index Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_NegativeTarget(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +80,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_NegativeStart(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +93,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("4,5,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_NegativeEnd(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +106,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("3,4,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_AllNegativeIndices(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +123,7 @@ public class ArrayCopyWithinTests
 
     #region Overlapping Region Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_OverlappingForward(ExecutionMode mode)
     {
         // Copying from index 0 to index 1 with overlap
@@ -148,8 +139,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,1,2,3,4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_OverlappingBackward(ExecutionMode mode)
     {
         // Copying from index 2 to index 0 with overlap
@@ -169,8 +159,7 @@ public class ArrayCopyWithinTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -183,8 +172,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_SingleElement(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +185,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_TargetBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -211,8 +198,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_StartBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +211,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_EndBeforeStart(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +224,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_SameTargetAndStart(ExecutionMode mode)
     {
         var source = """
@@ -253,8 +237,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_NegativeTargetBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -271,8 +254,7 @@ public class ArrayCopyWithinTests
 
     #region Chaining Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_Chaining(ExecutionMode mode)
     {
         var source = """
@@ -291,8 +273,7 @@ public class ArrayCopyWithinTests
 
     #region MDN Examples
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_MDNExample1(ExecutionMode mode)
     {
         // MDN: [1, 2, 3, 4, 5].copyWithin(-2)
@@ -307,8 +288,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("1,2,3,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_MDNExample2(ExecutionMode mode)
     {
         // MDN: [1, 2, 3, 4, 5].copyWithin(0, 3)
@@ -323,8 +303,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("4,5,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_MDNExample3(ExecutionMode mode)
     {
         // MDN: [1, 2, 3, 4, 5].copyWithin(0, 3, 4)
@@ -339,8 +318,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("4,2,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_MDNExample4(ExecutionMode mode)
     {
         // MDN: [1, 2, 3, 4, 5].copyWithin(-2, -3, -1)
@@ -359,8 +337,7 @@ public class ArrayCopyWithinTests
 
     #region With Different Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_WithStrings(ExecutionMode mode)
     {
         var source = """
@@ -373,8 +350,7 @@ public class ArrayCopyWithinTests
         Assert.Equal("d,e,c,d,e\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_CopyWithin_WithObjects(ExecutionMode mode)
     {
         var source = """

@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncFunctionReturnValueTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_BareReturn_ResolvesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_OffEnd_ResolvesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_BareReturn_ResolvesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_OffEnd_ResolvesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +73,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_ReturnNull_ResolvesNull(ExecutionMode mode)
     {
         // Care-case: an explicit `return null;` must keep resolving with null, not undefined.
@@ -99,8 +94,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("object\nnull\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_ReturnValue_Preserved(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +109,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_OffEnd_ResolvesUndefined(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +130,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\nundefined\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_AwaitThenOffEnd_ResolvesUndefined(ExecutionMode mode)
     {
         // The implicit-completion value must be undefined even when the body suspends on an
@@ -156,8 +148,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_BareReturnInTryWithAwaitFinally_ResolvesUndefined(ExecutionMode mode)
     {
         // A bare `return;` inside a try whose finally awaits routes through the pending-return
@@ -177,8 +168,7 @@ public class AsyncFunctionReturnValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_AwaitOfUndefinedResolving_YieldsUndefined(ExecutionMode mode)
     {
         // Awaiting an async function that resolves with the implicit undefined must observe

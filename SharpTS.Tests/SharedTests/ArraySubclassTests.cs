@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArraySubclassTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_ArrayBehaviorAndBrand(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class ArraySubclassTests
         Assert.Equal("2\n1 2\ntrue\ntrue\ntrue\n[1,2]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_MethodsFieldsAndIteration(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +52,7 @@ public class ArraySubclassTests
         Assert.Equal("7\nsum\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_ConstructorWithSuper(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +71,7 @@ public class ArraySubclassTests
         Assert.Equal("b\n2 true true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_SuperWithLengthArgument(ExecutionMode mode)
     {
         // ECMA-262 §23.1.1.1: a single numeric constructor argument sets the
@@ -97,8 +93,7 @@ public class ArraySubclassTests
         Assert.Equal("3\n2 x y\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExtendsArray_GetterResolves(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +110,7 @@ public class ArraySubclassTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ExtendsUnbridgedBuiltIn_PreciseRuntimeError(ExecutionMode mode)
     {
         // Built-ins without a subclassing bridge (Error/Array/#233 and

@@ -22,8 +22,7 @@ public class BuiltInStructuralTypeTests
 {
     // ----- keyof over built-ins -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Date_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("getTime\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_RegExp_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -44,8 +42,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("source\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Map_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +52,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("get\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Set_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +62,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("add\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Promise_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +72,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("then\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Date_RejectsNonMember(ExecutionMode mode)
     {
         // keyof Date is the union of its members; a non-member literal must not be assignable.
@@ -90,8 +84,7 @@ public class BuiltInStructuralTypeTests
 
     // ----- structural assignability with a built-in source -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Date_AssignableToMatchingShape(ExecutionMode mode)
     {
         var source = """
@@ -102,8 +95,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("number\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Map_AssignableToMatchingShape(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +107,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_RegExp_AssignableToMatchingShape(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +118,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Date_MissingMember_Rejected(ExecutionMode mode)
     {
         var source = """
@@ -138,8 +128,7 @@ public class BuiltInStructuralTypeTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Date_WrongMemberType_Rejected(ExecutionMode mode)
     {
         // getTime returns number, not string — width subtyping must still type-check member types.
@@ -152,8 +141,7 @@ public class BuiltInStructuralTypeTests
 
     // ----- keyof feeding indexed access and mapped types over a built-in -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexedAccess_OverBuiltIn_ResolvesMemberType(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +152,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("function\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MappedType_OverKeyOfBuiltIn_TypeChecks(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +165,7 @@ public class BuiltInStructuralTypeTests
 
     // ----- #530: the projection extended to Error (and the other GetXxxMemberType built-ins) -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Error_AcceptsMemberName(ExecutionMode mode)
     {
         var source = """
@@ -189,8 +175,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("message\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Error_RejectsNonMember(ExecutionMode mode)
     {
         var source = """
@@ -199,8 +184,7 @@ public class BuiltInStructuralTypeTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Error_AssignableToMatchingShape(ExecutionMode mode)
     {
         // The verbatim repro from #530: an Error value satisfies a matching structural shape.
@@ -212,8 +196,7 @@ public class BuiltInStructuralTypeTests
         Assert.Equal("boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Structural_Error_MissingMember_Rejected(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +208,7 @@ public class BuiltInStructuralTypeTests
 
     // ----- #529: the weak-type check (TS2559) now sees a built-in source's members -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakType_BuiltInSource_NoSharedMember_Rejected(ExecutionMode mode)
     {
         // tsc: TS2559 — Date has no properties in common with the all-optional target. Before #529 the
@@ -237,8 +219,7 @@ public class BuiltInStructuralTypeTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WeakType_BuiltInSource_SharedMember_Accepted(ExecutionMode mode)
     {
         // The weak-type rule fires only when NOTHING is in common: a target sharing a member name with

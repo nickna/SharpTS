@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ClassMethodNameTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodNamedGet(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class ClassMethodNameTests
         Assert.Equal("got x\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodNamedSet(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class ClassMethodNameTests
         Assert.Equal("a=b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodNamedDelete(ExecutionMode mode)
     {
         var source = """
@@ -63,8 +60,7 @@ public class ClassMethodNameTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetAccessor_StillWorks(ExecutionMode mode)
     {
         // Regression: `get value()` must still parse as an accessor, not as
@@ -84,8 +80,7 @@ public class ClassMethodNameTests
         Assert.Equal("42\n99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetMethod_Coexists_WithGetAccessor_DifferentClasses(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +105,7 @@ public class ClassMethodNameTests
     // that user code and stdlib hit (URLSearchParams etc.); fields with
     // these names are vanishingly rare.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticAndInstanceMethod_ShareName(ExecutionMode mode)
     {
         // Issue #722: static members live on the constructor, instance members
@@ -128,8 +122,7 @@ public class ClassMethodNameTests
         Assert.Equal("static instance\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticOverload_Coexists_WithInstanceMethod_SameName(ExecutionMode mode)
     {
         // Overload resolution must still run independently per namespace: an
@@ -147,8 +140,7 @@ public class ClassMethodNameTests
         Assert.Equal("static:1 static:a instance\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_StaticAndInstanceMethod_ShareName(ExecutionMode mode)
     {
         // Same fix applies to class expressions (issue #722, site 3).

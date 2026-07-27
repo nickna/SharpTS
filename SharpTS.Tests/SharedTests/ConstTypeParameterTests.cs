@@ -11,8 +11,7 @@ public class ConstTypeParameterTests
 {
     #region Basic Const Type Parameter Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_BasicFunction(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class ConstTypeParameterTests
         Assert.Equal("42\nhello\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_WithConstraint(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class ConstTypeParameterTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_MultipleTypeParams(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class ConstTypeParameterTests
         Assert.Equal("name=Alice\nage=30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_MixedConstAndNonConst(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +75,7 @@ public class ConstTypeParameterTests
 
     #region Const Type Parameter Classes
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_InClass(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +98,7 @@ public class ConstTypeParameterTests
         Assert.Equal("42\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_ClassWithConstraint(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +121,7 @@ public class ConstTypeParameterTests
 
     #region Const Type Parameter with Complex Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_WithObjectLiteral(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +137,7 @@ public class ConstTypeParameterTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_WithArrayLiteral(ExecutionMode mode)
     {
         var source = """
@@ -160,8 +152,7 @@ public class ConstTypeParameterTests
         Assert.Equal("10\na\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_NestedObjects(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +171,7 @@ public class ConstTypeParameterTests
 
     #region Explicit Type Arguments with Const
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_ExplicitTypeArg(ExecutionMode mode)
     {
         var source = """
@@ -200,8 +190,7 @@ public class ConstTypeParameterTests
 
     #region Default Type Parameters with Const
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_WithDefault(ExecutionMode mode)
     {
         var source = """
@@ -220,8 +209,7 @@ public class ConstTypeParameterTests
 
     #region Generic Method in Class with Const
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstTypeParam_GenericMethodInClass(ExecutionMode mode)
     {
         var source = """

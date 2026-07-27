@@ -17,8 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CrossModuleRestParamTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RestParam_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -38,8 +37,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("a,b,c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteralMethod_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -63,8 +61,7 @@ public class CrossModuleRestParamTests
 
     // ---- #426: state-machine functions (generator/async/async-generator) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorRestParam_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -86,8 +83,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("10,20,\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncRestParam_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -109,8 +105,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("sum=6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorRestParam_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -137,8 +132,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("agen=101,102,103,\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorLeadingRegularParamThenRest_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -160,8 +154,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("n1,n2,\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorEmptyRest_AcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -184,8 +177,7 @@ public class CrossModuleRestParamTests
         Assert.Equal("[]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadOfImportedGeneratorRestResult(ExecutionMode mode)
     {
         // Secondary #426 symptom: spreading the imported rest-param generator's

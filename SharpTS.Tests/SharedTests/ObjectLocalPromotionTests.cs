@@ -20,8 +20,7 @@ public class ObjectLocalPromotionTests
 {
     // ── Positive cases: promotable shapes ──────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_NumberRecord_ReadFieldsInLoop(ExecutionMode mode)
     {
         // The benchmark shape (objectWork): a fresh per-iteration record read by field.
@@ -41,8 +40,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("10000\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_FieldWrite_MutatesThenReads(ExecutionMode mode)
     {
         // `const o` binds the slot but its fields stay mutable.
@@ -58,8 +56,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_FieldWrite_ReturnsAssignedValue(ExecutionMode mode)
     {
         // `o.x = v` is an expression whose value is the assigned RHS.
@@ -75,8 +72,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("84\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_BooleanAndNumberFields(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +87,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_StringFields_Concat(ExecutionMode mode)
     {
         var source = """
@@ -106,8 +101,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("ab\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_MixedPrimitiveFields(ExecutionMode mode)
     {
         // number + string + boolean fields in one shape, with a string-typed result mixing kinds.
@@ -124,8 +118,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("x3!\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_MultipleObjects_Independent(ExecutionMode mode)
     {
         var source = """
@@ -142,8 +135,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("132\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_FieldWrittenFromComputedNumber(ExecutionMode mode)
     {
         var source = """
@@ -162,8 +154,7 @@ public class ObjectLocalPromotionTests
 
     // ── Escape cases: must fall back, must stay correct ────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_PassedToFunction(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +169,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_Returned(ExecutionMode mode)
     {
         var source = """
@@ -194,8 +184,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_Spread(ExecutionMode mode)
     {
         var source = """
@@ -210,8 +199,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_ForInEnumeration(ExecutionMode mode)
     {
         var source = """
@@ -227,8 +215,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_StrictEquality(ExecutionMode mode)
     {
         // Object identity comparison — a promoted struct local has no stable reference, so this must
@@ -245,8 +232,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_CapturedByClosure(ExecutionMode mode)
     {
         var source = """
@@ -261,8 +247,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_CompoundFieldAssign(ExecutionMode mode)
     {
         // `o.x += v` is intentionally not promoted in the first cut → falls back, must stay correct.
@@ -278,8 +263,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("13\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_NestedObjectField(ExecutionMode mode)
     {
         // A non-primitive (nested object) field disqualifies the shape → falls back.
@@ -294,8 +278,7 @@ public class ObjectLocalPromotionTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_DynamicBracketRead(ExecutionMode mode)
     {
         // Bracket access (even with a literal key) is a dynamic index → disqualifies → falls back.

@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AwaitStackSpillTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConsoleLog_MultiArg_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class AwaitStackSpillTests
         Assert.Equal("t1 5\nm 5 n 5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BinaryOperands_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class AwaitStackSpillTests
         Assert.Equal("x5\ntrue\n5\n32\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayAndObjectLiterals_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +65,7 @@ public class AwaitStackSpillTests
         Assert.Equal("[1, 5]\n{ a: 5 }\n{ dyn: 5 }\n[5, 2]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertyAndIndexAssignment_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +87,7 @@ public class AwaitStackSpillTests
         Assert.Equal("5\n8\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAndLogicalAssignment_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -120,8 +115,7 @@ public class AwaitStackSpillTests
         Assert.Equal("6\n6\n5\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TaggedTemplate_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +131,7 @@ public class AwaitStackSpillTests
         Assert.Equal("a5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMembers_InlineAwait(ExecutionMode mode)
     {
         var source = """
@@ -162,8 +155,7 @@ public class AwaitStackSpillTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConsoleError_MultiArg_InlineAwait_DoesNotCrash(ExecutionMode mode)
     {
         var source = """

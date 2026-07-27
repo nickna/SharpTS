@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NamedBuiltInImportTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_NamedImport_ExistsSync_Works(ExecutionMode mode)
     {
         var testFile = Path.GetTempFileName();
@@ -33,8 +32,7 @@ public class NamedBuiltInImportTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_NamedImport_WriteFileSync_ReadFileSync_Works(ExecutionMode mode)
     {
         var testFile = Path.Combine(Path.GetTempPath(), $"sharptstest_{Guid.NewGuid()}.txt");
@@ -60,8 +58,7 @@ public class NamedBuiltInImportTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_NamedImport_MultipleImports_Work(ExecutionMode mode)
     {
         var testFile = Path.Combine(Path.GetTempPath(), $"sharptstest_{Guid.NewGuid()}.txt");
@@ -91,8 +88,7 @@ public class NamedBuiltInImportTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_Basename_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -107,8 +103,7 @@ public class NamedBuiltInImportTests
         Assert.Equal("baz.txt", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_Dirname_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -125,8 +120,7 @@ public class NamedBuiltInImportTests
         Assert.Contains("bar", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_Extname_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -141,8 +135,7 @@ public class NamedBuiltInImportTests
         Assert.Equal(".ts", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_Join_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -163,8 +156,7 @@ public class NamedBuiltInImportTests
         Assert.Equal(["true", "true", "true"], lines);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_IsAbsolute_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -179,8 +171,7 @@ public class NamedBuiltInImportTests
         Assert.Equal("false", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_NamedImport_MultipleImports_Work(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -200,8 +191,7 @@ public class NamedBuiltInImportTests
         Assert.Equal(".ts", lines[1]);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceImports_StillWork(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

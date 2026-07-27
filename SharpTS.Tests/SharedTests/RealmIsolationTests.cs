@@ -21,8 +21,7 @@ public class RealmIsolationTests
     /// round-trips a registered symbol while returning <c>undefined</c> for an
     /// unregistered one.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolFor_WithinRealm_IsIdempotentAndRoundTrips(ExecutionMode mode)
     {
         var source = """

@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CaughtErrorIdentityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GuestThrownErrorShapedString_IsCaughtVerbatim_NotReTyped(ExecutionMode mode)
     {
         // A guest throw of an error-prefixed string is a plain string value in JS — it must NOT
@@ -39,8 +38,7 @@ public class CaughtErrorIdentityTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InternalRuntimeError_CaughtByGuest_IsErrorInstance(ExecutionMode mode)
     {
         // `1n ** -1n` is a runtime error in both modes; caught by guest code it must be an Error
@@ -53,8 +51,7 @@ public class CaughtErrorIdentityTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void InternalRuntimeError_CaughtByGuest_RecoversTypedError(ExecutionMode mode)
     {
         // Interpreter-specific: the "Runtime Error: " wrapper with no inner JS error name is
@@ -77,8 +74,7 @@ public class CaughtErrorIdentityTests
     // not flattened to a host Exception and re-typed at the downstream catch. These crossed the
     // boundary correctly in compiled mode already; the fix brings the interpreter to parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GuestStringThrow_AcrossFunctionCall_IsCaughtVerbatim(ExecutionMode mode)
     {
         var source = """
@@ -94,8 +90,7 @@ public class CaughtErrorIdentityTests
         Assert.Equal("string\nfalse\nTypeError: via-fn\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GuestStringThrow_AcrossHostCallback_IsCaughtVerbatim(ExecutionMode mode)
     {
         // Array.forEach invokes the guest callback through a host frame — the throw must cross it
@@ -112,8 +107,7 @@ public class CaughtErrorIdentityTests
         Assert.Equal("string\nfalse\nTypeError: in-forEach\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GuestErrorObject_AcrossHostCallback_KeepsIdentity(ExecutionMode mode)
     {
         // Anchor: a genuine Error object thrown across the same host frame must remain an Error

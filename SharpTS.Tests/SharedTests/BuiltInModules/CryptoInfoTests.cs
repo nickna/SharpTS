@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CryptoInfoTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetHashes_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -26,8 +25,7 @@ public class CryptoInfoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetHashes_ContainsSha256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -45,8 +43,7 @@ public class CryptoInfoTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetCiphers_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -63,8 +60,7 @@ public class CryptoInfoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetCiphers_ContainsAesCbc(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

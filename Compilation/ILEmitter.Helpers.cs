@@ -28,48 +28,6 @@ public partial class ILEmitter
     public bool HasDeferredReturns => _ctx.ReturnValueLocal != null;
 
     /// <summary>
-    /// Boxes the return value if it's a value type, and sets the appropriate stack type.
-    /// Used after calling functions that may have typed return values.
-    /// </summary>
-    /// <param name="returnType">The return type of the called method</param>
-    private new void BoxReturnValueIfNeeded(Type returnType)
-    {
-        if (returnType == typeof(void))
-        {
-            // A void-returning method used in a value context yields `undefined`, not C# null
-            // (= JS null) — mirrors BoxReturnValueIfNeeded in ExpressionEmitterBase. The helper
-            // pushes the $Undefined sentinel (null fallback for standalone) and sets stack type. #563
-            EmitUndefinedConstant();
-        }
-        else if (_ctx.Types.IsDouble(returnType))
-        {
-            // Return is unboxed double — leave unboxed, consumers auto-box via EmitBoxIfNeeded/EnsureBoxed
-            SetStackType(StackType.Double);
-        }
-        else if (_ctx.Types.IsBoolean(returnType))
-        {
-            // Return is unboxed bool — leave unboxed, consumers auto-box via EmitBoxIfNeeded/EnsureBoxed
-            SetStackType(StackType.Boolean);
-        }
-        else if (returnType.IsValueType)
-        {
-            // Other value types - box them
-            IL.Emit(OpCodes.Box, returnType);
-            SetStackUnknown();
-        }
-        else if (_ctx.Types.IsString(returnType))
-        {
-            // String is a reference type, just set stack type
-            _stackType = StackType.String;
-        }
-        else
-        {
-            // Reference types (including object) - just set stack to unknown
-            SetStackUnknown();
-        }
-    }
-
-    /// <summary>
     /// Emit default parameter value checks at function entry.
     /// For each parameter with a default value, checks if arg is null and assigns default.
     /// </summary>

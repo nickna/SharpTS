@@ -10,8 +10,7 @@ public class CryptoKeyExchangeTests
 {
     #region Diffie-Hellman Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetDiffieHellman_Modp14(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -29,8 +28,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetDiffieHellman_InvalidGroup_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -50,8 +48,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_GenerateKeys_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +66,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_GenerateKeys_HexEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -90,8 +86,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_ComputeSecret_TwoParties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -120,8 +115,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_GetPrime(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -141,8 +135,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_GetGenerator(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -161,8 +154,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_DiffieHellman_VerifyError_IsZero(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -182,8 +174,7 @@ public class CryptoKeyExchangeTests
 
     #region ECDH Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateECDH_P256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -201,8 +192,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateECDH_P384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -220,8 +210,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateECDH_P521(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -239,8 +228,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateECDH_InvalidCurve_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -260,8 +248,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_ECDH_GenerateKeys_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -279,8 +266,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_ECDH_ComputeSecret_TwoParties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -309,8 +295,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_ECDH_GetPublicKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -329,8 +314,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_ECDH_GetPrivateKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -349,8 +333,7 @@ public class CryptoKeyExchangeTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_ECDH_DifferentCurves_DifferentKeyLengths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -48,8 +48,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 1. Set-Cookie stored, sent on next request ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_StoredAndResent_DefaultCredentials(ExecutionMode mode)
     {
         var source = $$"""
@@ -68,8 +67,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 2. credentials: 'omit' does not send stored cookies ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_OmitDoesNotSendStored(ExecutionMode mode)
     {
         var source = $$"""
@@ -88,8 +86,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 2b. credentials: 'include' sends stored cookies (same as default) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_IncludeBehavesLikeSameOriginForSameHost(ExecutionMode mode)
     {
         // Without a top-level realm, 'include' and 'same-origin' both use the
@@ -111,8 +108,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 3. credentials: 'omit' does not store Set-Cookie ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_OmitDoesNotStoreSetCookie(ExecutionMode mode)
     {
         var source = $$"""
@@ -131,8 +127,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 4. Cross-host isolation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_CrossHostIsolation(ExecutionMode mode)
     {
         // Set a cookie for our test server, then verify a different host doesn't get it.
@@ -157,8 +152,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 5. Expired cookie removed ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_ExpiredCookieNotSent(ExecutionMode mode)
     {
         var source = $$"""
@@ -177,8 +171,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 6. HttpOnly cookie sent in subsequent requests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_HttpOnlyCookieSentInSubsequentRequest(ExecutionMode mode)
     {
         var source = $$"""
@@ -197,8 +190,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 7. Multiple Set-Cookie preserved as array via getSetCookie() ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_GetSetCookieReturnsArray(ExecutionMode mode)
     {
         var source = $$"""
@@ -218,8 +210,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 8. headers.get('set-cookie') returns first ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_HeadersGetReturnsFirstSetCookie(ExecutionMode mode)
     {
         var source = $$"""
@@ -236,8 +227,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 9. Cookies survive a redirect chain ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_StoredFromRedirectIntermediate(ExecutionMode mode)
     {
         // Hit a redirect that sets a cookie, follow to /echo-cookie which echoes the
@@ -258,8 +248,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 10. cookieJar.clear() removes all cookies ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_ClearJarRemovesAll(ExecutionMode mode)
     {
         // Step 1: store a cookie
@@ -287,8 +276,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== Invalid URL handling — both methods throw, symmetric ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_GetCookiesThrowsOnInvalidUrl(ExecutionMode mode)
     {
         var source = """
@@ -305,8 +293,7 @@ public class FetchCookieTests : IDisposable
         Assert.Equal("typeerror\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_SetCookieThrowsOnInvalidUrl(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +312,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 11. cookieJar.getCookies(url) returns the right header ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_GetCookieHeaderReturnsSentValue(ExecutionMode mode)
     {
         var source = $$"""
@@ -343,8 +329,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== http.get/http.request cookies ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_HttpModuleSharesJarWithFetch(ExecutionMode mode)
     {
         // Set a cookie via fetch, then read it back via http.get. The ClientRequest (#1043)
@@ -370,8 +355,7 @@ public class FetchCookieTests : IDisposable
         Assert.Contains("session=abc123", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_HttpRequestStoresAndSendsCookies(ExecutionMode mode)
     {
         // Pure http.request flow: set via http.request, read via http.request — proves the
@@ -401,8 +385,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 13. fetch.cookieJar.getCookies(url) from script (both modes) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_FetchCookieJarGetCookies_FromScript(ExecutionMode mode)
     {
         var source = $$"""
@@ -420,8 +403,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 14. fetch.cookieJar.setCookie() from script ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_FetchCookieJarSetCookie_FromScript(ExecutionMode mode)
     {
         var source = $$"""
@@ -440,8 +422,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 15. fetch.cookieJar.clear() from script ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cookies_FetchCookieJarClear_FromScript(ExecutionMode mode)
     {
         var source = $$"""
@@ -461,8 +442,7 @@ public class FetchCookieTests : IDisposable
 
     // ========== 12. Concurrent fetches don't race the jar ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Cookies_ConcurrentFetchesDoNotRaceJar(ExecutionMode mode)
     {
         // Fire 20 parallel fetches that each set the same cookie, then check that

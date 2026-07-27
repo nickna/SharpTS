@@ -14,8 +14,7 @@ public class AsyncGeneratorTests
 {
     #region Basic Async Generator Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_BasicYield_ReturnsValues(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +44,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1 false\n2 false\n3 false\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ObjectMethod_ReadsThis(ExecutionMode mode)
     {
         // #775/#923: an object async-generator method reads instance state via `this`. The value-call
@@ -68,8 +66,7 @@ public class AsyncGeneratorTests
         Assert.Equal("7\n8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_AsyncGeneratorObjectMethod_ReadsThis(ExecutionMode mode)
     {
         // #923: inline `for await (... of o.gen())` over an async-generator object method must thread
@@ -89,8 +86,7 @@ public class AsyncGeneratorTests
         Assert.Equal("42\n43\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorFunctionExpression_AsObjectProperty_ReadsThis(ExecutionMode mode)
     {
         // #923: the other `HasOwnThis` lift shape — an `async function*` EXPRESSION assigned to an
@@ -110,8 +106,7 @@ public class AsyncGeneratorTests
         Assert.Equal("5\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorFunctionExpression_DotCallBindsThis(ExecutionMode mode)
     {
         // #775: an `async function*` expression bound via `.call` reads `this`.
@@ -130,8 +125,7 @@ public class AsyncGeneratorTests
         Assert.Equal("9\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_EmptyGenerator_ReturnsDoneImmediately(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +144,7 @@ public class AsyncGeneratorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_WithAwait_AwaitsBeforeYield(ExecutionMode mode)
     {
         var source = """
@@ -181,8 +174,7 @@ public class AsyncGeneratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_WithParameters_UsesParameters(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +197,7 @@ public class AsyncGeneratorTests
         Assert.Equal("5\n6\n7\n8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_SingleYield_Works(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +221,7 @@ public class AsyncGeneratorTests
         Assert.Equal("42 false\nundefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldInLoop_Works(ExecutionMode mode)
     {
         var source = """
@@ -259,8 +249,7 @@ public class AsyncGeneratorTests
 
     #region for await...of Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_AsyncGenerator_IteratesValues(ExecutionMode mode)
     {
         var source = """
@@ -283,8 +272,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_AsyncGeneratorWithAwait_IteratesAwaitedValues(ExecutionMode mode)
     {
         var source = """
@@ -311,8 +299,7 @@ public class AsyncGeneratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_WithBreak_StopsIteration(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +327,7 @@ public class AsyncGeneratorTests
         Assert.Equal("0\n1\n2\n3\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_WithContinue_SkipsIteration(ExecutionMode mode)
     {
         var source = """
@@ -367,8 +353,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n3\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_EmptyAsyncGenerator_NoIterations(ExecutionMode mode)
     {
         var source = """
@@ -389,8 +374,7 @@ public class AsyncGeneratorTests
         Assert.Equal("iterations: 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_MultipleLoops_Works(ExecutionMode mode)
     {
         var source = """
@@ -419,8 +403,7 @@ public class AsyncGeneratorTests
     // context. SharpTS does not support top-level await, so — like a top-level `await` expression —
     // it must be rejected by the type checker rather than silently degrading to a synchronous
     // `for...of` (which then throws a misleading 'not iterable' runtime error in both modes).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_TopLevel_RejectedByTypeChecker(ExecutionMode mode)
     {
         var source = """
@@ -434,8 +417,7 @@ public class AsyncGeneratorTests
 
     // #672: `for await...of` inside a non-async function is likewise an await outside an async
     // context and must be rejected (TS conformance), not run as a synchronous `for...of`.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_InNonAsyncFunction_RejectedByTypeChecker(ExecutionMode mode)
     {
         var source = """
@@ -454,8 +436,7 @@ public class AsyncGeneratorTests
 
     #region Async Generator .return() and .throw() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_Return_ClosesGenerator(ExecutionMode mode)
     {
         var source = """
@@ -482,8 +463,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n42 true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_Throw_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -510,8 +490,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\nCaught: Test error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ReturnWithoutValue_ReturnsUndefined(ExecutionMode mode)
     {
         // ECMA-262 §27.6.1.3: AsyncGenerator.prototype.return(value) with value absent resolves to
@@ -536,8 +515,7 @@ public class AsyncGeneratorTests
         Assert.Equal("undefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ThrowWithoutValue_RejectsWithUndefined(ExecutionMode mode)
     {
         // throw() with no argument rejects with undefined, not null (#618).
@@ -555,8 +533,7 @@ public class AsyncGeneratorTests
         Assert.Equal("rejected undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_BareReturn_CompletesWithUndefined(ExecutionMode mode)
     {
         // A value-less `return;` completes with undefined, not null; `return null;` still reports null (#540).
@@ -578,8 +555,7 @@ public class AsyncGeneratorTests
         Assert.Equal("bare undefined\nretNull null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ManualNextOnThrowingGenerator_RejectsCatchably(ExecutionMode mode)
     {
         // A throwing async generator settles its final next() as a rejection (catchable via await),
@@ -600,8 +576,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1 err=b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_RejectedAwaitInTry_CaughtByOwnCatch(ExecutionMode mode)
     {
         // A rejected await inside a try in an async generator is caught by that try's catch, which
@@ -619,8 +594,7 @@ public class AsyncGeneratorTests
         Assert.Equal("caught boom\nv1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ThrowInTryAfterYield_CatchBindsValue(ExecutionMode mode)
     {
         // A throw in a flag-based try (one containing a yield) is caught and the catch parameter binds
@@ -644,8 +618,7 @@ public class AsyncGeneratorTests
 
     #region yield* Delegation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_DelegatesToSyncIterable(ExecutionMode mode)
     {
         var source = """
@@ -666,8 +639,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_DelegatesToAsyncGenerator(ExecutionMode mode)
     {
         var source = """
@@ -695,8 +667,7 @@ public class AsyncGeneratorTests
         Assert.Equal("start\na\nb\nend\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_EmptyIterable(ExecutionMode mode)
     {
         var source = """
@@ -719,8 +690,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_NestedDelegation(ExecutionMode mode)
     {
         var source = """
@@ -755,8 +725,7 @@ public class AsyncGeneratorTests
 
     #region Return Value Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ReturnsValue_IncludedInFinalResult(ExecutionMode mode)
     {
         var source = """
@@ -783,8 +752,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1 false\n2 false\nfinal true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ImplicitReturn_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -807,8 +775,7 @@ public class AsyncGeneratorTests
         Assert.Equal("undefined true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_EarlyReturn_SkipsRemainingYields(ExecutionMode mode)
     {
         var source = """
@@ -838,8 +805,7 @@ public class AsyncGeneratorTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_InNamespace_Works(ExecutionMode mode)
     {
         var source = """
@@ -864,8 +830,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_WithStringYields_Works(ExecutionMode mode)
     {
         var source = """
@@ -887,8 +852,7 @@ public class AsyncGeneratorTests
         Assert.Equal("hello\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldingObjects_Works(ExecutionMode mode)
     {
         var source = """
@@ -910,8 +874,7 @@ public class AsyncGeneratorTests
         Assert.Equal("Alice 30\nBob 25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldingArrays_Works(ExecutionMode mode)
     {
         var source = """
@@ -933,8 +896,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1,2,3\n4,5,6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ConditionalYield_Works(ExecutionMode mode)
     {
         var source = """
@@ -964,8 +926,7 @@ public class AsyncGeneratorTests
         Assert.Equal("With middle:\n1\n2\n3\nWithout middle:\n1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldNull_Works(ExecutionMode mode)
     {
         var source = """
@@ -988,8 +949,7 @@ public class AsyncGeneratorTests
         Assert.Equal("null\n1\nnull\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldBoolean_Works(ExecutionMode mode)
     {
         var source = """
@@ -1011,8 +971,7 @@ public class AsyncGeneratorTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_AwaitInYieldExpression_Works(ExecutionMode mode)
     {
         var source = """
@@ -1041,8 +1000,7 @@ public class AsyncGeneratorTests
 
     #region yield await Regression Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_MultipleAwaitsBetweenYields_Works(ExecutionMode mode)
     {
         var source = """
@@ -1071,8 +1029,7 @@ public class AsyncGeneratorTests
         Assert.Equal("6\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_MultipleYieldAwait_InSequence(ExecutionMode mode)
     {
         var source = """
@@ -1099,8 +1056,7 @@ public class AsyncGeneratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_MixedYieldAndYieldAwait(ExecutionMode mode)
     {
         var source = """
@@ -1129,8 +1085,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n20\n3\n40\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldAwaitThenStandaloneAwait(ExecutionMode mode)
     {
         var source = """
@@ -1158,8 +1113,7 @@ public class AsyncGeneratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldAwaitWithComputation(ExecutionMode mode)
     {
         var source = """
@@ -1189,8 +1143,7 @@ public class AsyncGeneratorTests
 
     #region Completion / resume value semantics — #481, #540
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ResumedYield_EvaluatesToUndefined(ExecutionMode mode)
     {
         // The resumed `yield` expression evaluates to undefined (no value sent), not null (#481, the
@@ -1205,8 +1158,7 @@ public class AsyncGeneratorTests
         Assert.Equal("r=undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStarCompletion_EvaluatesToUndefined(ExecutionMode mode)
     {
         // The completion value of `yield* inner()` (when the delegate has no explicit return value) is
@@ -1221,8 +1173,7 @@ public class AsyncGeneratorTests
         Assert.Equal("v2\nv3\nx=undefined\nv4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NextAfterDone_ReportsUndefinedNotStaleReturn(ExecutionMode mode)
     {
         // The return value is delivered exactly once; every later next() reports undefined, not the
@@ -1242,8 +1193,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n42\nundefined\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NextAfterReturn_ReportsUndefinedNotLastYielded(ExecutionMode mode)
     {
         // After return(v) delivers { value: v, done: true }, a later next() reports undefined — the
@@ -1266,8 +1216,7 @@ public class AsyncGeneratorTests
 
     #region Re-entrant next() — "already running" guard (#542)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ReentrantNext_RejectsInsteadOfStackOverflow(ExecutionMode mode)
     {
         // An async generator whose body advances itself (a re-entrant next()) is rejected with a
@@ -1294,8 +1243,7 @@ public class AsyncGeneratorTests
         Assert.Equal("caught: TypeError Async generator is already running\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void AsyncGenerator_ReentrantNext_AfterPendingAwait_Rejects(ExecutionMode mode)
     {
         // Re-entrancy issued *after* a genuinely-pending (setTimeout-backed) await — once the body has
@@ -1328,8 +1276,7 @@ public class AsyncGeneratorTests
 
     #region Genuinely-async awaits and request queuing (#631 / #542)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_PendingAwait_ForAwaitOf_YieldsAllValues(ExecutionMode mode)
     {
         // A not-yet-settled (setTimeout-backed) await inside an async generator consumed by for await…of
@@ -1349,8 +1296,7 @@ public class AsyncGeneratorTests
         Assert.Equal("v1\nv2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_PendingAwait_DirectNext_ResolvesInOrder(ExecutionMode mode)
     {
         // Driving a pending-await async generator by awaiting next() directly. #631 (compiled). Also
@@ -1376,8 +1322,7 @@ public class AsyncGeneratorTests
         Assert.Equal("7 false 8 false undefined true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_PendingRejection_InTry_ReachesCatch(ExecutionMode mode)
     {
         // A pending (genuinely-async) rejected await must reach the consumer's catch through for await…of.
@@ -1398,8 +1343,7 @@ public class AsyncGeneratorTests
         Assert.Equal("caught boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ConcurrentNext_QueuesInOrder(ExecutionMode mode)
     {
         // Two next() calls issued before the first settles must be serviced FIFO (ECMA-262 §27.6.3
@@ -1424,8 +1368,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1 false 2 false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ForAwaitBody_WritesOuterBinding(ExecutionMode mode)
     {
         // #689: a `let`/`const` declared before a `for await…of` over a (genuinely-async) async generator
@@ -1450,8 +1393,7 @@ public class AsyncGeneratorTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_DirectNext_PreservesCallerScope(ExecutionMode mode)
     {
         // #690 (env-leak symptom): after the first `await it.next()` drives the generator, bindings
@@ -1477,8 +1419,7 @@ public class AsyncGeneratorTests
         Assert.Equal("T 1 2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ForAwaitBody_OuterBinding_SurvivesNestedAwaitBody(ExecutionMode mode)
     {
         // #689 hardening: a generator body whose await is nested inside a delegated expression
@@ -1503,8 +1444,7 @@ public class AsyncGeneratorTests
         Assert.Equal("24\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_DirectNext_OuterBinding_SurvivesNestedAwaitBody(ExecutionMode mode)
     {
         // #752: the direct `await it.next()` form of the nested-await body shape
@@ -1530,8 +1470,7 @@ public class AsyncGeneratorTests
         Assert.Equal("T 2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ForAwaitOf_OverPendingAsyncGenerator_SuspendsNotBlocks(ExecutionMode mode)
     {
         // A `for await…of` INSIDE an async generator, consuming a genuinely-async (setTimeout-backed)
@@ -1554,8 +1493,7 @@ public class AsyncGeneratorTests
         Assert.Equal("v10\nv20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ForAwaitOf_BreakAwaitsReturn(ExecutionMode mode)
     {
         // Breaking out of a `for await…of` inside an async generator must await the inner iterator's
@@ -1580,8 +1518,7 @@ public class AsyncGeneratorTests
         Assert.Equal("v10\nend\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ForAwaitOf_InsideTryFinally_RunsFinally(ExecutionMode mode)
     {
         // A `for await…of` inside a try in an async generator suspends; the finally still runs after the
@@ -1606,8 +1543,7 @@ public class AsyncGeneratorTests
         Assert.Equal("v10\nv20\nfinally\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_DelegatesToPendingAsyncGenerator(ExecutionMode mode)
     {
         // yield* delegating to a genuinely-async (setTimeout-backed) async generator must drive the
@@ -1631,8 +1567,7 @@ public class AsyncGeneratorTests
         Assert.Equal("a1\na2\ndone\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_ValueLiveAcrossAwait_IsPreserved(ExecutionMode mode)
     {
         // A value live on the IL evaluation stack across an await inside an async generator — here the
@@ -1658,8 +1593,7 @@ public class AsyncGeneratorTests
 
     #region Sent Value Tests (next(v) — issue #473)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NextWithSentValue_PlainYield(ExecutionMode mode)
     {
         // The resumed `yield` expression evaluates to the value passed to next(v) (ECMA-262 §27.6.3.6).
@@ -1681,8 +1615,7 @@ public class AsyncGeneratorTests
         Assert.Equal("1\n52\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_FirstNextIgnoresSentValue(ExecutionMode mode)
     {
         // The first next() call always ignores its sent value — yield evaluates to undefined
@@ -1704,8 +1637,7 @@ public class AsyncGeneratorTests
         Assert.Equal("hello\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NextWithSentValue_Accumulator(ExecutionMode mode)
     {
         // Sum accumulates sent values across multiple next(v) calls.
@@ -1733,8 +1665,7 @@ public class AsyncGeneratorTests
         Assert.Equal("10\n30\n35\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_NextWithSentValue_NullAndUndefined(ExecutionMode mode)
     {
         // next(null) delivers null; bare next() delivers undefined (not null).
@@ -1769,8 +1700,7 @@ public class AsyncGeneratorTests
     // hoists function declarations in async bodies (Interpreter.Async.ExecuteBlockAsync), and the
     // compiler now hoists the function-scope forwarding binding for a PLAIN/ASYNC (non-generator)
     // encloser — where the forwarding arrow reads its captures live at call time.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorExpression_CapturesAsyncFunctionLocal_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -1787,8 +1717,7 @@ public class AsyncGeneratorTests
     }
 
     // The same forward-reference gap applied to a SYNC generator expression nested in an async function.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SyncGeneratorExpression_CapturesAsyncFunctionLocal_IsCallable(ExecutionMode mode)
     {
         var source = """
@@ -1807,8 +1736,7 @@ public class AsyncGeneratorTests
     // binding is hoisted to the generator body top, and its read-only forwarded capture (`y`) is routed
     // through the generator's #674 function display class so the hoisted forwarder reads it LIVE — not a
     // stale by-value snapshot. (Previously interpreter-only + a compiled-fails-cleanly guard.)
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorExpression_CapturesAsyncGeneratorLocal(ExecutionMode mode)
     {
         var source = """

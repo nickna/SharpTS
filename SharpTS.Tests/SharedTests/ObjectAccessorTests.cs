@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ObjectAccessorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class ObjectAccessorTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Setter_SetsValue(ExecutionMode mode)
     {
         var source = """
@@ -50,8 +48,7 @@ public class ObjectAccessorTests
         Assert.Equal("100\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +65,7 @@ public class ObjectAccessorTests
         Assert.Equal("Hello, test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Setter_BindsThis(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +87,7 @@ public class ObjectAccessorTests
         Assert.Equal("John\nDoe\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_ComputedValue(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +104,7 @@ public class ObjectAccessorTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterWithoutSetter_IsReadOnly(ExecutionMode mode)
     {
         var source = """
@@ -130,8 +124,7 @@ public class ObjectAccessorTests
         Assert.Equal("10\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedAccessorsAndRegularProperties(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +148,7 @@ public class ObjectAccessorTests
         Assert.Equal("regular\n10\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Getter_WithMethod(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +171,7 @@ public class ObjectAccessorTests
         Assert.Equal("0\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleGetters(ExecutionMode mode)
     {
         var source = """
@@ -202,8 +193,7 @@ public class ObjectAccessorTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadWithGetter_MergesProperties(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +214,7 @@ public class ObjectAccessorTests
         Assert.Equal("1\n2\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadWithGetterAndSetter_MergesProperties(ExecutionMode mode)
     {
         var source = """
@@ -251,8 +240,7 @@ public class ObjectAccessorTests
         Assert.Equal("100\n200\n110\n150\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadFromObjectWithAccessor_CopiesDataProperties(ExecutionMode mode)
     {
         var source = """

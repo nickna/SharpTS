@@ -30,7 +30,7 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
     private int _maxConnections = int.MaxValue;
     private X509Certificate2? _certificate;
     private bool _requestCert;
-    private bool _rejectUnauthorized;
+    private bool _rejectUnauthorized = true; // Node's tls.createServer default
     private List<SslApplicationProtocol>? _alpnProtocols;
     private ISharpTSCallable? _sniCallback;
 
@@ -221,6 +221,14 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
                                 ServerCertificate = cert,
                                 ClientCertificateRequired = _requestCert,
                                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                                // rejectUnauthorized was parsed from options but never
+                                // applied — .NET's default validation always rejected
+                                // invalid client certs, so { rejectUnauthorized: false }
+                                // (accept the handshake, expose authorized=false; Node
+                                // semantics) could not work. Only consulted when a
+                                // client certificate was actually requested.
+                                RemoteCertificateValidationCallback = (_, _, _, errors) =>
+                                    !_requestCert || !_rejectUnauthorized || errors == SslPolicyErrors.None,
                             };
 
                             if (_alpnProtocols != null)

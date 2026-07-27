@@ -61,11 +61,6 @@ public static class NarrowingPathExtractor
     }
 
     /// <summary>
-    /// Checks if an expression can be narrowed (i.e., has a stable identity).
-    /// </summary>
-    public static bool IsNarrowable(Expr expr) => TryExtract(expr) != null;
-
-    /// <summary>
     /// Gets the maximum depth we allow for narrowing paths.
     /// This prevents pathological cases like obj.a.b.c.d.e.f.g...
     /// </summary>

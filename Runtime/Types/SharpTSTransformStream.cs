@@ -22,15 +22,12 @@ public class SharpTSTransformStream : ITypeCategorized
     public SharpTSWritableStream Writable { get; }
 
     private readonly SharpTSTransformStreamDefaultController _controller;
-    private readonly Interp? _interp;
 
     private object? _transformFn;
     private object? _flushFn;
 
     public SharpTSTransformStream(Interp? interp, object? transformer, object? writableStrategy, object? readableStrategy)
     {
-        _interp = interp;
-
         if (transformer != null)
         {
             _transformFn = StreamFields.GetCallback(transformer, "transform");

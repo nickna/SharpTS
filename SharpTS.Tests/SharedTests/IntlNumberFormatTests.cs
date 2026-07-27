@@ -11,8 +11,7 @@ public class IntlNumberFormatTests
 {
     // ========== Basic Decimal Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_BasicDecimal(ExecutionMode mode)
     {
         var source = @"
@@ -25,8 +24,7 @@ public class IntlNumberFormatTests
 
     // ========== Currency Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_CurrencyUSD(ExecutionMode mode)
     {
         var source = @"
@@ -37,8 +35,7 @@ public class IntlNumberFormatTests
         Assert.Equal("$1,234.50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_CurrencyEUR(ExecutionMode mode)
     {
         var source = @"
@@ -52,8 +49,7 @@ public class IntlNumberFormatTests
 
     // ========== Percent Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_Percent(ExecutionMode mode)
     {
         var source = @"
@@ -68,8 +64,7 @@ public class IntlNumberFormatTests
 
     // ========== Fraction Digits ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_FractionDigits(ExecutionMode mode)
     {
         var source = @"
@@ -82,8 +77,7 @@ public class IntlNumberFormatTests
 
     // ========== No Grouping ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_NoGrouping(ExecutionMode mode)
     {
         var source = @"
@@ -96,8 +90,7 @@ public class IntlNumberFormatTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -112,8 +105,7 @@ public class IntlNumberFormatTests
 
     // ========== Minimum Integer Digits ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_MinimumIntegerDigits(ExecutionMode mode)
     {
         var source = @"
@@ -126,8 +118,7 @@ public class IntlNumberFormatTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -142,8 +133,7 @@ public class IntlNumberFormatTests
 
     // ========== Integer Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlNumberFormat_Integer(ExecutionMode mode)
     {
         var source = @"

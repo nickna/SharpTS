@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringRelationalComparisonTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LessThan_Strings(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GreaterThan_Strings(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LessEqual_Strings_Equal(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +50,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GreaterEqual_Strings(ExecutionMode mode)
     {
         var source = """
@@ -67,8 +63,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyString_LessThan_NonEmpty(ExecutionMode mode)
     {
         var source = """
@@ -79,8 +74,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringLiteral_Compare(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +85,7 @@ public class StringRelationalComparisonTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InsertionSort_UsingStringCompare(ExecutionMode mode)
     {
         // Mirrors the pattern used by stdlib/node/url.ts URLSearchParams.sort.

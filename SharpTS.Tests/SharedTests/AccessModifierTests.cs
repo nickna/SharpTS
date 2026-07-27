@@ -10,8 +10,7 @@ public class AccessModifierTests
 {
     #region Private Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Private_Field_AccessibleWithinClass(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class AccessModifierTests
         Assert.Equal("password123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Private_Method_AccessibleWithinClass(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +55,7 @@ public class AccessModifierTests
 
     #region Protected Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Protected_Field_AccessibleInSubclass(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +78,7 @@ public class AccessModifierTests
         Assert.Equal("secret-key\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Protected_Method_AccessibleInSubclass(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +104,7 @@ public class AccessModifierTests
 
     #region Public Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Public_Field_AccessibleEverywhere(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +122,7 @@ public class AccessModifierTests
         Assert.Equal("Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Public_Method_AccessibleEverywhere(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +143,7 @@ public class AccessModifierTests
 
     #region Readonly Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readonly_Field_CanBeReadAfterInit(ExecutionMode mode)
     {
         var source = """
@@ -172,8 +165,7 @@ public class AccessModifierTests
 
     #region Combined Modifiers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Private_Readonly_Field_Works(ExecutionMode mode)
     {
         var source = """
@@ -194,8 +186,7 @@ public class AccessModifierTests
         Assert.Equal("abc123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedModifiers_WorkTogether(ExecutionMode mode)
     {
         var source = """

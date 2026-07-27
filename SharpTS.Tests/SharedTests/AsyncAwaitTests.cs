@@ -11,8 +11,7 @@ public class AsyncAwaitTests
 {
     #region Basic Async Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_ReturnsPromise(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class AsyncAwaitTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_AwaitReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class AsyncAwaitTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrowFunction_Works(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class AsyncAwaitTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrowFunction_ExpressionBody(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +78,7 @@ public class AsyncAwaitTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_VoidReturn(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +100,7 @@ public class AsyncAwaitTests
 
     #region Await in Control Flow
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInLoop(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +121,7 @@ public class AsyncAwaitTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInConditional(ExecutionMode mode)
     {
         var source = """
@@ -153,8 +146,7 @@ public class AsyncAwaitTests
 
     #region Chained and Nested Calls
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedAwaits(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +172,7 @@ public class AsyncAwaitTests
         Assert.Equal("Result: 20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncCalls(ExecutionMode mode)
     {
         var source = """
@@ -203,8 +194,7 @@ public class AsyncAwaitTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleAwaitsSameFunction(ExecutionMode mode)
     {
         var source = """
@@ -227,8 +217,7 @@ public class AsyncAwaitTests
 
     #region Await with Non-Promise
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitOnNonPromise_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -247,8 +236,7 @@ public class AsyncAwaitTests
 
     #region Async Class Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncClassMethod(ExecutionMode mode)
     {
         var source = """
@@ -273,8 +261,7 @@ public class AsyncAwaitTests
 
     #region Parameters and Return Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncWithParameters(ExecutionMode mode)
     {
         var source = """
@@ -292,8 +279,7 @@ public class AsyncAwaitTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncWithDefaultParameters(ExecutionMode mode)
     {
         var source = """
@@ -313,8 +299,7 @@ public class AsyncAwaitTests
         Assert.Equal("Hello, Guest\nHello, Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncWithObjectReturn(ExecutionMode mode)
     {
         var source = """
@@ -332,8 +317,7 @@ public class AsyncAwaitTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncWithArrayReturn(ExecutionMode mode)
     {
         var source = """
@@ -355,8 +339,7 @@ public class AsyncAwaitTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_BooleanReturn(ExecutionMode mode)
     {
         var source = """
@@ -374,8 +357,7 @@ public class AsyncAwaitTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_WithLocalVariables(ExecutionMode mode)
     {
         var source = """
@@ -399,8 +381,7 @@ public class AsyncAwaitTests
 
     #region Await in Expressions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInTemplateLiteral(ExecutionMode mode)
     {
         var source = """
@@ -417,8 +398,7 @@ public class AsyncAwaitTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitInTernary(ExecutionMode mode)
     {
         var source = """
@@ -436,8 +416,7 @@ public class AsyncAwaitTests
         Assert.Equal("yes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitWithLogicalOperator(ExecutionMode mode)
     {
         var source = """
@@ -460,8 +439,7 @@ public class AsyncAwaitTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AwaitWithNullishCoalescing(ExecutionMode mode)
     {
         var source = """
@@ -483,8 +461,7 @@ public class AsyncAwaitTests
 
     #region Try/Catch
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncWithTryCatch(ExecutionMode mode)
     {
         var source = """
@@ -510,8 +487,7 @@ public class AsyncAwaitTests
 
     #region Type Checking
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeChecker_AwaitOutsideAsync_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -524,8 +500,7 @@ public class AsyncAwaitTests
         Assert.Contains("await", exception.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeChecker_AsyncReturnsPromise(ExecutionMode mode)
     {
         var source = """
@@ -544,8 +519,7 @@ public class AsyncAwaitTests
 
     #region Super in Async Methods (Compiler)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuperMethodCall(ExecutionMode mode)
     {
         var source = """
@@ -572,8 +546,7 @@ public class AsyncAwaitTests
         Assert.Equal("Hello World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuperMethodCallBeforeAwait(ExecutionMode mode)
     {
         var source = """
@@ -601,8 +574,7 @@ public class AsyncAwaitTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuperMethodCallAfterAwait(ExecutionMode mode)
     {
         var source = """
@@ -629,8 +601,7 @@ public class AsyncAwaitTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SuperWithParameters(ExecutionMode mode)
     {
         var source = """
@@ -661,8 +632,7 @@ public class AsyncAwaitTests
 
     #region Capturing Arrow Functions in Async
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_CapturingArrowLocal(ExecutionMode mode)
     {
         var source = """
@@ -683,8 +653,7 @@ public class AsyncAwaitTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_CapturingArrowParameter(ExecutionMode mode)
     {
         var source = """
@@ -704,8 +673,7 @@ public class AsyncAwaitTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_CapturingArrowMultipleVariables(ExecutionMode mode)
     {
         var source = """
@@ -726,8 +694,7 @@ public class AsyncAwaitTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_CapturingArrowThis(ExecutionMode mode)
     {
         var source = """
@@ -754,8 +721,7 @@ public class AsyncAwaitTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_CapturingArrowBeforeAwait(ExecutionMode mode)
     {
         var source = """
@@ -776,8 +742,7 @@ public class AsyncAwaitTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_CapturingArrowPassedToMethod(ExecutionMode mode)
     {
         var source = """
@@ -819,8 +784,7 @@ public class AsyncAwaitTests
     /// resolve that happens in a later statement would deadlock — a separate
     /// known compiled-mode behavior, not what this test pins.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void TopLevelThen_ResolvedLater_RunsCallbackWithItsParameter(ExecutionMode mode)
     {
         var source = """
@@ -845,8 +809,7 @@ public class AsyncAwaitTests
     // literal was emitted as CLR null (no SharpTSUndefined arm in the base EmitLiteral), and `===`
     // used the null≡undefined-collapsing loose equality helper instead of strict. The awaited null
     // must stay null-ish (typeof "object", === null) but must NOT be === undefined.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_NullResolvedPromise_IsNotStrictUndefined(ExecutionMode mode)
     {
         var source = """
@@ -866,8 +829,7 @@ public class AsyncAwaitTests
 
     // #600 (companion): the `undefined` literal must be the undefined sentinel inside an async body,
     // and `===` must keep null and undefined distinct while loose `==` still collapses them.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Await_UndefinedResolvedPromise_AndStrictEquality(ExecutionMode mode)
     {
         var source = """

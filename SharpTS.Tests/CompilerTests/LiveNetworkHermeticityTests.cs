@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -113,7 +114,7 @@ public class LiveNetworkHermeticityTests
     /// <summary>Enumerates (repo-relative path, absolute path) for every test .cs file, excluding bin/obj.</summary>
     private static IEnumerable<(string Relative, string Full)> EnumerateTestSources()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = RepoPaths.FindRepoRoot();
         var testsDir = Path.Combine(repoRoot, "SharpTS.Tests");
         foreach (var file in Directory.GetFiles(testsDir, "*.cs", SearchOption.AllDirectories))
         {
@@ -147,18 +148,4 @@ public class LiveNetworkHermeticityTests
         return host is not ("localhost" or "127.0.0.1" or "::1" or "0.0.0.0" or "");
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null)
-        {
-            if (Directory.Exists(Path.Combine(dir, "Compilation")) &&
-                File.Exists(Path.Combine(dir, "SharpTS.csproj")))
-            {
-                return dir;
-            }
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }

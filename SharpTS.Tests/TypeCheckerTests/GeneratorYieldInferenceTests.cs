@@ -107,8 +107,7 @@ public class GeneratorYieldInferenceTests
         Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InferredYield_IteratesInBothModes(ExecutionMode mode)
     {
         // Type-level change must not perturb interpretation or IL codegen.
@@ -121,8 +120,7 @@ public class GeneratorYieldInferenceTests
         Assert.Equal("60\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_EmptyYieldsNever_RunsInBothModes(ExecutionMode mode)
     {
         // An empty generator infers Generator<never>; spreading it yields an empty array. The never element
@@ -137,8 +135,7 @@ public class GeneratorYieldInferenceTests
 
     // ---- #532: nested generator declaration infers its yield type (compiled no longer System.Void) ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerator_InfersYieldType_RunsInBothModes(ExecutionMode mode)
     {
         // The nested generator's yield type is inferred (number), so the outer function returns number[]
@@ -169,8 +166,7 @@ public class GeneratorYieldInferenceTests
     // CheckClassBody computes the inferred (un-annotated) method return type during the body pass and
     // re-publishes the frozen class afterwards, so `new C().m()` no longer reads the `<inferred>` placeholder.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorMethod_InferredYield_IsIterable_RunsInBothModes(ExecutionMode mode)
     {
         // The #661 headline (also reported as #687): spreading a generator method with no explicit
@@ -196,8 +192,7 @@ public class GeneratorYieldInferenceTests
         Assert.Equal("TS2322", ex.Diagnostic.TsCode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorMethod_InferredYield_ForOf_RunsInBothModes(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +204,7 @@ public class GeneratorYieldInferenceTests
         Assert.Equal("30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorMethod_InferredYield_RunsInBothModes(ExecutionMode mode)
     {
         // The inferred async generator method computes AsyncGenerator<number> (its yield type), so
@@ -255,8 +249,7 @@ public class GeneratorYieldInferenceTests
         Assert.Equal("TS2322", ex.Diagnostic.TsCode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrdinaryMethod_InferredReturn_CorrectUse_RunsInBothModes(ExecutionMode mode)
     {
         // The same propagation must not over-reject: a correctly-typed consumer of the inferred return runs.

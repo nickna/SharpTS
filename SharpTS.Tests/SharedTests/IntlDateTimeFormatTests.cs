@@ -12,8 +12,7 @@ public class IntlDateTimeFormatTests
 {
     // ========== Basic Date Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateStyleShort(ExecutionMode mode)
     {
         var source = @"
@@ -25,8 +24,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains("1/15/2024", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateStyleLong(ExecutionMode mode)
     {
         var source = @"
@@ -42,8 +40,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Time Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeStyleShort(ExecutionMode mode)
     {
         var source = @"
@@ -56,8 +53,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains("30", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeStyleLong(ExecutionMode mode)
     {
         var source = @"
@@ -72,8 +68,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Combined Date + Time ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateAndTimeStyle(ExecutionMode mode)
     {
         var source = @"
@@ -89,8 +84,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Individual Component Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_YearMonthDay(ExecutionMode mode)
     {
         var source = @"
@@ -104,8 +98,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains("15", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TwoDigitYear(ExecutionMode mode)
     {
         var source = @"
@@ -121,8 +114,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Weekday ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_WeekdayLong(ExecutionMode mode)
     {
         var source = @"
@@ -135,8 +127,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains("Monday", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_WeekdayShort(ExecutionMode mode)
     {
         var source = @"
@@ -150,8 +141,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Weekday Narrow (Bug Fix) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_WeekdayNarrow(ExecutionMode mode)
     {
         var source = @"
@@ -166,8 +156,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Month Narrow (Bug Fix) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_MonthNarrow(ExecutionMode mode)
     {
         var source = @"
@@ -182,8 +171,7 @@ public class IntlDateTimeFormatTests
 
     // ========== dateStyle full/long differentiation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateStyleFull_IncludesWeekday(ExecutionMode mode)
     {
         var source = @"
@@ -196,8 +184,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains("January", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateStyleLong_NoWeekday(ExecutionMode mode)
     {
         var source = @"
@@ -213,8 +200,7 @@ public class IntlDateTimeFormatTests
 
     // ========== timeStyle medium/short differentiation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeStyleMedium_HasSeconds(ExecutionMode mode)
     {
         var source = @"
@@ -226,8 +212,7 @@ public class IntlDateTimeFormatTests
         Assert.Contains(":45", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeStyleShort_NoSeconds(ExecutionMode mode)
     {
         var source = @"
@@ -242,8 +227,7 @@ public class IntlDateTimeFormatTests
 
     // ========== dateStyle medium ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DateStyleMedium(ExecutionMode mode)
     {
         var source = @"
@@ -260,8 +244,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Hour12 ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_Hour12(ExecutionMode mode)
     {
         var source = @"
@@ -277,8 +260,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -291,8 +273,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("short\ngregory\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_ResolvedOptions_ReflectsCalendarAndNumbering(ExecutionMode mode)
     {
         var source = @"
@@ -308,8 +289,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -324,8 +304,7 @@ public class IntlDateTimeFormatTests
 
     // ========== No-argument constructor ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_LocaleOnly(ExecutionMode mode)
     {
         var source = @"
@@ -340,8 +319,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Month Short ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_MonthShort(ExecutionMode mode)
     {
         var source = @"
@@ -357,8 +335,7 @@ public class IntlDateTimeFormatTests
 
     // ========== formatToParts ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatToParts_ReturnsArray(ExecutionMode mode)
     {
         var source = @"
@@ -387,8 +364,7 @@ public class IntlDateTimeFormatTests
     // commits 696bdbc and cfc667b document the original workarounds.
     // ========================================================================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatToParts_HasTypeAndValue(ExecutionMode mode)
     {
         var source = @"
@@ -404,8 +380,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatToParts_ContainsLiterals(ExecutionMode mode)
     {
         var source = @"
@@ -421,8 +396,7 @@ public class IntlDateTimeFormatTests
 
     // ========== formatRange ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatRange_SameDate(ExecutionMode mode)
     {
         var source = @"
@@ -436,8 +410,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("string\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatRange_DifferentDates(ExecutionMode mode)
     {
         var source = @"
@@ -451,8 +424,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatRange_DifferentMonths(ExecutionMode mode)
     {
         var source = @"
@@ -469,8 +441,7 @@ public class IntlDateTimeFormatTests
 
     // ========== formatRangeToParts ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatRangeToParts_HasSourceField(ExecutionMode mode)
     {
         var source = @"
@@ -487,8 +458,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_FormatRangeToParts_SameDateIsShared(ExecutionMode mode)
     {
         var source = @"
@@ -504,8 +474,7 @@ public class IntlDateTimeFormatTests
 
     // ========== BCP 47 Extensions ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_HourCycleExtension_H23(ExecutionMode mode)
     {
         var source = @"
@@ -518,8 +487,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("h23\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_CalendarOption(ExecutionMode mode)
     {
         var source = @"
@@ -531,8 +499,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("buddhist\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_NumberingSystemOption(ExecutionMode mode)
     {
         var source = @"
@@ -546,8 +513,7 @@ public class IntlDateTimeFormatTests
 
     // ========== Timezone ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeZoneUTC(ExecutionMode mode)
     {
         var source = @"
@@ -560,8 +526,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeZoneNameLong_UTC(ExecutionMode mode)
     {
         var source = @"
@@ -574,8 +539,7 @@ public class IntlDateTimeFormatTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlDateTimeFormat_TimeZoneNameShort_UTC(ExecutionMode mode)
     {
         var source = @"

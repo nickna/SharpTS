@@ -29,8 +29,7 @@ public class MethodCompletionValueTests
     // ---- Off-the-end instance / static methods (the issue's primary repro) ----
     // The interpreter is already correct (CallV2), so these assert cross-mode parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndInstanceMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +39,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndStaticMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndInstanceMethod_StrictlyEqualsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +59,7 @@ public class MethodCompletionValueTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndInstanceMethod_InArithmetic_IsNaN(ExecutionMode mode)
     {
         // undefined + 10 === NaN, but null + 10 === 10 — this distinguishes the
@@ -80,8 +76,7 @@ public class MethodCompletionValueTests
 
     // A method that reaches the epilogue after a conditional branch (real body, still
     // falls off the end on the taken path) — exercises the epilogue, not a bare return.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MethodFallingOffEndAfterBranch_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +91,7 @@ public class MethodCompletionValueTests
     // ---- Class-expression methods (separate emit path) ----
     // Interpreter invokes these via CallV2 too, so cross-mode parity holds.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndClassExpressionInstanceMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -107,8 +101,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndClassExpressionStaticMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +114,7 @@ public class MethodCompletionValueTests
     // ---- Regression: explicit returns must NOT be rewritten to undefined ----
     // These go through EmitReturn (untouched by the fix); asserts cross-mode parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExplicitReturnNull_StaysNull(ExecutionMode mode)
     {
         // `return null` is observably distinct from `undefined` — it must be preserved.
@@ -134,8 +126,7 @@ public class MethodCompletionValueTests
         Assert.Equal("object\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExplicitReturnValue_IsPreserved(ExecutionMode mode)
     {
         var source = """
@@ -151,8 +142,7 @@ public class MethodCompletionValueTests
         Assert.Equal("5\n7\nhi\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BranchedExplicitReturns_StillWork(ExecutionMode mode)
     {
         var source = """
@@ -172,8 +162,7 @@ public class MethodCompletionValueTests
     // The setter's CLR return value is discarded; the assignment side effect and the
     // value of the assignment expression (the RHS, per JS) must be unaffected.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SetterOffEnd_StillAppliesEffect(ExecutionMode mode)
     {
         var source = """
@@ -194,8 +183,7 @@ public class MethodCompletionValueTests
     // epilogue; #603 fixed the interpreter's boxed `Call` to return the `undefined` sentinel
     // off the end, so these now assert cross-mode parity (previously compiled-only).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndGetter_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +193,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndStaticGetter_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -216,8 +203,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterFallingOffEndAfterBranch_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -230,8 +216,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndPrivateMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -244,8 +229,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndPrivateStaticMethod_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -258,8 +242,7 @@ public class MethodCompletionValueTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndClassExpressionGetter_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -272,8 +255,7 @@ public class MethodCompletionValueTests
     // Off-the-end getter/private completion must be `undefined`, not CLR `null` — assert via
     // arithmetic (undefined + 10 === NaN, but null + 10 === 10) so it can't pass by `typeof`
     // coincidence. This is the #603 distinguisher on the interpreter's boxed `Call` path.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndGetter_InArithmetic_IsNaN(ExecutionMode mode)
     {
         var source = """
@@ -283,8 +265,7 @@ public class MethodCompletionValueTests
         Assert.Equal("NaN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OffEndPrivateMethod_StrictlyEqualsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -300,8 +281,7 @@ public class MethodCompletionValueTests
     // Regression for #603: only the *off-the-end* completion becomes `undefined`. A getter with
     // an explicit `return null` must still observe CLR `null` (boxed `Call` returns via the
     // Return branch, untouched by the fix).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetterExplicitReturnNull_StaysNull(ExecutionMode mode)
     {
         var source = """

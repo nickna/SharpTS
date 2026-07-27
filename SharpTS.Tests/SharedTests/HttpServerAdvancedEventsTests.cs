@@ -18,21 +18,11 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpServerAdvancedEventsTests
 {
-    private static int GetAvailablePort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_AdvancedEventListeners_AreRegistrable(ExecutionMode mode)
     {
         // Registering upgrade/connect/clientError/checkContinue must not break normal serving.
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -57,11 +47,10 @@ public class HttpServerAdvancedEventsTests
         Assert.Contains("handled", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Server_CheckContinue_FiresInsteadOfRequest(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""

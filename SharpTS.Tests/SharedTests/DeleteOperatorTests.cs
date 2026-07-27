@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class DeleteOperatorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_ObjectProperty_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class DeleteOperatorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_ComputedProperty_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class DeleteOperatorTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_ExistingProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class DeleteOperatorTests
         Assert.Equal("bar\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_FrozenObject_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +66,7 @@ public class DeleteOperatorTests
         Assert.Equal("false\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_SealedObject_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -86,8 +81,7 @@ public class DeleteOperatorTests
         Assert.Equal("false\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_MultipleProperties(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +97,7 @@ public class DeleteOperatorTests
         Assert.Equal("true\n2\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Delete_Expression_EvaluatesOperand(ExecutionMode mode)
     {
         var source = """

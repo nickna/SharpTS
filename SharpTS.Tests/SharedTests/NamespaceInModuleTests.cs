@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NamespaceInModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_WithImportAfter_ExportedConst(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class NamespaceInModuleTests
         Assert.Equal("1\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_WithImportBefore_ExportedFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -52,8 +50,7 @@ public class NamespaceInModuleTests
         Assert.Equal("hi\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_WithImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -75,8 +72,7 @@ public class NamespaceInModuleTests
         Assert.Equal("10\n42\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_WithSiblingModuleImport_ClassAndEnumMembers(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

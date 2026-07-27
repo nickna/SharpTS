@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ClassToStringCoercionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainClass_StringCoercion_BrandsAsObjectObject(ExecutionMode mode)
     {
         // No toString override → Object.prototype brand "[object Object]" (Node),
@@ -28,8 +27,7 @@ public class ClassToStringCoercionTests
         Assert.Equal("[object Object]\n[object Object]\n[object Object]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserToString_StringCoercion_InvokesOverride(ExecutionMode mode)
     {
         var source = @"
@@ -43,8 +41,7 @@ public class ClassToStringCoercionTests
         Assert.Equal("bar!\nbar!\nv=bar!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserToString_ReturningNumber_CoercesToStringForm(ExecutionMode mode)
     {
         // toString returning a primitive number is a valid OrdinaryToPrimitive

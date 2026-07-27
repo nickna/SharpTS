@@ -10,7 +10,7 @@ namespace SharpTS.TypeSystem;
 /// Contains validation methods:
 /// ValidateInterfaceImplementation, ValidateAbstractMemberImplementation,
 /// IsMethodImplemented, IsGetterImplemented, IsSetterImplemented,
-/// FindMemberInClass, ValidateOverrideMembers,
+/// FindMemberInBaseChain, ValidateOverrideMembers,
 /// HasParentMethod, HasParentGetter, HasParentSetter.
 /// </remarks>
 public partial class TypeChecker
@@ -51,7 +51,7 @@ public partial class TypeChecker
             bool isOptional = interfaceType.OptionalMembers.Contains(memberName);
 
             // Check: field, getter, or method (including inheritance chain)
-            TypeInfo? actualType = FindMemberInClass(classType, memberName);
+            TypeInfo? actualType = FindMemberInBaseChain(classType, memberName);
 
             if (actualType == null && !isOptional)
             {
@@ -339,21 +339,6 @@ public partial class TypeChecker
         return false;
     }
 
-    private TypeInfo? FindMemberInClass(TypeInfo.Class classType, string name)
-    {
-        TypeInfo? current = classType;
-        while (current != null)
-        {
-            var fieldTypes = GetFieldTypes(current);
-            var getters = GetGetters(current);
-            var methods = GetMethods(current);
-            if (fieldTypes != null && fieldTypes.TryGetValue(name, out var ft)) return ft;
-            if (getters != null && getters.TryGetValue(name, out var gt)) return gt;
-            if (methods != null && methods.TryGetValue(name, out var mt)) return mt;
-            current = GetSuperclass(current);
-        }
-        return null;
-    }
 
     /// <summary>
     /// Validates that a class's own members are compatible with the members it overrides from its

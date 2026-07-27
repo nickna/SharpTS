@@ -11,8 +11,7 @@ public class RequestResponseTests
 {
     // ========== Response Constructor Tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_DefaultConstructor(ExecutionMode mode)
     {
         var source = @"
@@ -24,8 +23,7 @@ public class RequestResponseTests
         Assert.Equal("200\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_StringBody(ExecutionMode mode)
     {
         var source = @"
@@ -40,8 +38,7 @@ public class RequestResponseTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_NullBody(ExecutionMode mode)
     {
         var source = @"
@@ -56,8 +53,7 @@ public class RequestResponseTests
         Assert.Equal("\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_CustomStatus(ExecutionMode mode)
     {
         var source = @"
@@ -70,8 +66,7 @@ public class RequestResponseTests
         Assert.Equal("404\nNot Found\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_CustomHeaders(ExecutionMode mode)
     {
         var source = @"
@@ -82,8 +77,7 @@ public class RequestResponseTests
         Assert.Equal("val\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_BodyUsed(ExecutionMode mode)
     {
         var source = @"
@@ -99,8 +93,7 @@ public class RequestResponseTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Json(ExecutionMode mode)
     {
         var source = @"
@@ -115,8 +108,7 @@ public class RequestResponseTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_ArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -131,8 +123,7 @@ public class RequestResponseTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Clone(ExecutionMode mode)
     {
         var source = @"
@@ -152,8 +143,7 @@ public class RequestResponseTests
 
     // ========== Response Static Method Tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Json_Static(ExecutionMode mode)
     {
         var source = @"
@@ -170,8 +160,7 @@ public class RequestResponseTests
         Assert.Equal("200\napplication/json\nvalue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Json_WithInit(ExecutionMode mode)
     {
         var source = @"
@@ -182,8 +171,7 @@ public class RequestResponseTests
         Assert.Equal("201\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Redirect(ExecutionMode mode)
     {
         var source = @"
@@ -195,8 +183,7 @@ public class RequestResponseTests
         Assert.Equal("302\nhttps://example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Redirect_CustomStatus(ExecutionMode mode)
     {
         var source = @"
@@ -207,8 +194,7 @@ public class RequestResponseTests
         Assert.Equal("301\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Response_Error(ExecutionMode mode)
     {
         var source = @"
@@ -222,8 +208,7 @@ public class RequestResponseTests
 
     // ========== Request Constructor Tests ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_BasicGet(ExecutionMode mode)
     {
         var source = @"
@@ -235,8 +220,7 @@ public class RequestResponseTests
         Assert.Equal("GET\nhttps://example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_PostMethod(ExecutionMode mode)
     {
         var source = @"
@@ -247,8 +231,7 @@ public class RequestResponseTests
         Assert.Equal("POST\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_CustomHeaders(ExecutionMode mode)
     {
         var source = @"
@@ -261,8 +244,7 @@ public class RequestResponseTests
         Assert.Equal("Bearer token123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_Body(ExecutionMode mode)
     {
         var source = @"
@@ -280,8 +262,7 @@ public class RequestResponseTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_Clone(ExecutionMode mode)
     {
         var source = @"
@@ -294,8 +275,7 @@ public class RequestResponseTests
         Assert.Equal("POST\nhttps://example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Request_Properties(ExecutionMode mode)
     {
         var source = @"

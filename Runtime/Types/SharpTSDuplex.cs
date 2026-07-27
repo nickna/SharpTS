@@ -15,7 +15,6 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSDuplex : SharpTSReadable
 {
     private readonly WritableCore _writeCore;
-    private ISharpTSCallable? _readCallback;
     private int _writableHighWaterMark = 16384;
     private bool _writableObjectMode;
 
@@ -42,9 +41,10 @@ public class SharpTSDuplex : SharpTSReadable
     public void SetFinalCallback(ISharpTSCallable callback) => _writeCore.SetFinalCallback(callback);
 
     /// <summary>
-    /// Sets the custom read callback (from constructor options).
+    /// Accepts the custom read callback (from constructor options). Duplex reads are
+    /// push-driven, so the callback is intentionally ignored.
     /// </summary>
-    public void SetReadCallback(ISharpTSCallable callback) => _readCallback = callback;
+    public void SetReadCallback(ISharpTSCallable callback) { }
 
     /// <summary>
     /// Gets or sets the writable-side high water mark.

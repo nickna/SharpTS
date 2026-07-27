@@ -59,8 +59,7 @@ public class CommonJSModuleTests
 
     #region Module Execution Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAssignment_StringLiteral(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +77,7 @@ public class CommonJSModuleTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAssignment_Object(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -100,8 +98,7 @@ public class CommonJSModuleTests
         Assert.Equal("1.0.0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAssignment_Class(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -126,8 +123,7 @@ public class CommonJSModuleTests
         Assert.Equal("1.0.0\nHello from MyLibrary\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAssignment_Function(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -148,8 +144,7 @@ public class CommonJSModuleTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportRequire_ES6Module(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -171,8 +166,7 @@ public class CommonJSModuleTests
         Assert.Equal("3.14159\n16\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ImportRequire_AliasAccessInsideFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

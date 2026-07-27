@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArrowContextualTypingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SortComparator_StringAtNumericIndex(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class ArrowContextualTypingTests
         Assert.Equal("1,0,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SortComparator_ThisCaptureInClass(ExecutionMode mode)
     {
         // Exercises the URLSearchParams.sort pattern directly.
@@ -68,8 +66,7 @@ public class ArrowContextualTypingTests
         Assert.Equal("a,b,c\n1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MapCallback_InfersElementType(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +78,7 @@ public class ArrowContextualTypingTests
         Assert.Equal("ALICE,BOB\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FilterCallback_InfersElementType(ExecutionMode mode)
     {
         var source = """

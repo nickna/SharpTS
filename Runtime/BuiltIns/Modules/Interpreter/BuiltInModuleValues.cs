@@ -85,10 +85,8 @@ public static class BuiltInModuleValues
     /// </summary>
     public static bool HasInterpreterSupport(string moduleName)
     {
-        return moduleName is
-            "crypto" or "child_process" or "buffer"
-            or "stream" or "stream/promises" or "stream/web"
-            or "http" or "worker_threads" or "dns" or "dns/promises" or "net" or "https" or "tls"
-            or "dgram" or "cluster" or "vm";
+        // Single source of truth: the registry's module set (previously a third
+        // hand-maintained copy of the same 16-entry list — 2026-07 cleanup).
+        return BuiltInModuleRegistry.IsBuiltIn(moduleName);
     }
 }

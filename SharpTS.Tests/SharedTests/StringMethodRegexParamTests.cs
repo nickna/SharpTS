@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringMethodRegexParamTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Replace_WithRegex(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class StringMethodRegexParamTests
         Assert.Equal("hellX wXrld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReplaceAll_WithRegex(ExecutionMode mode)
     {
         var source = @"
@@ -35,8 +33,7 @@ public class StringMethodRegexParamTests
         Assert.Equal("a-b-c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Split_WithRegex(ExecutionMode mode)
     {
         var source = @"
@@ -51,8 +48,7 @@ public class StringMethodRegexParamTests
         Assert.Equal("3\none\ntwo\nthree\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Replace_StringSecondArg_StillWorks(ExecutionMode mode)
     {
         // Make sure the widened signature didn't break the plain string form.

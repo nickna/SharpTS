@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncArrowCapturedWriteTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_WritesCapturedVariable(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class AsyncArrowCapturedWriteTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_CompoundWriteToCapturedVariable(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class AsyncArrowCapturedWriteTests
         Assert.Equal("aba\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_WritesCapturedVariableAfterAwait(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class AsyncArrowCapturedWriteTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_MultipleCapturedWrites(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +78,7 @@ public class AsyncArrowCapturedWriteTests
         Assert.Equal("3 6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_TwoCapturedStoresAcrossAwait(ExecutionMode mode)
     {
         // #673: a nested async arrow with TWO writes to a captured variable straddling an await

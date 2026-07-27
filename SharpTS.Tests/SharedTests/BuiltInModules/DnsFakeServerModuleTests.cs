@@ -115,8 +115,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal("true\n" + expected, output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve_WithMxRrtype_FakeServer_ExactValues(ExecutionMode mode)
     {
         using var server = CreateRecordServer();
@@ -132,8 +131,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal("true\nmail.fake.test\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DnsPromises_ResolveMxAndTxt_FakeServer_ExactValues(ExecutionMode mode)
     {
         using var server = CreateRecordServer();
@@ -152,8 +150,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal("mail.fake.test\n10\nv=spf1 -all\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResolveTxt_TruncatedUdp_FallsBackToTcp(ExecutionMode mode)
     {
         using var server = new FakeDnsServer(
@@ -173,8 +170,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal(1, server.TcpQueryCount);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResolveMx_Nxdomain_CallsBackWithError(ExecutionMode mode)
     {
         using var server = new FakeDnsServer((request, _) => DnsPackets.Response(request, 3));
@@ -191,8 +187,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal(1, server.QueryCount); // NXDOMAIN is final — no retry
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResolveNs_Nxdomain_Promise_Rejects(ExecutionMode mode)
     {
         using var server = new FakeDnsServer((request, _) => DnsPackets.Response(request, 3));
@@ -213,8 +208,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal("error caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResolveMx_ServerNeverAnswers_TimesOutAfterRetries(ExecutionMode mode)
     {
         using var server = new FakeDnsServer((_, _) => null); // swallow every query
@@ -231,8 +225,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal(3, server.QueryCount); // initial attempt + MaxRetries (2)
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolver_SetServers_QueriesFakeServer(ExecutionMode mode)
     {
         // No env redirection here: the Resolver is pointed at the fake explicitly
@@ -257,8 +250,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal("true\nmail.fake.test\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_CnameOnlyAnswer_FollowsChain(ExecutionMode mode)
     {
         // CNAME-chain following (#1073): a response carrying ONLY a CNAME makes the
@@ -283,8 +275,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal(2, server.QueryCount);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Resolve4_CnameLoop_BoundedAndErrors(ExecutionMode mode)
     {
         // A CNAME pointing at itself must terminate at the chase depth bound and
@@ -304,8 +295,7 @@ public class DnsFakeServerModuleTests
         Assert.Equal(9, server.QueryCount); // initial + MaxCnameChaseDepth (8)
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ResolveCaa_CriticalFlagsByte_Parity(ExecutionMode mode)
     {
         // Node reports the whole CAA flags byte as 'critical' (#1073).

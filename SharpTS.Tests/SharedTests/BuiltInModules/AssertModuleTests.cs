@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class AssertModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Ok_PassesForTruthyValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -29,8 +28,7 @@ public class AssertModuleTests
         Assert.Equal("all passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Ok_ThrowsForFalsy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -50,8 +48,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_StrictEqual_PassesForEqualValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +66,7 @@ public class AssertModuleTests
         Assert.Equal("all passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_StrictEqual_ThrowsForUnequalValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -90,8 +86,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_StrictEqual_ThrowsForDifferentTypes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -111,8 +106,7 @@ public class AssertModuleTests
         Assert.Equal("caught type mismatch\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_NotStrictEqual_PassesForUnequalValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -130,8 +124,7 @@ public class AssertModuleTests
         Assert.Equal("all passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_NotStrictEqual_ThrowsForEqualValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -151,8 +144,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_DeepStrictEqual_PassesForEqualObjects(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -168,8 +160,7 @@ public class AssertModuleTests
         Assert.Equal("objects passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_DeepStrictEqual_PassesForEqualArrays(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -185,8 +176,7 @@ public class AssertModuleTests
         Assert.Equal("arrays passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_DeepStrictEqual_ThrowsForDifferentObjects(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -206,8 +196,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_DeepStrictEqual_ThrowsForDifferentArrays(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -227,8 +216,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Equal_PassesForLooselyEqualValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -245,8 +233,7 @@ public class AssertModuleTests
         Assert.Equal("all passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_NotEqual_PassesForDifferentValues(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -263,8 +250,7 @@ public class AssertModuleTests
         Assert.Equal("all passed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Fail_AlwaysThrows(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -284,8 +270,7 @@ public class AssertModuleTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_Fail_WithDefaultMessage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -305,8 +290,7 @@ public class AssertModuleTests
         Assert.Equal("caught default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_NamespaceImport_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -323,8 +307,7 @@ public class AssertModuleTests
         Assert.Equal("namespace import works\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_CustomMessage_IsUsed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -344,8 +327,7 @@ public class AssertModuleTests
         Assert.Equal("threw with message\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Assert_MultipleAssertions_InSequence(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

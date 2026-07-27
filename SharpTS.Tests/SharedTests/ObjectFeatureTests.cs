@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 public class ObjectFeatureTests
 {
     // Property Shorthand
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_PropertyShorthand_Works(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class ObjectFeatureTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MixedShorthandAndExplicit_Works(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class ObjectFeatureTests
     }
 
     // Method Shorthand
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_Works(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ObjectFeatureTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodWithDefaultParams_Works(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class ObjectFeatureTests
     }
 
     // Object Rest Pattern
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_RestPattern_Works(ExecutionMode mode)
     {
         var source = """
@@ -94,8 +89,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_RestPattern_MultipleExtracted_Works(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +106,7 @@ public class ObjectFeatureTests
     }
 
     // Object.keys
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Keys_ReturnsPropertyNames(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +120,7 @@ public class ObjectFeatureTests
     }
 
     // Object.values
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Values_ReturnsPropertyValues(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +136,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Values_WithMixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +150,7 @@ public class ObjectFeatureTests
     }
 
     // Object.entries
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Entries_ReturnsKeyValuePairs(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +168,7 @@ public class ObjectFeatureTests
     }
 
     // Object.keys on class instance
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Keys_OnClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -201,8 +190,7 @@ public class ObjectFeatureTests
     }
 
     // Object.values on class instance
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Values_OnClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +212,7 @@ public class ObjectFeatureTests
     }
 
     // Object.entries on class instance
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Entries_OnClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -247,8 +234,7 @@ public class ObjectFeatureTests
     }
 
     // Empty Object
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Empty_Works(ExecutionMode mode)
     {
         var source = """
@@ -261,8 +247,7 @@ public class ObjectFeatureTests
     }
 
     // Nested Object Literals
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Nested_Works(ExecutionMode mode)
     {
         var source = """
@@ -275,8 +260,7 @@ public class ObjectFeatureTests
     }
 
     // Object Property Assignment
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_PropertyAssignment_Works(ExecutionMode mode)
     {
         var source = """
@@ -290,8 +274,7 @@ public class ObjectFeatureTests
     }
 
     // Object with Array Property
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_WithArrayProperty_Works(ExecutionMode mode)
     {
         var source = """
@@ -305,8 +288,7 @@ public class ObjectFeatureTests
     }
 
     // Computed Property Names
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_ComputedPropertyName_VariableKey(ExecutionMode mode)
     {
         var source = """
@@ -319,8 +301,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_ComputedPropertyName_StringConcatenation(ExecutionMode mode)
     {
         var source = """
@@ -334,8 +315,7 @@ public class ObjectFeatureTests
         Assert.Equal("one\ntwo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_StringLiteralKey(ExecutionMode mode)
     {
         var source = """
@@ -348,8 +328,7 @@ public class ObjectFeatureTests
         Assert.Equal("hello\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_NumberLiteralKey(ExecutionMode mode)
     {
         var source = """
@@ -362,8 +341,7 @@ public class ObjectFeatureTests
         Assert.Equal("numeric key\nanother\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MixedStaticAndComputedKeys(ExecutionMode mode)
     {
         var source = """
@@ -378,8 +356,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_ComputedPropertyName_NumberKey(ExecutionMode mode)
     {
         var source = """
@@ -392,8 +369,7 @@ public class ObjectFeatureTests
         Assert.Equal("value at 42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_ComputedPropertyName_SymbolKey(ExecutionMode mode)
     {
         var source = """
@@ -406,8 +382,7 @@ public class ObjectFeatureTests
         Assert.Equal("symbol value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_ComputedPropertyName_WithSpread(ExecutionMode mode)
     {
         var source = """
@@ -423,8 +398,7 @@ public class ObjectFeatureTests
     }
 
     // Object Method This Binding
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ThisBinding_SingleProperty(ExecutionMode mode)
     {
         var source = """
@@ -441,8 +415,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ThisBinding_MultipleProperties(ExecutionMode mode)
     {
         var source = """
@@ -460,8 +433,7 @@ public class ObjectFeatureTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ThisBinding_NestedObject(ExecutionMode mode)
     {
         var source = """
@@ -484,8 +456,7 @@ public class ObjectFeatureTests
     // otherwise the resolver's scope distances don't match the runtime chain and
     // outer-variable captures read as undefined. Originally surfaced as
     // PerformanceObserver's callback seeing `[undefined]` from `list.getEntries()`.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_CapturesEnclosingVariable(ExecutionMode mode)
     {
         var source = """
@@ -504,8 +475,7 @@ public class ObjectFeatureTests
         Assert.Equal("m:42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ClosureAndThisCoexist(ExecutionMode mode)
     {
         var source = """
@@ -525,8 +495,7 @@ public class ObjectFeatureTests
     // Constructor-function pattern: `new F()` on a runtime $TSFunction value must
     // run the body with a fresh `this` and propagate property writes. Fixed for both
     // modes in #54.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_ConstructorPattern_CapturesEnclosingVariable(ExecutionMode mode)
     {
         var source = """
@@ -545,8 +514,7 @@ public class ObjectFeatureTests
         Assert.Equal("Hello World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_On_Returned_Ctor_MinimalClosure(ExecutionMode mode)
     {
         // The minimal-closure variant from #54 — ctor returned from a factory with
@@ -565,8 +533,7 @@ public class ObjectFeatureTests
         Assert.Equal("Fixed W\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_On_Inline_Callee_Expression(ExecutionMode mode)
     {
         // Inline form: `new (factory() as any)(args)` with no intermediate local.
@@ -586,8 +553,7 @@ public class ObjectFeatureTests
         Assert.Equal("Inline W\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_ArrowCapturesConstructedThis_DirectNew(ExecutionMode mode)
     {
         // #399: an arrow declared inside a plain `function` invoked with `new` must
@@ -609,8 +575,7 @@ public class ObjectFeatureTests
         Assert.Equal("arrow: cap\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_ArrowCapturesConstructedThis_DynamicNewViaValue(ExecutionMode mode)
     {
         // #399, dynamic-new form: the callee is a runtime value (`new C(...)`), so the
@@ -630,8 +595,7 @@ public class ObjectFeatureTests
         Assert.Equal("arrow: cap\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_NestedArrowsCaptureConstructedThis(ExecutionMode mode)
     {
         // #399, deep nesting: an arrow inside an arrow inside a function-as-constructor.
@@ -654,8 +618,7 @@ public class ObjectFeatureTests
         Assert.Equal("inner: deep\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_ArrowOnInstanceEscapesAndKeepsThis(ExecutionMode mode)
     {
         // #399, escaping arrow: the arrow is stored on the instance and invoked AFTER
@@ -674,8 +637,7 @@ public class ObjectFeatureTests
         Assert.Equal("escaped: X\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_ClassMethodArrowThis_StillWorks(ExecutionMode mode)
     {
         // #399 regression guard: routing captured-`this` through LoadThis() must not
@@ -697,8 +659,7 @@ public class ObjectFeatureTests
         Assert.Equal("P:a,P:b | P:c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Call_RoutesPropertyWritesToTarget(ExecutionMode mode)
     {
         // `Fn.call(target, ...)` must mutate `target`. Compiled path needed
@@ -720,8 +681,7 @@ public class ObjectFeatureTests
         Assert.Equal("99\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_Apply_RoutesPropertyWritesToTarget(ExecutionMode mode)
     {
         // .apply walks the same InvokeWithThis path as .call (compiled) and the
@@ -737,8 +697,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_Respects_Explicit_Object_Return(ExecutionMode mode)
     {
         // Per JS semantics: if a constructor returns a non-null object, `new` yields
@@ -760,8 +719,7 @@ public class ObjectFeatureTests
         Assert.Equal("explicit\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Function_New_Primitive_Return_Is_Ignored(ExecutionMode mode)
     {
         // Per JS semantics: if a constructor returns a primitive, `new` yields the
@@ -783,8 +741,7 @@ public class ObjectFeatureTests
         Assert.Equal("from this\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ThisBinding_MultipleMethods(ExecutionMode mode)
     {
         var source = """
@@ -805,8 +762,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_MethodShorthand_ThisBinding_WithParameters(ExecutionMode mode)
     {
         var source = """
@@ -825,8 +781,7 @@ public class ObjectFeatureTests
     }
 
     // Object.fromEntries tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_BasicArray(ExecutionMode mode)
     {
         var source = """
@@ -841,8 +796,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -855,8 +809,7 @@ public class ObjectFeatureTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_DuplicateKeys(ExecutionMode mode)
     {
         var source = """
@@ -869,8 +822,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -886,8 +838,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_MixedValueTypes(ExecutionMode mode)
     {
         var source = """
@@ -902,8 +853,7 @@ public class ObjectFeatureTests
         Assert.Equal("Alice\n30\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_FromEntries_WithMapEntries(ExecutionMode mode)
     {
         var source = """
@@ -920,8 +870,7 @@ public class ObjectFeatureTests
     }
 
     // Object.hasOwn tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_ReturnsTrueForOwnProperty(ExecutionMode mode)
     {
         var source = """
@@ -934,8 +883,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_ReturnsFalseForMissingProperty(ExecutionMode mode)
     {
         var source = """
@@ -948,8 +896,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_EmptyObject(ExecutionMode mode)
     {
         var source = """
@@ -961,8 +908,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_ClassInstanceField(ExecutionMode mode)
     {
         var source = """
@@ -986,8 +932,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_ClassInstanceMethod(ExecutionMode mode)
     {
         var source = """
@@ -1008,8 +953,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_HasOwn_WithNumberKey(ExecutionMode mode)
     {
         var source = """
@@ -1022,8 +966,7 @@ public class ObjectFeatureTests
     }
 
     // Object.assign tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_BasicMerge(ExecutionMode mode)
     {
         var source = """
@@ -1038,8 +981,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_ModifiesTarget(ExecutionMode mode)
     {
         var source = """
@@ -1053,8 +995,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_MultipleSources(ExecutionMode mode)
     {
         var source = """
@@ -1071,8 +1012,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_OverridesProperties(ExecutionMode mode)
     {
         var source = """
@@ -1085,8 +1025,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_LaterSourceWins(ExecutionMode mode)
     {
         var source = """
@@ -1099,8 +1038,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_ReturnsTarget(ExecutionMode mode)
     {
         var source = """
@@ -1113,8 +1051,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_EmptySource(ExecutionMode mode)
     {
         var source = """
@@ -1127,8 +1064,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_EmptyTarget(ExecutionMode mode)
     {
         var source = """
@@ -1142,8 +1078,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_MixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -1158,8 +1093,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\nhello\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Assign_NestedObjects(ExecutionMode mode)
     {
         var source = """
@@ -1174,8 +1108,7 @@ public class ObjectFeatureTests
     }
 
     // Object.freeze tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_ReturnsTheSameObject(ExecutionMode mode)
     {
         var source = """
@@ -1188,8 +1121,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_PreventsMutation(ExecutionMode mode)
     {
         var source = """
@@ -1203,8 +1135,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_PreventsAddingProperties(ExecutionMode mode)
     {
         var source = """
@@ -1219,8 +1150,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsFrozen_ReturnsTrueForFrozenObject(ExecutionMode mode)
     {
         var source = """
@@ -1233,8 +1163,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsFrozen_ReturnsFalseForNonFrozenObject(ExecutionMode mode)
     {
         var source = """
@@ -1246,8 +1175,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsFrozen_ReturnsTrueForPrimitives(ExecutionMode mode)
     {
         var source = """
@@ -1261,8 +1189,7 @@ public class ObjectFeatureTests
     }
 
     // Object.seal tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_ReturnsTheSameObject(ExecutionMode mode)
     {
         var source = """
@@ -1275,8 +1202,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_AllowsPropertyModification(ExecutionMode mode)
     {
         var source = """
@@ -1290,8 +1216,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_PreventsAddingProperties(ExecutionMode mode)
     {
         var source = """
@@ -1306,8 +1231,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsSealed_ReturnsTrueForSealedObject(ExecutionMode mode)
     {
         var source = """
@@ -1320,8 +1244,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsSealed_ReturnsFalseForNonSealedObject(ExecutionMode mode)
     {
         var source = """
@@ -1333,8 +1256,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsSealed_ReturnsTrueForFrozenObject(ExecutionMode mode)
     {
         var source = """
@@ -1348,8 +1270,7 @@ public class ObjectFeatureTests
     }
 
     // Array freeze/seal tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_ArrayPreventsModification(ExecutionMode mode)
     {
         var source = """
@@ -1363,8 +1284,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_ArrayPreventsPush(ExecutionMode mode)
     {
         var source = """
@@ -1378,8 +1298,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_ArrayAllowsModification(ExecutionMode mode)
     {
         var source = """
@@ -1393,8 +1312,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_ArrayPreventsPush(ExecutionMode mode)
     {
         var source = """
@@ -1408,8 +1326,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsFrozen_ArrayReturnsTrueForFrozen(ExecutionMode mode)
     {
         var source = """
@@ -1423,8 +1340,7 @@ public class ObjectFeatureTests
     }
 
     // Class instance freeze/seal tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_ClassInstancePreventsModification(ExecutionMode mode)
     {
         var source = """
@@ -1447,8 +1363,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_ClassInstanceAllowsModification(ExecutionMode mode)
     {
         var source = """
@@ -1471,8 +1386,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_IsFrozen_ClassInstanceReturnsTrueForFrozen(ExecutionMode mode)
     {
         var source = """
@@ -1492,8 +1406,7 @@ public class ObjectFeatureTests
     }
 
     // Shallow freeze tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_IsShallow(ExecutionMode mode)
     {
         var source = """
@@ -1507,8 +1420,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Freeze_ArrayReverseFails(ExecutionMode mode)
     {
         var source = """
@@ -1523,8 +1435,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Seal_ArrayReverseSucceeds(ExecutionMode mode)
     {
         var source = """
@@ -1540,8 +1451,7 @@ public class ObjectFeatureTests
     }
 
     // Object.is tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_SameNumbers(ExecutionMode mode)
     {
         var source = """
@@ -1554,8 +1464,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_DifferentNumbers(ExecutionMode mode)
     {
         var source = """
@@ -1567,8 +1476,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_NaN_ReturnsTrue(ExecutionMode mode)
     {
         // Object.is(NaN, NaN) should be true (this differs from === in standard JavaScript)
@@ -1582,8 +1490,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_PositiveAndNegativeZero_ReturnsFalse(ExecutionMode mode)
     {
         // Unlike ===, Object.is(+0, -0) should be false
@@ -1597,8 +1504,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_SameZeros(ExecutionMode mode)
     {
         var source = """
@@ -1610,8 +1516,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_NullComparison(ExecutionMode mode)
     {
         var source = """
@@ -1624,8 +1529,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_UndefinedComparison(ExecutionMode mode)
     {
         var source = """
@@ -1638,8 +1542,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_StringComparison(ExecutionMode mode)
     {
         var source = """
@@ -1652,8 +1555,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_BooleanComparison(ExecutionMode mode)
     {
         var source = """
@@ -1666,8 +1568,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_ObjectReferenceEquality(ExecutionMode mode)
     {
         var source = """
@@ -1683,8 +1584,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_ArrayReferenceEquality(ExecutionMode mode)
     {
         var source = """
@@ -1700,8 +1600,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_MixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -1715,8 +1614,7 @@ public class ObjectFeatureTests
         Assert.Equal("false\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_Is_Infinity(ExecutionMode mode)
     {
         var source = """
@@ -1730,8 +1628,7 @@ public class ObjectFeatureTests
     }
 
     // Object.defineProperty tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_BasicDataProperty(ExecutionMode mode)
     {
         var source = """
@@ -1744,8 +1641,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_ReturnsTheObject(ExecutionMode mode)
     {
         var source = """
@@ -1758,8 +1654,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_NonWritableProperty(ExecutionMode mode)
     {
         var source = """
@@ -1773,8 +1668,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_WritableProperty(ExecutionMode mode)
     {
         var source = """
@@ -1788,8 +1682,7 @@ public class ObjectFeatureTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_MultipleProperties(ExecutionMode mode)
     {
         var source = """
@@ -1804,8 +1697,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_OverwriteExistingProperty(ExecutionMode mode)
     {
         var source = """
@@ -1818,8 +1710,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_OnClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -1839,8 +1730,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_OnArray(ExecutionMode mode)
     {
         var source = """
@@ -1855,8 +1745,7 @@ public class ObjectFeatureTests
     }
 
     // Object.getOwnPropertyDescriptor tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_BasicProperty(ExecutionMode mode)
     {
         var source = """
@@ -1872,8 +1761,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_NonExistentProperty(ExecutionMode mode)
     {
         var source = """
@@ -1886,8 +1774,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_DefinedProperty(ExecutionMode mode)
     {
         var source = """
@@ -1904,8 +1791,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_ArrayLength(ExecutionMode mode)
     {
         var source = """
@@ -1921,8 +1807,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_ArrayElement(ExecutionMode mode)
     {
         var source = """
@@ -1938,8 +1823,7 @@ public class ObjectFeatureTests
         Assert.Equal("20\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_ClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -1959,8 +1843,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_ThenGetDescriptor_Roundtrip(ExecutionMode mode)
     {
         var source = """
@@ -1982,8 +1865,7 @@ public class ObjectFeatureTests
         Assert.Equal("Alice\ntrue\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_WithGetter(ExecutionMode mode)
     {
         var source = """
@@ -2000,8 +1882,7 @@ public class ObjectFeatureTests
         Assert.Equal("200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_WithGetterAndSetter(ExecutionMode mode)
     {
         var source = """
@@ -2021,8 +1902,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptor_AccessorProperty(ExecutionMode mode)
     {
         var source = """
@@ -2042,8 +1922,7 @@ public class ObjectFeatureTests
         Assert.Equal("function\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_FrozenObjectFails(ExecutionMode mode)
     {
         // When object is frozen, defineProperty should throw
@@ -2063,8 +1942,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_SealedObjectNewPropertyFails(ExecutionMode mode)
     {
         // When object is sealed, adding new property should throw
@@ -2085,8 +1963,7 @@ public class ObjectFeatureTests
     }
 
     // Object.getOwnPropertyNames tests
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_BasicObject(ExecutionMode mode)
     {
         var source = """
@@ -2099,8 +1976,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_EmptyObject(ExecutionMode mode)
     {
         var source = """
@@ -2113,8 +1989,7 @@ public class ObjectFeatureTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_Array(ExecutionMode mode)
     {
         var source = """
@@ -2131,8 +2006,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_ClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -2153,8 +2027,7 @@ public class ObjectFeatureTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_ReturnsStrings(ExecutionMode mode)
     {
         var source = """
@@ -2168,8 +2041,7 @@ public class ObjectFeatureTests
         Assert.Equal("string\nx\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_WithMixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -2182,8 +2054,7 @@ public class ObjectFeatureTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_IncludesNonEnumerableProperties(ExecutionMode mode)
     {
         // Unlike Object.keys(), getOwnPropertyNames should include non-enumerable properties
@@ -2200,8 +2071,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_DoesNotIncludeMethods(ExecutionMode mode)
     {
         // Methods defined on the class should NOT appear in getOwnPropertyNames
@@ -2227,8 +2097,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_IncludesDefinedProperties(ExecutionMode mode)
     {
         // Both getOwnPropertyNames and keys include properties added via defineProperty
@@ -2246,8 +2115,7 @@ public class ObjectFeatureTests
         Assert.Equal("2\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_WithBoundGetterSetter(ExecutionMode mode)
     {
         // Regression: accessors stored as bound/wrapper callables must be invocable
@@ -2270,8 +2138,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_WithArrowGetterSetter(ExecutionMode mode)
     {
         // Regression: arrow function accessors via defineProperty
@@ -2293,8 +2160,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_ReadsInheritedValueViaSetterOnlyAccessor(ExecutionMode mode)
     {
         // #801: ECMA-262 §6.2.5.5 ToPropertyDescriptor reads `value` via HasProperty/Get,
@@ -2316,8 +2182,7 @@ public class ObjectFeatureTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperty_AttributeOnlyRedefinePreservesValue(ExecutionMode mode)
     {
         // #801: an attribute-only descriptor (no `value` key) must preserve the existing
@@ -2332,8 +2197,7 @@ public class ObjectFeatureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Object_DefineProperty_ReadsInheritedEnumerableFromRegExpPrototype(ExecutionMode mode)
     {
         // #801: a descriptor's INHERITED `enumerable` (here via a user-set
@@ -2355,8 +2219,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Object_RegExp_InheritsUserSetPrototypeProperty(ExecutionMode mode)
     {
         // #801/#474-adjacent: a plain user property set on RegExp.prototype is visible
@@ -2374,8 +2237,7 @@ public class ObjectFeatureTests
     // Object.defineProperties
     // ========================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperties_BasicDataProperties(ExecutionMode mode)
     {
         var source = """
@@ -2391,8 +2253,7 @@ public class ObjectFeatureTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperties_WithAccessors(ExecutionMode mode)
     {
         var source = """
@@ -2413,8 +2274,7 @@ public class ObjectFeatureTests
         Assert.Equal("10\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_DefineProperties_ReturnsTarget(ExecutionMode mode)
     {
         var source = """
@@ -2433,8 +2293,7 @@ public class ObjectFeatureTests
     // Object.getOwnPropertyDescriptors
     // ================================
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptors_BasicObject(ExecutionMode mode)
     {
         var source = """
@@ -2450,8 +2309,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\n2\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptors_WithDefinedProperties(ExecutionMode mode)
     {
         var source = """
@@ -2466,8 +2324,7 @@ public class ObjectFeatureTests
         Assert.Equal("test\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptors_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -2481,8 +2338,7 @@ public class ObjectFeatureTests
         Assert.Equal("1\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Object_GetOwnPropertyDescriptors_EmptyObject(ExecutionMode mode)
     {
         var source = """

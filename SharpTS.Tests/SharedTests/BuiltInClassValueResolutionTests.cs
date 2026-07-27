@@ -19,8 +19,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class BuiltInClassValueResolutionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Date(ExecutionMode mode)
     {
         var source = @"
@@ -31,8 +30,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_RegExp(ExecutionMode mode)
     {
         var source = @"
@@ -43,8 +41,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Map(ExecutionMode mode)
     {
         var source = @"
@@ -55,8 +52,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Set(ExecutionMode mode)
     {
         var source = @"
@@ -67,8 +63,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Error(ExecutionMode mode)
     {
         var source = @"
@@ -79,8 +74,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Date_InsideFunction(ExecutionMode mode)
     {
         // The original repro lived inside a function body. Keep one test at
@@ -98,8 +92,7 @@ public class BuiltInClassValueResolutionTests
         Assert.Equal("date\nstring\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceOf_Date_InsideImportedModule(ExecutionMode mode)
     {
         // Exercises the stdlib-module code path — specifically the same

@@ -11,12 +11,16 @@ public static class FinalizationRegistryBuiltIns
     {
         return name switch
         {
-            "register" => BuiltInMethod.CreateV2("register", 1, 3, static (_, recv, args) =>
+            "register" => BuiltInMethod.CreateV2("register", 1, 3, static (interp, recv, args) =>
             {
                 var registry = (SharpTSFinalizationRegistry)recv.ToObject()!;
                 var target = args.Length > 0 ? args[0].ToObject() : null;
                 var heldValue = args.Length > 1 ? args[1].ToObject() : null;
                 var token = args.Length > 2 ? args[2].ToObject() : null;
+                // Enroll with the event loop so pending cleanups actually drain:
+                // registries used to enqueue heldValues that nothing ever read,
+                // so cleanup callbacks never fired.
+                interp.TrackFinalizationRegistry(registry);
                 registry.Register(target!, heldValue, token);
                 return RuntimeValue.Null;
             }),

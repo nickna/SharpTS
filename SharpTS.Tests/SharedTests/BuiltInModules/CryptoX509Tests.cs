@@ -50,8 +50,7 @@ KQIDAQAB
 
     private static string Escape(string pem) => pem.Replace("\r\n", "\n").Replace("\n", "\\n");
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_Parse_And_CoreProperties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +77,7 @@ KQIDAQAB
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_SubjectAltName_And_CheckHost(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -106,8 +104,7 @@ KQIDAQAB
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_Verify_PublicKey_And_ToString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -130,8 +127,7 @@ KQIDAQAB
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_KeyUsage_And_ExtKeyUsage(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -151,8 +147,7 @@ KQIDAQAB
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_NamedImport_Construction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -169,8 +164,7 @@ KQIDAQAB
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_FromBuffer_Pem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -189,8 +183,7 @@ KQIDAQAB
 
     // --- interpreter-only surface (compiled defers: checkEmail, toLegacyObject, email SANs) ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void X509_CheckEmail_And_LegacyObject_InterpOnly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -219,8 +212,7 @@ KQIDAQAB
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void X509_ValidDates_DualMode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

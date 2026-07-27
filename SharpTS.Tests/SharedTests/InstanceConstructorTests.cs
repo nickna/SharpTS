@@ -17,8 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class InstanceConstructorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceConstructor_IsTheClass(ExecutionMode mode)
     {
         var source = """
@@ -29,8 +28,7 @@ public class InstanceConstructorTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceConstructor_Name(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class InstanceConstructorTests
         Assert.Equal("Animal\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceConstructor_ReadsStaticMember(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +50,7 @@ public class InstanceConstructorTests
         Assert.Equal("mammal\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceConstructor_SubclassResolvesToSubclass(ExecutionMode mode)
     {
         // The most-derived class is reported — each class's GetProperty returns its
@@ -68,8 +64,7 @@ public class InstanceConstructorTests
         Assert.Equal("true false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceConstructor_OwnDataPropertyShadows(ExecutionMode mode)
     {
         // An own data property named `constructor` shadows the class (JS semantics):

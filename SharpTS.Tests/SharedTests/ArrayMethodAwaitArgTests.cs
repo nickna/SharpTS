@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 public class ArrayMethodAwaitArgTests
 {
     // The exact #850 repro: an async arrow that WRITES a captured variable, awaited inside push().
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Push_AwaitedWriteCaptureArrow(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +35,7 @@ public class ArrayMethodAwaitArgTests
     }
 
     // Same shape but a READ-ONLY capture — confirms the bug was never about write-capture promotion.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Push_AwaitedReadOnlyCaptureArrow(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("6,5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Push_MultipleAwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +70,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("1,2,3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Unshift_AwaitedArg(ExecutionMode mode)
     {
         var source = """
@@ -90,8 +86,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("1,2,3,4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Slice_AwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -106,8 +101,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("20,30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Splice_AwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -123,8 +117,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("10,99,30\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_AwaitedArg(ExecutionMode mode)
     {
         var source = """
@@ -139,8 +132,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("1,2,3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reduce_AwaitedInitialValue(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +147,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("106\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexOf_AwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +162,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Includes_AwaitedArg(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +177,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_AwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -204,8 +193,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("0,7,7,0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CopyWithin_AwaitedArgs(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +209,7 @@ public class ArrayMethodAwaitArgTests
         Assert.Equal("4,5,3,4,5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void At_AwaitedArg(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +226,7 @@ public class ArrayMethodAwaitArgTests
 
     // The original issue surfaced via a sync arrow capture plus an unrelated awaited call inside push
     // (variant D) — also fixed, since the trigger is purely the nested await in the array argument.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Push_SyncArrowCaptureWithUnrelatedAwait(ExecutionMode mode)
     {
         var source = """

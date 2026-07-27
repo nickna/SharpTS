@@ -14,8 +14,7 @@ public class DecoratorTests
 {
     #region Legacy (Stage 2) Decorators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyClassDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -33,8 +32,7 @@ public class DecoratorTests
         Assert.Equal("Class decorated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyClassDecorator_Factory(ExecutionMode mode)
     {
         const string source = """
@@ -55,8 +53,7 @@ public class DecoratorTests
         Assert.Equal("Tagged with: important\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyMethodDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -79,8 +76,7 @@ public class DecoratorTests
         Assert.Equal("Method decorated: greet\nHello!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyFieldDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -101,8 +97,7 @@ public class DecoratorTests
         Assert.Equal("Field decorated: name\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyMultipleDecorators_RightToLeft(ExecutionMode mode)
     {
         const string source = """
@@ -126,8 +121,7 @@ public class DecoratorTests
         Assert.Equal("second\nfirst\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyParameterDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -153,8 +147,7 @@ public class DecoratorTests
 
     #region TC39 Stage 3 Decorators
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stage3ClassDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -172,8 +165,7 @@ public class DecoratorTests
         Assert.Equal("Class class: MyClass\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stage3MethodDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -196,8 +188,7 @@ public class DecoratorTests
         Assert.Equal("Method method: greet\nHello!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stage3FieldDecorator_Simple(ExecutionMode mode)
     {
         const string source = """
@@ -218,8 +209,7 @@ public class DecoratorTests
         Assert.Equal("Field field: name\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stage3Decorator_ContextStatic(ExecutionMode mode)
     {
         const string source = """
@@ -245,8 +235,7 @@ public class DecoratorTests
     #region Reflect Metadata
 
     /// <summary>Compiled mode: Reflect metadata API is not available.</summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_DefineAndGet(ExecutionMode mode)
     {
         const string source = """
@@ -263,8 +252,7 @@ public class DecoratorTests
     }
 
     /// <summary>Compiled mode: Reflect metadata API is not available.</summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_PropertyKey(ExecutionMode mode)
     {
         const string source = """
@@ -281,8 +269,7 @@ public class DecoratorTests
     }
 
     /// <summary>Compiled mode: Reflect metadata API is not available.</summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_HasMetadata(ExecutionMode mode)
     {
         const string source = """
@@ -298,8 +285,7 @@ public class DecoratorTests
     }
 
     /// <summary>Compiled mode: Reflect metadata API is not available.</summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_GetKeys(ExecutionMode mode)
     {
         const string source = """
@@ -316,8 +302,7 @@ public class DecoratorTests
     }
 
     /// <summary>Compiled mode: Reflect metadata API is not available.</summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_DeleteMetadata(ExecutionMode mode)
     {
         const string source = """
@@ -333,8 +318,7 @@ public class DecoratorTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReflectMetadata_DecoratorFactory(ExecutionMode mode)
     {
         const string source = """
@@ -394,8 +378,7 @@ public class DecoratorTests
     // only checked EXPORT before parsing decorators, so `@dec export class` fell through
     // to "Decorators are not valid here." These cover every export-class form.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyClassDecorator_OnExportClass(ExecutionMode mode)
     {
         const string source = """
@@ -413,8 +396,7 @@ public class DecoratorTests
         Assert.Equal("Class decorated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyClassDecorator_OnExportDefaultClass(ExecutionMode mode)
     {
         const string source = """
@@ -432,8 +414,7 @@ public class DecoratorTests
         Assert.Equal("Class decorated\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LegacyClassDecorator_OnExportAbstractClass(ExecutionMode mode)
     {
         const string source = """

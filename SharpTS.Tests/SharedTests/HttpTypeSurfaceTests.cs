@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class HttpTypeSurfaceTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ServerAndClient_TypeCheck(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -34,8 +33,7 @@ public class HttpTypeSurfaceTests
         Assert.Contains("typecheck ok 16384", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HttpsCreateServerWithTlsOptions_TypeChecks(ExecutionMode mode)
     {
         var (certPem, keyPem) = TlsModuleTestsCertHelper.GenerateSelfSignedCert();

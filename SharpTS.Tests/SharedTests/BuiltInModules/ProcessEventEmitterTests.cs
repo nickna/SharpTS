@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ProcessEventEmitterTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_On_RegistersAndEmitsEvent(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_On_PassesArguments(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Once_CalledOnlyOnce(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Emit_ReturnsTrueWhenListenersExist(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_Emit_ReturnsFalseWhenNoListeners(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_RemoveListener_RemovesSpecificListener(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +99,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_ListenerCount_ReturnsCorrectCount(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +112,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_EventNames_ReturnsRegisteredEvents(ExecutionMode mode)
     {
         var source = """
@@ -135,8 +127,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_RemoveAllListeners_ClearsAllForEvent(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +141,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_On_MethodChaining(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +159,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_MultipleListeners_AllCalled(ExecutionMode mode)
     {
         var source = """
@@ -189,8 +178,7 @@ public class ProcessEventEmitterTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Process_StillHasOriginalProperties(ExecutionMode mode)
     {
         // Ensure EventEmitter integration doesn't break existing process properties

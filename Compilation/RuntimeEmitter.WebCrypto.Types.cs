@@ -24,7 +24,6 @@ public partial class RuntimeEmitter
     private FieldBuilder _ckHash = null!;       // lowercase digest or null
     private FieldBuilder _ckCurve = null!;      // canonical curve or null
 
-    private TypeBuilder _subtleType = null!;
     private ConstructorBuilder _subtleCtor = null!;
     private MethodBuilder _subtleGenerateKeyCore = null!;
     private MethodBuilder _subtleImportKeyCore = null!;
@@ -142,7 +141,6 @@ public partial class RuntimeEmitter
             "$SubtleCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
-        _subtleType = tb;
 
         _subtleCtor = tb.DefineDefaultConstructor(MethodAttributes.Public);
 

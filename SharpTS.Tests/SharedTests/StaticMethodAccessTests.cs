@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StaticMethodAccessTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateStaticMethod_ExternalAccess_Errors(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is private", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateStaticMethod_InternalAccess_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class StaticMethodAccessTests
         Assert.Equal("s\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProtectedStaticMethod_FromSubclass_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class StaticMethodAccessTests
         Assert.Equal("base\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProtectedStaticMethod_ExternalAccess_Errors(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is protected", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateInstanceMethod_NotMaskedByPublicStaticTwin(ExecutionMode mode)
     {
         // Issue #722 collision: a public `static run` must not overwrite the
@@ -92,8 +87,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is private", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PublicStaticTwin_StillAccessible_WhenInstanceTwinIsPrivate(ExecutionMode mode)
     {
         // The mirror of the above: the public static `run` remains accessible
@@ -111,8 +105,7 @@ public class StaticMethodAccessTests
 
     // --- Static fields (same StaticFieldAccess treatment as static methods) ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateStaticField_ExternalRead_Errors(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +118,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is private", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateStaticField_ExternalAssignment_Errors(ExecutionMode mode)
     {
         var source = """
@@ -139,8 +131,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is private", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateStaticField_InternalRead_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +145,7 @@ public class StaticMethodAccessTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProtectedStaticField_FromSubclass_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +159,7 @@ public class StaticMethodAccessTests
         Assert.Equal("9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateInstanceField_NotMaskedByPublicStaticTwin(ExecutionMode mode)
     {
         // Field collision mirror of issue #722: a public `static x` must not
@@ -186,8 +175,7 @@ public class StaticMethodAccessTests
         Assert.Contains("is private", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PublicStaticField_ExternalRead_Allowed(ExecutionMode mode)
     {
         var source = """

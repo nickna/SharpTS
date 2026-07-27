@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class UtilFormattingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StyleText_SingleFormat_WrapsInAnsiCodes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -30,8 +29,7 @@ public class UtilFormattingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StyleText_ArrayOfFormats_Nests(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -48,8 +46,7 @@ public class UtilFormattingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StyleText_InvalidFormat_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -69,8 +66,7 @@ public class UtilFormattingTests
         Assert.Equal("threw\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FormatWithOptions_InspectsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -85,8 +81,7 @@ public class UtilFormattingTests
         Assert.Equal("{ a: 1 }\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetSystemErrorMessage_ReturnsDescription(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -102,8 +97,7 @@ public class UtilFormattingTests
         Assert.Equal("ENOENT\nno such file or directory\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Debuglog_SectionOff_IsNoOp(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -121,8 +115,7 @@ public class UtilFormattingTests
         Assert.Equal("enabled:false\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_DepthOption_LimitsRecursion(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -137,8 +130,7 @@ public class UtilFormattingTests
         Assert.Equal("{ a: [Object] }\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_MaxArrayLength_Truncates(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -153,8 +145,7 @@ public class UtilFormattingTests
         Assert.Equal("[ 1, 2, ... 3 more items ]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_Colors_AppliesAnsi(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -169,8 +160,7 @@ public class UtilFormattingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Inspect_CustomHook_ControlsOutput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

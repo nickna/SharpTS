@@ -20,8 +20,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- fill -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_WholeArray(ExecutionMode mode)
     {
         Assert.Equal("2.5,2.5,2.5,2.5\n", Run(@"
@@ -30,8 +29,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_Range_LeavesOthersZero(ExecutionMode mode)
     {
         Assert.Equal("0,7,7,7,0\n", Run(@"
@@ -40,8 +38,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_Int32_TruncatesTowardZero(ExecutionMode mode)
     {
         Assert.Equal("3,3,3\n", Run(@"
@@ -50,8 +47,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_Uint8Clamped_ClampsHigh(ExecutionMode mode)
     {
         Assert.Equal("255,255,255\n", Run(@"
@@ -60,8 +56,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fill_Uint8Clamped_ClampsLow(ExecutionMode mode)
     {
         Assert.Equal("0,0,0\n", Run(@"
@@ -72,8 +67,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- set -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SameType_AtOffset(ExecutionMode mode)
     {
         // Same element type → Buffer.BlockCopy fast path.
@@ -85,8 +79,7 @@ public class TypedArrayBulkMethodTests
             console.log(b.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_CrossType_ConvertsPerElement(ExecutionMode mode)
     {
         // Different element type → value-converting element-wise path (truncates to int8).
@@ -98,8 +91,7 @@ public class TypedArrayBulkMethodTests
             console.log(i.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_FromRegularArray(ExecutionMode mode)
     {
         Assert.Equal("10,20,30\n", Run(@"
@@ -108,8 +100,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SameType_NegativeOffset_Throws(ExecutionMode mode)
     {
         // The same-type fast path must NOT silently accept a negative offset — it falls
@@ -122,8 +113,7 @@ public class TypedArrayBulkMethodTests
             catch (e) { console.log('threw'); }", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SameType_TooLarge_Throws(ExecutionMode mode)
     {
         Assert.Equal("threw\n", Run(@"
@@ -135,8 +125,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- copyWithin -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CopyWithin_Forward(ExecutionMode mode)
     {
         Assert.Equal("3,4,2,3,4\n", Run(@"
@@ -146,8 +135,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CopyWithin_OverlappingRegions(ExecutionMode mode)
     {
         // src [0..3) copied onto [2..5): overlapping; memmove must read-before-overwrite.
@@ -160,8 +148,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- reverse -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reverse_EvenLength(ExecutionMode mode)
     {
         Assert.Equal("4,3,2,1\n", Run(@"
@@ -171,8 +158,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reverse_OddLength_MiddleFixed(ExecutionMode mode)
     {
         Assert.Equal("3,2,1\n", Run(@"
@@ -182,8 +168,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Reverse_Float64_PreservesValues(ExecutionMode mode)
     {
         Assert.Equal("3.5,2.5,1.5\n", Run(@"
@@ -195,8 +180,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- slice -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Slice_Range(ExecutionMode mode)
     {
         Assert.Equal("1,2,3\n", Run(@"
@@ -205,8 +189,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.slice(1, 4).join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Slice_NegativeBegin(ExecutionMode mode)
     {
         Assert.Equal("3,4\n", Run(@"
@@ -215,8 +198,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.slice(-2).join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Slice_IsIndependentCopy(ExecutionMode mode)
     {
         // Mutating the slice must not affect the source (slice copies, subarray would alias).
@@ -230,8 +212,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- subarray -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subarray_AliasesBackingBuffer(ExecutionMode mode)
     {
         // subarray returns a VIEW over the same buffer: mutating it is visible in the parent.
@@ -243,8 +224,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join(',') + '|' + s.join(','));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subarray_NegativeBegin(ExecutionMode mode)
     {
         Assert.Equal("3,4\n", Run(@"
@@ -255,8 +235,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- indexOf / lastIndexOf / includes -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IndexOf_FoundMissingAndFromIndex(ExecutionMode mode)
     {
         // found=1, missing=-1, and fromIndex skips earlier matches.
@@ -266,8 +245,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.indexOf(6) + ',' + a.indexOf(42) + ',' + a.indexOf(5, 1));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LastIndexOf_ScansBackward(ExecutionMode mode)
     {
         Assert.Equal("2,1,-1\n", Run(@"
@@ -276,8 +254,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.lastIndexOf(1) + ',' + a.lastIndexOf(2) + ',' + a.lastIndexOf(9));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Includes_TrueAndFalse(ExecutionMode mode)
     {
         Assert.Equal("true,false\n", Run(@"
@@ -286,8 +263,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.includes(2) + ',' + a.includes(9));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Includes_NaN_SameValueZero(ExecutionMode mode)
     {
         // includes uses SameValueZero, so NaN matches NaN (unlike indexOf strict equality).
@@ -299,8 +275,7 @@ public class TypedArrayBulkMethodTests
 
     // ----- join / toString -----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Join_CustomAndDefaultSeparator(ExecutionMode mode)
     {
         Assert.Equal("1-2-3 1,2,3\n", Run(@"
@@ -309,8 +284,7 @@ public class TypedArrayBulkMethodTests
             console.log(a.join('-') + ' ' + a.join());", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ToString_CommaSeparated(ExecutionMode mode)
     {
         Assert.Equal("1,2,3\n", Run(@"

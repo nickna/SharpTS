@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NumberFormattingParityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConsoleLog_PrecisionAndThresholds(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class NumberFormattingParityTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringAndToString(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +45,7 @@ public class NumberFormattingParityTests
         Assert.Equal("0.30000000000000004\n1e+21\n0.30000000000000004\n1e+21\n1e+21\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConcatTemplateJoinAndPropertyKey(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +61,7 @@ public class NumberFormattingParityTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void JsonStringify_PrecisionAndSpecials(ExecutionMode mode)
     {
         // NaN/Infinity serialize as null; everything else uses Number::toString.
@@ -78,8 +74,7 @@ public class NumberFormattingParityTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LargeIntegers_ShortestRoundTrip(ExecutionMode mode)
     {
         // At/above 2^53 the double loses integer precision; ECMA-262 uses the shortest
@@ -92,8 +87,7 @@ public class NumberFormattingParityTests
         Assert.Equal("1234567890123456800\n9007199254740992\n9007199254740992\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpecialValuesAndRadix(ExecutionMode mode)
     {
         var source = """

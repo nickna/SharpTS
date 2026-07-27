@@ -12,8 +12,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CjsAccessorImportTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedImport_Reads_GetterDefinedExport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -38,8 +37,7 @@ public class CjsAccessorImportTests
         Assert.Equal("hi world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedImport_GetterClosesOverLaterBinding(ExecutionMode mode)
     {
         // Mirrors uuid's layout: Object.defineProperty calls come before the var that the

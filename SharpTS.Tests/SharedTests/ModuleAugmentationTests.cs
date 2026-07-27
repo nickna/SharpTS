@@ -11,8 +11,7 @@ public class ModuleAugmentationTests
 {
     #region Parser Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareModule_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ModuleAugmentationTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareGlobal_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +45,7 @@ public class ModuleAugmentationTests
 
     #region Global Augmentation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareGlobal_DefinesNewInterface(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +66,7 @@ public class ModuleAugmentationTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareGlobal_WithExport_DefinesInterface(ExecutionMode mode)
     {
         var source = """
@@ -95,8 +91,7 @@ public class ModuleAugmentationTests
 
     #region Ambient Module Declaration Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AmbientModule_IsTypeOnly(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +109,7 @@ public class ModuleAugmentationTests
         Assert.Equal("ambient declaration works\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AmbientModule_MultipleDeclarations(ExecutionMode mode)
     {
         var source = """
@@ -138,8 +132,7 @@ public class ModuleAugmentationTests
 
     #region Module Augmentation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ModuleAugmentation_AddsNewInterface(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -171,8 +164,7 @@ public class ModuleAugmentationTests
 
     #region Type Alias in Declare Block Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareModule_WithTypeAlias(ExecutionMode mode)
     {
         var source = """

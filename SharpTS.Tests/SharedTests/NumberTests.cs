@@ -10,8 +10,7 @@ public class NumberTests
 {
     #region Static Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_MAX_VALUE_ReturnsLargeNumber(ExecutionMode mode)
     {
         // Use a comparison that doesn't require scientific notation parsing
@@ -20,8 +19,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_MIN_VALUE_ReturnsSmallPositive(ExecutionMode mode)
     {
         // MIN_VALUE is the smallest positive number (like double.Epsilon)
@@ -30,8 +28,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NaN_IsNaN(ExecutionMode mode)
     {
         var source = "console.log(Number.isNaN(Number.NaN));";
@@ -39,8 +36,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_POSITIVE_INFINITY_IsInfinity(ExecutionMode mode)
     {
         var source = "console.log(Number.POSITIVE_INFINITY > Number.MAX_VALUE);";
@@ -48,8 +44,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NEGATIVE_INFINITY_IsNegativeInfinity(ExecutionMode mode)
     {
         // Verify NEGATIVE_INFINITY is less than any large negative number
@@ -58,8 +53,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_MAX_SAFE_INTEGER_HasCorrectValue(ExecutionMode mode)
     {
         var source = "console.log(Number.MAX_SAFE_INTEGER === 9007199254740991);";
@@ -67,8 +61,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_MIN_SAFE_INTEGER_HasCorrectValue(ExecutionMode mode)
     {
         var source = "console.log(Number.MIN_SAFE_INTEGER === -9007199254740991);";
@@ -76,8 +69,7 @@ public class NumberTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_EPSILON_IsSmallPositive(ExecutionMode mode)
     {
         // EPSILON is 2^-52, a very small positive number
@@ -90,8 +82,7 @@ public class NumberTests
 
     #region Static Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_parseInt_ParsesIntegers(ExecutionMode mode)
     {
         var source = """
@@ -102,8 +93,7 @@ public class NumberTests
         Assert.Equal("42\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_parseInt_WithRadix(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +105,7 @@ public class NumberTests
         Assert.Equal("255\n5\n63\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_parseFloat_ParsesFloats(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +117,7 @@ public class NumberTests
         Assert.Equal("3.14\n42\n3.14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_isNaN_StrictBehavior(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +129,7 @@ public class NumberTests
         Assert.Equal("true\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_isFinite_StrictBehavior(ExecutionMode mode)
     {
         var source = """
@@ -155,8 +142,7 @@ public class NumberTests
         Assert.Equal("true\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_isInteger_DetectsIntegers(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +155,7 @@ public class NumberTests
         Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_isSafeInteger_DetectsSafeIntegers(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +172,7 @@ public class NumberTests
 
     #region Instance Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_toFixed_FormatsDecimals(ExecutionMode mode)
     {
         var source = """
@@ -201,8 +185,7 @@ public class NumberTests
         Assert.Equal("3.14\n42.00\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_toPrecision_FormatsPrecision(ExecutionMode mode)
     {
         var source = """
@@ -213,8 +196,7 @@ public class NumberTests
         Assert.Contains("123.5", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_toExponential_FormatsExponential(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +207,7 @@ public class NumberTests
         Assert.Contains("e+", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_toString_WithRadix(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +223,7 @@ public class NumberTests
 
     #region Global Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Global_parseInt_Works(ExecutionMode mode)
     {
         var source = """
@@ -254,8 +234,7 @@ public class NumberTests
         Assert.Equal("42\n255\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Global_parseFloat_Works(ExecutionMode mode)
     {
         var source = """
@@ -266,8 +245,7 @@ public class NumberTests
         Assert.Equal("3.14\n42.5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Global_isNaN_CoercesBehavior(ExecutionMode mode)
     {
         var source = """
@@ -280,8 +258,7 @@ public class NumberTests
         Assert.Equal("true\nfalse\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Global_isFinite_CoercesBehavior(ExecutionMode mode)
     {
         var source = """

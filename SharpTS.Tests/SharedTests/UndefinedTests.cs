@@ -10,8 +10,7 @@ public class UndefinedTests
 {
     #region Basic Undefined Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_TypeOf_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -22,8 +21,7 @@ public class UndefinedTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_GlobalVariable_Accessible(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +35,7 @@ public class UndefinedTests
 
     #region Equality Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_LooseEquality_WithUndefined(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +45,7 @@ public class UndefinedTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_LooseEquality_WithNull(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +56,7 @@ public class UndefinedTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_StrictEquality_WithUndefined(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +66,7 @@ public class UndefinedTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_StrictEquality_WithNull_ReturnsFalse(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +77,7 @@ public class UndefinedTests
         Assert.Equal("false\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_NotEqualToFalsyValues(ExecutionMode mode)
     {
         var source = """
@@ -100,8 +93,7 @@ public class UndefinedTests
 
     #region Truthiness Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_IsFalsy(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +111,7 @@ public class UndefinedTests
 
     #region String Conversion Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_Stringify(ExecutionMode mode)
     {
         var source = """
@@ -135,8 +126,7 @@ public class UndefinedTests
 
     #region Nullish Coalescing Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithUndefined_ReturnsDefault(ExecutionMode mode)
     {
         var source = """
@@ -147,8 +137,7 @@ public class UndefinedTests
         Assert.Equal("default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithNull_ReturnsDefault(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +148,7 @@ public class UndefinedTests
         Assert.Equal("default\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NullishCoalescing_WithValue_ReturnsValue(ExecutionMode mode)
     {
         var source = """
@@ -175,8 +163,7 @@ public class UndefinedTests
 
     #region Optional Chaining Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_WithUndefined_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -187,8 +174,7 @@ public class UndefinedTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalChaining_WithValue_ReturnsProperty(ExecutionMode mode)
     {
         var source = """
@@ -203,8 +189,7 @@ public class UndefinedTests
 
     #region Type Annotation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Undefined_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -222,8 +207,7 @@ public class UndefinedTests
 
     #region Uninitialized Variable Tests (Issue #17)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UninitializedLet_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -236,8 +220,7 @@ public class UndefinedTests
         Assert.Equal("undefined\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UninitializedVar_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -250,8 +233,7 @@ public class UndefinedTests
         Assert.Equal("undefined\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalParam_NoDefault_IsUndefined(ExecutionMode mode)
     {
         var source = """

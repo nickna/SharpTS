@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class RegExpFlagPropertyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlagProperties_SetFlags_ReadTrue(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class RegExpFlagPropertyTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlagProperties_UnsetFlags_ReadFalse(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class RegExpFlagPropertyTests
         Assert.Equal("false\nfalse\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FlagsString_IncludesHasIndicesAndSticky(ExecutionMode mode)
     {
         var source = """

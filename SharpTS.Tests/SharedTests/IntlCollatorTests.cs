@@ -11,8 +11,7 @@ public class IntlCollatorTests
 {
     // ========== Basic Comparison ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_BasicCompare(ExecutionMode mode)
     {
         var source = @"
@@ -27,8 +26,7 @@ public class IntlCollatorTests
 
     // ========== Case Sensitivity ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_CaseInsensitive(ExecutionMode mode)
     {
         var source = @"
@@ -39,8 +37,7 @@ public class IntlCollatorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_CaseSensitive(ExecutionMode mode)
     {
         var source = @"
@@ -54,8 +51,7 @@ public class IntlCollatorTests
 
     // ========== Accent Sensitivity ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_AccentInsensitive(ExecutionMode mode)
     {
         var source = @"
@@ -66,8 +62,7 @@ public class IntlCollatorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_AccentSensitive(ExecutionMode mode)
     {
         var source = @"
@@ -81,8 +76,7 @@ public class IntlCollatorTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -97,8 +91,7 @@ public class IntlCollatorTests
 
     // ========== Sorting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_SortArray(ExecutionMode mode)
     {
         var source = @"
@@ -113,8 +106,7 @@ public class IntlCollatorTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -128,8 +120,7 @@ public class IntlCollatorTests
 
     // ========== Ignore Punctuation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlCollator_IgnorePunctuation(ExecutionMode mode)
     {
         var source = @"

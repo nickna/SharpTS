@@ -11,8 +11,7 @@ public class BufferTests
 {
     #region Type Annotation and Basic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class BufferTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_TypeInference_Works(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class BufferTests
         Assert.Equal("test\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Alloc_Works(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +48,7 @@ public class BufferTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Length_Property(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +64,7 @@ public class BufferTests
 
     #region toString Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ToString_Default(ExecutionMode mode)
     {
         var source = """
@@ -81,8 +76,7 @@ public class BufferTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ToString_WithEncoding(ExecutionMode mode)
     {
         var source = """
@@ -98,8 +92,7 @@ public class BufferTests
 
     #region slice Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Slice_WithBothArgs(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +105,7 @@ public class BufferTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Slice_StartOnly(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +118,7 @@ public class BufferTests
         Assert.Equal("world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Slice_NoArgs(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +131,7 @@ public class BufferTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Slice_NegativeStart(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +148,7 @@ public class BufferTests
 
     #region copy Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Copy_Basic(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +163,7 @@ public class BufferTests
         Assert.Equal("5\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Copy_WithOffsets(ExecutionMode mode)
     {
         var source = """
@@ -190,8 +178,7 @@ public class BufferTests
         Assert.Equal("5\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Copy_Partial(ExecutionMode mode)
     {
         var source = """
@@ -210,8 +197,7 @@ public class BufferTests
 
     #region compare Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Compare_Less(ExecutionMode mode)
     {
         var source = """
@@ -224,8 +210,7 @@ public class BufferTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Compare_Equal(ExecutionMode mode)
     {
         var source = """
@@ -238,8 +223,7 @@ public class BufferTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Compare_Greater(ExecutionMode mode)
     {
         var source = """
@@ -252,8 +236,7 @@ public class BufferTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Compare_DifferentLengths(ExecutionMode mode)
     {
         var source = """
@@ -271,8 +254,7 @@ public class BufferTests
 
     #region equals Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Equals_True(ExecutionMode mode)
     {
         var source = """
@@ -285,8 +267,7 @@ public class BufferTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Equals_False_DifferentContent(ExecutionMode mode)
     {
         var source = """
@@ -299,8 +280,7 @@ public class BufferTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Equals_False_DifferentLength(ExecutionMode mode)
     {
         var source = """
@@ -317,8 +297,7 @@ public class BufferTests
 
     #region fill Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Fill_WithNumber(ExecutionMode mode)
     {
         var source = """
@@ -331,8 +310,7 @@ public class BufferTests
         Assert.Equal("AAAAA\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Fill_WithString(ExecutionMode mode)
     {
         var source = """
@@ -345,8 +323,7 @@ public class BufferTests
         Assert.Equal("XYXYXY\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Fill_WithRange(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +338,7 @@ public class BufferTests
         Assert.Equal("0\n88\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Fill_ReturnsThis(ExecutionMode mode)
     {
         var source = """
@@ -378,8 +354,7 @@ public class BufferTests
 
     #region write Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Write_Basic(ExecutionMode mode)
     {
         var source = """
@@ -393,8 +368,7 @@ public class BufferTests
         Assert.Equal("5\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Write_WithOffset(ExecutionMode mode)
     {
         var source = """
@@ -413,8 +387,7 @@ public class BufferTests
 
     #region readUInt8 Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt8_Basic(ExecutionMode mode)
     {
         var source = """
@@ -427,8 +400,7 @@ public class BufferTests
         Assert.Equal("65\n66\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt8_DefaultOffset(ExecutionMode mode)
     {
         var source = """
@@ -440,8 +412,7 @@ public class BufferTests
         Assert.Equal("88\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt8_InExpression(ExecutionMode mode)
     {
         var source = """
@@ -458,8 +429,7 @@ public class BufferTests
 
     #region writeUInt8 Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteUInt8_Basic(ExecutionMode mode)
     {
         var source = """
@@ -476,8 +446,7 @@ public class BufferTests
         Assert.Equal("1\n2\n255\n128\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteUInt8_DefaultOffset(ExecutionMode mode)
     {
         var source = """
@@ -494,8 +463,7 @@ public class BufferTests
 
     #region toJSON Method
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ToJSON_Structure(ExecutionMode mode)
     {
         var source = """
@@ -515,8 +483,7 @@ public class BufferTests
 
     #region Complex Scenarios
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_MethodChaining(ExecutionMode mode)
     {
         var source = """
@@ -529,8 +496,7 @@ public class BufferTests
         Assert.Equal("DD\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_AsFunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -544,8 +510,7 @@ public class BufferTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_AsFunctionReturnType(ExecutionMode mode)
     {
         var source = """
@@ -559,8 +524,7 @@ public class BufferTests
         Assert.Equal("CCC\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_InArray(ExecutionMode mode)
     {
         var source = """
@@ -576,8 +540,7 @@ public class BufferTests
         Assert.Equal("one\ntwo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_InConditional(ExecutionMode mode)
     {
         var source = """
@@ -595,8 +558,7 @@ public class BufferTests
         Assert.Equal("AAA\nBBB\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_CompareResultInExpression(ExecutionMode mode)
     {
         var source = """
@@ -614,8 +576,7 @@ public class BufferTests
 
     #region Multi-byte Read Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadInt8_Basic(ExecutionMode mode)
     {
         var source = """
@@ -630,8 +591,7 @@ public class BufferTests
         Assert.Equal("127\n-128\n-1\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt16LE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -648,8 +608,7 @@ public class BufferTests
         Assert.Equal("22136\n4660\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt16BE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -666,8 +625,7 @@ public class BufferTests
         Assert.Equal("4660\n22136\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt32LE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -683,8 +641,7 @@ public class BufferTests
         Assert.Equal("305419896\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadUInt32BE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -700,8 +657,7 @@ public class BufferTests
         Assert.Equal("305419896\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadInt16LE_Signed(ExecutionMode mode)
     {
         var source = """
@@ -715,8 +671,7 @@ public class BufferTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadInt32LE_Signed(ExecutionMode mode)
     {
         var source = """
@@ -732,8 +687,7 @@ public class BufferTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadFloatLE_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -747,8 +701,7 @@ public class BufferTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadDoubleLE_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -766,8 +719,7 @@ public class BufferTests
 
     #region Multi-byte Write Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteInt8_Basic(ExecutionMode mode)
     {
         var source = """
@@ -782,8 +734,7 @@ public class BufferTests
         Assert.Equal("255\n127\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteUInt16LE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -800,8 +751,7 @@ public class BufferTests
         Assert.Equal("52\n18\n120\n86\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteUInt16BE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -818,8 +768,7 @@ public class BufferTests
         Assert.Equal("18\n52\n86\n120\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteUInt32_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -834,8 +783,7 @@ public class BufferTests
         Assert.Equal("305419896\n305419896\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteInt16_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -850,8 +798,7 @@ public class BufferTests
         Assert.Equal("-1000\n-1000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteInt32_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -866,8 +813,7 @@ public class BufferTests
         Assert.Equal("-100000\n-100000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteFloat_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -884,8 +830,7 @@ public class BufferTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteDouble_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -900,8 +845,7 @@ public class BufferTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Write_ReturnsNextOffset(ExecutionMode mode)
     {
         var source = """
@@ -921,8 +865,7 @@ public class BufferTests
 
     #region Search Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_IndexOf_ByteValue(ExecutionMode mode)
     {
         var source = """
@@ -936,8 +879,7 @@ public class BufferTests
         Assert.Equal("2\n5\n-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Includes_Basic(ExecutionMode mode)
     {
         var source = """
@@ -955,8 +897,7 @@ public class BufferTests
 
     #region Swap Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Swap16_Basic(ExecutionMode mode)
     {
         var source = """
@@ -972,8 +913,7 @@ public class BufferTests
         Assert.Equal("2\n1\n4\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Swap32_Basic(ExecutionMode mode)
     {
         var source = """
@@ -991,8 +931,7 @@ public class BufferTests
         Assert.Equal("4\n3\n2\n1\n8\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Swap64_Basic(ExecutionMode mode)
     {
         var source = """
@@ -1008,8 +947,7 @@ public class BufferTests
         Assert.Equal("8\n7\n2\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Swap_Chaining(ExecutionMode mode)
     {
         var source = """
@@ -1026,8 +964,7 @@ public class BufferTests
 
     #region Endianness Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Endianness_Conversion(ExecutionMode mode)
     {
         var source = """
@@ -1040,8 +977,7 @@ public class BufferTests
         Assert.Equal("78563412\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Mixed_Endianness(ExecutionMode mode)
     {
         var source = """
@@ -1062,8 +998,7 @@ public class BufferTests
 
     #region BigInt Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_ReadBigInt64LE_Basic(ExecutionMode mode)
     {
         var source = """
@@ -1083,8 +1018,7 @@ public class BufferTests
         Assert.Equal("1n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_WriteBigInt64LE_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -1098,8 +1032,7 @@ public class BufferTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_BigInt_RoundTrip(ExecutionMode mode)
     {
         var source = """
@@ -1118,8 +1051,7 @@ public class BufferTests
 
     #region Issue #45 — compiled Buffer index access
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_IndexAccess_ReturnsByteValue(ExecutionMode mode)
     {
         // Regression for #45: `randomBytes(n)[i]` returned $Undefined in
@@ -1144,8 +1076,7 @@ public class BufferTests
             Assert.Equal("number true", lines[i]);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_IndexAccess_NumericOperations(ExecutionMode mode)
     {
         // Regression for #45: `bytes[i] % n` threw InvalidCastException
@@ -1160,8 +1091,7 @@ public class BufferTests
         Assert.Equal("1\n256\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_IndexAssign_StoresMaskedByte(ExecutionMode mode)
     {
         // Matches Node.js semantics: assignment is masked to 0xFF.
@@ -1177,8 +1107,7 @@ public class BufferTests
         Assert.Equal("42 44 255\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_IndexAccess_OutOfRange_ReturnsNaN(ExecutionMode mode)
     {
         // Matches SharpTSBuffer.this[int] — out-of-range reads yield NaN in
@@ -1198,8 +1127,7 @@ public class BufferTests
 
     #region buffer module exports (#1160)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BufferModule_AtobBtoa_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1216,8 +1144,7 @@ public class BufferTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BufferModule_GlobalAtobBtoa(ExecutionMode mode)
     {
         // atob/btoa are also globals (no import).
@@ -1230,8 +1157,7 @@ public class BufferTests
         Assert.Equal("U2hhcnBUUw==\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BufferModule_IsUtf8IsAscii(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1248,8 +1174,7 @@ public class BufferTests
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BufferModule_Transcode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1266,8 +1191,7 @@ public class BufferTests
         Assert.Equal("hello\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BufferModule_ConstantsAndSlowBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1291,8 +1215,7 @@ public class BufferTests
 
     #region Buffer statics + read/write matrix (#1161)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Of_And_PoolSize(ExecutionMode mode)
     {
         var source = """
@@ -1306,8 +1229,7 @@ public class BufferTests
         Assert.Equal("Hi\n2\n8192\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_VariableLengthReadWrite(ExecutionMode mode)
     {
         var source = """
@@ -1326,8 +1248,7 @@ public class BufferTests
         Assert.Equal("197121\n66051\n394500\n197121\n-1000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_Subarray(ExecutionMode mode)
     {
         var source = """
@@ -1340,8 +1261,7 @@ public class BufferTests
         Assert.Equal("141e\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_LowercaseUintAliases(ExecutionMode mode)
     {
         var source = """
@@ -1357,8 +1277,7 @@ public class BufferTests
         Assert.Equal("1\n1\n513\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Buffer_CopyBytesFrom(ExecutionMode mode)
     {
         var source = """
@@ -1381,8 +1300,7 @@ public class BufferTests
     // documented follow-up (see the compiled deferral test below), so the behavioral
     // tests are interpreter-only.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Blob_SizeTypeTextSlice(ExecutionMode mode)
     {
         var source = """
@@ -1397,8 +1315,7 @@ public class BufferTests
         Assert.Equal("13\ntext/plain\nHello, world!\nHello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Blob_ArrayBufferBytesStream(ExecutionMode mode)
     {
         var source = """
@@ -1423,8 +1340,7 @@ public class BufferTests
         Assert.Equal("4\n4 97\n4 97\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void File_NameLastModified(ExecutionMode mode)
     {
         var source = """
@@ -1440,8 +1356,7 @@ public class BufferTests
         Assert.Equal("f.txt\n12345\n4\ntext/plain\ndata\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Blob_BufferModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1460,8 +1375,7 @@ public class BufferTests
         Assert.Equal("2\na.txt\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Blob_CompiledThrowsClearDeferral(ExecutionMode mode)
     {
         // Compiled mode emits a clear, documented deferral error rather than the

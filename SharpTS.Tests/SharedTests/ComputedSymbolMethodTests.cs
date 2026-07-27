@@ -13,8 +13,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ComputedSymbolMethodTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectReturningIterator_ForOf_Works(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("0\n1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorIterator_ForOfAndSpread_Works(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("1\n2\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorIterator_CapturesThis(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +59,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GeneratorIterator_ElementTypeIsNumber(ExecutionMode mode)
     {
         // The spread must yield number[], not Iterator<number>[] — the factory's iterator
@@ -80,8 +76,7 @@ public class ComputedSymbolMethodTests
     // #791: non-symbol computed keys (string/number) fold to a string-named method. Bodies emit as
     // synthetic $symmethod_N and register in the symbol-method registry under the property-key string;
     // named/string-index access consults the registry as a fallback in $IHasFields.GetProperty.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonSymbolComputedMethodKey_FoldsToNamedMethod(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +88,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringLiteralComputedMethodKey_BothAccessForms(ExecutionMode mode)
     {
         // Literal key, accessed both by name and by string index.
@@ -108,8 +102,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("42\n42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MutableLocalComputedMethodKey_FoldsToNamedMethod(ExecutionMode mode)
     {
         // Fully dynamic form: the key is a mutable local, unknowable at compile time.
@@ -122,8 +115,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericComputedMethodKey_FoldsToStringKey(ExecutionMode mode)
     {
         // A numeric key folds to its property-key string ("1"), reachable via either index form.
@@ -137,8 +129,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("7\n7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedComputedMethodKey_ResolvesOnSubclass(ExecutionMode mode)
     {
         // A computed key declared on the base resolves through the subclass via the base-chain walk.
@@ -151,8 +142,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("99\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorIterator_ForAwait_Works(ExecutionMode mode)
     {
         var source = """
@@ -166,8 +156,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("10\n20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenericIterableClass_Works(ExecutionMode mode)
     {
         // Exercises the symbol registry's generic-class handling (registry keyed by the open
@@ -183,8 +172,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("1\n2\n3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedComputedIterator_Works(ExecutionMode mode)
     {
         // A subclass inherits the base's [Symbol.iterator] via the registry's base-chain walk.
@@ -203,8 +191,7 @@ public class ComputedSymbolMethodTests
     // compiled mode the bracket-get wraps the method in `$TSFunction(obj, method)`, mirroring the
     // string-key method path. for...of / spread / for-await (which pass the receiver themselves) were
     // already unaffected.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DirectSymbolMethodAccess_ReturnsCallable(ExecutionMode mode)
     {
         var source = """
@@ -219,8 +206,7 @@ public class ComputedSymbolMethodTests
     // Class *expressions* now wire computed symbol-keyed methods through the same synthetic-method +
     // registry path as class declarations, including the generator state machine (#755 sub-case 2,
     // building on the class-expression generator routing in #765).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_ComputedSymbolMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -234,8 +220,7 @@ public class ComputedSymbolMethodTests
     // Class expression carrying an async computed symbol method (`async *[Symbol.asyncIterator]()`),
     // consumed with for-await — exercises the class-expression async-generator + symbol-registry
     // paths together (#755 sub-case 2).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpression_AsyncComputedSymbolMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +252,7 @@ public class ComputedSymbolMethodTests
     // Tests are kept free of dynamic `this` inside the generator (object generator methods lose
     // `this` in both modes — pre-existing #775).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteral_ComputedGeneratorMethod_Iterates(ExecutionMode mode)
     {
         var source = """
@@ -279,8 +263,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("1\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteral_NamedGeneratorMethod_Iterates(ExecutionMode mode)
     {
         var source = """
@@ -291,8 +274,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("10\n20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteral_AsyncMethod_Resolves(ExecutionMode mode)
     {
         var source = """
@@ -303,8 +285,7 @@ public class ComputedSymbolMethodTests
         Assert.Equal("async: 5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLiteral_AsyncGeneratorMethod_Iterates(ExecutionMode mode)
     {
         var source = """

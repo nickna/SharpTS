@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class FinalizationRegistryTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinalizationRegistry_CreateAndRegister(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -23,8 +22,7 @@ public class FinalizationRegistryTests
         Assert.Contains("registered", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinalizationRegistry_Unregister_ReturnsTrue(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -38,8 +36,7 @@ public class FinalizationRegistryTests
         Assert.Contains("true", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinalizationRegistry_Unregister_UnknownToken_ReturnsFalse(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -54,8 +51,7 @@ public class FinalizationRegistryTests
         Assert.Contains("false", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinalizationRegistry_Typeof(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -65,8 +61,7 @@ public class FinalizationRegistryTests
         Assert.Contains("true", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinalizationRegistry_Constructor_RequiresCallback(ExecutionMode mode)
     {
         var ex = Assert.ThrowsAny<Exception>(() =>

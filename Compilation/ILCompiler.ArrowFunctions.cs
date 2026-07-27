@@ -615,9 +615,6 @@ public partial class ILCompiler
             case Stmt.Throw th:
                 CollectArrowsFromExpr(th.Value);
                 break;
-            case Stmt.Print p:
-                CollectArrowsFromExpr(p.Expr);
-                break;
             case Stmt.Using u:
                 foreach (var binding in u.Bindings)
                     CollectArrowsFromExpr(binding.Initializer);

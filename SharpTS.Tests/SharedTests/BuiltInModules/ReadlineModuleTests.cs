@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ReadlineModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CreateInterface_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -26,8 +25,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Module_HasQuestionSync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -42,8 +40,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Module_HasCreateInterface(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -58,8 +55,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_HasEventEmitterMethods(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -77,8 +73,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_SetAndGetPrompt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -95,8 +90,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_DefaultPrompt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -112,8 +106,7 @@ public class ReadlineModuleTests
         Assert.Equal("> \n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_Close_EmitsEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -132,8 +125,7 @@ public class ReadlineModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_Close_EmitsEvent_WithCount(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -152,8 +144,7 @@ public class ReadlineModuleTests
         Assert.Contains("count: 1", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_PauseResume(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -173,8 +164,7 @@ public class ReadlineModuleTests
         Assert.Contains("ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_PauseResume_EmitsEvents(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -196,8 +186,7 @@ public class ReadlineModuleTests
         Assert.Contains("resumed", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_Write(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -213,8 +202,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_PromptWithCustomPrefix(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -230,8 +218,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_Question_Exists(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -247,8 +234,7 @@ public class ReadlineModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Interface_MultipleSetPrompt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -267,8 +253,7 @@ public class ReadlineModuleTests
         Assert.Equal("a> \nb> \n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedImport_CreateInterface(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -12,8 +12,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class ValueCallUndefinedPaddingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModuleImport_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\ntrue\nfalse\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclarationAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +53,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Callback_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -67,8 +63,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunctionAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -82,8 +77,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltInCallback_OmittedTrailingArg_StillNullPadded(ExecutionMode mode)
     {
         // Regression guard: built-in array callbacks pad missing trailing slots with null
@@ -101,8 +95,7 @@ public class ValueCallUndefinedPaddingTests
     // sentinel, matching function declarations/arrows. Marking is applied to every user
     // class-method builder kind (instance, static, private, class-expression).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethodBound_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +107,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethodAsValue_OmittedOptionalArg_StrictEquality(ExecutionMode mode)
     {
         var source = """
@@ -132,8 +124,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("true\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethodAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +135,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassExpressionMethodAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -157,8 +147,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InstanceMethodAsCallback_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +165,7 @@ public class ValueCallUndefinedPaddingTests
     // instead of the sentinel on the value-call / cross-module boundary. `typeof`/`=== undefined`
     // then answered "object"/false. Marking the stub fixes all three kinds.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModuleImport_AsyncFunction_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -198,8 +186,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModuleImport_Generator_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -215,8 +202,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModuleImport_AsyncGenerator_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -235,8 +221,7 @@ public class ValueCallUndefinedPaddingTests
         Assert.Equal("undefined\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunctionAsValue_OmittedOptionalArg_IsUndefined(ExecutionMode mode)
     {
         // Value-call (non-module) path for the async free-function stub.

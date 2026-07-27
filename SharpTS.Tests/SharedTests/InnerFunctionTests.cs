@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class InnerFunctionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_Basic(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class InnerFunctionTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_WithParameters(ExecutionMode mode)
     {
         var source = """
@@ -45,8 +43,7 @@ public class InnerFunctionTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_Recursive(ExecutionMode mode)
     {
         var source = """
@@ -64,8 +61,7 @@ public class InnerFunctionTests
         Assert.Equal("120\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_CapturingOuterVariable(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +79,7 @@ public class InnerFunctionTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ModifyingCapturedVariable(ExecutionMode mode)
     {
         var source = """
@@ -105,8 +100,7 @@ public class InnerFunctionTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_MultipleInnerFunctions(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +121,7 @@ public class InnerFunctionTests
         Assert.Equal("Hello, Alice\nGoodbye, Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_DeclaredBeforeUse(ExecutionMode mode)
     {
         // Inner function declared before first call (standard order)
@@ -146,8 +139,7 @@ public class InnerFunctionTests
         Assert.Equal("declared first\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_CapturingParameter(ExecutionMode mode)
     {
         var source = """
@@ -164,8 +156,7 @@ public class InnerFunctionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ReturnedAsValue(ExecutionMode mode)
     {
         // Inner function used as a closure factory
@@ -188,8 +179,7 @@ public class InnerFunctionTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_SimpleRecursion(ExecutionMode mode)
     {
         // Simplest possible recursive inner function - no typed params, string result
@@ -208,8 +198,7 @@ public class InnerFunctionTests
         Assert.Equal("3,2,1,done\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_SingleSelfCall(ExecutionMode mode)
     {
         // Just one self-call to isolate the most basic recursive behavior
@@ -228,8 +217,7 @@ public class InnerFunctionTests
         Assert.Equal("base\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_SelfRefCheck(ExecutionMode mode)
     {
         // Check that the self-reference local is accessible as a function
@@ -248,8 +236,7 @@ public class InnerFunctionTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_NestedInnerFunctions(ExecutionMode mode)
     {
         // Function inside function inside function
@@ -270,8 +257,7 @@ public class InnerFunctionTests
         Assert.Equal("deep\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ForwardReferenceHoisted(ExecutionMode mode)
     {
         // Reduced repro of issue #40: an earlier-declared hoisted function
@@ -291,8 +277,7 @@ public class InnerFunctionTests
         Assert.Equal("forward\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_MutualRecursion(ExecutionMode mode)
     {
         // Two hoisted functions reference each other. Before the two-pass
@@ -317,8 +302,7 @@ public class InnerFunctionTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ThreeWayForwardReferenceCycle(ExecutionMode mode)
     {
         // Three-way cycle, all forward references.
@@ -336,8 +320,7 @@ public class InnerFunctionTests
         Assert.Equal("a->b->c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_ForwardReferenceInArrowBody(ExecutionMode mode)
     {
         // Exact shape from issue #40: hoisted forward-reference inside an
@@ -360,8 +343,7 @@ public class InnerFunctionTests
         Assert.Equal("wrapped:x\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_NewOnPeerHoistedFunction(ExecutionMode mode)
     {
         // Issue #59: `new X()` inside an inner function where X is a peer
@@ -382,8 +364,7 @@ public class InnerFunctionTests
         Assert.Equal("a-object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InnerFunction_NewInsideLogicalFallback(ExecutionMode mode)
     {
         // Issue #59, lodash shape: `new (x || MapCache)` — MapCache as the
@@ -406,8 +387,7 @@ public class InnerFunctionTests
         Assert.Equal("map\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_ArrayIsArray_AsValue(ExecutionMode mode)
     {
         // Regression: `var f = Array.isArray` previously stored the boolean
@@ -429,8 +409,7 @@ public class InnerFunctionTests
         Assert.Equal("function\ntrue\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void BuiltIn_ClassNameProperty_Preserved(ExecutionMode mode)
     {
         // Compiled-only: regression guard that closing the Type-reflection
@@ -450,8 +429,7 @@ public class InnerFunctionTests
         Assert.Equal("MyClass\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_MathMethods_AsValues(ExecutionMode mode)
     {
         // Issue #60: `var f = Math.floor; f(x)` must resolve to the Math.floor
@@ -478,8 +456,7 @@ public class InnerFunctionTests
         Assert.Equal("function function function\n2 3 5\n4 1\n3 0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_NumberMethods_AsValues(ExecutionMode mode)
     {
         // Issue #60: Number.isInteger / isFinite / isInteger / isSafeInteger
@@ -497,8 +474,7 @@ public class InnerFunctionTests
         Assert.Equal("function true false false\nfunction true false false\nfunction true false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_StringFromCharCode_AsValue(ExecutionMode mode)
     {
         // Issue #60: String.fromCharCode as a stored value. $Runtime's
@@ -515,8 +491,7 @@ public class InnerFunctionTests
         Assert.Equal("function\nA\nHi!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void BuiltIn_MathMaxMin_Variadic_WithCoercion(ExecutionMode mode)
     {
         // Compiled-only: verifies that the Math.max/min adapters coerce
@@ -537,8 +512,7 @@ public class InnerFunctionTests
         Assert.Equal("3\n2\n-Infinity\nInfinity\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_ArrayConstructor_AllForms(ExecutionMode mode)
     {
         // Issue #61: `new Array(n)` / `Array(n)` / `new Array(a, b, c)` must
@@ -559,8 +533,7 @@ public class InnerFunctionTests
         Assert.Equal("3\n3\n[1, 2, 3]\n[hello]\n[]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void BuiltIn_ArrayConstructor_AsValue_CallForm(ExecutionMode mode)
     {
         // Issue #61: calling an Array reference stored in a variable — the
@@ -584,8 +557,7 @@ public class InnerFunctionTests
         Assert.Equal("2 undefined undefined\n2 x y\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BuiltIn_NumberStringBoolean_BareIdentifiers(ExecutionMode mode)
     {
         // Issue #62: bare `Number` / `String` / `Boolean` must resolve to
@@ -604,8 +576,7 @@ public class InnerFunctionTests
         Assert.Equal("function function function\nfunction function function\ntrue true true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void BuiltIn_StoredTypeToken_StaticMemberDispatch(ExecutionMode mode)
     {
         // Issue #63: when a built-in type constructor is stored in a variable
@@ -631,8 +602,7 @@ public class InnerFunctionTests
         Assert.Equal("function function function\ntrue false\ntrue false\nHi\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void BuiltIn_ClassUnknownStaticProperty_IsUndefined(ExecutionMode mode)
     {
         // Compiled-only: `ClassName.nonexistentProp` must return undefined

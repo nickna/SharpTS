@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class PathModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Join_CombinesPaths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class PathModuleTests
         Assert.True(output.Contains("foo\\bar\\baz") || output.Contains("foo/bar/baz"));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Basename_ReturnsFileName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -47,8 +45,7 @@ public class PathModuleTests
         Assert.Contains("file.js\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Dirname_ReturnsDirectory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -65,8 +62,7 @@ public class PathModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Extname_ReturnsExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -83,8 +79,7 @@ public class PathModuleTests
         Assert.Equal(".txt\n.gz\n\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_IsAbsolute_ChecksAbsolutePaths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -107,8 +102,7 @@ public class PathModuleTests
         Assert.Contains("false", lines);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Normalize_NormalizesPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -125,8 +119,7 @@ public class PathModuleTests
         Assert.Contains("true", output.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Sep_ReturnsSeparator(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -142,8 +135,7 @@ public class PathModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Delimiter_ReturnsDelimiter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -159,8 +151,7 @@ public class PathModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Parse_ParsesPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -180,8 +171,7 @@ public class PathModuleTests
         Assert.Contains(".txt\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Format_FormatsPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -198,8 +188,7 @@ public class PathModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Resolve_ResolvesPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -216,8 +205,7 @@ public class PathModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Relative_ReturnsRelativePath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -235,8 +223,7 @@ public class PathModuleTests
 
     #region POSIX Path Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Sep_ReturnsForwardSlash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -251,8 +238,7 @@ public class PathModuleTests
         Assert.Equal("/\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Delimiter_ReturnsColon(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -267,8 +253,7 @@ public class PathModuleTests
         Assert.Equal(":\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Join_UsesForwardSlash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -283,8 +268,7 @@ public class PathModuleTests
         Assert.Equal("foo/bar/baz\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_IsAbsolute_ChecksPosixPaths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -304,8 +288,7 @@ public class PathModuleTests
         Assert.Equal("false", lines[2]); // C:\foo is NOT absolute in POSIX
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Basename_ReturnsFilename(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -322,8 +305,7 @@ public class PathModuleTests
         Assert.Contains("file\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Dirname_ReturnsDirectory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -338,8 +320,7 @@ public class PathModuleTests
         Assert.Equal("/foo/bar\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Normalize_NormalizesPosixPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -354,8 +335,7 @@ public class PathModuleTests
         Assert.Equal("/foo/baz\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Posix_Parse_ParsesPosixPath(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -384,8 +364,7 @@ public class PathModuleTests
 
     #region Win32 Path Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Sep_ReturnsBackslash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -400,8 +379,7 @@ public class PathModuleTests
         Assert.Equal("\\\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Delimiter_ReturnsSemicolon(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -416,8 +394,7 @@ public class PathModuleTests
         Assert.Equal(";\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Join_UsesBackslash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -432,8 +409,7 @@ public class PathModuleTests
         Assert.Equal("foo\\bar\\baz\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_IsAbsolute_ChecksWin32Paths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -461,8 +437,7 @@ public class PathModuleTests
         Assert.Equal("false", lines[4]); // C: — drive-relative, not absolute
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Basename_ReturnsFilename(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -479,8 +454,7 @@ public class PathModuleTests
         Assert.Contains("file\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Dirname_ReturnsDirectory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -495,8 +469,7 @@ public class PathModuleTests
         Assert.Equal("C:\\foo\\bar\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Normalize_NormalizesWin32Path(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -511,8 +484,7 @@ public class PathModuleTests
         Assert.Equal("C:\\foo\\baz\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_Win32_Parse_ParsesWin32Path(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -539,8 +511,7 @@ public class PathModuleTests
 
     #endregion
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Path_DefaultImport_ExposesNamespace(ExecutionMode mode)
     {
         // #66: default import from `node:path` needs to yield the namespace,

@@ -11,8 +11,7 @@ public class TaggedTemplateLiteralTests
 {
     #region Basic Tagged Templates
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Basic_TaggedTemplate_CallsTagFunction(ExecutionMode mode)
     {
         var code = """
@@ -30,8 +29,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("tagged\n1\nhello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Basic_TaggedTemplate_WithInterpolation(ExecutionMode mode)
     {
         var code = """
@@ -46,8 +44,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("hello _!:world", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Basic_TaggedTemplate_MultipleInterpolations(ExecutionMode mode)
     {
         var code = """
@@ -75,8 +72,7 @@ public class TaggedTemplateLiteralTests
 
     #region Raw Strings
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Raw_Property_PreservesBackslashes(ExecutionMode mode)
     {
         var code = """
@@ -90,8 +86,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("hello\\nworld", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Cooked_Vs_Raw_Difference(ExecutionMode mode)
     {
         var code = """
@@ -107,8 +102,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("different", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Raw_Property_WithMultipleParts(ExecutionMode mode)
     {
         var code = """
@@ -127,8 +121,7 @@ public class TaggedTemplateLiteralTests
 
     #region String.raw
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringRaw_PreservesRawStrings(ExecutionMode mode)
     {
         var code = """
@@ -139,8 +132,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("hello\\nworld", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringRaw_WithInterpolation(ExecutionMode mode)
     {
         var code = """
@@ -152,8 +144,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("C:\\Users\\test\\path", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringRaw_MultipleInterpolations(ExecutionMode mode)
     {
         var code = """
@@ -170,8 +161,7 @@ public class TaggedTemplateLiteralTests
 
     #region Tag Function Return Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tag_ReturnsNumber(ExecutionMode mode)
     {
         var code = """
@@ -186,8 +176,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("3", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tag_ReturnsArray(ExecutionMode mode)
     {
         var code = """
@@ -202,8 +191,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("3", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Tag_ReturnsObject(ExecutionMode mode)
     {
         var code = """
@@ -221,8 +209,7 @@ public class TaggedTemplateLiteralTests
 
     #region Arrow Functions as Tags
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowFunction_AsTag(ExecutionMode mode)
     {
         var code = """
@@ -234,8 +221,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("a-b-c", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowFunction_ReturnsString(ExecutionMode mode)
     {
         var code = """
@@ -258,8 +244,7 @@ public class TaggedTemplateLiteralTests
 
     #region Method as Tag
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectMethod_AsTag(ExecutionMode mode)
     {
         var code = """
@@ -282,8 +267,7 @@ public class TaggedTemplateLiteralTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NoInterpolations_EmptyTag(ExecutionMode mode)
     {
         var code = """
@@ -297,8 +281,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("1:0", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AllInterpolations_NoLiteralText(ExecutionMode mode)
     {
         var code = """
@@ -312,8 +295,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("|||:1,2,3", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedTemplates(ExecutionMode mode)
     {
         var code = """
@@ -330,8 +312,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("outer:inner:hello", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExpressionAsValue(ExecutionMode mode)
     {
         var code = """
@@ -345,8 +326,7 @@ public class TaggedTemplateLiteralTests
         Assert.Equal("number,boolean,string,object", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArraysFrozen(ExecutionMode mode)
     {
         var code = """

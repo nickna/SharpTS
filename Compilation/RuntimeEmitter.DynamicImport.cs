@@ -24,7 +24,6 @@ public partial class RuntimeEmitter
         // only emit when UsesDynamicImport is set.
         if (_features.UsesDynamicImport)
         {
-            EmitWrapVoidTaskAsObjectTask(typeBuilder, runtime);
             EmitDynamicImportModule(typeBuilder, runtime);
         }
     }
@@ -135,74 +134,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits WrapVoidTaskAsObjectTask: converts Task to Task&lt;object?&gt;.
-    /// Signature: Task&lt;object?&gt; WrapVoidTaskAsObjectTask(Task task)
-    /// </summary>
-    private void EmitWrapVoidTaskAsObjectTask(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "WrapVoidTaskAsObjectTask",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.TaskOfObject,
-            [_types.Task]
-        );
-        runtime.WrapVoidTaskAsObjectTask = method;
-
-        var il = method.GetILGenerator();
-
-        // Use Task.ContinueWith to convert void Task to Task<object?>
-        // task.ContinueWith<object?>(t => null)
-        // First we need to create a helper method that returns null
-
-        // We'll use Task.FromResult(null) and await the input task first
-        // Actually, the simplest approach is:
-        // return task.ContinueWith(_ => (object?)null);
-
-        // Get ContinueWith<TResult>(Func<Task, TResult>)
-        var continueWithMethod = typeof(Task).GetMethod("ContinueWith", 1,
-            [typeof(Func<,>).MakeGenericType(typeof(Task), Type.MakeGenericMethodParameter(0))])!
-            .MakeGenericMethod(typeof(object));
-
-        // First, emit the helper method for the Func
-        var helperMethod = EmitVoidTaskContinuationHelper(typeBuilder);
-
-        il.Emit(OpCodes.Ldarg_0); // task
-        il.Emit(OpCodes.Ldnull); // target for delegate
-        il.Emit(OpCodes.Ldftn, helperMethod);
-        il.Emit(OpCodes.Newobj, typeof(Func<Task, object>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, continueWithMethod);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits a helper method that takes a Task and returns null.
-    /// Used as the continuation function for converting Task to Task&lt;object?&gt;.
-    /// </summary>
-    private MethodBuilder EmitVoidTaskContinuationHelper(TypeBuilder typeBuilder)
-    {
-        var method = typeBuilder.DefineMethod(
-            "VoidTaskToNull",
-            MethodAttributes.Private | MethodAttributes.Static,
-            _types.Object,
-            [_types.Task]
-        );
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-
-        return method;
-    }
-
-    /// <summary>
-    /// Emits DynamicImportModule: loads a module dynamically at runtime.
-    /// Signature: Task&lt;object?&gt; DynamicImportModule(string specifier, string currentModulePath)
-    ///
-    /// This implementation looks up the module in the pre-compiled registry.
-    /// If found, returns a resolved task with the module namespace.
-    /// If not found, returns a rejected task with an error message.
-    /// </summary>
     private void EmitDynamicImportModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

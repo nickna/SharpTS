@@ -11,8 +11,7 @@ public class IntlSegmenterTests
 {
     // ========== Grapheme Segmentation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_GraphemeBasic(ExecutionMode mode)
     {
         var source = @"
@@ -26,8 +25,7 @@ public class IntlSegmenterTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_GraphemeSpread(ExecutionMode mode)
     {
         var source = @"
@@ -39,8 +37,7 @@ public class IntlSegmenterTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_GraphemeSegmentProperties(ExecutionMode mode)
     {
         var source = @"
@@ -57,8 +54,7 @@ public class IntlSegmenterTests
 
     // ========== Word Segmentation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_WordBasic(ExecutionMode mode)
     {
         var source = @"
@@ -70,8 +66,7 @@ public class IntlSegmenterTests
         Assert.Equal("3\n", output); // "Hello", " ", "World"
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_WordIsWordLike(ExecutionMode mode)
     {
         var source = @"
@@ -87,8 +82,7 @@ public class IntlSegmenterTests
 
     // ========== Sentence Segmentation ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_SentenceBasic(ExecutionMode mode)
     {
         var source = @"
@@ -103,8 +97,7 @@ public class IntlSegmenterTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -116,8 +109,7 @@ public class IntlSegmenterTests
         Assert.Equal("word\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_DefaultGranularity(ExecutionMode mode)
     {
         var source = @"
@@ -131,8 +123,7 @@ public class IntlSegmenterTests
 
     // ========== Segment Index Values ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_SegmentIndex(ExecutionMode mode)
     {
         var source = @"
@@ -148,8 +139,7 @@ public class IntlSegmenterTests
 
     // ========== Containing Method ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_ContainingBasic(ExecutionMode mode)
     {
         var source = @"
@@ -162,8 +152,7 @@ public class IntlSegmenterTests
         Assert.Equal("H\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_ContainingMiddle(ExecutionMode mode)
     {
         var source = @"
@@ -178,8 +167,7 @@ public class IntlSegmenterTests
 
     // ========== Empty String ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_EmptyString(ExecutionMode mode)
     {
         var source = @"
@@ -193,8 +181,7 @@ public class IntlSegmenterTests
 
     // ========== For-Of Iteration ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Segmenter_ForOf(ExecutionMode mode)
     {
         var source = @"

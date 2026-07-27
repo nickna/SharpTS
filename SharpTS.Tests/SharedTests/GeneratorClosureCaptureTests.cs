@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GeneratorClosureCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturesOuterLetByReference_NotSnapshot(ExecutionMode mode)
     {
         // The canonical #541 repro: x is mutated after the generator is created but before
@@ -28,8 +27,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_SelfReferenceResolvesLive(ExecutionMode mode)
     {
         // The shape from #521: the generator's own binding is assigned the generator instance
@@ -44,8 +42,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("generator\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MutationBetweenYieldsIsVisible(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("10 20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_WriteToCapturedVarPropagatesToOuterScope(ExecutionMode mode)
     {
         // A write to a captured variable from inside the generator body must update the
@@ -78,8 +74,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_IncrementAndCompoundOnCapturedVar(ExecutionMode mode)
     {
         var source = """
@@ -94,8 +89,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("2 12 12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_InstanceMethodCapturesOuterByReference(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +103,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("55\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturedVarInLoopBodyReadLive(ExecutionMode mode)
     {
         // Combines by-reference capture with the loop-body hoisting path (#497).
@@ -125,8 +118,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("200 201 202\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_YieldStarDelegateSeesCapturedMutation(ExecutionMode mode)
     {
         var source = """
@@ -141,8 +133,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("9 9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MultipleInstancesShareCapturedVar(ExecutionMode mode)
     {
         var source = """
@@ -157,8 +148,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("7 7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_ReferencesTopLevelFunctionAsValue(ExecutionMode mode)
     {
         // Referencing a top-level function as a value inside a generator previously read a
@@ -172,8 +162,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("H\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_CapturingArrowCalledInsideBody(ExecutionMode mode)
     {
         // Calling a *capturing* arrow inside a generator body previously failed in compiled mode with
@@ -191,8 +180,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_NestedGeneratorCapturingLocal_IsLifted(ExecutionMode mode)
     {
         // The #583 §1 repro: a nested generator that captures an enclosing local is lambda-lifted (the
@@ -210,8 +198,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_NestedAsyncCapturingLocal_IsLifted(ExecutionMode mode)
     {
         // The async analogue of #583 §1: a nested async function capturing an enclosing local lifts too.
@@ -227,8 +214,7 @@ public class GeneratorClosureCaptureTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_PlainNestedFunctionCapturingLocal_IsLifted(ExecutionMode mode)
     {
         // A plain function nested in a generator, capturing an enclosing local (#583 §1, case-B analogue):

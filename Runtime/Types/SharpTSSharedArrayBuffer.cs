@@ -50,19 +50,6 @@ public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
     }
 
     /// <summary>
-    /// Private constructor for creating sliced views that share the same backing array.
-    /// </summary>
-    private SharpTSSharedArrayBuffer(byte[] data, GCHandle handle, int byteLength, Guid bufferId)
-    {
-        _data = data;
-        _handle = handle;
-        ByteLength = byteLength;
-        BufferId = bufferId;
-        // Note: We don't own the handle in this case, so we won't free it
-        _disposed = true; // Mark as disposed so finalizer doesn't try to free
-    }
-
-    /// <summary>
     /// Gets a span over the entire buffer for direct memory access.
     /// </summary>
     public Span<byte> AsSpan()

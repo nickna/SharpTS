@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class OverrideKeywordTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_BasicMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class OverrideKeywordTests
         Assert.Equal("Woof\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_WithAccessModifier_Works(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +44,7 @@ public class OverrideKeywordTests
         Assert.Equal("Woof\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_ProtectedMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class OverrideKeywordTests
         Assert.Equal("Woof\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_AbstractMethod_Works(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +84,7 @@ public class OverrideKeywordTests
         Assert.Equal("300\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_MultiLevelInheritance_Works(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +104,7 @@ public class OverrideKeywordTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_SkipLevel_Works(ExecutionMode mode)
     {
         // Override grandparent method, parent doesn't override
@@ -130,8 +124,7 @@ public class OverrideKeywordTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_Getter_Works(ExecutionMode mode)
     {
         var source = """
@@ -148,8 +141,7 @@ public class OverrideKeywordTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_Setter_Works(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +163,7 @@ public class OverrideKeywordTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_WithoutKeyword_StillWorks(ExecutionMode mode)
     {
         // Implicit override still works (override keyword is optional)
@@ -190,8 +181,7 @@ public class OverrideKeywordTests
         Assert.Equal("Woof\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_WithOverloads_Works(ExecutionMode mode)
     {
         var source = """
@@ -225,8 +215,7 @@ public class OverrideKeywordTests
 
     // Error cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_NoParentMethod_Errors(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +231,7 @@ public class OverrideKeywordTests
         Assert.Contains("speak", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_NoSuperclass_Errors(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +244,7 @@ public class OverrideKeywordTests
         Assert.Contains("override", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_StaticMethod_Errors(ExecutionMode mode)
     {
         var source = """
@@ -273,8 +260,7 @@ public class OverrideKeywordTests
         Assert.Contains("Static", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_Constructor_Errors(ExecutionMode mode)
     {
         var source = """
@@ -290,8 +276,7 @@ public class OverrideKeywordTests
         Assert.Contains("constructor", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_NoParentGetter_Errors(ExecutionMode mode)
     {
         var source = """
@@ -307,8 +292,7 @@ public class OverrideKeywordTests
         Assert.Contains("value", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Override_NoParentSetter_Errors(ExecutionMode mode)
     {
         var source = """

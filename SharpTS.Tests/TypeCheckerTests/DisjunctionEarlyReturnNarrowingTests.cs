@@ -13,8 +13,7 @@ namespace SharpTS.Tests.TypeCheckerTests;
 /// </summary>
 public class DisjunctionEarlyReturnNarrowingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DisjunctionNullGuard_EarlyReturn_NarrowsAfter(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class DisjunctionEarlyReturnNarrowingTests
         Assert.Equal("2\n0\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedDisjunctionGuard_EarlyReturn_NarrowsAll(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class DisjunctionEarlyReturnNarrowingTests
         Assert.Equal("3\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EventsModuleImport_TypeChecksAndRuns(ExecutionMode mode)
     {
         // The original #216 repro: importing EventEmitter triggered a

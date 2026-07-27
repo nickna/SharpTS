@@ -821,7 +821,6 @@ public partial class RuntimeEmitter
             EmitReflectConstruct(typeBuilder, runtime);
         }
         EmitIsArray(typeBuilder, runtime);
-        EmitSpreadArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
         EmitExpandCallArgs(typeBuilder, runtime);
         EmitArrayPop(typeBuilder, runtime);
@@ -929,7 +928,6 @@ public partial class RuntimeEmitter
         EmitStringIndexOf(typeBuilder, runtime);
         EmitStringIndexOfFrom(typeBuilder, runtime);
         EmitStringReplace(typeBuilder, runtime);
-        EmitStringSplit(typeBuilder, runtime);
         EmitStringIncludes(typeBuilder, runtime);
         EmitStringStartsWith(typeBuilder, runtime);
         EmitStringEndsWith(typeBuilder, runtime);
@@ -1167,9 +1165,9 @@ public partial class RuntimeEmitter
             // The Phase1-reserved GetWebCryptoObject must still get a body.
             EmitGetWebCryptoObjectStub(runtime);
         }
-        // Util module methods (util.types.* always emitted; promisify/callbackify/deprecate
-        // gated inside EmitUtilMethods on _features.UsesUtilPromisify).
-        EmitUtilMethods(typeBuilder, runtime);
+        // Util inspect helper bodies (console.dir depends on them; the rest of
+        // the emitted util surface died when util moved to stdlib/node/util.ts).
+        EmitUtilStandaloneMethods(typeBuilder, runtime);
         // Readline module methods — gated on UsesReadline (flag was already
         // detected via `import 'readline'` but the call site used to ignore it).
         if (_features.UsesReadline)

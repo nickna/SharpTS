@@ -17,8 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class InnerFunctionArrowCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecl_InArrow_ReadsConstAssignedAfterHoist(ExecutionMode mode)
     {
         // Minimal repro from #307: bgt is hoisted before `const Obj = 42` runs.
@@ -35,8 +34,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecl_GrandparentArrowCapture_ThroughIntermediateArrow(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +53,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("grand\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecl_GrandparentArrowCapture_ThroughIntermediateFunctionDecl(ExecutionMode mode)
     {
         // The intermediate scope is a function DECLARATION: the live reference
@@ -77,8 +74,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("grand2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecl_InArrow_MutationsVisibleBothWays(ExecutionMode mode)
     {
         // Writes from the arrow body must be visible inside the function
@@ -99,8 +95,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecls_InFunctionExpression_PeerReferences(ExecutionMode mode)
     {
         // lodash idiom: hoisted peers referencing each other before their
@@ -119,8 +114,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDecl_HoistedBeforeVarAssignment_CalledAfter(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +131,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("assigned-later\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Closure_CapturesFromTwoAncestorArrowScopes(ExecutionMode mode)
     {
         // lodash shortOut shape: the returned closure captures `tag` from the
@@ -170,8 +163,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("v7/T\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturedParameter_ReassignedInBody_ReadsStayCurrent(ExecutionMode mode)
     {
         // lodash runInContext shape: a captured parameter is reassigned at the
@@ -191,8 +183,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("real/real\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValueForm_ObjectCall_Coerces(ExecutionMode mode)
     {
         // lodash overArg(Object.keys, Object): `Object` held as a value and
@@ -209,8 +200,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValueForm_ObjectCreate_SingleArg(ExecutionMode mode)
     {
         // Value-form Object.create(proto) under-application: the padded props
@@ -227,8 +217,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValueForm_DateNow_AsValue(ExecutionMode mode)
     {
         // lodash: `var nativeNow = Date.now;` then nativeNow() — value-form
@@ -249,8 +238,7 @@ public class InnerFunctionArrowCaptureTests
     // the arg slot before the DC, so a DC-only store leaves the direct read
     // seeing the stale original argument while the closure read sees the new
     // value. Mirrors the assignment-path dual-write from #307/#313.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturedParam_PostfixIncrement_SyncsArgSlotAndDC(ExecutionMode mode)
     {
         var source = """
@@ -269,8 +257,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("8008\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturedParam_PrefixDecrement_SyncsArgSlotAndDC(ExecutionMode mode)
     {
         // Prefix form + decrement + arrow parameter (arrow scope DC branch).
@@ -287,8 +274,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("6006\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturedUntypedParam_PostfixIncrement_SyncsArgSlotAndDC(ExecutionMode mode)
     {
         // Untyped (any) parameter: arg slot is object, so the dual-write must
@@ -312,8 +298,7 @@ public class InnerFunctionArrowCaptureTests
     // saw the stale/previous value — null on the first loop iteration. The
     // declaration now writes the freshly-assigned value back into the closure's
     // DC field after the store, while keeping per-iteration fresh-binding.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SelfReferentialConst_SingleDeclaration_ClosureSeesValue(ExecutionMode mode)
     {
         var source = """
@@ -327,8 +312,7 @@ public class InnerFunctionArrowCaptureTests
         Assert.Equal("true\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SelfReferentialConst_InLoop_EachClosureSeesOwnBinding(ExecutionMode mode)
     {
         // The first iteration's closure captured null (snapshot before the

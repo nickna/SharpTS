@@ -25,7 +25,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _dgramMessageClosureType = typeBuilder;
 
         // Fields — use _dgramSocketTypeBuilder so Callvirt resolves Emit correctly
         var socketField = typeBuilder.DefineField("_socket", _dgramSocketTypeBuilder, FieldAttributes.Private);

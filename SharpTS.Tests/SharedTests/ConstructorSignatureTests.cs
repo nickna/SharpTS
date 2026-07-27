@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ConstructorSignatureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorSignature_BasicInterface(ExecutionMode mode)
     {
         var code = """
@@ -45,8 +44,7 @@ public class ConstructorSignatureTests
         Assert.Equal("10\n20\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NewOnVariable_SimpleClass(ExecutionMode mode)
     {
         var code = """
@@ -66,8 +64,7 @@ public class ConstructorSignatureTests
         Assert.Equal("42\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NewOnVariable_FunctionReturnsInstance(ExecutionMode mode)
     {
         var code = """
@@ -90,8 +87,7 @@ public class ConstructorSignatureTests
         Assert.Equal("test\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorSignature_WithOptionalParam(ExecutionMode mode)
     {
         var code = """
@@ -122,8 +118,7 @@ public class ConstructorSignatureTests
         Assert.Equal("custom\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NewOnNamespacedClass(ExecutionMode mode)
     {
         var code = """

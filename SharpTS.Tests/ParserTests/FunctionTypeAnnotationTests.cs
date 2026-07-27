@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,17 +12,9 @@ public class FunctionTypeAnnotationTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     private static Expr.ArrowFunction ParseArrowFromVarOrConst(string source)
     {
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Single(statements);
         var initializer = statements[0] switch
         {
@@ -158,7 +151,7 @@ public class FunctionTypeAnnotationTests
     [Fact]
     public void VarDecl_FunctionTypeAnnotation()
     {
-        var statements = Parse("let handler: (e: Event) => void;");
+        var statements = TestHarness.ParseOrThrow("let handler: (e: Event) => void;");
         Assert.Single(statements);
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Equal("handler", varStmt.Name.Lexeme);
@@ -168,7 +161,7 @@ public class FunctionTypeAnnotationTests
     [Fact]
     public void ConstDecl_FunctionTypeAnnotation()
     {
-        var statements = Parse("const callback: (x: number, y: number) => boolean = (a, b) => a > b;");
+        var statements = TestHarness.ParseOrThrow("const callback: (x: number, y: number) => boolean = (a, b) => a > b;");
         Assert.Single(statements);
         var constStmt = Assert.IsType<Stmt.Const>(statements[0]);
         Assert.Equal("callback", constStmt.Name.Lexeme);
@@ -182,7 +175,7 @@ public class FunctionTypeAnnotationTests
     [Fact]
     public void Arrow_CallbackArg_FunctionTypeReturn()
     {
-        var statements = Parse("arr.map((x): (y: number) => number => y => x * y);");
+        var statements = TestHarness.ParseOrThrow("arr.map((x): (y: number) => number => y => x * y);");
         var exprStmt = Assert.IsType<Stmt.Expression>(statements[0]);
         var call = Assert.IsType<Expr.Call>(exprStmt.Expr);
         Assert.Single(call.Arguments);
@@ -198,7 +191,7 @@ public class FunctionTypeAnnotationTests
     public void FunctionType_ThreeNamedParams()
     {
         // Function type with three named parameters
-        var statements = Parse("let fn: (a: number, b: string, c: boolean) => void;");
+        var statements = TestHarness.ParseOrThrow("let fn: (a: number, b: string, c: boolean) => void;");
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Equal("(number, string, boolean) => void", varStmt.TypeAnnotation);
     }
@@ -207,7 +200,7 @@ public class FunctionTypeAnnotationTests
     public void FunctionType_AllNamedParams()
     {
         // All params have names and types
-        var statements = Parse("let fn: (a: number, b: string) => void;");
+        var statements = TestHarness.ParseOrThrow("let fn: (a: number, b: string) => void;");
         var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
         Assert.Equal("(number, string) => void", varStmt.TypeAnnotation);
     }
@@ -227,41 +220,41 @@ public class FunctionTypeAnnotationTests
     public void FunctionType_BareParameterName_Parses()
     {
         // `(x) => number`: x is a parameter name with implicit `any`, not a grouped type.
-        Assert.NotEmpty(Parse("let f: (x) => number;"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let f: (x) => number;"));
     }
 
     [Fact]
     public void FunctionType_MultipleBareParameters_Parses()
     {
-        Assert.NotEmpty(Parse("let f: (x, y) => number;"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let f: (x, y) => number;"));
     }
 
     [Fact]
     public void FunctionType_MixedTypedAndBareParameters_Parses()
     {
-        Assert.NotEmpty(Parse("let f: (x: number, y) => number;"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let f: (x: number, y) => number;"));
     }
 
     [Fact]
     public void FunctionType_BareOptionalParameter_Parses()
     {
         // `(x?) => number`: optional parameter with implicit `any`.
-        Assert.NotEmpty(Parse("let f: (x?) => number;"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let f: (x?) => number;"));
     }
 
     [Fact]
     public void FunctionType_BareParameterInIndexSignature_Parses()
     {
         // The function type appears as an index-signature value: `[k: string]: (x) => number`.
-        Assert.NotEmpty(Parse("interface I { [k: string]: (x) => number; }"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("interface I { [k: string]: (x) => number; }"));
     }
 
     [Fact]
     public void GroupedType_StillParses_NotMistakenForFunctionType()
     {
         // Regression guard: a grouped/parenthesized type with no trailing `=>` stays a grouped type.
-        Assert.NotEmpty(Parse("let a: (number | string)[];"));
-        Assert.NotEmpty(Parse("let b: (Foo);"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let a: (number | string)[];"));
+        Assert.NotEmpty(TestHarness.ParseOrThrow("let b: (Foo);"));
     }
 
     #endregion

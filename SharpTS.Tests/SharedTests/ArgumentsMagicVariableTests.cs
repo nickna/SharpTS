@@ -19,8 +19,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class ArgumentsMagicVariableTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_LengthAndIndexing(ExecutionMode mode)
     {
         var source = @"
@@ -35,8 +34,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("2\n10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_WithRestParam_SpreadsToDistinctIndices(ExecutionMode mode)
     {
         // Rest params aggregate trailing args into a collection, but the
@@ -58,8 +56,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("0\n1\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_InsideArrow_InheritsFromEnclosingFunction(ExecutionMode mode)
     {
         // Per JS spec: `arguments` in an arrow is a lexical reference to the
@@ -85,8 +82,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_CapturesExtrasPastDeclaredArity(ExecutionMode mode)
     {
         // The lodash `overRest` pattern: a wrapper function declares zero (or
@@ -115,8 +111,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("6\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_DirectCallWithZeroDeclaredParams_SeesExtras(ExecutionMode mode)
     {
         // Direct-call path (not through `$TSFunction.Invoke`): the emitter needs
@@ -137,8 +132,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("2\nhello\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_InMethodOfClass(ExecutionMode mode)
     {
         var source = @"
@@ -155,8 +149,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("foo-bar\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_IndexedTraversal(ExecutionMode mode)
     {
         // Indexed access through `arguments.length` is the legacy-JS variadic
@@ -180,8 +173,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("\na\nabc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Arguments_FunctionExpression_ApplyForwarding(ExecutionMode mode)
     {
         // Lodash-style wrapper: the returned function EXPRESSION binds its own
@@ -203,8 +195,7 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Arguments_VisibleToDirectEval(ExecutionMode mode)
     {
         // Direct eval runs against the live scope chain, so `arguments` must be

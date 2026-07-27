@@ -22,7 +22,9 @@ public class SharpTSAbortSignal : ITypeCategorized
     public TypeCategory RuntimeCategory => TypeCategory.AbortSignal;
 
     private readonly CancellationToken _token;
+#pragma warning disable IDE0052 // deliberately unread: pins the CTS (and its timer) against GC while the signal is alive
     private CancellationTokenSource? _ownedCts; // owned by timeout/any factories
+#pragma warning restore IDE0052
     private object? _reason;
     private readonly List<object> _listeners = [];
     private object? _onabort;

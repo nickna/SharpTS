@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class LiteralAfterPrimitiveTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyObject_AfterNumericConst_IsObject(ExecutionMode mode)
     {
         var source = @"
@@ -36,8 +35,7 @@ public class LiteralAfterPrimitiveTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyObject_AfterBooleanConst_IsObject(ExecutionMode mode)
     {
         // Parallel check for the Boolean arm of the stack-type tracker.
@@ -53,8 +51,7 @@ public class LiteralAfterPrimitiveTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyArray_AfterNumericConst_IsArray(ExecutionMode mode)
     {
         var source = @"
@@ -69,8 +66,7 @@ public class LiteralAfterPrimitiveTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyObject_AfterLetNumber_IsObject(ExecutionMode mode)
     {
         // `let i = 0;` is the pattern that surfaced this in util.parseArgs —
@@ -90,8 +86,7 @@ public class LiteralAfterPrimitiveTests
         Assert.Equal("object\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EmptyObject_UsedAsMapAfterLoop_BehavesAsDictionary(ExecutionMode mode)
     {
         var source = @"
@@ -112,8 +107,7 @@ public class LiteralAfterPrimitiveTests
         Assert.Equal("3\n1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonEmptyObject_AfterNumericConst_StillWorks(ExecutionMode mode)
     {
         // Baseline — non-empty literals already worked; make sure we didn't break them.

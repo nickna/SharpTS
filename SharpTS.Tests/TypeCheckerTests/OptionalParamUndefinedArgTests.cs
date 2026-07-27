@@ -11,8 +11,7 @@ namespace SharpTS.Tests.TypeCheckerTests;
 /// </summary>
 public class OptionalParamUndefinedArgTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OptionalParameter_AcceptsExplicitUndefined(ExecutionMode mode)
     {
         var source = """
@@ -22,8 +21,7 @@ public class OptionalParamUndefinedArgTests
         Assert.Equal("Hi undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParameter_AcceptsExplicitUndefined_FiresDefault(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +70,7 @@ public class OptionalParamUndefinedArgTests
         Assert.Equal("undefined\n", TestHarness.RunInterpreted(source));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethodDefaultParameter_AcceptsUndefined(ExecutionMode mode)
     {
         // #668 private-method argument-compatibility path. Runs in BOTH modes: unlike free
@@ -90,8 +87,7 @@ public class OptionalParamUndefinedArgTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethodOptionalParameter_AcceptsExplicitUndefined(ExecutionMode mode)
     {
         // #668 path that #696 unblocked: an *optional* (`b?: T`) private-method parameter could
@@ -107,8 +103,7 @@ public class OptionalParamUndefinedArgTests
         Assert.Equal("x_\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethodOptionalParameter_OmittedArgument(ExecutionMode mode)
     {
         // The minimal #696 scenario end-to-end: a private method with a sole optional parameter

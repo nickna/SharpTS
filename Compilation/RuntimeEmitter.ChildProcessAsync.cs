@@ -29,9 +29,7 @@ public partial class RuntimeEmitter
     private FieldBuilder _childCtxOptions = null!;     // object (options dict or null)
     private FieldBuilder _childCtxStdout = null!;      // object ($Readable)
     private FieldBuilder _childCtxStderr = null!;      // object ($Readable)
-    private FieldBuilder _childCtxStdin = null!;       // object ($Writable)
     private FieldBuilder _childCtxTimeout = null!;     // double (ms; <=0 = none)
-    private FieldBuilder _childCtxKillSignal = null!;  // string (default SIGTERM)
     // Captured worker results, stored on the bg thread and replayed on the loop thread.
     private FieldBuilder _childCtxResStdout = null!;   // object (string)
     private FieldBuilder _childCtxResStderr = null!;   // object (string)
@@ -60,7 +58,6 @@ public partial class RuntimeEmitter
     private MethodBuilder _childCtxStdinEnd = null!;
 
     private MethodBuilder _childRunAsync = null!;
-    private MethodBuilder _childAsyncUnref = null!;
     private MethodBuilder _childConfigureSpawn = null!;
     private MethodBuilder _childStdioMode = null!;
     private MethodBuilder _childSpawnError = null!;
@@ -79,13 +76,11 @@ public partial class RuntimeEmitter
     private MethodInfo _miProcIdGet = null!;
     private MethodInfo _miProcStdoutGet = null!;
     private MethodInfo _miProcStderrGet = null!;
-    private MethodInfo _miProcStdinGet = null!;
     private MethodInfo _miProcExitCodeGet = null!;
     private MethodInfo _miProcHasExitedGet = null!;
     private MethodInfo _miProcWaitForExit = null!;
     private MethodInfo _miProcWaitForExitMs = null!;
     private MethodInfo _miProcKillTree = null!;
-    private MethodInfo _miReadToEnd = null!;
     private MethodInfo _miExceptionMessageGet = null!;
     private MethodInfo _miDictSet = null!;
     private MethodInfo _miGetMethodFromHandle = null!;
@@ -100,13 +95,11 @@ public partial class RuntimeEmitter
         _miProcIdGet = _types.Process.GetProperty("Id")!.GetGetMethod()!;
         _miProcStdoutGet = _types.Process.GetProperty("StandardOutput")!.GetGetMethod()!;
         _miProcStderrGet = _types.Process.GetProperty("StandardError")!.GetGetMethod()!;
-        _miProcStdinGet = _types.Process.GetProperty("StandardInput")!.GetGetMethod()!;
         _miProcExitCodeGet = _types.Process.GetProperty("ExitCode")!.GetGetMethod()!;
         _miProcHasExitedGet = _types.Process.GetProperty("HasExited")!.GetGetMethod()!;
         _miProcWaitForExit = _types.Process.GetMethod("WaitForExit", Type.EmptyTypes)!;
         _miProcWaitForExitMs = _types.Process.GetMethod("WaitForExit", [_types.Int32])!;
         _miProcKillTree = _types.Process.GetMethod("Kill", [_types.Boolean])!;
-        _miReadToEnd = _types.TextReader.GetMethod("ReadToEnd")!;
         _miExceptionMessageGet = _types.Exception.GetProperty("Message")!.GetGetMethod()!;
         _miDictSet = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object)!;
         _miGetMethodFromHandle = typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!;
@@ -477,9 +470,9 @@ public partial class RuntimeEmitter
         _childCtxOptions = t.DefineField("_options", _types.Object, FieldAttributes.Public);
         _childCtxStdout = t.DefineField("_stdout", _types.Object, FieldAttributes.Public);
         _childCtxStderr = t.DefineField("_stderr", _types.Object, FieldAttributes.Public);
-        _childCtxStdin = t.DefineField("_stdin", _types.Object, FieldAttributes.Public);
+        t.DefineField("_stdin", _types.Object, FieldAttributes.Public);
         _childCtxTimeout = t.DefineField("_timeout", _types.Double, FieldAttributes.Public);
-        _childCtxKillSignal = t.DefineField("_killSignal", _types.String, FieldAttributes.Public);
+        t.DefineField("_killSignal", _types.String, FieldAttributes.Public);
         _childCtxResStdout = t.DefineField("_resStdout", _types.Object, FieldAttributes.Public);
         _childCtxResStderr = t.DefineField("_resStderr", _types.Object, FieldAttributes.Public);
         _childCtxResCode = t.DefineField("_resCode", _types.Int32, FieldAttributes.Public);
@@ -561,7 +554,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }
-        _childAsyncUnref = unref;
 
         // static void ChildRunAsync(Func<object> worker)
         var taskRunOpen = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)

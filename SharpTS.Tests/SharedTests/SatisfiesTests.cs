@@ -11,8 +11,7 @@ public class SatisfiesTests
 {
     #region Basic Pass-Through
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_BasicNumber(ExecutionMode mode)
     {
         var source = """
@@ -24,8 +23,7 @@ public class SatisfiesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_BasicString(ExecutionMode mode)
     {
         var source = """
@@ -37,8 +35,7 @@ public class SatisfiesTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_ObjectLiteral(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +52,7 @@ public class SatisfiesTests
 
     #region Union Constraints
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_UnionConstraint(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class SatisfiesTests
 
     #region Array Constraints
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_ArrayConstraint(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +87,7 @@ public class SatisfiesTests
 
     #region Escape Hatches
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_AnyConstraint(ExecutionMode mode)
     {
         var source = """
@@ -106,8 +100,7 @@ public class SatisfiesTests
         Assert.Equal("1\ntwo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_UnknownConstraint(ExecutionMode mode)
     {
         var source = """
@@ -123,8 +116,7 @@ public class SatisfiesTests
 
     #region Chaining
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_Chained(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +132,7 @@ public class SatisfiesTests
 
     #region Excess Properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_ExcessProperties(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +150,7 @@ public class SatisfiesTests
 
     #region With Arrow Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_InArrowFunction(ExecutionMode mode)
     {
         var source = """
@@ -175,8 +165,7 @@ public class SatisfiesTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_ArrowReturnsSatisfies(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +181,7 @@ public class SatisfiesTests
 
     #region Async Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_InAsyncFunction(ExecutionMode mode)
     {
         var source = """
@@ -216,8 +204,7 @@ public class SatisfiesTests
 
     #region With as const
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Satisfies_WithAsConst(ExecutionMode mode)
     {
         var source = """

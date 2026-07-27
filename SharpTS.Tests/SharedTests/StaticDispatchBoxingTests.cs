@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StaticDispatchBoxingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_BoxedPrimitiveArgs_SyncTopLevel(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class StaticDispatchBoxingTests
         Assert.Equal("number\nnumber\nboolean\nboolean\nstring\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_BoxedPrimitiveArgs_InsideAsync(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +52,7 @@ public class StaticDispatchBoxingTests
         Assert.Equal("number\nnumber\nboolean\nnumber\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PromiseSubclassStatic_InsideAsync(ExecutionMode mode)
     {
         var source = """

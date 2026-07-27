@@ -11,8 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class DefaultParameterTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_StringValue_AppliedAcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -33,8 +32,7 @@ public class DefaultParameterTests
         Assert.Equal("Hello, World\nHi, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_MultipleDefaults_AppliedAcrossModuleImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -56,8 +54,7 @@ public class DefaultParameterTests
         Assert.Equal("app-v1\napp_v1\napp_prod\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_DirectCall_StillWorks(ExecutionMode mode)
     {
         // Direct same-module calls must continue to work — the overload-generator
@@ -74,8 +71,7 @@ public class DefaultParameterTests
         Assert.Equal("Hello, World\nHi, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_NumericValue_DirectCall(ExecutionMode mode)
     {
         // Numeric (value-type) defaults work for direct same-module calls via OverloadGenerator,
@@ -95,8 +91,7 @@ public class DefaultParameterTests
         Assert.Equal("8\n14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_NumericValue_AppliedAcrossModuleImport(ExecutionMode mode)
     {
         // #925: a VALUE-TYPE default (`number`) on a module-exported function must fire through the
@@ -117,8 +112,7 @@ public class DefaultParameterTests
         Assert.Equal("8\n14\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_BooleanAndBigIntValue_AppliedAcrossModuleImport(ExecutionMode mode)
     {
         // #925: the value-type-default fix covers `boolean` and `bigint` defaults too, not just `number`.
@@ -137,8 +131,7 @@ public class DefaultParameterTests
         Assert.Equal("true\n7n\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_NumericValue_ValueCallBoundary(ExecutionMode mode)
     {
         // #925: same fix via the value-call path — a function stored in a value and called with the
@@ -152,8 +145,7 @@ public class DefaultParameterTests
         Assert.Equal("8\n14\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_NumericValue_AsyncFunction_AcrossModuleImport(ExecutionMode mode)
     {
         // #925: an exported ASYNC function with a value-type default fires it through the boundary.
@@ -174,8 +166,7 @@ public class DefaultParameterTests
         Assert.Equal("8\n14\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ExplicitUndefined_FiresDefault(ExecutionMode mode)
     {
         // Per JS spec, passing explicit `undefined` must trigger the default.
@@ -222,8 +213,7 @@ public class DefaultParameterTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_FunctionExpression_OmittedArg_AppliesDefault(ExecutionMode mode)
     {
         // #646: a function *expression* (or arrow) used to drop the default in compiled mode,
@@ -237,8 +227,7 @@ public class DefaultParameterTests
         Assert.Equal("7\n14\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ArrowFunction_OmittedArg_AppliesDefault(ExecutionMode mode)
     {
         // #646
@@ -250,8 +239,7 @@ public class DefaultParameterTests
         Assert.Equal("7\n14\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_AsyncArrow_OmittedArg_AppliesDefault(ExecutionMode mode)
     {
         // #646 / #635: the async function-expression / async-arrow path inherits the same
@@ -263,8 +251,7 @@ public class DefaultParameterTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ReferencesEarlierParam_Arrow(ExecutionMode mode)
     {
         // #698: a later default may reference any earlier parameter. The arrow / function-expression
@@ -277,8 +264,7 @@ public class DefaultParameterTests
         Assert.Equal("15\n6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ReferencesEarlierParam_FunctionDeclaration(ExecutionMode mode)
     {
         // #698: function-declaration earlier-param default. Compiled mode used to crash at runtime
@@ -292,8 +278,7 @@ public class DefaultParameterTests
         Assert.Equal("10\n6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ReferencesEarlierParam_StringValue(ExecutionMode mode)
     {
         // #698: reference-typed earlier-param default (exercises a different conversion path
@@ -306,8 +291,7 @@ public class DefaultParameterTests
         Assert.Equal("xx\nxy\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultParam_ReferencesEarlierDefaultedParam_Chain(ExecutionMode mode)
     {
         // #698: a default may reference an earlier *defaulted* parameter, e.g. c = a + b where b is
@@ -323,8 +307,7 @@ public class DefaultParameterTests
         Assert.Equal("12\n14\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void DefaultParam_ReferencesEarlierParam_Method(ExecutionMode mode)
     {
         // #698: a method default referencing an earlier parameter type-checks and evaluates correctly

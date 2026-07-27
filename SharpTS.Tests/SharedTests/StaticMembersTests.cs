@@ -10,8 +10,7 @@ public class StaticMembersTests
 {
     #region Static Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticField_InitializedCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class StaticMembersTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticField_StringInitializer(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class StaticMembersTests
         Assert.Equal("SharpTS\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticField_ModificationPersists(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +58,7 @@ public class StaticMembersTests
 
     #region Static Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_CanBeCalled(ExecutionMode mode)
     {
         var source = """
@@ -78,8 +74,7 @@ public class StaticMembersTests
         Assert.Equal("25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_CallsOtherStatic(ExecutionMode mode)
     {
         var source = """
@@ -98,8 +93,7 @@ public class StaticMembersTests
         Assert.Equal("27\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_ModifiesStaticField(ExecutionMode mode)
     {
         var source = """
@@ -119,8 +113,7 @@ public class StaticMembersTests
         Assert.Equal("1\n2\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_WithParameters(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +137,7 @@ public class StaticMembersTests
 
     #region Static and Instance Separation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticAndInstance_AreSeparate(ExecutionMode mode)
     {
         var source = """
@@ -179,8 +171,7 @@ public class StaticMembersTests
     // call returned null. Babel-transpiled CJS (minimatch, uuid, many others)
     // hits this through `const mod = require('./submodule'); mod.AST.fromGlob(...)`.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_ThroughLocalAlias(ExecutionMode mode)
     {
         var source = """
@@ -196,8 +187,7 @@ public class StaticMembersTests
         Assert.Equal("function\n42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticMethod_ThroughObjectProperty(ExecutionMode mode)
     {
         var source = """
@@ -215,8 +205,7 @@ public class StaticMembersTests
         Assert.Equal("function\n42\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticField_ThroughLocalAlias(ExecutionMode mode)
     {
         var source = """
@@ -293,8 +282,7 @@ public class StaticMembersTests
     // Static members declared on a base user class are inherited by subclasses. In compiled mode the
     // .NET token references the *declaring* class, so resolution walks the superclass chain (#332).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_Method(ExecutionMode mode)
     {
         var source = """
@@ -308,8 +296,7 @@ public class StaticMembersTests
         Assert.Equal("hi\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_Field(ExecutionMode mode)
     {
         var source = """
@@ -323,8 +310,7 @@ public class StaticMembersTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_Getter(ExecutionMode mode)
     {
         var source = """
@@ -338,8 +324,7 @@ public class StaticMembersTests
         Assert.Equal("L\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_MultiLevelChain(ExecutionMode mode)
     {
         var source = """
@@ -356,8 +341,7 @@ public class StaticMembersTests
         Assert.Equal("A\na\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_SubclassShadowWins(ExecutionMode mode)
     {
         var source = """
@@ -374,8 +358,7 @@ public class StaticMembersTests
         Assert.Equal("Child\nParent\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_FromGenericBase(ExecutionMode mode)
     {
         var source = """
@@ -393,8 +376,7 @@ public class StaticMembersTests
         Assert.Equal("made\nbox\nT\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_FieldWriteDoesNotCorruptBase(ExecutionMode mode)
     {
         // A static-field write through the subclass must not mutate the base's storage.
@@ -410,8 +392,7 @@ public class StaticMembersTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_FieldWriteCreatesOwnShadow(ExecutionMode mode)
     {
         // Writing an inherited static field through a subclass creates a per-subclass own shadow:
@@ -427,8 +408,7 @@ public class StaticMembersTests
         Assert.Equal("1\n42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_ShadowReadBeforeWriteSeesBase(ExecutionMode mode)
     {
         // Before a subclass write, an inherited-field read resolves the live base value; after the
@@ -449,8 +429,7 @@ public class StaticMembersTests
         Assert.Equal("1\n7\n42\n42\n9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_ShadowNearestAncestorWins(ExecutionMode mode)
     {
         // A shadow on an intermediate ancestor is visible to a deeper subclass until that subclass
@@ -470,8 +449,7 @@ public class StaticMembersTests
         Assert.Equal("b\nc\nb\na\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_ShadowSiblingsAreIsolated(ExecutionMode mode)
     {
         // Each subclass owns its shadow; a write through one sibling is invisible to the other and
@@ -489,8 +467,7 @@ public class StaticMembersTests
         Assert.Equal("1\n0\n0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_ShadowFromGenericBase(ExecutionMode mode)
     {
         // Writing an inherited static declared on a generic base creates the subclass shadow without
@@ -506,8 +483,7 @@ public class StaticMembersTests
         Assert.Equal("intbox\nbox\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticField_OwnCompoundAndIncrementViaClassName(ExecutionMode mode)
     {
         // Read-modify-write of an own static field accessed as `Class.field` must land on the field
@@ -526,8 +502,7 @@ public class StaticMembersTests
         Assert.Equal("13\n14\n14\n15\n14\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStatic_CompoundAndIncrementCreateShadow(ExecutionMode mode)
     {
         // Read-modify-write through a subclass reads the inherited value, then writes the result to
@@ -558,8 +533,7 @@ public class StaticMembersTests
     // subclass's own declared statics and ancestor expando shadows — never an ancestor's *declared*
     // static (#358). The interpreter was already correct.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStaticAsValue_DeclaredFieldPreShadow(ExecutionMode mode)
     {
         var source = """
@@ -572,8 +546,7 @@ public class StaticMembersTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStaticAsValue_DeclaredMethod(ExecutionMode mode)
     {
         var source = """
@@ -586,8 +559,7 @@ public class StaticMembersTests
         Assert.Equal("hi\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStaticAsValue_MultiLevelChain(ExecutionMode mode)
     {
         var source = """
@@ -602,8 +574,7 @@ public class StaticMembersTests
         Assert.Equal("7\nhi\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStaticAsValue_OwnShadowWinsOverDeclared(ExecutionMode mode)
     {
         // Once a per-subclass own shadow exists, the dynamic read returns it, not the base value.
@@ -618,8 +589,7 @@ public class StaticMembersTests
         Assert.Equal("99\n10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InheritedStaticAsValue_AncestorExpandoWinsOverDeclared(ExecutionMode mode)
     {
         // An expando shadow written on an ancestor (shadow-before-declared) is seen through the
@@ -643,8 +613,7 @@ public class StaticMembersTests
     // these reads come through an `any`/value position. Compiled mode was already correct; the
     // interpreter previously threw "Static member 'x' does not exist on class 'y'." (#398).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingStaticAsValue_OnSubclass(ExecutionMode mode)
     {
         var source = """
@@ -657,8 +626,7 @@ public class StaticMembersTests
         Assert.Equal("undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingStaticAsValue_OnPlainClass(ExecutionMode mode)
     {
         var source = """
@@ -671,8 +639,7 @@ public class StaticMembersTests
         Assert.Equal("1\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingStaticAsValue_UsedInExpression(ExecutionMode mode)
     {
         // A missing read yielding `undefined` participates in normal coercion rather than aborting.

@@ -13,8 +13,7 @@ public class NetTransportParityTests
 {
     #region #1068 — write backpressure + drain
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Socket_Write_PastHighWaterMark_ReturnsFalse_ThenDrains(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -50,8 +49,7 @@ public class NetTransportParityTests
         Assert.Equal("hwm 4\nwrite false\nneedDrain true\ndrain 0 false\nserver got 10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Socket_Write_BelowHighWaterMark_ReturnsTrue_DefaultHwm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -78,8 +76,7 @@ public class NetTransportParityTests
         Assert.Equal("default hwm 16384\nsmall write true\nneedDrain false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Socket_WriteCallback_FiresAfterFlush_BeforeDrain(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -107,8 +104,7 @@ public class NetTransportParityTests
         Assert.Equal("write cb\ndrain\nend cb\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_HighWaterMarkOption_AppliesToAcceptedSockets(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -136,8 +132,7 @@ public class NetTransportParityTests
         Assert.Equal("accepted hwm 8\nserver write false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Socket_EndWithData_FlushesQueuedWritesBeforeFin(ExecutionMode mode)
     {
         // end(data, cb) must flush pending writes, then the final chunk, then FIN —
@@ -175,8 +170,7 @@ public class NetTransportParityTests
 
     #region #1069 — net.BlockList + net.SocketAddress
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockList_AddressRangeSubnet_CheckAndRules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -212,8 +206,7 @@ public class NetTransportParityTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SocketAddress_DefaultsAndOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -236,8 +229,7 @@ public class NetTransportParityTests
         Assert.Equal("1.2.3.4 ipv4 80 0\n:: ipv6\n127.0.0.1 ipv4 0\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockList_InvalidInputs_ThrowOrFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -256,8 +248,7 @@ public class NetTransportParityTests
         Assert.Equal("addAddress threw\naddRange threw\naddSubnet threw\nfalse\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_BlockList_RejectsBlockedPeerSilently(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -285,8 +276,7 @@ public class NetTransportParityTests
         Assert.Equal("blocked client closed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_AllowHalfOpen_KeepsWritableSideAfterFin(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -329,8 +319,7 @@ public class NetTransportParityTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_Drop_FiresPastMaxConnections(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -366,8 +355,7 @@ public class NetTransportParityTests
         Assert.Equal("drop string number IPv4\nc2 closed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Net_AutoSelectFamilyDefaults_GetAndSet(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -388,8 +376,7 @@ public class NetTransportParityTests
         Assert.Equal("true\n250\nfalse\n500\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BlockList_NamedImport_Constructible(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

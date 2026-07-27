@@ -534,14 +534,11 @@ internal class BoundSharpTSFunctionWrapper : ISharpTSCallable
 /// </summary>
 internal class SyntheticThisInstance : SharpTSInstance
 {
-    private readonly object _actualThis;
     private static readonly SharpTSClass _dummyClass = CreateDummyClass();
 
     public SyntheticThisInstance(object actualThis)
         : base(_dummyClass)
     {
-        _actualThis = actualThis;
-
         // Copy fields from the actual 'this' object into this instance
         if (actualThis is SharpTSObject obj)
         {

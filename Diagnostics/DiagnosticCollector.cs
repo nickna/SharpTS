@@ -76,14 +76,6 @@ public class DiagnosticCollector
     }
 
     /// <summary>
-    /// Adds an info diagnostic.
-    /// </summary>
-    public bool AddInfo(string message, SourceLocation? location = null)
-    {
-        return Add(new Diagnostic(DiagnosticSeverity.Info, DiagnosticCode.General, message, location));
-    }
-
-    /// <summary>
     /// Clears all collected diagnostics.
     /// </summary>
     public void Clear() => _diagnostics.Clear();

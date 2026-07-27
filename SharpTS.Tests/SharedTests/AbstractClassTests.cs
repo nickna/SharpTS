@@ -10,8 +10,7 @@ public class AbstractClassTests
 {
     #region Basic Abstract Classes
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_ConcreteChild_CanBeInstantiated(ExecutionMode mode)
     {
         var source = """
@@ -33,8 +32,7 @@ public class AbstractClassTests
         Assert.Equal("300\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_WithConcreteMethods_InheritsCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +55,7 @@ public class AbstractClassTests
 
     #region Abstract Accessors
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractAccessor_ImplementedInChild_Works(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +77,7 @@ public class AbstractClassTests
         Assert.Equal("John\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_AbstractSetter_Works(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +106,7 @@ public class AbstractClassTests
 
     #region Multiple Abstract Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleAbstractMethods_AllImplemented_Works(ExecutionMode mode)
     {
         var source = """
@@ -140,8 +135,7 @@ public class AbstractClassTests
 
     #region Abstract Inheritance Chains
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_ExtendsAbstract_DefersImplementation(ExecutionMode mode)
     {
         var source = """
@@ -163,8 +157,7 @@ public class AbstractClassTests
         Assert.Equal("Woof\nWalking\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_ThreeLevelChain_Works(ExecutionMode mode)
     {
         var source = """
@@ -189,8 +182,7 @@ public class AbstractClassTests
 
     #region Constructor and Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_Constructor_CalledViaSuper(ExecutionMode mode)
     {
         var source = """
@@ -214,8 +206,7 @@ public class AbstractClassTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_WithFields_Works(ExecutionMode mode)
     {
         var source = """
@@ -246,8 +237,7 @@ public class AbstractClassTests
 
     #region Polymorphic Behavior
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AbstractClass_PolymorphicBehavior(ExecutionMode mode)
     {
         var source = """

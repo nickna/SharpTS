@@ -317,21 +317,6 @@ public static class BuiltInTypes
     }
 
     /// <summary>
-    /// Type signatures for instance methods on number primitives (e.g., (123).toFixed(2))
-    /// </summary>
-    public static TypeInfo? GetNumberInstanceMemberType(string name)
-    {
-        return name switch
-        {
-            "toFixed" => new TypeInfo.Function([], StringType),       // digits is optional
-            "toPrecision" => new TypeInfo.Function([], StringType),   // precision is optional
-            "toExponential" => new TypeInfo.Function([], StringType), // fractionDigits is optional
-            "toString" => new TypeInfo.Function([], StringType),      // radix is optional
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// Type signatures for static methods on the Date namespace
     /// </summary>
     public static TypeInfo? GetDateStaticMemberType(string name)
@@ -618,61 +603,6 @@ public static class BuiltInTypes
                 TypeInfo.Undefined.Shared, RequiredParams: 2),
             "unregister" => new TypeInfo.Function([TypeInfo.Any.Shared],
                 new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN)),
-            _ => null
-        };
-    }
-
-    /// <summary>
-    /// Type signatures for static members on the Symbol namespace
-    /// </summary>
-    public static TypeInfo? GetSymbolStaticMemberType(string name)
-    {
-        var symbolType = TypeInfo.Symbol.Shared;
-
-        return name switch
-        {
-            // Well-known symbols (properties returning symbol)
-            "iterator" => symbolType,
-            "asyncIterator" => symbolType,
-            "toStringTag" => symbolType,
-            "hasInstance" => symbolType,
-            "isConcatSpreadable" => symbolType,
-            "toPrimitive" => symbolType,
-            "species" => symbolType,
-            "unscopables" => symbolType,
-
-            // Static methods
-            "for" => new TypeInfo.Function([StringType], symbolType),
-            "keyFor" => new TypeInfo.Function([symbolType],
-                new TypeInfo.Union([StringType, TypeInfo.Null.Shared])),
-
-            _ => null
-        };
-    }
-
-    /// <summary>
-    /// Type signatures for global timer functions (setTimeout, clearTimeout).
-    /// </summary>
-    public static TypeInfo? GetGlobalTimerFunctionType(string name)
-    {
-        var timeoutType = TypeInfo.Timeout.Shared;
-
-        return name switch
-        {
-            // setTimeout(callback: () => void, ms?: number, ...args: any[]): Timeout
-            "setTimeout" => new TypeInfo.Function(
-                [new TypeInfo.Function([], VoidType), NumberType],
-                timeoutType,
-                RequiredParams: 1  // callback is required, delay is optional (defaults to 0)
-            ),
-
-            // clearTimeout(handle?: Timeout): void
-            "clearTimeout" => new TypeInfo.Function(
-                [new TypeInfo.Union([timeoutType, TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])],
-                VoidType,
-                RequiredParams: 0  // handle is optional (safe to call with null/undefined)
-            ),
-
             _ => null
         };
     }
@@ -996,31 +926,6 @@ public static class BuiltInTypes
             "abort" => new TypeInfo.Function([AnyType], signalType, RequiredParams: 0),
             "timeout" => new TypeInfo.Function([NumberType], signalType),
             "any" => new TypeInfo.Function([new TypeInfo.Array(signalType)], signalType),
-            _ => null
-        };
-    }
-
-    /// <summary>
-    /// Type signatures for instance members on Headers objects.
-    /// </summary>
-    public static TypeInfo? GetHeadersMemberType(string name)
-    {
-        return name switch
-        {
-            "get" => new TypeInfo.Function([StringType], new TypeInfo.Union([StringType, TypeInfo.Null.Shared])),
-            "set" => new TypeInfo.Function([StringType, StringType], VoidType),
-            "has" => new TypeInfo.Function([StringType], BooleanType),
-            "delete" => new TypeInfo.Function([StringType], BooleanType),
-            "append" => new TypeInfo.Function([StringType, StringType], VoidType),
-            "forEach" => new TypeInfo.Function(
-                [new TypeInfo.Function([StringType, StringType], VoidType)],
-                VoidType),
-            "entries" => new TypeInfo.Function([],
-                new TypeInfo.Iterator(TypeInfo.Tuple.FromTypes([StringType, StringType], 2))),
-            "keys" => new TypeInfo.Function([],
-                new TypeInfo.Iterator(StringType)),
-            "values" => new TypeInfo.Function([],
-                new TypeInfo.Iterator(StringType)),
             _ => null
         };
     }

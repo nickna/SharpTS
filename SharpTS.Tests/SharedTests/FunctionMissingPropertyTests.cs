@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class FunctionMissingPropertyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingProperty_OffFunctionDeclaration_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class FunctionMissingPropertyTests
         Assert.Equal("undefined\ntrue\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingProperty_OffArrow_IsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class FunctionMissingPropertyTests
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UserAssignedProperty_StillRoundTrips_MissIsUndefined(ExecutionMode mode)
     {
         // The miss path must not disturb genuine user-assigned properties:
@@ -55,8 +52,7 @@ public class FunctionMissingPropertyTests
         Assert.Equal("42\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MissingProperty_OffConstructorReturnedArrow_IsUndefined(ExecutionMode mode)
     {
         // The discovery case from #651: a constructor returning an arrow yields

@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -10,17 +11,9 @@ public class PrivateFieldParserTests
 {
     #region Helpers
 
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     private static Stmt.Class ParseClass(string source)
     {
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Single(statements);
         return Assert.IsType<Stmt.Class>(statements[0]);
     }

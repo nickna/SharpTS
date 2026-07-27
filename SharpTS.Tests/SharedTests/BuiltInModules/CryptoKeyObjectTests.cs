@@ -54,8 +54,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region createSecretKey Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_FromBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -74,8 +73,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_FromStringUtf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -94,8 +92,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_FromStringHex(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +111,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_FromStringBase64(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -134,8 +130,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -156,8 +151,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_NoAsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -175,8 +169,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_NoAsymmetricKeyDetails(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -197,8 +190,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region createPublicKey Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_FromPem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -218,8 +210,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_AsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -238,8 +229,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_AsymmetricKeyDetails_RSA(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -260,8 +250,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -282,8 +271,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_NoSymmetricKeySize(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -302,8 +290,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_FromObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -323,8 +310,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_FromGeneratedKeyPair(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -348,8 +334,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region createPrivateKey Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_FromPem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -369,8 +354,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_AsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -389,8 +373,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_AsymmetricKeyDetails_RSA(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -412,8 +395,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -434,8 +416,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_FromGeneratedKeyPair(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -459,8 +440,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region EC Key Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_EC(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -480,8 +460,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_EC(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -501,8 +480,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_EC_AsymmetricKeyDetails(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -525,8 +503,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_EC_AsymmetricKeyDetails_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -550,8 +527,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Error Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePublicKey_InvalidPem_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -572,8 +548,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreatePrivateKey_InvalidPem_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -594,8 +569,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSecretKey_InvalidEncoding_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

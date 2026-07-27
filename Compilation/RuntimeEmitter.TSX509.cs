@@ -25,7 +25,6 @@ public partial class RuntimeEmitter
             "$X509Certificate",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
-        runtime.X509CertificateType = tb;
 
         // Fields — everything cheap-to-read is precomputed in the ctor.
         var certField = tb.DefineField("_cert", typeof(X509Certificate2), FieldAttributes.Private);

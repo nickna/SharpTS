@@ -10,8 +10,7 @@ public class DataViewTests
 {
     #region Constructor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_CreatesViewOverArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -24,8 +23,7 @@ public class DataViewTests
         Assert.Equal("16\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_WithByteOffset(ExecutionMode mode)
     {
         var source = @"
@@ -38,8 +36,7 @@ public class DataViewTests
         Assert.Equal("12\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_WithByteOffsetAndLength(ExecutionMode mode)
     {
         var source = @"
@@ -52,8 +49,7 @@ public class DataViewTests
         Assert.Equal("8\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_OverSharedArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -66,8 +62,7 @@ public class DataViewTests
         Assert.Equal("16\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_InvalidOffset_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -83,8 +78,7 @@ public class DataViewTests
         Assert.Equal("error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Constructor_InvalidLength_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -104,8 +98,7 @@ public class DataViewTests
 
     #region Buffer Property Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Buffer_ReturnsUnderlyingArrayBuffer(ExecutionMode mode)
     {
         var source = @"
@@ -122,8 +115,7 @@ public class DataViewTests
 
     #region Int8/Uint8 Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetInt8(ExecutionMode mode)
     {
         var source = @"
@@ -138,8 +130,7 @@ public class DataViewTests
         Assert.Equal("127\n-128\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetUint8(ExecutionMode mode)
     {
         var source = @"
@@ -158,8 +149,7 @@ public class DataViewTests
 
     #region Int16/Uint16 Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetInt16_BigEndian(ExecutionMode mode)
     {
         var source = @"
@@ -174,8 +164,7 @@ public class DataViewTests
         Assert.Equal("4660\n18\n52\n", output); // 0x1234 = 4660, big-endian: [0x12, 0x34]
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetInt16_LittleEndian(ExecutionMode mode)
     {
         var source = @"
@@ -190,8 +179,7 @@ public class DataViewTests
         Assert.Equal("4660\n52\n18\n", output); // 0x1234 = 4660, little-endian: [0x34, 0x12]
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetUint16(ExecutionMode mode)
     {
         var source = @"
@@ -208,8 +196,7 @@ public class DataViewTests
 
     #region Int32/Uint32 Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetInt32_BigEndian(ExecutionMode mode)
     {
         var source = @"
@@ -222,8 +209,7 @@ public class DataViewTests
         Assert.Equal("305419896\n", output); // 0x12345678 = 305419896
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetInt32_LittleEndian(ExecutionMode mode)
     {
         var source = @"
@@ -236,8 +222,7 @@ public class DataViewTests
         Assert.Equal("305419896\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetUint32(ExecutionMode mode)
     {
         var source = @"
@@ -250,8 +235,7 @@ public class DataViewTests
         Assert.Equal("4294967295\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_NegativeInt32(ExecutionMode mode)
     {
         var source = @"
@@ -269,8 +253,7 @@ public class DataViewTests
 
     #region Float32/Float64 Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetFloat32(ExecutionMode mode)
     {
         var source = @"
@@ -284,8 +267,7 @@ public class DataViewTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetFloat64(ExecutionMode mode)
     {
         var source = @"
@@ -299,8 +281,7 @@ public class DataViewTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_Float64_Endianness(ExecutionMode mode)
     {
         var source = @"
@@ -321,8 +302,7 @@ public class DataViewTests
 
     #region BigInt64/BigUint64 Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetBigInt64(ExecutionMode mode)
     {
         var source = @"
@@ -336,8 +316,7 @@ public class DataViewTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetGetBigUint64(ExecutionMode mode)
     {
         var source = @"
@@ -351,8 +330,7 @@ public class DataViewTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_NegativeBigInt64(ExecutionMode mode)
     {
         var source = @"
@@ -370,8 +348,7 @@ public class DataViewTests
 
     #region Out of Bounds Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_GetInt8_OutOfBounds_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -388,8 +365,7 @@ public class DataViewTests
         Assert.Equal("error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_GetInt32_OutOfBounds_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -406,8 +382,7 @@ public class DataViewTests
         Assert.Equal("error\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SetFloat64_OutOfBounds_ThrowsRangeError(ExecutionMode mode)
     {
         var source = @"
@@ -428,8 +403,7 @@ public class DataViewTests
 
     #region ArrayBuffer.isView Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayBuffer_IsView_ReturnsTrueForDataView(ExecutionMode mode)
     {
         var source = @"
@@ -445,8 +419,7 @@ public class DataViewTests
 
     #region Shared Memory Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_SharesMemoryWithTypedArray(ExecutionMode mode)
     {
         var source = @"
@@ -464,8 +437,7 @@ public class DataViewTests
         Assert.Equal("18\n52\n86\n120\n", output); // 0x12, 0x34, 0x56, 0x78
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_WithOffset_SharesMemory(ExecutionMode mode)
     {
         var source = @"
@@ -492,8 +464,7 @@ public class DataViewTests
 
     #region Default Endianness Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DataView_DefaultEndianness_IsBigEndian(ExecutionMode mode)
     {
         var source = @"

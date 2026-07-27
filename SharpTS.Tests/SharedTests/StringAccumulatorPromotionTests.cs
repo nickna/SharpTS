@@ -19,8 +19,7 @@ public class StringAccumulatorPromotionTests
 {
     // ── Positive cases: promotable shapes ──────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_BuildThenScan_CharCodeSum(ExecutionMode mode)
     {
         // The stringWork shape: append in a loop, then sweep length + charCodeAt.
@@ -39,8 +38,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("585\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_CompoundAppend_Length(ExecutionMode mode)
     {
         var source = """
@@ -56,8 +54,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_CharCodeAt_OutOfRange_IsNaN(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +70,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("NaN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_PerScope_NameCollisionDoesNotPoison(ExecutionMode mode)
     {
         // `s` in build() is a clean append-only accumulator and must promote even though an
@@ -101,8 +97,7 @@ public class StringAccumulatorPromotionTests
 
     // ── Non-promotable cases: must fall back and stay correct ───────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NotPromoted_Returned_StillCorrect(ExecutionMode mode)
     {
         // `return s` escapes the accumulator (a StringBuilder slot can't be returned as a string
@@ -119,8 +114,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("zzz\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NotPromoted_Reassigned_StillCorrect(ExecutionMode mode)
     {
         // `s = "b"` is a non-append reassignment → disqualified.
@@ -137,8 +131,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("bc\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NotPromoted_Captured_StillCorrect(ExecutionMode mode)
     {
         // `s` is captured by a closure → routed to an object display-class field, never a
@@ -156,8 +149,7 @@ public class StringAccumulatorPromotionTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NotPromoted_NonStringAppend_StillCorrect(ExecutionMode mode)
     {
         // `s = s + i` appends a number — not statically string, so not the promotable shape;

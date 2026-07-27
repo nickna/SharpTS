@@ -43,11 +43,6 @@ public sealed class NarrowingContext
         _invalidatedPaths = invalidatedPaths;
     }
 
-    private NarrowingContext(ImmutableDictionary<NarrowingPath, TypeInfo> narrowings)
-        : this(narrowings, ImmutableHashSet<NarrowingPath>.Empty)
-    {
-    }
-
     /// <summary>
     /// Gets the narrowed type for a path, or null if the path is not narrowed.
     /// </summary>
@@ -299,29 +294,6 @@ public sealed class NarrowingContext
         return result.Count == 0 && mergedInvalidated.IsEmpty
             ? Empty
             : new NarrowingContext(result.ToImmutable(), mergedInvalidated);
-    }
-
-    /// <summary>
-    /// Creates a context that represents the narrowings from one branch
-    /// when the other branch always terminates (return/throw).
-    /// </summary>
-    /// <param name="survivingBranch">The narrowings from the branch that continues.</param>
-    /// <param name="terminatingBranchNarrowings">The narrowings that were in effect when termination occurred.</param>
-    /// <remarks>
-    /// After: if (x === null) return;
-    /// The narrowings from the "then" branch don't matter since it terminates,
-    /// so we use the narrowings from the implicit "else" (the excluded types).
-    /// </remarks>
-    public static NarrowingContext AfterTerminatingBranch(
-        NarrowingContext survivingBranch,
-        NarrowingContext? excludedNarrowings)
-    {
-        // If there are excluded narrowings, apply them to the surviving context
-        if (excludedNarrowings != null && !excludedNarrowings.IsEmpty)
-        {
-            return survivingBranch.WithNarrowings(excludedNarrowings);
-        }
-        return survivingBranch;
     }
 
     public override string ToString()

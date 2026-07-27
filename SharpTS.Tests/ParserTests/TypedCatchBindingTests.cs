@@ -11,21 +11,13 @@ namespace SharpTS.Tests.ParserTests;
 /// </summary>
 public class TypedCatchBindingTests
 {
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
-
     [Theory]
     [InlineData("any")]
     [InlineData("unknown")]
     [InlineData("string")]
     public void CatchBindingAnnotation_Parses(string annotation)
     {
-        var stmts = Parse($"try {{ throw 1; }} catch (e: {annotation}) {{ }}");
+        var stmts = TestHarness.ParseOrThrow($"try {{ throw 1; }} catch (e: {annotation}) {{ }}");
         var tryCatch = Assert.IsType<Stmt.TryCatch>(stmts[0]);
         Assert.Equal("e", tryCatch.CatchParam?.Lexeme);
         Assert.Equal(annotation, tryCatch.CatchParamType);
@@ -34,13 +26,12 @@ public class TypedCatchBindingTests
     [Fact]
     public void CatchBinding_NoAnnotation_TypeIsNull()
     {
-        var stmts = Parse("try { throw 1; } catch (e) { }");
+        var stmts = TestHarness.ParseOrThrow("try { throw 1; } catch (e) { }");
         var tryCatch = Assert.IsType<Stmt.TryCatch>(stmts[0]);
         Assert.Null(tryCatch.CatchParamType);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CatchBinding_AnyAndUnknown_Run(ExecutionMode mode)
     {
         var source = """
@@ -52,8 +43,7 @@ public class TypedCatchBindingTests
         Assert.Equal("any 1\nunknown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void CatchBinding_OtherAnnotation_IsTypeErrorNotParseError(ExecutionMode mode)
     {
         var source = """

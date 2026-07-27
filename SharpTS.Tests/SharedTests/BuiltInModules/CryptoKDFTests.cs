@@ -11,8 +11,7 @@ public class CryptoKDFTests
 {
     // ============ PBKDF2 TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -29,8 +28,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_Sha256_KnownVector(ExecutionMode mode)
     {
         // RFC 6070 test vector for PBKDF2-HMAC-SHA256
@@ -48,8 +46,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_Sha1_KnownVector(ExecutionMode mode)
     {
         // RFC 6070 test vector for PBKDF2-HMAC-SHA1
@@ -67,8 +64,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_Sha512(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -93,8 +89,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_Sha384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -111,8 +106,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_DifferentIterations(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -129,8 +123,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_DifferentSalts(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -147,8 +140,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_BufferPassword(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -166,8 +158,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_BufferSalt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -185,8 +176,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2Sync_UnsupportedAlgorithmThrows(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -208,8 +198,7 @@ public class CryptoKDFTests
 
     // ============ SCRYPT TESTS ============
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -226,8 +215,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_KnownVector(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -246,8 +234,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_DefaultParameters(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -272,8 +259,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_DifferentSalts(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -290,8 +276,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_DifferentPasswords(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -308,8 +293,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_DifferentCostParameter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -326,8 +310,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_BufferPassword(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -345,8 +328,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_BufferSalt(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -364,8 +346,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_CostAlias(ExecutionMode mode)
     {
         // 'cost' is an alias for 'N'
@@ -383,8 +364,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_BlockSizeAlias(ExecutionMode mode)
     {
         // 'blockSize' is an alias for 'r'
@@ -402,8 +382,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_ParallelizationAlias(ExecutionMode mode)
     {
         // 'parallelization' is an alias for 'p'
@@ -421,8 +400,7 @@ public class CryptoKDFTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_Deterministic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -441,8 +419,7 @@ public class CryptoKDFTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScryptSync_WithOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

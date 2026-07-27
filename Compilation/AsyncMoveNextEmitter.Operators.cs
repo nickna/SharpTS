@@ -53,7 +53,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Call, Types.StringConcat2);
             }
         }
-        _stackType = StackType.String;
+        _helpers.StackType = StackType.String;
     }
 
     protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)

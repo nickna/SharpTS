@@ -26,7 +26,6 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     // $Process type + members needed across emission steps
-    private TypeBuilder _processTypeBuilder = null!;
     private MethodBuilder _processGetInstance = null!;
     private FieldBuilder _processFieldsField = null!;
 
@@ -43,7 +42,6 @@ public partial class RuntimeEmitter
     private FieldBuilder _processSignalRegistrationsField = null!;
 
     // Closure type for deferred (event-loop-scheduled) process event emission
-    private TypeBuilder _processEmitClosureType = null!;
     private ConstructorBuilder _processEmitClosureCtor = null!;
 
     private static readonly string[] _processTrappableSignals =
@@ -939,7 +937,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, rootLocal);
             il.Emit(OpCodes.Ret);
         }
-        runtime.ProcessBuildReport = build;
 
         // ---- ProcessWriteReportImpl(object filename, object err) → object(string) ----
         var write = tb.DefineMethod("ProcessWriteReportImpl",
@@ -1065,7 +1062,6 @@ public partial class RuntimeEmitter
             "$ProcessEmitClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
-        _processEmitClosureType = tb;
 
         var eventField = tb.DefineField("_event", _types.String, FieldAttributes.Private);
         var argField = tb.DefineField("_arg", _types.Object, FieldAttributes.Private);
@@ -1121,8 +1117,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType);
         tb.AddInterfaceImplementation(runtime.IHasFieldsInterface);
-        _processTypeBuilder = tb;
-        runtime.ProcessType = tb;
 
         _processFieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);

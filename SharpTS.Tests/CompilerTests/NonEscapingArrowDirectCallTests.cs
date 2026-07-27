@@ -14,8 +14,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class NonEscapingArrowDirectCallTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingArrow_InvokedByName_IsCorrect(ExecutionMode mode)
     {
         // The canonical #858 shape: arrow captures the loop var and is called directly each iteration.
@@ -33,8 +32,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("999000\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingArrow_MultipleTypedArgs_IsCorrect(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("505500\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BooleanReturningArrow_InvokedByName_IsCorrect(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +67,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EscapingArrow_PassedAsArgument_KeepsWrapperSemantics(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +81,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EscapingArrow_Returned_KeepsWrapperSemantics(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +94,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EscapingArrow_StoredInArray_KeepsWrapperSemantics(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +108,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveArrow_ViaName_KeepsWrapperSemantics(ExecutionMode mode)
     {
         // The arrow references itself by name from within its own (nested) body, so the name is
@@ -130,8 +123,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("120\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReassignedBinding_IsDisqualified_AndCorrect(ExecutionMode mode)
     {
         var source = """
@@ -145,8 +137,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("107\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SameNameInTwoScopes_IsDisqualified_AndCorrect(ExecutionMode mode)
     {
         // `dup` is declared in two functions; the whole-program single-declaration guard disqualifies
@@ -165,8 +156,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("2,3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCapturingArrow_InvokedByName_IsCorrect(ExecutionMode mode)
     {
         // Non-capturing arrows fall through to the wrapper path (no display class to key on) but
@@ -181,8 +171,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DirectCallArrow_CapturesAcrossIterations_FreshBinding(ExecutionMode mode)
     {
         // Per-iteration `let` capture: each arrow must see its own iteration's `i`. A broken
@@ -206,8 +195,7 @@ public class NonEscapingArrowDirectCallTests
 
     // ---- #858 follow-up: non-capturing arrows compile to a direct static `call` ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCapturingArrow_InLoop_IsCorrect(ExecutionMode mode)
     {
         // The main perf shape: a non-capturing arrow declared and called every iteration. Previously
@@ -228,8 +216,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("504500\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCapturingArrow_MultipleArgs_AndBooleanReturn(ExecutionMode mode)
     {
         var source = """
@@ -249,8 +236,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCapturingAndCapturing_InSameFunction_BothCorrect(ExecutionMode mode)
     {
         // A non-capturing arrow (static call) and a capturing arrow (callvirt Invoke) coexist; the two
@@ -271,8 +257,7 @@ public class NonEscapingArrowDirectCallTests
         Assert.Equal("19800\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCapturingArrow_NameAlsoAParameterElsewhere_StaysCorrect(ExecutionMode mode)
     {
         // Scope-collision guard for the non-capturing path: `dup` is an optimized non-capturing arrow in

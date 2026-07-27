@@ -52,11 +52,6 @@ public class TypeMap
     public void SetClassExprType(Expr.ClassExpr expr, TypeInfo.Class classType) => _classExprTypes[expr] = classType;
 
     /// <summary>
-    /// Gets the class expression type by expression reference, or null if not found.
-    /// </summary>
-    public TypeInfo.Class? GetClassExprType(Expr.ClassExpr expr) => _classExprTypes.GetValueOrDefault(expr);
-
-    /// <summary>
     /// Registers a top-level function type by name.
     /// </summary>
     public void SetFunctionType(string functionName, TypeInfo.Function functionType) => _functionTypes[functionName] = functionType;

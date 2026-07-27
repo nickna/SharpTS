@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NumberLocalCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberLoopLocal_CapturedByArrow(ExecutionMode mode)
     {
         // The #431 repro: a per-iteration number const captured by an arrow.
@@ -28,8 +27,7 @@ public class NumberLocalCaptureTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberBlockConst_CapturedByArrow(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class NumberLocalCaptureTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberLoopVar_CapturedByArrow_IsPerIteration(ExecutionMode mode)
     {
         // Capturing the `let` loop binding itself (not a fresh per-iteration const). Both modes

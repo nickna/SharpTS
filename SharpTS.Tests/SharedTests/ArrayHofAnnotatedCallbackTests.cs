@@ -20,8 +20,7 @@ public class ArrayHofAnnotatedCallbackTests
 {
     // ── Adapter path: annotated callbacks inside a function (the benchmark shape) ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedMap_Number(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +33,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("2,4,6,8,10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedFilter_BooleanPredicate(ExecutionMode mode)
     {
         var source = """
@@ -48,8 +46,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("2,4,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedReduce_TwoTypedParams(ExecutionMode mode)
     {
         var source = """
@@ -62,8 +59,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedChain_MapFilterReduce(ExecutionMode mode)
     {
         // The array-methods benchmark shape: every callback param is annotated.
@@ -80,8 +76,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("40\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedPredicates_FindSomeEveryFindIndex(ExecutionMode mode)
     {
         var source = """
@@ -98,8 +93,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("4,true,true,2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedForEach_Void(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +108,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedStringParam_MapsToLength(ExecutionMode mode)
     {
         var source = """
@@ -130,8 +123,7 @@ public class ArrayHofAnnotatedCallbackTests
 
     // ── Coercion parity: non-integer / NaN elements must marshal identically ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AnnotatedMap_FloatAndNaN(ExecutionMode mode)
     {
         var source = """
@@ -146,8 +138,7 @@ public class ArrayHofAnnotatedCallbackTests
 
     // ── Fallback cases: must NOT take the 1-arg adapter, must stay correct ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultiArgCallback_UsesIndex_FallsBack(ExecutionMode mode)
     {
         // 2-param map callback uses the index → arity guard keeps it on the reflective
@@ -164,8 +155,7 @@ public class ArrayHofAnnotatedCallbackTests
 
     // ── #861 L3: capturing annotated arrows (instance adapter on the display class) ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingAnnotatedArrow_Map(ExecutionMode mode)
     {
         // Capturing arrow → instance adapter on the display class (L3); the captured value must
@@ -181,8 +171,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("11,12,13\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingAnnotatedArrow_Reduce(ExecutionMode mode)
     {
         var source = """
@@ -196,8 +185,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("515\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingAnnotatedArrow_PerIterationFreshCapture(ExecutionMode mode)
     {
         // The display instance must be built FRESH at each call so each closure captures the
@@ -216,8 +204,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("10,11,12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingBooleanPredicate_Filter(ExecutionMode mode)
     {
         // L3 (capturing instance adapter) + L4 (bool-returning adapter → *DirectBool): a captured
@@ -233,8 +220,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("4,5,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BooleanPredicate_SomeEvery_ShortCircuit(ExecutionMode mode)
     {
         // L4 bool adapter under the short-circuiting some/every must agree with the reflective path.
@@ -250,8 +236,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("true,false\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CapturingAnnotatedArrow_Chained(ExecutionMode mode)
     {
         // Capturing arrows across a chained map().filter().reduce() (L1 capturing adapter + L2 round-trip).
@@ -268,8 +253,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UntypedCallback_StillWorks(ExecutionMode mode)
     {
         // Unannotated callback keeps the pre-existing untyped direct/reflective path.
@@ -285,8 +269,7 @@ public class ArrayHofAnnotatedCallbackTests
 
     // ── #861 L2: chained-stage round-trip elimination ──
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedMapFilter_AssignedToArrayVariable(ExecutionMode mode)
     {
         // The final stage's result is consumed as an array value, so its $Array wrap must be
@@ -302,8 +285,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("6,8,10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedMapFilter_LengthOnResult(ExecutionMode mode)
     {
         // .length on the chain result requires the final $Array wrap to survive.
@@ -317,8 +299,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedMapSlice_MixedCallbackAndPlainArgs(ExecutionMode mode)
     {
         // Inner map (callback) feeds outer slice (plain args) — the bare List must flow across the
@@ -333,8 +314,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("4,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedFilterMap_UntypedAndAnnotatedMixed(ExecutionMode mode)
     {
         // Inner filter is annotated, outer map is untyped — both stages chain through a bare List.
@@ -348,8 +328,7 @@ public class ArrayHofAnnotatedCallbackTests
         Assert.Equal("20,40,60\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstBoundAnnotatedCallback_Resolves(ExecutionMode mode)
     {
         // const-bound arrow callback resolves through ConstArrowBindings and takes the

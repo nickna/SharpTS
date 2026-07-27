@@ -11,8 +11,7 @@ public class ArrayFillTests
 {
     #region Basic Fill Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_FillsEntireArray(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class ArrayFillTests
         Assert.Equal("0,0,0,0,0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_ReturnsSameArray(ExecutionMode mode)
     {
         var source = """
@@ -39,8 +37,7 @@ public class ArrayFillTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithDifferentValueType(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class ArrayFillTests
 
     #region Start Index Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithStartIndex(ExecutionMode mode)
     {
         var source = """
@@ -71,8 +67,7 @@ public class ArrayFillTests
         Assert.Equal("1,2,0,0,0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithNegativeStartIndex(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +80,7 @@ public class ArrayFillTests
         Assert.Equal("1,2,3,0,0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_StartIndexBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +93,7 @@ public class ArrayFillTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_NegativeStartIndexBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -117,8 +110,7 @@ public class ArrayFillTests
 
     #region End Index Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithStartAndEndIndex(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +123,7 @@ public class ArrayFillTests
         Assert.Equal("1,0,0,0,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithNegativeEndIndex(ExecutionMode mode)
     {
         var source = """
@@ -145,8 +136,7 @@ public class ArrayFillTests
         Assert.Equal("1,0,0,0,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_EndIndexBeforeStart(ExecutionMode mode)
     {
         var source = """
@@ -159,8 +149,7 @@ public class ArrayFillTests
         Assert.Equal("1,2,3,4,5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_EndIndexBeyondLength(ExecutionMode mode)
     {
         var source = """
@@ -177,8 +166,7 @@ public class ArrayFillTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -191,8 +179,7 @@ public class ArrayFillTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_SingleElement(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +192,7 @@ public class ArrayFillTests
         Assert.Equal("99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithNull(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +207,7 @@ public class ArrayFillTests
         Assert.Equal("null\nnull\nnull\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_WithObject(ExecutionMode mode)
     {
         // Test that fill uses the same object reference for all elements
@@ -243,8 +228,7 @@ public class ArrayFillTests
 
     #region Chaining Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Fill_Chaining(ExecutionMode mode)
     {
         var source = """

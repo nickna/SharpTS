@@ -761,10 +761,13 @@ public partial class TypeChecker
         // typeof never throws on undeclared variables - it returns "undefined"
         if (unary.Operator.Type == TokenType.TYPEOF)
         {
-            // Still type-check the operand if possible, but don't fail on undeclared variables
+            // Still type-check the operand if possible, but don't fail on undeclared
+            // variables. Only the undeclared-name failure (TS2304) is legal to
+            // swallow here — any other type error in the operand must surface.
             if (unary.Right is Expr.Variable)
             {
-                try { CheckExpr(unary.Right); } catch (TypeCheckException) { }
+                try { CheckExpr(unary.Right); }
+                catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2304") { }
             }
             else
             {

@@ -144,46 +144,6 @@ public static class OverloadGenerator
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits conversion from stack value to target type if needed.
-    /// </summary>
-    private static void EmitConversionIfNeeded(
-        ILGenerator il,
-        ILEmitter emitter,
-        Expr sourceExpr,
-        Type targetType)
-    {
-        // If target is object, box value types
-        if (targetType == typeof(object))
-        {
-            emitter.EmitBoxIfNeeded(sourceExpr);
-            return;
-        }
-
-        // If source is a literal that might need boxing
-        if (sourceExpr is Expr.Literal lit)
-        {
-            if (lit.Value is double && targetType == typeof(double))
-            {
-                // Already correct type, no conversion needed
-                return;
-            }
-            if (lit.Value is bool && targetType == typeof(bool))
-            {
-                return;
-            }
-            if (lit.Value is string && targetType == typeof(string))
-            {
-                return;
-            }
-        }
-
-        // For non-literal expressions that return object, unbox if target is value type
-        if (targetType.IsValueType)
-        {
-            il.Emit(OpCodes.Unbox_Any, targetType);
-        }
-    }
 
     /// <summary>
     /// Emits the default value for a type (0 for numbers, false for bool, null for references).
@@ -223,46 +183,5 @@ public static class OverloadGenerator
             // Reference types default to null
             il.Emit(OpCodes.Ldnull);
         }
-    }
-
-    /// <summary>
-    /// Emits the forwarding body for a constructor overload.
-    /// </summary>
-    public static void EmitConstructorOverloadBody(
-        ILGenerator il,
-        ConstructorInfo fullConstructor,
-        List<Stmt.Parameter> parameters,
-        int overloadArity,
-        ILEmitter emitter)
-    {
-        // Load 'this'
-        il.Emit(OpCodes.Ldarg_0);
-
-        // Load all provided arguments
-        for (int i = 0; i < overloadArity; i++)
-        {
-            il.Emit(OpCodes.Ldarg, i + 1); // +1 for 'this'
-        }
-
-        // Emit default values for missing arguments
-        for (int i = overloadArity; i < parameters.Count; i++)
-        {
-            var defaultExpr = parameters[i].DefaultValue;
-            if (defaultExpr != null)
-            {
-                emitter.EmitExpression(defaultExpr);
-                var targetType = fullConstructor.GetParameters()[i].ParameterType;
-                EmitConversionIfNeeded(il, emitter, defaultExpr, targetType);
-            }
-            else
-            {
-                var targetType = fullConstructor.GetParameters()[i].ParameterType;
-                EmitDefaultValue(il, targetType);
-            }
-        }
-
-        // Call the full constructor
-        il.Emit(OpCodes.Call, fullConstructor);
-        il.Emit(OpCodes.Ret);
     }
 }

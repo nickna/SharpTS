@@ -5,8 +5,6 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    // TypeBuilder stored between phases
-    private TypeBuilder _finRegEntryTypeBuilder = null!;
     private FieldBuilder _finRegEntryHeldValueField = null!;
     private FieldBuilder _finRegEntryQueueField = null!;
     private FieldBuilder _finRegEntrySuppressedField = null!;
@@ -22,7 +20,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _finRegEntryTypeBuilder = typeBuilder;
 
         // Fields
         _finRegEntryHeldValueField = typeBuilder.DefineField("_heldValue", _types.Object, FieldAttributes.Private);

@@ -16,17 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpAgentPoolTests
 {
-    private static int GetAvailablePort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Agent_GetName_FormatsOriginKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -43,11 +33,10 @@ public class HttpAgentPoolTests
         Assert.Contains("keepAlive=true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Agent_KeepAlive_PopulatesFreeSockets(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -73,11 +62,10 @@ public class HttpAgentPoolTests
         Assert.Contains("freeOrigins=1", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Agent_NoKeepAlive_LeavesFreeSocketsEmpty(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -104,11 +92,10 @@ public class HttpAgentPoolTests
         Assert.Contains("activeOrigins=0", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Agent_Destroy_ClearsPool(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""

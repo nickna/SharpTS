@@ -92,6 +92,17 @@ public partial class ILCompiler
         _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     /// <summary>
+    /// Non-fatal compilation warnings (e.g. an unresolvable external .NET type).
+    /// Collected instead of written to Console so embedders observe them and the
+    /// compiler never interleaves with the compiled program's own output; the
+    /// CLI prints them to stderr after compilation.
+    /// </summary>
+    public IReadOnlyList<string> Warnings => _warnings;
+    private readonly List<string> _warnings = [];
+
+    internal void AddWarning(string message) => _warnings.Add(message);
+
+    /// <summary>
     /// The assemblies of every external .NET type the compilation bound (@DotNetType
     /// classes and dotnet: imports). These are HARD metadata references in the emitted
     /// IL; the CLI intersects them with the sharpts.json / -r reference set to decide
@@ -189,9 +200,6 @@ public partial class ILCompiler
     private readonly bool _useReferenceAssemblies;
     private readonly string? _sdkPath;
 
-    // Assembly metadata for version and attributes
-    private readonly AssemblyMetadata? _metadata;
-
     // External assembly references for @DotNetType support
     private AssemblyReferenceLoader? _referenceLoader;
 
@@ -278,7 +286,6 @@ public partial class ILCompiler
     {
         _useReferenceAssemblies = useReferenceAssemblies;
         _sdkPath = sdkPath;
-        _metadata = metadata;
         _outputTarget = target;
         _inMemoryOnly = inMemoryOnly;
 
@@ -348,10 +355,8 @@ public partial class ILCompiler
     {
         return _classRegistry ??= new ClassRegistry(
             builders: _classes.Builders,
-            externalTypes: _classes.ExternalTypes,
             superclass: _classes.Superclass,
             constructors: _classes.Constructors,
-            constructorOverloads: _classes.ConstructorOverloads,
             instanceMethods: _classes.InstanceMethods,
             instanceGetters: _classes.InstanceGetters,
             instanceSetters: _classes.InstanceSetters,
@@ -402,7 +407,7 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
 
         // Check for "use strict" directive at file level
-        _isStrictMode = CheckForUseStrict(statements);
+        _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
 
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to the module top level so the mature top-level state-machine pipeline can lower them
@@ -435,33 +440,6 @@ public partial class ILCompiler
     }
 
     #region Compile Phases
-
-    /// <summary>
-    /// Checks if the statements begin with a "use strict" directive.
-    /// </summary>
-    /// <param name="statements">The list of statements to check.</param>
-    /// <returns>True if "use strict" directive is found at the beginning.</returns>
-    private static bool CheckForUseStrict(List<Stmt>? statements)
-    {
-        if (statements == null) return false;
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Directive directive)
-            {
-                if (directive.Value == "use strict")
-                {
-                    return true;
-                }
-                // Continue checking other directives at the start
-            }
-            else
-            {
-                // Non-directive statement encountered, stop checking
-                break;
-            }
-        }
-        return false;
-    }
 
     /// <summary>
     /// Phase 0: Extract .NET namespace from @Namespace file directive.

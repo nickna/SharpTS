@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.BuildTests;
@@ -19,7 +20,7 @@ public class ProjectStructureTests
     [Fact]
     public void EverySiblingProject_IsExcludedFromCoreCompilation()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = RepoPaths.FindRepoRoot();
         var coreCsproj = Path.Combine(repoRoot, "SharpTS.csproj");
         var csprojText = File.ReadAllText(coreCsproj);
 
@@ -82,18 +83,4 @@ public class ProjectStructureTests
             seg.Equals("obj", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null)
-        {
-            if (Directory.Exists(Path.Combine(dir, "Compilation")) &&
-                File.Exists(Path.Combine(dir, "SharpTS.csproj")))
-            {
-                return dir;
-            }
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }

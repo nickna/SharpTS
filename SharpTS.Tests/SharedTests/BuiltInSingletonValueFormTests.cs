@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class BuiltInSingletonValueFormTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_AsValue_MethodsDispatch(ExecutionMode mode)
     {
         var source = @"
@@ -32,8 +31,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("function\n2\n3\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Json_AsValue_MethodsDispatch(ExecutionMode mode)
     {
         var source = @"
@@ -46,8 +44,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("function\n{\"a\":1}\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_AsValue_MethodIdentityIsStable(ExecutionMode mode)
     {
         // The value-form wrapper must be the same identity-cached method the bare
@@ -64,8 +61,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Math_AsValue_MethodsAreNonEnumerable(ExecutionMode mode)
     {
         // Math's methods are non-enumerable per ECMA-262 §17, so `Object.keys(Math)`
@@ -80,8 +76,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Json_StaticMethodIdentityIsStable(ExecutionMode mode)
     {
         // #299: JSON.parse / JSON.stringify are single built-in function objects
@@ -96,8 +91,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Math_ValuesAndEntriesExcludeNonEnumerableBuiltIns(ExecutionMode mode)
     {
         // #298: Object.values/entries must apply the same own-enumerable filter
@@ -115,8 +109,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("1\n1\n42\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void Json_ValuesAndEntriesExcludeNonEnumerableBuiltIns(ExecutionMode mode)
     {
         // #298: same own-enumerable filter for the JSON singleton.
@@ -131,8 +124,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("1\n1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PlainObject_ValuesAndEntriesUnaffectedByEnumerableFilter(ExecutionMode mode)
     {
         // Guard the #298 fix: a plain object literal (no installed descriptors,
@@ -146,8 +138,7 @@ public class BuiltInSingletonValueFormTests
         Assert.Equal("1,2,3\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Math_AsValue_ValuesAndEntriesAreEmpty(ExecutionMode mode)
     {
         // Object.values/entries on Math return only its own enumerable properties;

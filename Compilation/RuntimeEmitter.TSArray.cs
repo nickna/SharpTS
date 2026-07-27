@@ -53,10 +53,8 @@ public partial class RuntimeEmitter
     /// so a genuine <c>NaN</c> element (canonicalized to the standard bits on
     /// write) is never mistaken for a hole. Matches V8's hole-NaN choice.
     /// </summary>
-    private const long HoleNanBits = unchecked((long)0xFFF7FFFFFFFFFFFFUL);
 
     /// <summary>Canonical JS NaN bits — what a genuine NaN element is stored as.</summary>
-    private const long CanonicalNanBits = unchecked((long)0x7FF8000000000000UL);
 
     // Cached generic type for the sparse dictionary backing.
     private Type _tsArraySparseType = null!;
@@ -192,7 +190,6 @@ public partial class RuntimeEmitter
         // Legacy int-indexed methods (pre-Stage-E surface; unchanged semantics).
         EmitTSArrayGet(typeBuilder, runtime);
         EmitTSArraySet(typeBuilder, runtime);
-        EmitTSArraySetStrict(typeBuilder, runtime);
 
         EmitTSArrayHasIndex(typeBuilder, runtime, syncLength);
         EmitTSArrayGetRaw(typeBuilder, runtime, getCore, syncLength);
@@ -901,55 +898,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
         il.Emit(OpCodes.Throw);
     }
-
-    private void EmitTSArraySetStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "SetStrict", MethodAttributes.Public, _types.Void,
-            [_types.Int32, _types.Object, _types.Boolean]);
-        runtime.TSArraySetStrict = method;
-
-        var il = method.GetILGenerator();
-        EmitTSArrayDeoptGuard(il);
-        var notFrozenLabel = il.DefineLabel();
-        var frozenReturnLabel = il.DefineLabel();
-        var throwBoundsLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsArrayIsFrozenField);
-        il.Emit(OpCodes.Brfalse, notFrozenLabel);
-
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Brfalse, frozenReturnLabel);
-
-        EmitInlineThrowErrorInline(il, "TypeError: Cannot assign to read only property of array", runtime.TSTypeErrorCtor);
-
-        il.MarkLabel(frozenReturnLabel);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notFrozenLabel);
-
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, throwBoundsLabel);
-
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _tsArrayListCountGetter!);
-        il.Emit(OpCodes.Bge, throwBoundsLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _tsArrayListSetItem!);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(throwBoundsLabel);
-        il.Emit(OpCodes.Ldstr, "Index out of bounds.");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-    }
-
     // -----------------------------------------------------------------------
     // Long-indexed / sparse-aware API — mirrors SharpTSArray semantics.
     // -----------------------------------------------------------------------
@@ -2033,7 +1981,6 @@ public partial class RuntimeEmitter
     // Reserved for a future int→long convenience shim if needed by legacy call
     // sites. M1 does not add one because the legacy int-indexed Get/Set above
     // already cover the pre-Stage-E surface.
-    private const int _reservedStageEConstants = 0;
     private const long TSArraySparseThreshold = 1024;
     private const long TSArrayMaxWriteIndex = (long)uint.MaxValue - 1;
     private const long TSArrayMaxLength = (long)uint.MaxValue;

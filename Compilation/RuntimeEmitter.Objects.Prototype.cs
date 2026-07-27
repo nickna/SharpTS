@@ -718,8 +718,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits Object.setPrototypeOf(obj, proto) - sets the prototype of an object.
     /// Signature: object ObjectSetPrototypeOf(object obj, object proto)
-    /// Uses reflection to call RuntimeSetPrototypeOf helper for complex object type handling.
-    /// Also stores in local prototype table for standalone checks.
+    /// Stores in the local prototype table for standalone checks.
     /// </summary>
     private void EmitObjectSetPrototypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime,
         FieldBuilder prototypeStoreField, FieldBuilder nonExtensibleObjectsField)

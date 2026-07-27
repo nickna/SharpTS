@@ -20,8 +20,7 @@ public class ConstructorReturnValueTests
 {
     // ---- The issue repro: a constructor returning an arrow yields the arrow, not `this` ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningArrow_YieldsArrow(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +41,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("function\nfn-result:X\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionExpressionConstructorReturningArrow_YieldsArrow(ExecutionMode mode)
     {
         // The function-expression construct path (SharpTSArrowFunction with HasOwnThis).
@@ -61,8 +59,7 @@ public class ConstructorReturnValueTests
 
     // ---- Other object return types win too ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningObject_YieldsObject(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +71,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("undefined 2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningArray_YieldsArray(ExecutionMode mode)
     {
         var source = """
@@ -86,8 +82,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("true 9 8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningClassInstance_YieldsInstance(ExecutionMode mode)
     {
         var source = """
@@ -101,8 +96,7 @@ public class ConstructorReturnValueTests
 
     // ---- Primitive returns are ignored: `this` wins ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningNumber_YieldsThis(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +107,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("object 1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningString_YieldsThis(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +118,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("object 1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningBoolean_YieldsThis(ExecutionMode mode)
     {
         var source = """
@@ -137,8 +129,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("object 1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorReturningNull_YieldsThis(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +140,7 @@ public class ConstructorReturnValueTests
         Assert.Equal("object 1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstructorFallingOffEnd_YieldsThis(ExecutionMode mode)
     {
         // No return at all — `this` wins. (Interacts with #603: the boxed Call now returns the

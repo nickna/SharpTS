@@ -20,7 +20,6 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private TypeBuilder _tlsAcceptClosureType = null!;
     private ConstructorBuilder _tlsAcceptClosureCtor = null!;
     private MethodBuilder _tlsAcceptClosureRun = null!;
 
@@ -48,7 +47,6 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _tlsAcceptClosureType = typeBuilder;
 
         var serverField = typeBuilder.DefineField("_server", _tlsServerTypeBuilder, FieldAttributes.Private);
         var socketField = typeBuilder.DefineField("_socket", _tlsSocketTypeBuilder, FieldAttributes.Private);

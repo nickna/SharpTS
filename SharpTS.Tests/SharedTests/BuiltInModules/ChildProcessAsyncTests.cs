@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ChildProcessAsyncTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_ReturnsChildProcess(ExecutionMode mode)
     {
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -32,8 +31,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_ReturnsChildProcess(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -59,8 +57,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpawnSync_Input_FeedsStdin(ExecutionMode mode)
     {
         // The `input` option feeds the synchronous child's stdin; `sort` echoes it back sorted.
@@ -77,8 +74,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("sorted:apple\nbanana\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecSync_StillWorks(ExecutionMode mode)
     {
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -98,8 +94,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_ChildProcess_HasKillMethod(ExecutionMode mode)
     {
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -121,8 +116,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_ChildProcess_Properties(ExecutionMode mode)
     {
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -143,8 +137,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Stdio_Ignore_NullsStreams(ExecutionMode mode)
     {
         // stdio:'ignore' discards the child's output and sets the stdio streams to null,
@@ -163,8 +156,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("out=true err=true\nclose:0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Stdio_Array_PipesOnlyStdout(ExecutionMode mode)
     {
         // stdio array: [stdin=ignore, stdout=pipe, stderr=ignore] — only stdout is a stream.
@@ -183,8 +175,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("out:arrayform stdin=true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Shell_RunsThroughShell(ExecutionMode mode)
     {
         // `echo shellworks` is a shell builtin / single shell command line — it only resolves
@@ -204,8 +195,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("shell:shellworks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_MissingCommand_EmitsEnoentError(ExecutionMode mode)
     {
         // A missing executable emits an async 'error' event with code 'ENOENT' (+ syscall/path),
@@ -223,8 +213,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("code=ENOENT syscall=spawn this_command_does_not_exist_xyz path=this_command_does_not_exist_xyz\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Kill_SetsKilledAndSignal(ExecutionMode mode)
     {
         // Spawn a long-running process, kill it, and observe live killed/signalCode in 'exit'.
@@ -247,8 +236,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("killed=true signal=SIGTERM\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_ExitCode_IsLiveAfterClose(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -264,8 +252,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("exitCode=0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Stdout_DataAndClose(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -291,8 +278,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("end:spawned\nclose:0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_Stdin_RoundTrip(ExecutionMode mode)
     {
         // `sort` reads all of stdin and writes it back; a single line round-trips unchanged.
@@ -315,8 +301,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("got:hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_HasStdinStream(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -339,8 +324,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFile_ReturnsChildProcess(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -365,8 +349,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_IpcRoundTrip(ExecutionMode mode)
     {
         // Parent forks a child .ts module, exchanges a JSON message over IPC, then disconnects.
@@ -395,8 +378,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("parent got: got world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fork_TypeIsFunction(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -411,8 +393,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFileSync_CapturesOutput(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -435,8 +416,7 @@ public class ChildProcessAsyncTests
         Assert.Contains("sync_output", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_Callback_FiresWithStdout(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -453,8 +433,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("cb:true:hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_EmitsCloseThenExit(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -471,8 +450,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("close:0\nexit:0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_Encoding_Buffer_ReturnsBuffer(ExecutionMode mode)
     {
         // encoding:'buffer' makes stdout a Buffer instead of a string.
@@ -490,8 +468,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("isBuf:true val:hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecSync_Input_FeedsStdin(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -507,8 +484,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("execSync:apple\nbanana\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFileSync_Input_FeedsStdin(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -524,8 +500,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("execFileSync:berry\ncherry\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spawn_WindowsVerbatimArguments_Honored(ExecutionMode mode)
     {
         // windowsVerbatimArguments passes args as a raw command line; verify a normal spawn
@@ -550,8 +525,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("vb:vbworks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_MaxBuffer_Overflow_Errors(ExecutionMode mode)
     {
         // Output longer than maxBuffer kills the child and surfaces ERR_CHILD_PROCESS_STDIO_MAXBUFFER.
@@ -569,8 +543,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("code:ERR_CHILD_PROCESS_STDIO_MAXBUFFER\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_NonZeroExit_CallbackReceivesError(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -591,8 +564,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("err:true:code:3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecFile_Callback_FiresWithStdout(ExecutionMode mode)
     {
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -616,8 +588,7 @@ public class ChildProcessAsyncTests
         Assert.Equal("filecb:true:filecb\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Exec_ChildProcess_HasPidProperty(ExecutionMode mode)
     {
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)

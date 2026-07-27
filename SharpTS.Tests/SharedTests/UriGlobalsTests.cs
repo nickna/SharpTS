@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class UriGlobalsTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EncodeURIComponent_EncodesSpaces(ExecutionMode mode)
     {
         var source = "console.log(encodeURIComponent('hello world'));";
@@ -18,8 +17,7 @@ public class UriGlobalsTests
         Assert.Equal("hello%20world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EncodeURIComponent_EncodesReservedChars(ExecutionMode mode)
     {
         // & / ? = # are all reserved and must be encoded
@@ -28,8 +26,7 @@ public class UriGlobalsTests
         Assert.Equal("a%3Db%26c%2Fd%3Fe%23f\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EncodeURIComponent_PassesThroughUnreserved(ExecutionMode mode)
     {
         // A-Z a-z 0-9 - _ . ~ pass through per RFC 3986
@@ -38,8 +35,7 @@ public class UriGlobalsTests
         Assert.Equal("abcABC123-_.~\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DecodeURIComponent_DecodesPercentEncoded(ExecutionMode mode)
     {
         var source = "console.log(decodeURIComponent('hello%20world'));";
@@ -47,8 +43,7 @@ public class UriGlobalsTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DecodeURIComponent_RoundTripPreservesString(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +56,7 @@ public class UriGlobalsTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EncodeURIComponent_CoercesNonString(ExecutionMode mode)
     {
         var source = "console.log(encodeURIComponent(42));";

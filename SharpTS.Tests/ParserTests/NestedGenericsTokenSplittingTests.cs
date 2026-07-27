@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.ParserTests;
@@ -11,14 +12,6 @@ namespace SharpTS.Tests.ParserTests;
 public class NestedGenericsTokenSplittingTests
 {
     #region Helpers
-
-    private static List<Stmt> Parse(string source)
-    {
-        var lexer = new Lexer(source);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.ParseOrThrow();
-    }
 
     private static string GetVariableType(List<Stmt> statements, string varName)
     {
@@ -43,7 +36,7 @@ public class NestedGenericsTokenSplittingTests
             interface Data { value: number; }
             let x: Partial<Readonly<Data>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Data>>", type);
     }
@@ -55,7 +48,7 @@ public class NestedGenericsTokenSplittingTests
             interface Entry<K, V> { key: K; value: V; }
             let x: Partial<Entry<string, number>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Entry<string, number>>", type);
     }
@@ -67,7 +60,7 @@ public class NestedGenericsTokenSplittingTests
             interface Item { id: number; }
             let x: Partial<Readonly<Item>>[] = [];
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Item>>[]", type);
     }
@@ -79,7 +72,7 @@ public class NestedGenericsTokenSplittingTests
             interface Data { x: number; }
             function process(d: Partial<Readonly<Data>>): void {}
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var func = GetFunction(statements, "process");
         Assert.Single(func.Parameters);
         Assert.Equal("Partial<Readonly<Data>>", func.Parameters[0].Type);
@@ -92,7 +85,7 @@ public class NestedGenericsTokenSplittingTests
             interface Config { debug: boolean; }
             function getConfig(): Partial<Readonly<Config>> { return {}; }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var func = GetFunction(statements, "getConfig");
         Assert.Equal("Partial<Readonly<Config>>", func.ReturnType);
     }
@@ -108,7 +101,7 @@ public class NestedGenericsTokenSplittingTests
             interface Data { value: number; }
             let x: Partial<Readonly<Required<Data>>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Required<Data>>>", type);
     }
@@ -120,7 +113,7 @@ public class NestedGenericsTokenSplittingTests
             interface Item { id: number; }
             let x: Partial<Readonly<Required<Item>>>[] = [];
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Required<Item>>>[]", type);
     }
@@ -132,7 +125,7 @@ public class NestedGenericsTokenSplittingTests
             interface Settings { enabled: boolean; }
             function apply(s: Partial<Readonly<Required<Settings>>>): void {}
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var func = GetFunction(statements, "apply");
         Assert.Single(func.Parameters);
         Assert.Equal("Partial<Readonly<Required<Settings>>>", func.Parameters[0].Type);
@@ -149,7 +142,7 @@ public class NestedGenericsTokenSplittingTests
             interface Base { val: number; }
             let x: Partial<Readonly<Required<Partial<Base>>>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Required<Partial<Base>>>>", type);
     }
@@ -161,7 +154,7 @@ public class NestedGenericsTokenSplittingTests
             interface Core { n: number; }
             let x: Partial<Readonly<Required<Partial<Readonly<Core>>>>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Required<Partial<Readonly<Core>>>>>", type);
     }
@@ -179,7 +172,7 @@ public class NestedGenericsTokenSplittingTests
             let x: Partial<Readonly<A>> = {};
             let y: Partial<Readonly<Required<B>>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         Assert.Equal("Partial<Readonly<A>>", GetVariableType(statements, "x"));
         Assert.Equal("Partial<Readonly<Required<B>>>", GetVariableType(statements, "y"));
     }
@@ -192,7 +185,7 @@ public class NestedGenericsTokenSplittingTests
             interface B { b: string; }
             let x: Partial<Readonly<A>> | Partial<Readonly<B>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<A>> | Partial<Readonly<B>>", type);
     }
@@ -204,7 +197,7 @@ public class NestedGenericsTokenSplittingTests
             interface Inner { x: number; }
             let x: Record<string, Partial<Readonly<Inner>>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Record<string, Partial<Readonly<Inner>>>", type);
     }
@@ -284,7 +277,7 @@ public class NestedGenericsTokenSplittingTests
     public void Parser_RightShift_ParsesAsBinaryOperator()
     {
         var source = "let x = 16 >> 2;";
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var varStmt = statements.OfType<Stmt.Var>().First();
         var binary = varStmt.Initializer as Expr.Binary;
 
@@ -296,7 +289,7 @@ public class NestedGenericsTokenSplittingTests
     public void Parser_UnsignedRightShift_ParsesAsBinaryOperator()
     {
         var source = "let x = 16 >>> 2;";
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var varStmt = statements.OfType<Stmt.Var>().First();
         var binary = varStmt.Initializer as Expr.Binary;
 
@@ -312,7 +305,7 @@ public class NestedGenericsTokenSplittingTests
             let typed: Partial<Readonly<Num>> = { n: 32 };
             let shifted = 16 >> 2;
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
 
         // Verify nested generic type parsed correctly
         Assert.Equal("Partial<Readonly<Num>>", GetVariableType(statements, "typed"));
@@ -335,7 +328,7 @@ public class NestedGenericsTokenSplittingTests
             interface Base { id: number; }
             function process<T extends Partial<Readonly<Base>>>(x: T): void {}
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var func = GetFunction(statements, "process");
 
         Assert.NotNull(func.TypeParams);
@@ -352,7 +345,7 @@ public class NestedGenericsTokenSplittingTests
                 value: T;
             }
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var classStmt = statements.OfType<Stmt.Class>().First();
 
         Assert.NotNull(classStmt.TypeParams);
@@ -369,7 +362,7 @@ public class NestedGenericsTokenSplittingTests
     {
         // Ensure that the spaced workaround still works for backwards compatibility
         var source = "let x: Partial<Readonly<Data> > = {};";
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Data>>", type);
     }
@@ -381,7 +374,7 @@ public class NestedGenericsTokenSplittingTests
             interface Empty {}
             let x: Partial<Readonly<Empty>> = {};
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Empty>>", type);
     }
@@ -393,7 +386,7 @@ public class NestedGenericsTokenSplittingTests
             interface Data { values: number[]; }
             let x: Partial<Readonly<Data>>[] = [];
             """;
-        var statements = Parse(source);
+        var statements = TestHarness.ParseOrThrow(source);
         var type = GetVariableType(statements, "x");
         Assert.Equal("Partial<Readonly<Data>>[]", type);
     }

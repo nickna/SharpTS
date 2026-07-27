@@ -25,8 +25,7 @@ public class UrlTests
 
     // ========== URL Constructor ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Constructor_ParsesFullUrl(ExecutionMode mode)
     {
         var body = @"
@@ -37,8 +36,7 @@ public class UrlTests
         Assert.Equal("https://example.com/path?q=1#hash\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Constructor_WithBase(ExecutionMode mode)
     {
         var body = @"
@@ -51,8 +49,7 @@ public class UrlTests
 
     // ========== URL Properties ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Protocol(ExecutionMode mode)
     {
         var body = @"
@@ -63,8 +60,7 @@ public class UrlTests
         Assert.Equal("https:\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Host_DefaultPort(ExecutionMode mode)
     {
         var body = @"
@@ -75,8 +71,7 @@ public class UrlTests
         Assert.Equal("example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Host_NonDefaultPort(ExecutionMode mode)
     {
         var body = @"
@@ -87,8 +82,7 @@ public class UrlTests
         Assert.Equal("example.com:8080\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Hostname(ExecutionMode mode)
     {
         var body = @"
@@ -99,8 +93,7 @@ public class UrlTests
         Assert.Equal("example.com\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Port_NonDefault(ExecutionMode mode)
     {
         var body = @"
@@ -111,8 +104,7 @@ public class UrlTests
         Assert.Equal("8080\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Port_Default_Empty(ExecutionMode mode)
     {
         var body = @"
@@ -123,8 +115,7 @@ public class UrlTests
         Assert.Equal("\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Pathname(ExecutionMode mode)
     {
         var body = @"
@@ -135,8 +126,7 @@ public class UrlTests
         Assert.Equal("/path/to/resource\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Search(ExecutionMode mode)
     {
         var body = @"
@@ -147,8 +137,7 @@ public class UrlTests
         Assert.Equal("?q=1&r=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Hash(ExecutionMode mode)
     {
         var body = @"
@@ -159,8 +148,7 @@ public class UrlTests
         Assert.Equal("#section\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_Origin(ExecutionMode mode)
     {
         var body = @"
@@ -173,8 +161,7 @@ public class UrlTests
 
     // ========== URL Methods ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_ToString(ExecutionMode mode)
     {
         var body = @"
@@ -185,8 +172,7 @@ public class UrlTests
         Assert.Equal("https://example.com/path\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_ToJSON(ExecutionMode mode)
     {
         var body = @"
@@ -199,8 +185,7 @@ public class UrlTests
 
     // ========== URL.searchParams ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URL_SearchParams_Get(ExecutionMode mode)
     {
         var body = @"
@@ -214,8 +199,7 @@ public class UrlTests
 
     // ========== URLSearchParams Constructor ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Constructor_Empty(ExecutionMode mode)
     {
         var body = @"
@@ -226,8 +210,7 @@ public class UrlTests
         Assert.Equal("\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Constructor_String(ExecutionMode mode)
     {
         var body = @"
@@ -238,8 +221,7 @@ public class UrlTests
         Assert.Equal("a=1&b=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Constructor_Object(ExecutionMode mode)
     {
         var body = @"
@@ -253,8 +235,7 @@ public class UrlTests
 
     // ========== URLSearchParams Methods ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Get_ReturnsNull(ExecutionMode mode)
     {
         var body = @"
@@ -265,8 +246,7 @@ public class UrlTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Has(ExecutionMode mode)
     {
         var body = @"
@@ -278,8 +258,7 @@ public class UrlTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Set(ExecutionMode mode)
     {
         var body = @"
@@ -291,8 +270,7 @@ public class UrlTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Append(ExecutionMode mode)
     {
         var body = @"
@@ -305,8 +283,7 @@ public class UrlTests
         Assert.Equal("a=1&a=2&b=3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Delete(ExecutionMode mode)
     {
         var body = @"
@@ -318,8 +295,7 @@ public class UrlTests
         Assert.Equal("b=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_GetAll(ExecutionMode mode)
     {
         var body = @"
@@ -333,8 +309,7 @@ public class UrlTests
         Assert.Equal("2\n1\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Sort(ExecutionMode mode)
     {
         var body = @"
@@ -346,8 +321,7 @@ public class UrlTests
         Assert.Equal("a=1&b=2&c=3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_Size(ExecutionMode mode)
     {
         var body = @"
@@ -358,8 +332,7 @@ public class UrlTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void URLSearchParams_ToString(ExecutionMode mode)
     {
         var body = @"
@@ -381,8 +354,7 @@ public class UrlTests
         return TestHarness.RunModules(files, "main.ts", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_RelativeUrl_SplitsQueryString(ExecutionMode mode)
     {
         // Regression for #47: parse('/api/echo?k=v') used to return
@@ -403,8 +375,7 @@ public class UrlTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_RelativeUrl_SplitsFragment(ExecutionMode mode)
     {
         var body = @"
@@ -417,8 +388,7 @@ public class UrlTests
         Assert.Equal("pathname: /a/b\nhash: #frag\nsearch: null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_RelativeUrl_SplitsBothQueryAndFragment(ExecutionMode mode)
     {
         var body = @"
@@ -432,8 +402,7 @@ public class UrlTests
         Assert.Equal("pathname: /a\nsearch: ?x=1\nquery: x=1\nhash: #f\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_RelativeUrl_HashBeforeQuestionMarkIsFragment(ExecutionMode mode)
     {
         // Split order matters: a '?' inside a fragment is literal.
@@ -447,8 +416,7 @@ public class UrlTests
         Assert.Equal("pathname: /a\nhash: #frag?not-a-query\nsearch: null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_EmptyString_DegenerateCase(ExecutionMode mode)
     {
         var body = @"
@@ -461,8 +429,7 @@ public class UrlTests
         Assert.Equal("pathname: \nsearch: null\nhash: null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Parse_AbsoluteUrl_StillSplitsCorrectly(ExecutionMode mode)
     {
         // Regression guard: the absolute-URL path must be unchanged.

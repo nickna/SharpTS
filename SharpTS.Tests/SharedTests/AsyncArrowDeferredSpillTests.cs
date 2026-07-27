@@ -22,8 +22,7 @@ public class AsyncArrowDeferredSpillTests
     private static string Defer(object v, int ms)
         => $"new Promise<number>(r => setTimeout(() => r({v}), {ms}))";
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedArrow_BinaryConcat_PrefixSurvivesDeferredAwait(ExecutionMode mode)
     {
         // The exact shape from the issue.
@@ -37,8 +36,7 @@ public class AsyncArrowDeferredSpillTests
         Assert.Equal("z1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneArrow_BinaryConcat_PrefixSurvivesDeferredAwait(ExecutionMode mode)
     {
         var source = $$"""
@@ -48,8 +46,7 @@ public class AsyncArrowDeferredSpillTests
         Assert.Equal("z1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneArrow_TwoDeferredAwaits(ExecutionMode mode)
     {
         var source = $$"""
@@ -63,8 +60,7 @@ public class AsyncArrowDeferredSpillTests
         Assert.Equal("A1B2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneArrow_TemplateLiteral_DeferredAwaits(ExecutionMode mode)
     {
         var source = $$"""
@@ -74,8 +70,7 @@ public class AsyncArrowDeferredSpillTests
         Assert.Equal("v=q-5-6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneArrow_ArrayAndObject_DeferredAwaits(ExecutionMode mode)
     {
         var source = $$"""
@@ -89,8 +84,7 @@ public class AsyncArrowDeferredSpillTests
         Assert.Equal("x,1,y z2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedArrow_CapturesOuterLocalAndSpillsAcrossAwait(ExecutionMode mode)
     {
         // Arrow captures an outer local (prefix) AND spills it across the await.

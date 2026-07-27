@@ -57,12 +57,6 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     ILGenerator IEmitterContext.IL => _ctx.IL;
 
     /// <summary>
-    /// Resets the stack type tracking to unknown state.
-    /// Exposed for call handlers that emit code changing the stack.
-    /// </summary>
-    public void ResetStackType() => _helpers.SetStackUnknown();
-
-    /// <summary>
     /// Marks the stack as containing an unknown/object type.
     /// Part of IEmitterContext interface for type emitter strategies.
     /// </summary>
@@ -216,10 +210,6 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
             case Stmt.Throw t:
                 EmitThrow(t);
-                break;
-
-            case Stmt.Print p:
-                EmitPrint(p);
                 break;
 
             case Stmt.Function fn:

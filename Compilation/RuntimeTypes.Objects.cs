@@ -541,24 +541,6 @@ public static partial class RuntimeTypes
         }
     }
 
-    /// <summary>
-    /// Invokes a getter accessor function with the given 'this' binding.
-    /// Public helper method for use by emitted code.
-    /// </summary>
-    public static object? InvokeGetterAccessor(object? accessor, object? thisArg)
-    {
-        return InvokeAccessor(accessor, thisArg);
-    }
-
-    /// <summary>
-    /// Invokes a setter accessor function with the given 'this' binding and value.
-    /// Public helper method for use by emitted code.
-    /// </summary>
-    public static void InvokeSetterAccessor(object? accessor, object? thisArg, object? value)
-    {
-        InvokeAccessor(accessor, thisArg, value);
-    }
-
     #endregion
 
     #region Object Methods

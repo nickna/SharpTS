@@ -13,8 +13,7 @@ public class NestedGenericsParsingTests
 {
     #region Double Nested Generics (>> token splitting)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_VariableDeclaration(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_FunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -42,8 +40,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("test\ndefault\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_FunctionReturnType(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +55,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_GenericClassInstantiation(ExecutionMode mode)
     {
         var source = """
@@ -76,8 +72,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_MultipleTypeArguments(ExecutionMode mode)
     {
         var source = """
@@ -89,8 +84,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_MultipleVariables(ExecutionMode mode)
     {
         // Tests multiple nested generic declarations in sequence
@@ -106,8 +100,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("Alice\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DoubleNested_InFunctionCall(ExecutionMode mode)
     {
         var source = """
@@ -126,8 +119,7 @@ public class NestedGenericsParsingTests
 
     #region Triple Nested Generics (>>> token splitting)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TripleNested_VariableDeclaration(ExecutionMode mode)
     {
         var source = """
@@ -139,8 +131,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TripleNested_FunctionParameter(ExecutionMode mode)
     {
         var source = """
@@ -154,8 +145,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TripleNested_MultipleVariables(ExecutionMode mode)
     {
         var source = """
@@ -170,8 +160,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("1\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TripleNested_GenericClass(ExecutionMode mode)
     {
         var source = """
@@ -191,8 +180,7 @@ public class NestedGenericsParsingTests
 
     #region Quadruple+ Nested Generics (multiple splits)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void QuadrupleNested_VariableDeclaration(ExecutionMode mode)
     {
         var source = """
@@ -204,8 +192,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("999\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeeplyNested_FiveLevel(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +208,7 @@ public class NestedGenericsParsingTests
 
     #region Mixed Contexts
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedNesting_DifferentLevels(ExecutionMode mode)
     {
         var source = """
@@ -237,8 +223,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("1\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InClassField(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +241,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InMethodParameter(ExecutionMode mode)
     {
         var source = """
@@ -275,8 +259,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("42\n0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InMethodReturnType(ExecutionMode mode)
     {
         var source = """
@@ -293,8 +276,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InArrowFunction(ExecutionMode mode)
     {
         var source = """
@@ -307,8 +289,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("123\n-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InTypeAssertion(ExecutionMode mode)
     {
         var source = """
@@ -325,8 +306,7 @@ public class NestedGenericsParsingTests
 
     #region Regression: Right-Shift Operators Still Work
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RightShift_InExpression(ExecutionMode mode)
     {
         var source = """
@@ -337,8 +317,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnsignedRightShift_InExpression(ExecutionMode mode)
     {
         var source = """
@@ -349,8 +328,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RightShift_NegativeNumber(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +339,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("-4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RightShift_WithParentheses(ExecutionMode mode)
     {
         var source = """
@@ -374,8 +351,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RightShift_InComparison(ExecutionMode mode)
     {
         var source = """
@@ -387,8 +363,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedContext_TypeAndShiftOperator(ExecutionMode mode)
     {
         // Tests that >> works as shift in expressions while also having nested generics
@@ -407,8 +382,7 @@ public class NestedGenericsParsingTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_EmptyTypeArgs(ExecutionMode mode)
     {
         // Generic with nested generic that has its own empty case
@@ -421,8 +395,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_WithOptionalProperties(ExecutionMode mode)
     {
         var source = """
@@ -437,8 +410,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_ConsecutiveDeclarations(ExecutionMode mode)
     {
         var source = """
@@ -456,8 +428,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("1\ntwo\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_InConditionalReturn(ExecutionMode mode)
     {
         var source = """
@@ -475,8 +446,7 @@ public class NestedGenericsParsingTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedGenerics_Record_With_NestedType(ExecutionMode mode)
     {
         var source = """

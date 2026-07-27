@@ -10,8 +10,7 @@ public class TripleSlashReferenceTests
 {
     #region Basic Path References
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_FunctionFromReferencedScript(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -31,8 +30,7 @@ public class TripleSlashReferenceTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_VariableFromReferencedScript(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -52,8 +50,7 @@ public class TripleSlashReferenceTests
         Assert.Equal("3.14159\n2.71828\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_ClassFromReferencedScript(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -84,8 +81,7 @@ public class TripleSlashReferenceTests
 
     #region Multiple References
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_MultipleReferences(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -115,8 +111,7 @@ public class TripleSlashReferenceTests
 
     #region Nested References
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_NestedReferences(ExecutionMode mode)
     {
         // A references B, B references C
@@ -140,8 +135,7 @@ public class TripleSlashReferenceTests
         Assert.Equal("5\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_DiamondReferences(ExecutionMode mode)
     {
         // A references B and C, both B and C reference D
@@ -178,8 +172,7 @@ public class TripleSlashReferenceTests
 
     #region Execution Order
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_ExecutionOrder_ReferencesFirst(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -205,8 +198,7 @@ public class TripleSlashReferenceTests
 
     #region Path Resolution
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_WithoutExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -224,8 +216,7 @@ public class TripleSlashReferenceTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_NestedDirectory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -249,8 +240,7 @@ public class TripleSlashReferenceTests
 
     #region Error Cases (Interpreter only - error messages differ)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_NotFoundFile_ThrowsError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -266,8 +256,7 @@ public class TripleSlashReferenceTests
         Assert.Contains("not found", ex.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_InModuleFile_ThrowsError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -286,8 +275,7 @@ public class TripleSlashReferenceTests
         Assert.Contains("script", ex.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_ToModuleFile_ThrowsError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -306,8 +294,7 @@ public class TripleSlashReferenceTests
         Assert.Contains("module", ex.Message.ToLower());
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathReference_Circular_ThrowsError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -331,8 +318,7 @@ public class TripleSlashReferenceTests
 
     #region Script Detection
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScriptDetection_FileWithNoImportExport_IsScript(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -348,8 +334,7 @@ public class TripleSlashReferenceTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ScriptDetection_FileWithImport_IsModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

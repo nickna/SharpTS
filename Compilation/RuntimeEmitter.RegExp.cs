@@ -17,7 +17,6 @@ public partial class RuntimeEmitter
         EmitRegExpFromArgs(typeBuilder, runtime);
         EmitRegExpTest(typeBuilder, runtime);
         EmitRegExpExec(typeBuilder, runtime);
-        EmitRegExpToString(typeBuilder, runtime);
         EmitRegExpGetSource(typeBuilder, runtime);
         EmitRegExpGetFlags(typeBuilder, runtime);
         EmitRegExpGetGlobal(typeBuilder, runtime);
@@ -428,39 +427,6 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notRegExpLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitRegExpToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "RegExpToString",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.String,
-            [_types.Object]
-        );
-        runtime.RegExpToString = method;
-
-        var il = method.GetILGenerator();
-        var notRegExpLabel = il.DefineLabel();
-        var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
-
-        // var regexp = regex as $RegExp
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
-        il.Emit(OpCodes.Stloc, regexpLocal);
-
-        // if (regexp == null) return "/(?:)/"
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Brfalse, notRegExpLabel);
-
-        // return regexp.ToString()
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpToStringMethod);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notRegExpLabel);
-        il.Emit(OpCodes.Ldstr, "/(?:)/");
         il.Emit(OpCodes.Ret);
     }
 

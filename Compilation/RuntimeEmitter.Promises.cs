@@ -450,7 +450,6 @@ public partial class RuntimeEmitter
             taskType,
             [_types.Object]
         );
-        runtime.ProcessElementSettled = processElementSettled;
         EmitProcessElementSettledWrapper(processElementSettled.GetILGenerator(), processElementSettledSM);
         EmitProcessElementSettledMoveNext(processElementSettledSM, runtime);
         processElementSettledSM.Type.CreateType();

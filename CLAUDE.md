@@ -46,6 +46,11 @@ Source → Lexer → Parser → TypeChecker → Interpreter (tree-walk)
 | `Cli/` | Command-line argument parsing |
 | `Configuration/` | tsconfig.json discovery/`extends`/merge + strictness option resolution |
 | `Declaration/` | TypeScript declaration generation from .NET types |
+| `Repl/` | Interactive REPL (PrettyPrompt-based; needs a real terminal — untestable end-to-end) |
+| `References/` | `sharpts.json` manifest → third-party DLL / NuGet reference resolution (restore, assets parsing, load) |
+| `stdlib/` | TypeScript source for Node-compatible modules, embedded into SharpTS.dll and compiled with user programs |
+| `Examples/` | Showcase programs (`Examples/test-examples.ps1` harness; `examples.yml` workflow runs it on demand) |
+| `SharpTS.Sdk/` + `SharpTS.Sdk.Tasks/` | MSBuild SDK package (`Sdk="SharpTS.Sdk"`) and its build tasks |
 | `SharpTS.LanguageServer/` | Standalone OmniSharp-based LSP server (`sharpts-lsp` tool) for IDE integration |
 | `SharpTS.Tests/` | xUnit test project |
 
@@ -62,7 +67,7 @@ Source → Lexer → Parser → TypeChecker → Interpreter (tree-walk)
 
 **Type System:**
 - Structural typing for interfaces (duck typing)
-- Classes are compared **structurally** for assignment compatibility (matching `tsc`), **except** when the target class is branded by a private/protected member anywhere in its hierarchy — then it is nominal (source must be the same class or a subclass). Inheritance/subtyping is still nominal (name-based) for the hierarchy walk. See `TypeChecker.Compatibility.cs` (`Instance` vs `Instance`) and `HasNominalClassBrand`.
+- Classes are compared **structurally** for assignment compatibility (matching `tsc`), **except** when the target class is branded by a private/protected member anywhere in its hierarchy — then it is nominal (source must be the same class or a subclass). Inheritance/subtyping is still nominal (name-based) for the hierarchy walk. See `TypeChecker.Compatibility.cs` (`Instance` vs `Instance`) and `HasNominalClassBrand` (`TypeChecker.Compatibility.Helpers.cs`).
 - `TypeInfo` records represent types statically; runtime objects are independent
 
 ### RuntimeValue Boxing Elimination (Active Optimization)
@@ -79,12 +84,12 @@ The codebase is migrating from `object?` to `RuntimeValue` struct to eliminate b
 **ISharpTSCallable** (`Runtime/Types/SharpTSFunction.cs`) is the single callable interface:
 - Boxed `Call(Interpreter, List<object?>)` (being retired) plus `CallV2(Interpreter, ReadOnlySpan<RuntimeValue>)`
 - `CallV2` has a default implementation that bridges to `Call` — unmigrated implementors work unchanged; migrated ones override it to run boxing-free
-- Call sites holding boxed args use `.CallBoxed(...)` from `Runtime/Types/CallableInterop.cs` (never invoke legacy `Call` directly in new code)
+- Call sites holding boxed args should use `.CallBoxed(...)` from `Runtime/Types/CallableInterop.cs` (routes through `CallV2`) rather than invoking legacy `Call` directly. NOTE: the name **"Call"** is a reflection contract — emitted IL invokes it via `Ldstr "Call"` at 5 sites (`RuntimeEmitter.VmHelpers.cs`, `RuntimeEmitter.Objects.Invocation.cs`, `RuntimeEmitter.Objects.Properties.cs`); renaming the interface method silently breaks compiled DLLs. `CallBoxed` is only a C# extension method, not a reflected name.
 - Spans can't cross `await`: async call sites evaluate all args first, then call synchronously; async/generator implementors copy span → list before starting the state machine
 
 **BuiltInMethod** (`Runtime/BuiltIns/BuiltInMethod.cs`):
 - `CreateV2()` factory for RuntimeValue-based methods; `HasV2Implementation` gates the interpreter fast path
-- All production built-in bodies are converted to `CreateV2`/`MethodV2` form. The legacy delegate type (`Func<Interpreter, object?, List<object?>, object?>`) and the boxed `Call(Interpreter, List<object?>)` survive ONLY as plumbing: compiled standalone DLLs reflectively invoke `Call` (see `RuntimeEmitter.VmHelpers.cs`), and `CreateConstant`/the V2→legacy wrapper route through it. Do not register new built-ins with the legacy constructor.
+- Nearly all production built-in bodies use `CreateV2`/`MethodV2` form. Known stragglers on the legacy delegate (`Func<Interpreter, object?, List<object?>, object?>`): the `ProcessBuiltIns` diagnostics/report registrations, and `BuiltInAsyncMethod` (`Runtime/BuiltIns/BuiltInAsyncMethod.cs`, ~60 async built-in registrations — never migrated, no `CallV2` override). The legacy plumbing otherwise survives only for the emitted-IL "Call" reflection contract above and `CreateConstant`. Do not register new built-ins with the legacy constructor.
 - Thread-local pooling in array built-ins to avoid allocations
 
 ### Visitor-Style Traversal Pattern
@@ -136,7 +141,7 @@ il.Emit(OpCodes.Call, method);
 runtime.SomeMethod = EmitReflectionHelper(typeBuilder, "SomeMethod", argCount);
 
 // GOOD - same idiom emitted inline into an existing method body; leaves the
-// Invoke result on the stack. EmitReflectionCallVoid pops it; onMissing
+// Invoke result on the stack (pop it yourself for void targets); onMissing
 // customizes the SharpTS.dll-absent path (ret/throw); emitArg customizes
 // argument loading. EmitReflectionCreateInstance covers the
 // Activator.CreateInstance(Type.GetType("…, SharpTS"), args) form.
@@ -156,9 +161,9 @@ The same applies to `PropertyDescriptorStore`, `ObjectBuiltIns`, and any other S
 
 ### Error Handling Conventions
 
-- Type errors: "Type Error:" prefix
-- Runtime errors: "Runtime Error:" prefix
-- Compile errors: "Compile Error:" prefix
+- Type errors: "Type Error:" prefix; runtime errors: "Runtime Error:" prefix
+- The structured model is `Diagnostics/Diagnostic.cs` (`DiagnosticCode` + optional canonical `TSnnnn` code); type-checker throws carry `tsCode:` where a `tsc` analogue exists
+- Compiler warnings are collected on `ILCompiler.Warnings` (never written to Console from `Compilation/`); the CLI prints them to stderr
 
 ## Important Implementation Details
 

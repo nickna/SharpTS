@@ -12,8 +12,7 @@ public class UnboxedArithmeticTests
 {
     #region Numeric Chain Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericChain_NoIntermediateBoxing(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedLocal_StaysUnboxed(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleArithmeticOps_ComplexExpression(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +50,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("29\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LongChain_AllOperators(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +66,7 @@ public class UnboxedArithmeticTests
 
     #region Typed Local Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExplicitNumberType_UsesUnboxedLocal(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +78,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void InferredType_FallsBackToObject(ExecutionMode mode)
     {
         var source = """
@@ -99,8 +93,7 @@ public class UnboxedArithmeticTests
     // CompiledOnly: Uninitialized `let x: number` defaults to 0 in compiled mode
     // (.NET value type default) but produces `undefined` in the interpreter (correct per JS spec).
     // This is a CLR platform constraint — .NET locals of value types are zero-initialized.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void UninitializedNumberLocal_DefaultsToZero(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +105,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedLocal_ReassignmentWorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +123,7 @@ public class UnboxedArithmeticTests
 
     #region Boxing Boundary Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionCallWithNumericArg_BoxesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -146,8 +137,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnNumericValue_BoxesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -161,8 +151,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PropertySetWithNumeric_BoxesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +167,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrayElementWithNumeric_BoxesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +180,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConsoleLogWithNumericExpr_BoxesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -208,8 +195,7 @@ public class UnboxedArithmeticTests
 
     #region Mixed Type Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedAnyAndNumber_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -222,8 +208,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ObjectLocalWithNumber_FallsBackToBoxing(ExecutionMode mode)
     {
         var source = """
@@ -236,8 +221,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumberAndStringConcatenation_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -254,8 +238,7 @@ public class UnboxedArithmeticTests
 
     #region Control Flow Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TernaryWithNumericBranches_ProducesCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +250,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TernaryWithNumericBranches_FalseBranch(ExecutionMode mode)
     {
         var source = """
@@ -280,8 +262,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IfElseWithNumericAssignment_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -298,8 +279,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LoopWithNumericAccumulator_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -316,8 +296,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOfWithNumericSum_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -337,8 +316,7 @@ public class UnboxedArithmeticTests
 
     #region Compound Assignment Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundAddWithTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -351,8 +329,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundSubtractWithTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -365,8 +342,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundMultiplyWithTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -379,8 +355,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CompoundDivideWithTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -393,8 +368,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IncrementTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -407,8 +381,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DecrementTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -421,8 +394,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixIncrementTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -434,8 +406,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixDecrementTypedLocal_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -451,8 +422,7 @@ public class UnboxedArithmeticTests
 
     #region Comparison Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NumericComparison_ProducesBoolean(ExecutionMode mode)
     {
         var source = """
@@ -465,8 +435,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComparisonInCondition_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -480,8 +449,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("yes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedComparisons_WorkCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -495,8 +463,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComparisonWithArithmetic_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -513,8 +480,7 @@ public class UnboxedArithmeticTests
 
     #region Function with Numeric Locals Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionWithTypedLocals_ComputesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -530,8 +496,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("22\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RecursiveFunctionWithNumbers_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -548,8 +513,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("120\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedFunctionCalls_WorkCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -570,8 +534,7 @@ public class UnboxedArithmeticTests
 
     #region Class Method Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassMethodWithNumericComputation_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -597,8 +560,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassWithNumericField_ArithmeticWorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -628,8 +590,7 @@ public class UnboxedArithmeticTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ZeroOperations_WorkCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -643,8 +604,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NegativeNumbers_WorkCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -658,8 +618,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FloatingPointOperations_WorkCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -672,8 +631,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DivisionBySmallNumber_WorksCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -690,8 +648,7 @@ public class UnboxedArithmeticTests
 
     #region Typed Return Value Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_FibonacciRecursion_WorksCorrectly(ExecutionMode mode)
     {
         // Tests recursive typed returns with multiple return points
@@ -709,8 +666,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("55\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_MutualRecursion_WorksCorrectly(ExecutionMode mode)
     {
         // Tests mutually recursive functions with typed returns
@@ -731,8 +687,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_DeepNesting_WorksCorrectly(ExecutionMode mode)
     {
         // Tests deeply nested function calls with typed returns
@@ -751,8 +706,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("9.5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_ChainedInExpression_WorksCorrectly(ExecutionMode mode)
     {
         // Tests using typed return values in complex expressions
@@ -768,8 +722,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("13\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_InTernaryCondition_WorksCorrectly(ExecutionMode mode)
     {
         // Tests typed return values used in ternary expressions
@@ -784,8 +737,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("above\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_BooleanFunction_WorksCorrectly(ExecutionMode mode)
     {
         // Tests functions with boolean return type
@@ -805,8 +757,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_StringFunction_WorksCorrectly(ExecutionMode mode)
     {
         // Tests functions with string return type
@@ -821,8 +772,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_UsedAsArgument_WorksCorrectly(ExecutionMode mode)
     {
         // Tests passing typed return values directly as arguments
@@ -837,8 +787,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_InWhileCondition_WorksCorrectly(ExecutionMode mode)
     {
         // Tests typed boolean return in loop condition
@@ -857,8 +806,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("1\n2\n3\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_InIfCondition_WorksCorrectly(ExecutionMode mode)
     {
         // Tests typed boolean return in if condition
@@ -882,8 +830,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("greater\nless\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_MultipleReturnPaths_WorksCorrectly(ExecutionMode mode)
     {
         // Tests function with multiple return statements
@@ -910,8 +857,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("negative\nzero\nsmall\nlarge\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_InArrayMap_WorksCorrectly(ExecutionMode mode)
     {
         // Tests typed return with array operations
@@ -928,8 +874,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("2,4,6,8,10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_ClassMethodReturningNumber_WorksCorrectly(ExecutionMode mode)
     {
         // Tests class methods with typed returns
@@ -956,8 +901,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("1\n2\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_ClassMethodChaining_WorksCorrectly(ExecutionMode mode)
     {
         // Tests chaining calls on class methods with typed returns
@@ -978,8 +922,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("64\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_WithDefaultParameter_WorksCorrectly(ExecutionMode mode)
     {
         // Tests typed return with default parameters
@@ -995,8 +938,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("10\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReturn_TailRecursion_WorksCorrectly(ExecutionMode mode)
     {
         // Tests tail-recursive function with typed return
@@ -1019,8 +961,7 @@ public class UnboxedArithmeticTests
 
     #region Arrow Function Typed Return Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ExpressionBody_Number(ExecutionMode mode)
     {
         // Tests arrow function with expression body returning number
@@ -1033,8 +974,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ExpressionBody_Boolean(ExecutionMode mode)
     {
         // Tests arrow function with expression body returning boolean
@@ -1048,8 +988,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ExpressionBody_String(ExecutionMode mode)
     {
         // Tests arrow function with expression body returning string
@@ -1062,8 +1001,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_BlockBody_Number(ExecutionMode mode)
     {
         // Tests arrow function with block body returning number
@@ -1079,8 +1017,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("49\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_BlockBody_MultipleReturns(ExecutionMode mode)
     {
         // Tests arrow function with multiple return paths
@@ -1099,8 +1036,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("5\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_NestedArrows(ExecutionMode mode)
     {
         // Tests nested arrow functions with typed returns
@@ -1117,8 +1053,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ArrayMap(ExecutionMode mode)
     {
         // Tests arrow function typed return with array map
@@ -1132,8 +1067,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("2,4,6,8,10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ArrayFilter(ExecutionMode mode)
     {
         // Tests arrow function typed return with array filter
@@ -1147,8 +1081,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("2,4,6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ArrayReduce(ExecutionMode mode)
     {
         // Tests arrow function typed return with array reduce
@@ -1162,8 +1095,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_ChainedCalls(ExecutionMode mode)
     {
         // Tests chaining calls on arrow functions with typed returns
@@ -1179,8 +1111,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("37\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_WithClosure(ExecutionMode mode)
     {
         // Tests arrow function with closure and typed return
@@ -1196,8 +1127,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_VoidExpression_NoError(ExecutionMode mode)
     {
         // Tests arrow function with void expression body (like console.log)
@@ -1211,8 +1141,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("Hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_InTernary(ExecutionMode mode)
     {
         // Tests arrow function typed return used in ternary expression
@@ -1226,8 +1155,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_RecursiveArrow(ExecutionMode mode)
     {
         // Tests recursive arrow function with typed return (using let for self-reference)
@@ -1241,8 +1169,7 @@ public class UnboxedArithmeticTests
         Assert.Equal("120\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowTypedReturn_AsMethodCallback(ExecutionMode mode)
     {
         // Tests arrow function with typed return as method callback

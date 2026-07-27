@@ -279,17 +279,8 @@ public class SharpTSSet : ITypeCategorized, IEnumerable<object?>
 
     public override string ToString()
     {
-        var values = _set.Select(FormatValue);
+        var values = _set.Select(CollectionInspect.FormatValue);
         return $"Set({_set.Count}) {{ {string.Join(", ", values)} }}";
     }
 
-    private static string FormatValue(object? value) => value switch
-    {
-        null => "undefined",
-        string s => $"\"{s}\"",
-        bool b => b ? "true" : "false",
-        SharpTSArray arr => arr.ToString(),
-        SharpTSObject obj => obj.ToString(),
-        _ => value.ToString() ?? "undefined"
-    };
 }

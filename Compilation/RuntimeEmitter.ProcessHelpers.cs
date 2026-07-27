@@ -16,8 +16,6 @@ public partial class RuntimeEmitter
         EmitProcessUptime(typeBuilder, runtime);
         EmitProcessMemoryUsage(typeBuilder, runtime);
         EmitProcessGetNextTick(typeBuilder, runtime);
-        EmitProcessEventEmitterCallMethod(typeBuilder, runtime);
-        EmitProcessEmitExitMethod(typeBuilder, runtime);
         EmitStdinMethods(typeBuilder, runtime);
         EmitStdoutMethods(typeBuilder, runtime);
         EmitStderrMethods(typeBuilder, runtime);
@@ -749,7 +747,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
 
             // Call stream.SetWriteCallback(tsFunction)
-            il.Emit(OpCodes.Callvirt, runtime.TSWritableType.GetMethod("SetWriteCallback")!);
+            il.Emit(OpCodes.Callvirt, runtime.TSWritableSetWriteCallback!);
         }
 
         // Cache: _instance = stream
@@ -888,68 +886,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object ProcessEventEmitterCall(string methodName, object[] args)
-    /// Delegates to ProcessBuiltIns.EventEmitterCall via reflection.
-    /// </summary>
-    private void EmitProcessEventEmitterCallMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ProcessEventEmitterCall",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.String, _types.ObjectArray]
-        );
-        runtime.ProcessEventEmitterCall = method;
-
-        var il = method.GetILGenerator();
-
-        // ProcessBuiltIns.EventEmitterCall(methodName, args) — graceful null when
-        // SharpTS.dll is absent (process events degrade silently standalone).
-        EmitReflectionCall(il, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS", "EventEmitterCall", 2,
-            onMissing: () =>
-            {
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ret);
-            });
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static void ProcessEmitExit(int exitCode)
-    /// Calls ProcessBuiltIns.EmitExitEvent to fire the 'exit' event.
-    /// </summary>
-    private void EmitProcessEmitExitMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ProcessEmitExit",
-            MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [_types.Int32]
-        );
-        runtime.ProcessEmitExit = method;
-
-        var il = method.GetILGenerator();
-
-        // ProcessBuiltIns.EmitExitEvent(null, exitCode) — no-op when SharpTS.dll
-        // is absent (graceful standalone degradation).
-        EmitReflectionCallVoid(il, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS", "EmitExitEvent", 2,
-            emitArg: i =>
-            {
-                if (i == 0)
-                {
-                    il.Emit(OpCodes.Ldnull); // interpreter = null
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldarg_0); // exitCode
-                    il.Emit(OpCodes.Box, _types.Int32);
-                }
-            },
-            onMissing: () => il.Emit(OpCodes.Ret));
         il.Emit(OpCodes.Ret);
     }
 

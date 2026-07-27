@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncMemberIncrementTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_PropertyAndIndex_AllForms(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +33,7 @@ public class AsyncMemberIncrementTests
         Assert.Equal("2 11 4 5 7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncFunction_ResultValueSemantics(ExecutionMode mode)
     {
         // Postfix yields the (ToNumber-coerced) original; prefix yields the new value.
@@ -52,8 +50,7 @@ public class AsyncMemberIncrementTests
         Assert.Equal("5 7 7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_MemberIncrement(ExecutionMode mode)
     {
         var source = """
@@ -72,8 +69,7 @@ public class AsyncMemberIncrementTests
         Assert.Equal("6 0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncArrow_MemberIncrement(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +84,7 @@ public class AsyncMemberIncrementTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGenerator_MemberIncrement(ExecutionMode mode)
     {
         var source = """

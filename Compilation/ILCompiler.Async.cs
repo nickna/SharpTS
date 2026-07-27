@@ -550,9 +550,6 @@ public partial class ILCompiler
             case Stmt.Throw th:
                 AnalyzeArrowExprForAwaits(th.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
-            case Stmt.Print p:
-                AnalyzeArrowExprForAwaits(p.Expr, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
-                break;
         }
     }
 
@@ -721,7 +718,7 @@ public partial class ILCompiler
             ctx.CommonJsExportFields = _modules.CommonJsExportFields;
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
-            ctx.IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body);
+            ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(func.Body);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;

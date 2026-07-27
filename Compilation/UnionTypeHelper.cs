@@ -26,21 +26,6 @@ public static class UnionTypeHelper
     }
 
     /// <summary>
-    /// Checks if an object is a union type instance.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsUnionValue(object? value)
-        => value is IUnionType;
-
-    /// <summary>
-    /// Unwraps the underlying value from a union type.
-    /// Returns the original value if not a union.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static object? UnwrapValue(object? value)
-        => value is IUnionType union ? union.Value : value;
-
-    /// <summary>
     /// Converts all arguments for union type parameters in a method call.
     /// Modifies the args array in-place using implicit conversion operators.
     /// </summary>

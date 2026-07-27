@@ -362,8 +362,8 @@ public static partial class ProcessBuiltIns
         Environment.ExitCode = exitCode;
         EmitExitEvent(i, exitCode);
 
-        Environment.Exit(exitCode);
-        return null; // Never reached
+        ProcessControl.Exit(exitCode);
+        return null; // Reached only when an embedder's ExitHandler returns
     }
 
     /// <summary>

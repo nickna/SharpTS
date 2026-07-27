@@ -388,37 +388,75 @@ internal static class WebStreamsHelpers
         var branch1 = new SharpTSReadableStream(interp, underlyingSource: null, strategy: null);
         var branch2 = new SharpTSReadableStream(interp, underlyingSource: null, strategy: null);
 
-        // Drain the source's existing queue plus any pull-generated chunks
-        // into both branches, synchronously where possible.
-        while (true)
+        PumpNext();
+
+        return new SharpTSArray(new List<object?> { branch1, branch2 });
+
+        // Feeds both branches from the source. Synchronous reads drain inline
+        // (the common already-queued case); an in-flight async pull() continues
+        // on the event loop instead of blocking it — the previous sync
+        // GetResult() here hung the loop for any source with an async pull.
+        void PumpNext()
         {
-            var readTask = source.ReadInternal();
-            if (!readTask.IsCompleted)
+            while (true)
             {
-                // An async pull is in flight — block and wait. For sync sources
-                // (all current tests) this never actually blocks because the
-                // task is completed immediately.
-                readTask.GetAwaiter().GetResult();
+                Task<object?> readTask;
+                try { readTask = source.ReadInternal(); }
+                catch (Exception ex) { Finish(ex); return; }
+
+                if (!readTask.IsCompleted)
+                {
+                    interp.Ref();
+                    readTask.ContinueWith(t => interp.EnqueueCallback(() =>
+                    {
+                        interp.Unref();
+                        if (t.IsFaulted) { Finish(t.Exception?.InnerException ?? t.Exception); return; }
+                        if (HandleResult(t.Result)) PumpNext();
+                    }), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                    return;
+                }
+
+                if (readTask.IsFaulted) { Finish(readTask.Exception?.InnerException ?? readTask.Exception); return; }
+                if (!HandleResult(readTask.Result)) return;
             }
-            var result = readTask.Result;
-            if (result is not IDictionary<string, object?> obj)
-            {
-                break;
-            }
+        }
+
+        // Returns true to keep pumping.
+        bool HandleResult(object? result)
+        {
+            if (result is not IDictionary<string, object?> obj) { Finish(error: null); return false; }
             var done = obj.TryGetValue("done", out var d) && d is bool db && db;
-            if (done)
+            if (done) { Finish(error: null); return false; }
+            var chunk = obj.TryGetValue("value", out var v) ? v : SharpTSUndefined.Instance;
+            EnqueueToBranch(branch1, chunk);
+            EnqueueToBranch(branch2, chunk);
+            return true;
+        }
+
+        void Finish(object? error)
+        {
+            if (error != null)
+            {
+                // A failed source read errors both branches (WHATWG tee) —
+                // silently ending them showed the consumer a short, *successful*
+                // stream.
+                branch1.ErrorInternal(error);
+                branch2.ErrorInternal(error);
+            }
+            else
             {
                 branch1.CloseInternal();
                 branch2.CloseInternal();
-                break;
             }
-            var chunk = obj.TryGetValue("value", out var v) ? v : SharpTSUndefined.Instance;
-            try { branch1.EnqueueInternal(chunk); } catch { }
-            try { branch2.EnqueueInternal(chunk); } catch { }
+            if (source.Reader == reader) source.Reader = null;
         }
 
-        if (source.Reader == reader) source.Reader = null;
-
-        return new SharpTSArray(new List<object?> { branch1, branch2 });
+        static void EnqueueToBranch(SharpTSReadableStream branch, object? chunk)
+        {
+            // A closed/canceled/errored branch skips the chunk (spec: the other
+            // branch keeps receiving); anything else must not be swallowed.
+            try { branch.EnqueueInternal(chunk); }
+            catch (InvalidOperationException) { }
+        }
     }
 }

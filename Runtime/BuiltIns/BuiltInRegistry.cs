@@ -1490,23 +1490,4 @@ public sealed class BuiltInRegistry
             ((SharpTSAsyncLocalStorage)instance).GetMember(name));
     }
 
-    private static string Stringify(object? obj)
-    {
-        if (obj == null) return "null";
-        if (obj is double d)
-        {
-            return Compilation.RuntimeTypes.FormatNumber(d);
-        }
-        if (obj is bool b) return b ? "true" : "false";
-        if (obj is SharpTSArray arr)
-        {
-            return "[" + string.Join(", ", arr.Select(Stringify)) + "]";
-        }
-        if (obj is SharpTSObject sobj)
-        {
-            var pairs = sobj.Fields.Select(kv => $"{kv.Key}: {Stringify(kv.Value)}");
-            return "{ " + string.Join(", ", pairs) + " }";
-        }
-        return obj.ToString() ?? "null";
-    }
 }

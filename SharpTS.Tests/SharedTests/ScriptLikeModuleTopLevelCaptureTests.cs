@@ -47,8 +47,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
     private static string Normalize(string s) =>
         string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd())).Trim();
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_ReadsTopLevelLet(ExecutionMode mode)
     {
         // Previously: ReferenceError: Undefined variable 'v'.
@@ -59,8 +58,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
             """, "v=7", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_MutatesTopLevelLet(ExecutionMode mode)
     {
         // Previously: InvalidProgramException, for each of the three write forms.
@@ -75,8 +73,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
             """, "2,4,6", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_MutatesTopLevelVarAndString(ExecutionMode mode)
     {
         Expect("""
@@ -94,8 +91,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
     /// Function declarations hoist, so a function defined above the binding it captures
     /// still has to resolve to the same storage once called.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HoistedFunction_CapturesLaterDeclaredTopLevelLet(ExecutionMode mode)
     {
         Expect("""
@@ -108,8 +104,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
             """, "count=3", mode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ClassMethod_CapturesTopLevelLet(ExecutionMode mode)
     {
         Expect("""
@@ -130,8 +125,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
     /// (it never enters the shared bucket). Both are kept so a future change to the
     /// normalization can't fix one shape by breaking another.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowAndRealModule_StillCaptureTopLevelLet(ExecutionMode mode)
     {
         Expect("""
@@ -154,8 +148,7 @@ public class ScriptLikeModuleTopLevelCaptureTests
     /// Two script-like modules genuinely share one global scope, so a function in the
     /// entry file must see a binding the imported-by-side-effect script declared.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FunctionDeclaration_MutatesAcrossScriptMergedFiles(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

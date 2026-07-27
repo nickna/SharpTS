@@ -16,8 +16,7 @@ public class ConstInitializerWideningTests
 {
     // --- The headline bug: property/element reassignment on a const object/array literal ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstObjectLiteral_PropertyReassign_Allowed(ExecutionMode mode)
     {
         // `const o = { n: 1 }` has type `{ n: number }`, so `o.n = 9` is legal TypeScript.
@@ -110,8 +109,7 @@ public class ConstInitializerWideningTests
             TestHarness.RunInterpreted("const o = { p: { n: 1 } as const }; o.p.n = 9;"));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstObjectLiteral_MixedPlainAndAsConstMembers(ExecutionMode mode)
     {
         // In the same object literal, a plain member widens (`o.b.m = 5` is allowed) while an
@@ -123,8 +121,7 @@ public class ConstInitializerWideningTests
     // --- #493: `as const` literal types survive `const`-initializer widening regardless of the
     // nesting position (array element, spread member), and `as const` members model readonly. ---
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConstArrayElement_KeepsLiteralType(ExecutionMode mode)
     {
         // `as const` on an *array element* inside a fresh array literal is no longer widened away:
@@ -133,8 +130,7 @@ public class ConstInitializerWideningTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadOfAsConstObject_KeepsLiteralType(ExecutionMode mode)
     {
         // Spreading an `as const` object into a fresh object literal preserves the (already-fixed)
@@ -189,8 +185,7 @@ public class ConstInitializerWideningTests
         Assert.Equal("TS2322", ex.Diagnostic.TsCode);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SpreadOfFreshObjectLiteral_Widens(ExecutionMode mode)
     {
         // Spreading a *fresh* inline object literal still widens its members (unlike an `as const`
@@ -199,8 +194,7 @@ public class ConstInitializerWideningTests
         Assert.Equal("2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedSpread_PlainSourceWidens_AsConstSourcePreserved(ExecutionMode mode)
     {
         // A plain spread member widens (`o.a` is `number`, writable) while a later `as const` spread

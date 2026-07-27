@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class QuerystringModuleTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Parse_ParsesSimpleString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -26,8 +25,7 @@ public class QuerystringModuleTests
         Assert.Equal("bar\nqux\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Parse_HandlesUrlEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +42,7 @@ public class QuerystringModuleTests
         Assert.Equal("John Doe\nNew York\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Parse_HandlesPlusAsSpace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -61,8 +58,7 @@ public class QuerystringModuleTests
         Assert.Equal("John Doe\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Parse_HandlesEmptyValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -79,8 +75,7 @@ public class QuerystringModuleTests
         Assert.Equal("true\nvalue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Parse_CustomSeparator(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -97,8 +92,7 @@ public class QuerystringModuleTests
         Assert.Equal("bar\nqux\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Stringify_CreatesQueryString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -115,8 +109,7 @@ public class QuerystringModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Stringify_EncodesSpecialChars(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -132,8 +125,7 @@ public class QuerystringModuleTests
         Assert.Contains("hello%20world", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Escape_EncodesString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -150,8 +142,7 @@ public class QuerystringModuleTests
         Assert.Contains("%26", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_Unescape_DecodesString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +158,7 @@ public class QuerystringModuleTests
         Assert.Equal("hello world\nhello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_DecodeAlias_WorksLikeParse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -184,8 +174,7 @@ public class QuerystringModuleTests
         Assert.Equal("bar\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_EncodeAlias_WorksLikeStringify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -201,8 +190,7 @@ public class QuerystringModuleTests
         Assert.Equal("key=value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_NamespaceImport_Works(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -220,8 +208,7 @@ public class QuerystringModuleTests
         Assert.Equal("1\nb=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Querystring_RoundTrip_PreservesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -17,17 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpServerLifecycleTests
 {
-    private static int GetAvailablePort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_DefaultConfig_IsReadable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -47,8 +37,7 @@ public class HttpServerLifecycleTests
         Assert.Equal("keepAlive=5000\nheaders=60000\nrequest=300000\ntimeout=0\nmaxHeaders=2000\nmaxReq=0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_LifecycleMethods_AreCallable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -70,11 +59,10 @@ public class HttpServerLifecycleTests
         Assert.Contains("idle-ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Server_CloseAllConnections_StopsServer(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -92,8 +80,7 @@ public class HttpServerLifecycleTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Server_Config_IsSettable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -113,11 +100,10 @@ public class HttpServerLifecycleTests
         Assert.Equal("1234\n9999\n50\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Server_ConnectionEvent_Fires(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""

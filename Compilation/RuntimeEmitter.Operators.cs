@@ -242,20 +242,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Delegate);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
-        // $PromisifiedFunction / $DeprecatedFunction => "function" (from util.promisify/deprecate).
-        // These types only exist when UsesUtilPromisify is set; without the feature
-        // the runtime fields are null and Isinst would NRE at IL emission time.
-        if (_features.UsesUtilPromisify)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSPromisifiedFunctionType);
-            il.Emit(OpCodes.Brtrue, functionLabel);
-
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSDeprecatedFunctionType);
-            il.Emit(OpCodes.Brtrue, functionLabel);
-        }
-
         // $BoundArrayMethod / $BoundMapMethod / $BoundSetMethod / $BoundAnyFunction => "function"
         // These are callable wrappers returned by GetListProperty/GetMapProperty/GetSetProperty
         // for dynamic property access on arrays/maps/sets (duck typing across module boundaries)

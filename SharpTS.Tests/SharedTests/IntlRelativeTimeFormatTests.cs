@@ -11,8 +11,7 @@ public class IntlRelativeTimeFormatTests
 {
     // ========== Past Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_PastDays(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class IntlRelativeTimeFormatTests
         Assert.Equal("3 days ago\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_PastSingular(ExecutionMode mode)
     {
         var source = @"
@@ -37,8 +35,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Future Formatting ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_FutureHours(ExecutionMode mode)
     {
         var source = @"
@@ -49,8 +46,7 @@ public class IntlRelativeTimeFormatTests
         Assert.Equal("in 2 hours\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_FutureMonths(ExecutionMode mode)
     {
         var source = @"
@@ -63,8 +59,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Auto Numeric ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_AutoYesterday(ExecutionMode mode)
     {
         var source = @"
@@ -75,8 +70,7 @@ public class IntlRelativeTimeFormatTests
         Assert.Equal("yesterday\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_AutoTomorrow(ExecutionMode mode)
     {
         var source = @"
@@ -87,8 +81,7 @@ public class IntlRelativeTimeFormatTests
         Assert.Equal("tomorrow\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_AutoLastYear(ExecutionMode mode)
     {
         var source = @"
@@ -99,8 +92,7 @@ public class IntlRelativeTimeFormatTests
         Assert.Equal("last year\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_AutoNextMonth(ExecutionMode mode)
     {
         var source = @"
@@ -113,8 +105,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Different Units ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_VariousUnits(ExecutionMode mode)
     {
         var source = @"
@@ -129,8 +120,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -145,8 +135,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -160,8 +149,7 @@ public class IntlRelativeTimeFormatTests
 
     // ========== Plural Unit Names ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlRelativeTimeFormat_PluralUnitNames(ExecutionMode mode)
     {
         // Should accept both singular and plural unit names

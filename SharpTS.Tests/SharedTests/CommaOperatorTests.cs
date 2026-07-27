@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CommaOperatorTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_ReturnsLastValue(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class CommaOperatorTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_EvaluatesAllExpressions(ExecutionMode mode)
     {
         var source = """
@@ -38,8 +36,7 @@ public class CommaOperatorTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_SideEffectsExecuteLeftToRight(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class CommaOperatorTests
         Assert.Equal("abc\nc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_InForLoopIncrement(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class CommaOperatorTests
         Assert.Equal("0:10 1:9 2:8\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_InForLoopInitializer(ExecutionMode mode)
     {
         var source = """
@@ -92,8 +87,7 @@ public class CommaOperatorTests
         Assert.Equal("3\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_InExpressionStatement(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +102,7 @@ public class CommaOperatorTests
         Assert.Equal("5\n10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_TwoOperands(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +114,7 @@ public class CommaOperatorTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_WithDifferentTypes(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +126,7 @@ public class CommaOperatorTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_DoesNotAffectFunctionArguments(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +140,7 @@ public class CommaOperatorTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_DoesNotAffectArrayLiterals(ExecutionMode mode)
     {
         var source = """
@@ -165,8 +155,7 @@ public class CommaOperatorTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_NestedInParens(ExecutionMode mode)
     {
         var source = """
@@ -178,8 +167,7 @@ public class CommaOperatorTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_WithFunctionCalls(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +185,7 @@ public class CommaOperatorTests
         Assert.Equal("3\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comma_ComplexForLoop(ExecutionMode mode)
     {
         var source = """

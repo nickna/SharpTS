@@ -15,8 +15,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncArrowNestedCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_ReadsSingleCapture(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("105\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_ReadsCaptureAndOwnParameter(ExecutionMode mode)
     {
         var source = """
@@ -85,8 +83,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_MultipleCaptures(ExecutionMode mode)
     {
         // Three captures from the enclosing top-level async arrow ride together in the
@@ -103,8 +100,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("60\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_MultipleCaptures_MixedWithOwnParameter(ExecutionMode mode)
     {
         // Captures are unpacked from the object[] target before the arrow's own parameter,
@@ -121,8 +117,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("103\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_MultipleCapturesOfEnclosingParameters(ExecutionMode mode)
     {
         // Captures resolve through the enclosing arrow's ParameterFields (not LocalFields),
@@ -138,8 +133,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StandaloneAsyncArrow_MultipleCapturesFromEnclosingFunction(ExecutionMode mode)
     {
         // A standalone async arrow (no enclosing async state machine — here the enclosing
@@ -160,8 +154,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("60\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_TransitiveCaptureThroughStandaloneArrow(ExecutionMode mode)
     {
         // `a` is captured by `g` (a standalone capture on g's own state machine, because g
@@ -185,8 +178,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_RelayOnlyCaptureToDeeperArrow(ExecutionMode mode)
     {
         // #716: the intermediate arrow `g` does NOT itself read `a` — it captures it solely so the
@@ -208,8 +200,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_RelayOnlyCaptureThroughTwoIntermediates(ExecutionMode mode)
     {
         // #716 across two relay-only intermediates: both `g` and `h` forward `a` to the deepest `k`.
@@ -231,8 +222,7 @@ public class AsyncArrowNestedCaptureTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAsyncArrow_RelayOnlyMultipleCaptures(ExecutionMode mode)
     {
         // #716: more than one relay-only capture forwarded through the intermediate arrow.

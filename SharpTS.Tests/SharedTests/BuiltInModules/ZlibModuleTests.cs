@@ -11,8 +11,7 @@ public class ZlibModuleTests
 {
     #region Gzip Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Gzip_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -30,8 +29,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Gzip_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -48,8 +46,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Gzip_StringInput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -66,8 +63,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Gzip_WithLevel(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -95,8 +91,7 @@ public class ZlibModuleTests
 
     #region Deflate Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -114,8 +109,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_DeflateRaw_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -133,8 +127,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -155,8 +148,7 @@ public class ZlibModuleTests
 
     #region Brotli Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Brotli_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -174,8 +166,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Brotli_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -192,8 +183,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Brotli_LargeData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -216,8 +206,7 @@ public class ZlibModuleTests
 
     #region Zstd Tests (Interpreter Only - requires ZstdSharp.dll for compiled)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Zstd_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -235,8 +224,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Zstd_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -253,8 +241,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Zstd_LargeData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -277,8 +264,7 @@ public class ZlibModuleTests
 
     #region Unzip (Auto-Detect) Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Unzip_DetectsGzip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -296,8 +282,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Unzip_DetectsDeflate(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -319,8 +304,7 @@ public class ZlibModuleTests
 
     #region Constants Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_CompressionLevels(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -338,8 +322,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_Strategies(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -358,8 +341,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_ReturnCodes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -376,8 +358,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_Brotli_Extended(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -396,8 +377,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_Brotli_Basic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -414,8 +394,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_Zstd(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -436,8 +415,7 @@ public class ZlibModuleTests
 
     #region Return Type Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_ReturnsBuffer_Full(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -457,8 +435,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_ReturnsBuffer_Basic(ExecutionMode mode)
     {
         // Note: zstdCompressSync and deflateRawSync excluded due to deployment requirements
@@ -481,8 +458,7 @@ public class ZlibModuleTests
 
     #region Empty Input Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_EmptyInput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -509,8 +485,7 @@ public class ZlibModuleTests
 
     #region Binary Data Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_BinaryData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -545,8 +520,7 @@ public class ZlibModuleTests
 
     #region Named Import Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_NamedImports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -569,8 +543,7 @@ public class ZlibModuleTests
 
     #region Streaming API Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateGzip_WriteAndRead(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -599,8 +572,7 @@ public class ZlibModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateDeflate_WriteAndVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -629,8 +601,7 @@ public class ZlibModuleTests
         Assert.Equal("compressed data\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateBrotliCompress_WriteAndVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -659,8 +630,7 @@ public class ZlibModuleTests
         Assert.Equal("brotli test data\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateGzip_WriteAndCollect(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -691,8 +661,7 @@ public class ZlibModuleTests
         Assert.Equal("streaming compression\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateDeflateRaw_WriteAndVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -721,8 +690,7 @@ public class ZlibModuleTests
         Assert.Equal("raw deflate test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_CreateUnzip_AutoDetectsGzip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -756,8 +724,7 @@ public class ZlibModuleTests
 
     #region Async Callback API Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Gzip_Async_Callback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -781,8 +748,7 @@ public class ZlibModuleTests
         Assert.Equal("async gzip test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_Async_Callback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -805,8 +771,7 @@ public class ZlibModuleTests
         Assert.Equal("async deflate\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_BrotliCompress_Async_Callback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -833,8 +798,7 @@ public class ZlibModuleTests
 
     #region Named Import Tests for Streaming APIs
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_NamedImport_CreateGzip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -867,8 +831,7 @@ public class ZlibModuleTests
 
     #region crc32 / codes / constants (#1162)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Crc32_KnownValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -884,8 +847,7 @@ public class ZlibModuleTests
         Assert.Equal("907060870\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Crc32_EmptyIsZero(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -900,8 +862,7 @@ public class ZlibModuleTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Crc32_RunningValueChains(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -920,8 +881,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Crc32_NamedImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -936,8 +896,7 @@ public class ZlibModuleTests
         Assert.Equal("907060870\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Codes_Bidirectional(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -956,8 +915,7 @@ public class ZlibModuleTests
         Assert.Equal("0\n1\n-3\nZ_OK\nZ_DATA_ERROR\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Constants_Completeness(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -981,8 +939,7 @@ public class ZlibModuleTests
 
     #region Compression options (#1163)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_LevelExtremesRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1003,8 +960,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_StrategyRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1021,8 +977,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Brotli_QualityExtremesDifferAndRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1047,8 +1002,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Brotli_WindowRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1070,8 +1024,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Deflate_DictionaryRoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1091,8 +1044,7 @@ public class ZlibModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_MaxOutputLength_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1119,8 +1071,7 @@ public class ZlibModuleTests
 
     #region Stream control methods (#1164)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Stream_FlushAndCounters(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1147,8 +1098,7 @@ public class ZlibModuleTests
         Assert.Equal("flushed\ntrue\n17\n17\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Stream_Close(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1165,8 +1115,7 @@ public class ZlibModuleTests
         Assert.Equal("close-event\nclose-cb\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Stream_Reset(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1197,8 +1146,7 @@ public class ZlibModuleTests
 
     #region Facade Tests (stdlib/node/zlib.ts over primitive:zlib)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Async_BadInput_InvokesErrorCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1218,8 +1166,7 @@ public class ZlibModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_Codes_BidirectionalMapping(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1236,8 +1183,7 @@ public class ZlibModuleTests
         Assert.Equal("-3\nZ_DATA_ERROR\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Zlib_NamedImports_ThroughFacade(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -11,8 +11,7 @@ public class PrivateFieldTests
 {
     #region Instance Private Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateField_GetAndSet(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +39,7 @@ public class PrivateFieldTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateField_WithInitializer(ExecutionMode mode)
     {
         var source = """
@@ -61,8 +59,7 @@ public class PrivateFieldTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateField_MultipleInstances(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +90,7 @@ public class PrivateFieldTests
         Assert.Equal("2\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateField_CoexistsWithPublicField(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +124,7 @@ public class PrivateFieldTests
 
     #region Static Private Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateField_GetAndSet(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +153,7 @@ public class PrivateFieldTests
         Assert.Equal("0\n1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateField_WithInitializer(ExecutionMode mode)
     {
         var source = """
@@ -182,8 +176,7 @@ public class PrivateFieldTests
 
     #region Private Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_CalledFromPublicMethod(ExecutionMode mode)
     {
         var source = """
@@ -205,8 +198,7 @@ public class PrivateFieldTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_AccessesPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -233,8 +225,7 @@ public class PrivateFieldTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_WithParameters(ExecutionMode mode)
     {
         var source = """
@@ -256,8 +247,7 @@ public class PrivateFieldTests
         Assert.Equal("$42.00\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_MultipleOptionalParameters_PartialApplication(ExecutionMode mode)
     {
         // #696: several optional parameters, only some supplied. Omitted trailing arguments read
@@ -274,8 +264,7 @@ public class PrivateFieldTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateMethod_DefaultParameter_FiresWhenOmitted(ExecutionMode mode)
     {
         // #696: a defaulted private-method parameter fires its default when the argument is omitted,
@@ -317,8 +306,7 @@ public class PrivateFieldTests
 
     #region Static Private Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateMethod_CalledFromStaticPublicMethod(ExecutionMode mode)
     {
         var source = """
@@ -339,8 +327,7 @@ public class PrivateFieldTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateMethod_OptionalParameter_Omitted(ExecutionMode mode)
     {
         // #696: optional parameter on a *static* private method, invoked with no argument.
@@ -354,8 +341,7 @@ public class PrivateFieldTests
         Assert.Equal("default\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticPrivateMethod_AccessesStaticPrivateField(ExecutionMode mode)
     {
         var source = """
@@ -385,8 +371,7 @@ public class PrivateFieldTests
 
     #region Combined Features
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateElements_FullExample(ExecutionMode mode)
     {
         var source = """
@@ -430,8 +415,7 @@ public class PrivateFieldTests
         Assert.Equal("1\n2\n2\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrivateField_MultiplePrivateFields(ExecutionMode mode)
     {
         var source = """

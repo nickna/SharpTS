@@ -301,8 +301,8 @@ public partial class ILCompiler
         {
             if (!_classes.ExternalTypes.TryGetValue(name, out var existing) || existing != externalType)
             {
-                Console.WriteLine(
-                    $"Warning: dotnet: import '{name}' ({externalType.FullName}) conflicts with a " +
+                AddWarning(
+                    $"dotnet: import '{name}' ({externalType.FullName}) conflicts with a " +
                     "user-defined class of the same name; the user class wins in compiled dispatch. " +
                     "Rename the import (import { X as Alias }) to use the .NET type.");
             }

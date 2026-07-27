@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArrayConcatSpreadTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfArrayOfArrays_FlattensOneLevel(ExecutionMode mode)
     {
         // The issue repro: ...[[1, 2]] spreads into concat([1, 2]), which then
@@ -31,8 +30,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[0,1,2]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfFlatArray_AppendsElements(ExecutionMode mode)
     {
         // ...[1, 2] spreads into concat(1, 2); neither arg is an array, so each
@@ -44,8 +42,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[0,1,2]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfMultipleArrays_FlattensEach(ExecutionMode mode)
     {
         // ...[[1,2],[3]] spreads into concat([1,2], [3]) → each flattened once.
@@ -56,8 +53,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[0,1,2,3]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_MixedSpreadAndPlainArgs(ExecutionMode mode)
     {
         // concat(2, ...[[3, 4]], 5) → append 2, flatten [3,4], append 5.
@@ -68,8 +64,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[1,2,3,4,5]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfBoxedStringArrays(ExecutionMode mode)
     {
         // The bug is not numeric-specific — boxed (string) element arrays spread
@@ -81,8 +76,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[\"a\",\"b\",\"c\"]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfVariable(ExecutionMode mode)
     {
         // Spread source as a named variable (not an inline literal) routes
@@ -95,8 +89,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[0,1,2]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadOfEmptyArray_NoOp(ExecutionMode mode)
     {
         // Spreading an empty array contributes no arguments.
@@ -107,8 +100,7 @@ public class ArrayConcatSpreadTests
         Assert.Equal("[0]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Concat_SpreadInsideAsyncFunction(ExecutionMode mode)
     {
         // Exercises the async emitter: the spread element list is produced by an

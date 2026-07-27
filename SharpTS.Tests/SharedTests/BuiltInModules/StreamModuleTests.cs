@@ -10,8 +10,7 @@ public class StreamModuleTests
 {
     #region Import Patterns
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_NamedImport_Readable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class StreamModuleTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_NamedImport_Writable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -44,8 +42,7 @@ public class StreamModuleTests
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_NamedImport_All(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -64,8 +61,7 @@ public class StreamModuleTests
         Assert.Equal("function\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_NamespaceImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -85,8 +81,7 @@ public class StreamModuleTests
 
     #region Readable Stream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Push_Read(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -108,8 +103,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Read_ReturnsNull_WhenEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -127,8 +121,7 @@ public class StreamModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Push_Null_SignalsEnd(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -147,8 +140,7 @@ public class StreamModuleTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -170,8 +162,7 @@ public class StreamModuleTests
         Assert.Equal("true\nfalse\n0\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Destroy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -191,8 +182,7 @@ public class StreamModuleTests
         Assert.Equal("false\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_EndEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -218,8 +208,7 @@ public class StreamModuleTests
 
     #region Writable Stream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_Write_WithCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -247,8 +236,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -273,8 +261,7 @@ public class StreamModuleTests
         Assert.Equal("true\nfalse\nfalse\nfalse\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_FinishEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -295,8 +282,7 @@ public class StreamModuleTests
         Assert.Equal("finish event fired\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_Cork_Uncork(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -325,8 +311,7 @@ public class StreamModuleTests
         Assert.Equal("before uncork: 0\nafter uncork: 2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_End_WithChunk(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -353,8 +338,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_Final_Callback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -389,8 +373,7 @@ public class StreamModuleTests
 
     #region Pipe
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Pipe_Writable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -421,8 +404,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Pipe_ReturnsDestination(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -446,8 +428,7 @@ public class StreamModuleTests
 
     #region Duplex Stream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Duplex_ReadAndWrite(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -479,8 +460,7 @@ public class StreamModuleTests
         Assert.Equal("write: hello\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Duplex_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -504,8 +484,7 @@ public class StreamModuleTests
 
     #region Transform Stream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Transform_BasicTransformation(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -531,8 +510,7 @@ public class StreamModuleTests
         Assert.Equal("HELLO\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Transform_Pipe_Chain(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -574,8 +552,7 @@ public class StreamModuleTests
 
     #region PassThrough Stream
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PassThrough_PassesDataUnchanged(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -598,8 +575,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PassThrough_InPipeline(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -636,8 +612,7 @@ public class StreamModuleTests
 
     #region Events
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_CloseEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -662,8 +637,7 @@ public class StreamModuleTests
 
     #region Flowing Mode
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_FlowingMode_DataEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -689,8 +663,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_FlowingMode_EndEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -718,8 +691,7 @@ public class StreamModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_FlowingMode_Pause_Resume(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -748,8 +720,7 @@ public class StreamModuleTests
         Assert.Equal("paused: 1\nresumed: 3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Pipe_EntersFlowingMode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -780,8 +751,7 @@ public class StreamModuleTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_ReadableFlowing_Property(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -802,8 +772,7 @@ public class StreamModuleTests
         Assert.Equal("false\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_FlowingMode_MultiplePush(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -834,8 +803,7 @@ public class StreamModuleTests
 
     #region Drain
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Writable_WritableHighWaterMark_Property(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -855,8 +823,7 @@ public class StreamModuleTests
 
     #region stream.finished()
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Finished_CallsCallbackAfterReadableEnds(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -876,8 +843,7 @@ public class StreamModuleTests
         Assert.Contains("finished ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Finished_CallsCallbackAfterWritableFinishes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -898,8 +864,7 @@ public class StreamModuleTests
         Assert.Contains("finished ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Finished_CallsCallbackWithErrorOnStreamError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -918,8 +883,7 @@ public class StreamModuleTests
         Assert.Contains("error: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Finished_CleanupRemovesListeners(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -941,8 +905,7 @@ public class StreamModuleTests
         Assert.Contains("done", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Finished_OptionsReadableFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -968,8 +931,7 @@ public class StreamModuleTests
 
     #region stream.pipeline()
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Pipeline_ReadableToWritable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -998,8 +960,7 @@ public class StreamModuleTests
         Assert.Contains("chunks: hello,world", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Pipeline_ReadableTransformWritable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1033,8 +994,7 @@ public class StreamModuleTests
         Assert.Contains("results: HELLO", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Pipeline_ReturnsDestinationStream(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1057,8 +1017,7 @@ public class StreamModuleTests
 
     #region Readable.from()
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_ReadableFrom_ArrayObjectMode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1079,8 +1038,7 @@ public class StreamModuleTests
         Assert.Contains("1 2 3", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_ReadableFrom_StringArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1102,8 +1060,7 @@ public class StreamModuleTests
 
     #region Missing Events
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_PauseEvent_FiresOnPause(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1120,8 +1077,7 @@ public class StreamModuleTests
         Assert.Contains("paused", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_ResumeEvent_FiresOnResume(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1139,8 +1095,7 @@ public class StreamModuleTests
         Assert.Contains("resumed", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_PrefinishEvent_FiresBeforeFinish(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1162,8 +1117,7 @@ public class StreamModuleTests
         Assert.Contains("prefinish,finish", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_AutoDestroy_DestroysAfterEnd(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1191,8 +1145,7 @@ public class StreamModuleTests
 
     #region highWaterMark
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_HighWaterMark_PushReturnsFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1210,8 +1163,7 @@ public class StreamModuleTests
         Assert.Contains("true false", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_HighWaterMark_CustomValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1231,8 +1183,7 @@ public class StreamModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_HighWaterMark_ObjectModeDefault16(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1254,8 +1205,7 @@ public class StreamModuleTests
         Assert.Contains("16", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Writable_HighWaterMark_WriteReturnsFalse(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1279,8 +1229,7 @@ public class StreamModuleTests
         Assert.Contains("true false", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Writable_HighWaterMark_DrainEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1308,8 +1257,7 @@ public class StreamModuleTests
         Assert.Contains("after: true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_ReadableHighWaterMark_Property(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1325,8 +1273,7 @@ public class StreamModuleTests
         Assert.Contains("1024", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_WritableHighWaterMark_Property(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1342,8 +1289,7 @@ public class StreamModuleTests
         Assert.Contains("2048", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Writable_SyncWrite_NeverBackpressures(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1364,8 +1310,7 @@ public class StreamModuleTests
         Assert.Contains("true", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Writable_WritableLength_TracksInFlight(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1395,8 +1340,7 @@ public class StreamModuleTests
 
     #region toArray, forEach, isReadable, isWritable
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_ToArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1416,8 +1360,7 @@ public class StreamModuleTests
         Assert.Contains("3 1 2 3", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_ForEach(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1437,8 +1380,7 @@ public class StreamModuleTests
         Assert.Contains("a,b", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_IsReadable_IsWritable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1462,8 +1404,7 @@ public class StreamModuleTests
 
     #region map/filter
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_Map(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1493,8 +1434,7 @@ public class StreamModuleTests
         Assert.Contains("2,4,6", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_Filter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1525,8 +1465,7 @@ public class StreamModuleTests
         Assert.Contains("3,4", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_MapFilter_Chaining(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1559,8 +1498,7 @@ public class StreamModuleTests
 
     // #1026: `Readable.prototype.map` must return a Transform stream, NOT an array — i.e. the
     // call must dispatch to $Readable.Map, not the Array/Iterator map emitter. Verifies parity.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Readable_Map_ReturnsStream_NotArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1581,8 +1519,7 @@ public class StreamModuleTests
 
     #region addAbortSignal
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_AddAbortSignal_ReturnsStream(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1600,8 +1537,7 @@ public class StreamModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_AddAbortSignal_DestroysOnAbort(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1623,8 +1559,7 @@ public class StreamModuleTests
         Assert.Equal("error:AbortError,close true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_AddAbortSignal_AlreadyAborted_DestroysImmediately(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1649,8 +1584,7 @@ public class StreamModuleTests
 
     #region Async iteration (Symbol.asyncIterator) — #1024
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_AsyncIterator_SyncProducer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1672,8 +1606,7 @@ public class StreamModuleTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_AsyncIterator_SlowProducer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1700,8 +1633,7 @@ public class StreamModuleTests
         Assert.Equal("10,20,30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_AsyncIterator_EarlyBreak_Destroys(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1723,8 +1655,7 @@ public class StreamModuleTests
         Assert.Equal("a,b true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_AsyncIterator_ErrorRejects(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1754,8 +1685,7 @@ public class StreamModuleTests
         Assert.Equal("got x\ncaught: boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_AsyncIterator_FromArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1780,8 +1710,7 @@ public class StreamModuleTests
 
     #region Async iterator helpers (reduce/some/every/find/flatMap/drop/take/asIndexedPairs) — #1025
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Helper_ReduceSomeEveryFind(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1807,8 +1736,7 @@ public class StreamModuleTests
         Assert.Equal("10\n10\ntrue\nfalse\ntrue\nfalse\n3\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Helper_DropTake(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1828,8 +1756,7 @@ public class StreamModuleTests
         Assert.Equal("3,4,5\n1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Helper_FlatMap(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1850,8 +1777,7 @@ public class StreamModuleTests
         Assert.Equal("1,10,2,20,3,30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Readable_Helper_AsIndexedPairs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1876,8 +1802,7 @@ public class StreamModuleTests
 
     #region compose + Duplex.from — #1028
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_Compose_TransformChain(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1899,8 +1824,7 @@ public class StreamModuleTests
         Assert.Equal("A!,B!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_DuplexFrom_Iterable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1925,8 +1849,7 @@ public class StreamModuleTests
 
     #region isErrored + get/setDefaultHighWaterMark + prefinish ordering — #1030
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_IsErrored(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1945,8 +1868,7 @@ public class StreamModuleTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_DefaultHighWaterMark_GetSet(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1964,8 +1886,7 @@ public class StreamModuleTests
         Assert.Equal("16384\n16\n99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Stream_PrefinishFinishOrdering(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1989,8 +1910,7 @@ public class StreamModuleTests
 
     #region Node↔Web conversions (toWeb/fromWeb) — #1029 (interpreter-only documented subset)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Stream_Readable_ToWeb(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -2013,8 +1933,7 @@ public class StreamModuleTests
         Assert.Equal("a,b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Stream_Readable_FromWeb(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

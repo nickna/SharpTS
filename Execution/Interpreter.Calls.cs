@@ -1083,24 +1083,9 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Applies a compound assignment operator to two values.
-    /// </summary>
-    /// <param name="op">The compound operator token type (e.g., PLUS_EQUAL, MINUS_EQUAL).</param>
-    /// <param name="left">The current value of the target.</param>
-    /// <param name="right">The value to combine with.</param>
-    /// <returns>The result of the operation.</returns>
-    /// <remarks>
-    /// Supports arithmetic (+=, -=, *=, /=, %=) and bitwise (&amp;=, |=, ^=, &lt;&lt;=, &gt;&gt;=, &gt;&gt;&gt;=)
-    /// compound operators. String concatenation is handled for +=.
-    /// </remarks>
-    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition_assignment">MDN Compound Assignment</seealso>
-    private object? ApplyCompoundOperator(TokenType op, object? left, object? right)
-    {
-        return ApplyCompoundOperatorRV(op, RuntimeValue.FromBoxed(left), RuntimeValue.FromBoxed(right)).ToObject();
-    }
-
-    /// <summary>
     /// RuntimeValue-native compound operator — avoids boxing for numeric operations.
+    /// Supports arithmetic (+=, -=, *=, /=, %=) and bitwise (&amp;=, |=, ^=, &lt;&lt;=, &gt;&gt;=, &gt;&gt;&gt;=)
+    /// compound operators; string concatenation is handled for +=.
     /// </summary>
     private RuntimeValue ApplyCompoundOperatorRV(TokenType op, RuntimeValue left, RuntimeValue right)
     {

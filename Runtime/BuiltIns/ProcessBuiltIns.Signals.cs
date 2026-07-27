@@ -164,7 +164,7 @@ public static partial class ProcessBuiltIns
             }
             if (signalName is "SIGINT" or "SIGTERM" or "SIGHUP" or "SIGQUIT" or "SIGBREAK" or "SIGKILL")
             {
-                Environment.Exit(128 + _signalNumbers[signalName]);
+                ProcessControl.Exit(128 + _signalNumbers[signalName]);
             }
             return true; // Untrappable-default-ignore signals (e.g. SIGWINCH)
         }

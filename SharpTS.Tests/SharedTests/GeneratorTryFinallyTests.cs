@@ -23,8 +23,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GeneratorTryFinallyTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldInTryFinally_RunsFinallyAfterBody(ExecutionMode mode)
     {
         // The exact repro from #477.
@@ -43,8 +42,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\n2\nfin\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldThenThrowInTry_CaughtWithValue(ExecutionMode mode)
     {
         // The yield resumes, then a synchronous throw in the same try body is caught — and the
@@ -65,8 +63,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\ncaught boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldInTry_CatchAndFinally_ThenYieldAfter(ExecutionMode mode)
     {
         var source = """
@@ -86,8 +83,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\nfin\n9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldInTryFinally_InsideLoop_RunsFinallyEachIteration(ExecutionMode mode)
     {
         var source = """
@@ -106,8 +102,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0\nf0\n1\nf1\n2\nf2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedTryFinally_WithYield_RunsBothFinallysInnerThenOuter(ExecutionMode mode)
     {
         var source = """
@@ -128,8 +123,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\ninner\nouter\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStarInTryFinally_DelegatesThenRunsFinally(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +143,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\n2\n3\n4\nfin\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FinallyThatYields_IsDriven(ExecutionMode mode)
     {
         var source = """
@@ -168,8 +161,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\n2\n3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInsideTryFinally_RunsFinallyBeforeCompleting(ExecutionMode mode)
     {
         // `return` inside the try must run the finally before the generator completes; the
@@ -190,8 +182,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\nfin\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInsideNestedTryFinally_RunsAllEnclosingFinallys(ExecutionMode mode)
     {
         var source = """
@@ -214,8 +205,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\ninner\nouter\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInTry_WithYieldingFinally_CompletesAfterFinallyYields(ExecutionMode mode)
     {
         // The finally itself yields, suspending MoveNext between the `return` and the completion
@@ -239,8 +229,7 @@ public class GeneratorTryFinallyTests
 
     // ---- #500: non-local exits other than a try-body return must run the enclosing finally ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakOutOfTryFinally_RunsFinallyBeforeBreaking(ExecutionMode mode)
     {
         // The exact #500 repro: break leaving the try must run the finally first.
@@ -256,8 +245,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\nFIN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ContinueOutOfTryFinally_RunsFinallyThatIteration(ExecutionMode mode)
     {
         // `continue` from inside the try must run the finally before jumping to the next iteration,
@@ -280,8 +268,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("got0\nafter0\nfin0\ngot1\nfin1\ngot2\nafter2\nfin2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowFromCatch_RunsFinallyThenPropagates(ExecutionMode mode)
     {
         // The exact #500 repro: a throw inside the catch must still run the finally before the
@@ -296,8 +283,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\nFIN\nouter b\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnFromCatch_RunsFinallyBeforeCompleting(ExecutionMode mode)
     {
         // A `return` from the catch body must run the finally; the yield after the try must not run.
@@ -312,8 +298,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("1\nFIN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakThroughNestedFinallys_RunsInnerThenOuter(ExecutionMode mode)
     {
         // A break that leaves two enclosing trys runs both finallys, innermost first.
@@ -331,8 +316,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\ninner\nouter\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledBreakToOuterLoop_RunsInterveningFinally(ExecutionMode mode)
     {
         // A labeled break targeting the outer loop runs the finally of the inner loop's try.
@@ -350,8 +334,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nfin00\nv1\nfin01\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakToLoopBetweenTwoTrys_RunsOnlyInnerFinally(ExecutionMode mode)
     {
         // The break targets a loop that sits *between* two trys: only the finally inside that loop
@@ -371,8 +354,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\ninner0\nv1\ninner1\nafter-loop\nOUTER\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakWithYieldingFinally_DrivesFinallyThenBreaks(ExecutionMode mode)
     {
         // The finally that runs on the break path itself yields; the break completes only after the
@@ -390,8 +372,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\nv2\nv3\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowFromFinally_RunsEnclosingFinallyThenPropagates(ExecutionMode mode)
     {
         // A throw raised inside a finally body must still run the enclosing finally before it
@@ -408,8 +389,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\nOUTER\ncaught boom\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakOutOfInnerCatchlessTry_RunsOuterFinally(ExecutionMode mode)
     {
         // The break leaves an inner try/catch that has no finally, nested in an outer try-with-
@@ -428,8 +408,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\nOUTERFIN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NextValue_DeliveredToYieldInsideTry(ExecutionMode mode)
     {
         // The value passed to next() must reach a yield expression sitting inside a try.
@@ -450,8 +429,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("got 10\nfin\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void HoistedCatchParam_SimplePath_ReceivesThrownValue(ExecutionMode mode)
     {
         // Catch parameter used after a yield is hoisted to a field; the try here has no yield
@@ -478,8 +456,7 @@ public class GeneratorTryFinallyTests
     // finally) rather than an illegal `ret`/`br` — previously these crashed MoveNext with
     // InvalidProgramException (return → ReturnFromTry, break/continue → BranchOutOfTry).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BareReturnInNoYieldTryFinally_RunsFinally(ExecutionMode mode)
     {
         // The exact #554 repro: a yield precedes the try, but the try itself contains no yield.
@@ -491,8 +468,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0\nf\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ValueReturnInNoYieldTryFinally_RunsFinallyThenCompletesWithValue(ExecutionMode mode)
     {
         // The finally runs on the return path, and the returned value is the completion value.
@@ -507,8 +483,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0/false\nf\n7/true\nundefined/true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakInNoYieldTryFinally_RunsFinallyBeforeBreaking(ExecutionMode mode)
     {
         // The second #554 repro: break leaves a no-yield try, running its finally first.
@@ -520,8 +495,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0\nf\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ContinueInNoYieldTryFinally_RunsFinallyEachIteration(ExecutionMode mode)
     {
         // The yield sits outside the try, so the try (holding the continue) takes the real-IL path.
@@ -538,8 +512,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nf0\nv1\nf1\nv2\nf2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInNoYieldTry_NestedInYieldingFinally_RunsAllThenKeepsValue(ExecutionMode mode)
     {
         // The inner try has no yield (real IL block); it is nested in an outer try whose finally
@@ -564,8 +537,7 @@ public class GeneratorTryFinallyTests
 
     // ---- #555: a `return <value>` whose finally yields must keep its completion value ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnValueWithYieldingFinally_RestoresCompletionValue(ExecutionMode mode)
     {
         // The exact #555 repro: the finally yields 9 (overwriting Current), but the final next() must
@@ -582,8 +554,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("9/false\n5/true\nundefined/true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnValueInYieldingTry_NonYieldingFinally_KeepsValue(ExecutionMode mode)
     {
         // Sibling of #555: the try yields (flag-based path) and returns a value; the finally does not
@@ -601,8 +572,7 @@ public class GeneratorTryFinallyTests
 
     // ---- #599: an exception propagating through a YIELDING finally must not be lost ----
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UncaughtThrow_ThroughYieldingFinally_StillPropagates(ExecutionMode mode)
     {
         // The exact #599 repro: the try throws after a yield, and the (catch-less) finally yields.
@@ -622,8 +592,7 @@ public class GeneratorTryFinallyTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RethrownFromInnerCatch_ThroughYieldingFinally_StillPropagates(ExecutionMode mode)
     {
         // #599's second shape: an inner try/catch (a sync segment of the outer try body) rethrows;
@@ -641,8 +610,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("{\"value\":7,\"done\":false}\ncaught:e2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UncaughtThrow_ThroughNestedYieldingFinally_NotClobbered(ExecutionMode mode)
     {
         // A finally that yields and itself contains a (separate) try/finally that also yields. Each
@@ -662,8 +630,7 @@ public class GeneratorTryFinallyTests
     // None of ret/br/Leave may exit a .NET finally region, so these constructs must take the
     // flag-based path even with no yield (the finally-side analog of #554's try/catch-body fix).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInsideNoYieldFinally_Completes(ExecutionMode mode)
     {
         // The exact #598 repro: a `return` inside a no-yield finally. The generator has a yield
@@ -681,8 +648,7 @@ public class GeneratorTryFinallyTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakInsideNoYieldFinally_ExitsLoop(ExecutionMode mode)
     {
         // #598's break repro: a `break` inside a no-yield finally exits the enclosing loop.
@@ -694,8 +660,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0\n1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ContinueInsideNoYieldFinally_SkipsRest(ExecutionMode mode)
     {
         var source = """
@@ -711,8 +676,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("body0\nbody2\ny9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInNoYieldFinally_OverridesPendingException(ExecutionMode mode)
     {
         // The try throws but the finally returns: per JS semantics the abrupt return overrides the
@@ -729,8 +693,7 @@ public class GeneratorTryFinallyTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledBreakInsideNoYieldFinally_ExitsOuterLoop(ExecutionMode mode)
     {
         var source = """
@@ -745,8 +708,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("0\n1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReturnInNestedNoYieldFinally_RunsOuterFinally(ExecutionMode mode)
     {
         // A return in an inner finally must still run the enclosing finally before completing.
@@ -773,8 +735,7 @@ public class GeneratorTryFinallyTests
     // a separate, broader representation gap tracked elsewhere — so undefined cases assert via
     // `=== undefined` rather than string form. `throw null` is fully correct.)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowNullIntoFlagBasedTryCatch_IsCaught(ExecutionMode mode)
     {
         // The exact #619 repro: throw null after a yield, caught in the same try's catch.
@@ -786,8 +747,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\ncaught e=null\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowUndefinedIntoFlagBasedTryCatch_IsCaught(ExecutionMode mode)
     {
         // throw undefined likewise reaches the catch (was skipped). Asserted via `=== undefined`
@@ -800,8 +760,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\nisUndef=true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FalsyNonNullThrowIntoFlagBasedTryCatch_StillCaught(ExecutionMode mode)
     {
         // Guard the boundary: a falsy-but-non-null thrown value (0 / "" / false box to non-null
@@ -814,8 +773,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\ncaught e=0\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowNullIntoCatchlessTryFinally_RethrowsAfterFinally(ExecutionMode mode)
     {
         // The catch-less rethrow gate also used value-nullness; a thrown null was dropped instead of
@@ -828,8 +786,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v1\nfin\nouter isNull=true\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowNullIntoCatchlessTry_WithYieldingFinally_RethrowsAfterFinally(ExecutionMode mode)
     {
         // The present flag must survive a yielding finally (persisted to a field, like the captured
@@ -847,8 +804,7 @@ public class GeneratorTryFinallyTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BareThrowOnSuspendedGenerator_InjectsUndefined(ExecutionMode mode)
     {
         // A bare it.throw() (no argument) injects `undefined` into the suspended yield and engages the
@@ -869,8 +825,7 @@ public class GeneratorTryFinallyTests
     // throw is now routed into the enclosing try's capture local (running the finally(s) inside that try
     // first) and branched to its cleanup, the catch-side analog of the existing finally routing.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RethrowFromCatch_CaughtByEnclosingTryCatch(ExecutionMode mode)
     {
         // The exact #632 repro: an inner catch rethrows; the outer catch must catch the rethrown value.
@@ -887,8 +842,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\ninner caught inner\nouter caught rethrown\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowFromCatch_WithInterveningFinally_RunsFinallyThenOuterCatch(ExecutionMode mode)
     {
         // The inner try has a finally: a throw escaping the inner catch must run that finally before the
@@ -908,8 +862,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nC1 inner\nF1\nouter rethrown\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UncaughtThrowFromCatchlessTryFinally_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // An uncaught exception leaving a catch-less inner try/finally must, after its finally runs,
@@ -928,8 +881,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nF\nouter x\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThrowFromFinallyBody_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // A throw from a finally body propagates to the enclosing try's catch the same way.
@@ -946,8 +898,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nF1\nouter fromFinally\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RethrowAcrossTwoNestedFinallys_RunsBothBeforeEnclosingCatch(ExecutionMode mode)
     {
         // Two finallys lie between the rethrow and the enclosing catch; both run, innermost first.
@@ -966,8 +917,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nFinner\nCmid deep\nFmid\nouter remid\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExternalThrowAtCatchBodyYield_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // An external it.throw() injected at a yield *inside a catch body* must also propagate to the
@@ -996,8 +946,7 @@ public class GeneratorTryFinallyTests
     // bodies are now emitted through the same sync-segment capture the try body uses, then the captured
     // exception is routed outward like a lexical handler throw.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RealThrowEscapingNestedTryInCatchBody_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // The exact #675 repro: a nested real-IL try/catch inside a flag-based catch body rethrows; the
@@ -1019,8 +968,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nC3 b\nouter c\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RealThrowEscapingNestedTryInFinallyBody_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // The finally-body analog: a nested real-IL try/catch inside a flag-based finally body rethrows.
@@ -1041,8 +989,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nF3 b\nouter c\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RealThrowEscapingNestedTryInCatchBody_RunsOwnFinallyFirst(ExecutionMode mode)
     {
         // The inner try has its own finally: a real exception escaping its catch body must run that
@@ -1065,8 +1012,7 @@ public class GeneratorTryFinallyTests
         Assert.Equal("v0\nC3 b\nT1fin\nouter c\nv1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RuntimeErrorInCatchBody_CaughtByEnclosingTry(ExecutionMode mode)
     {
         // A runtime error (call on undefined) raised at the top of a flag-based catch body is likewise

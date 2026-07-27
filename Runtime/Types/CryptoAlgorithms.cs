@@ -64,9 +64,6 @@ internal static class CryptoAlgorithms
         _ => throw new ArgumentException($"Not an XOF hash: {normalized}")
     };
 
-    /// <summary>Whether the (normalized) algorithm is an extendable-output hash.</summary>
-    public static bool IsXofHash(string normalized) => normalized is "shake128" or "shake256";
-
     /// <summary>
     /// Validates and normalizes a hash algorithm name for <c>createHash</c>/<c>crypto.hash</c>.
     /// Throws for unknown names and for SHA-3/SHAKE on platforms whose crypto

@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TlsUnsupportedApiTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnsupportedApis_Throw(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

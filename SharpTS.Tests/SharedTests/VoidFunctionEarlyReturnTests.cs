@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class VoidFunctionEarlyReturnTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EarlyReturn_InVoidFunction_WithInterfaceParam(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -37,8 +36,7 @@ public class VoidFunctionEarlyReturnTests
         Assert.Equal("2 a b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EarlyReturn_InVoidFunction_WithArrayParam(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

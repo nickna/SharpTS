@@ -350,9 +350,17 @@ public partial class Interpreter : IDisposable
     /// Schedules a virtual timer to be executed on the main thread.
     /// Returns the VirtualTimer so it can be cancelled later.
     /// </summary>
+    // Monotonic clock for the virtual-timer queue. FireTime values are compared
+    // only against this same clock, never against wall time, so an NTP step or a
+    // manual clock change cannot fire every pending setTimeout early or stall it
+    // for the offset (same non-monotonic-clock bug class as the process.uptime()
+    // Stopwatch fix).
+    private static readonly System.Diagnostics.Stopwatch _timerClock = System.Diagnostics.Stopwatch.StartNew();
+    private static long TimerNowMs => _timerClock.ElapsedMilliseconds;
+
     internal VirtualTimer ScheduleTimer(int delayMs, int intervalMs, Action callback, bool isInterval)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var now = TimerNowMs;
         var fireTime = now + delayMs;
         var timer = new VirtualTimer(fireTime, intervalMs, callback, isInterval);
         lock (_virtualTimersLock)
@@ -518,7 +526,7 @@ public partial class Interpreter : IDisposable
                 return TimeSpan.FromSeconds(60);
             }
 
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var now = TimerNowMs;
             var ms = priority.FireTime - now;
 
             // Clamp to reasonable range: 0ms to 60 seconds
@@ -876,16 +884,62 @@ public partial class Interpreter : IDisposable
     /// timer callbacks without relying on background thread scheduling.
     /// Uses priority queue for O(log n) timer extraction.
     /// </summary>
+    // FinalizationRegistry instances with at least one registration, drained on
+    // event-loop ticks. Weak: tracking must not keep a guest registry alive.
+    private readonly List<WeakReference<SharpTSFinalizationRegistry>> _finalizationRegistries = [];
+    private readonly object _finalizationRegistriesLock = new();
+
+    /// <summary>
+    /// Enrolls a FinalizationRegistry so its GC-enqueued cleanups are drained on
+    /// event-loop ticks. Without this, registered cleanup callbacks never fired.
+    /// </summary>
+    internal void TrackFinalizationRegistry(SharpTSFinalizationRegistry registry)
+    {
+        lock (_finalizationRegistriesLock)
+        {
+            foreach (var wr in _finalizationRegistries)
+                if (wr.TryGetTarget(out var existing) && ReferenceEquals(existing, registry))
+                    return;
+            _finalizationRegistries.Add(new WeakReference<SharpTSFinalizationRegistry>(registry));
+        }
+    }
+
+    private void DrainFinalizationRegistries()
+    {
+        if (_finalizationRegistries.Count == 0) return;
+        List<SharpTSFinalizationRegistry>? due = null;
+        lock (_finalizationRegistriesLock)
+        {
+            for (int i = _finalizationRegistries.Count - 1; i >= 0; i--)
+            {
+                if (!_finalizationRegistries[i].TryGetTarget(out var registry))
+                {
+                    _finalizationRegistries.RemoveAt(i);
+                    continue;
+                }
+                if (registry.HasPendingCleanups) (due ??= []).Add(registry);
+            }
+        }
+        // Invoke outside the lock: cleanup callbacks are arbitrary guest code.
+        if (due != null)
+            foreach (var registry in due)
+                registry.DrainCleanups(this);
+    }
+
     internal void ProcessPendingCallbacks()
     {
         // Process microtasks first - they always run before any macrotask (timers)
         // This ensures correct JavaScript event loop semantics during busy-wait loops
         ProcessMicrotasks();
 
+        // FinalizationRegistry cleanups ride event-loop ticks (Node runs them as
+        // ordinary tasks after GC observes a target collection).
+        DrainFinalizationRegistries();
+
         // Quick checks before acquiring lock
         if (_isDisposed || !_hasScheduledTimers) return;
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var now = TimerNowMs;
         List<VirtualTimer>? toExecute = null;
         List<VirtualTimer>? toReschedule = null;
 
@@ -1076,7 +1130,7 @@ public partial class Interpreter : IDisposable
         try
         {
             // Check for "use strict" directive at file level
-            bool isStrict = CheckForUseStrict(statements);
+            bool isStrict = Parsing.DirectivePrologue.HasUseStrict(statements);
             if (isStrict)
             {
                 // Wrap the current environment with strict mode enabled
@@ -1335,7 +1389,7 @@ public partial class Interpreter : IDisposable
         using (PushScriptContext(scriptEnv, script))
         {
             // Check for "use strict" directive
-            bool isStrict = CheckForUseStrict(script.Statements);
+            bool isStrict = Parsing.DirectivePrologue.HasUseStrict(script.Statements);
             if (isStrict && !_environment.IsStrictMode)
             {
                 _environment = new RuntimeEnvironment(_environment, strictMode: true);
@@ -1401,7 +1455,14 @@ public partial class Interpreter : IDisposable
         if (mainFunc == null)
             return;
 
-        // Get the main function from the environment (single scope traversal)
+        // Get the main function from the environment (single scope traversal).
+        // Deliberately narrowed to SharpTSFunction: `async function main()` is a
+        // SharpTSAsyncFunction and is NOT auto-invoked — hundreds of existing
+        // programs (and this repo's own test corpus) follow the pattern
+        // `async function main() {...} main();`, and auto-invoking would run
+        // them twice. The Promise<...> return types in the gate above exist for
+        // a *sync* main that returns a promise chain; WaitForPromise below
+        // pumps the event loop while that settles.
         if (!_environment.TryGet(mainFunc.Name.Lexeme, out RuntimeValue mainRV))
             return;
 
@@ -1412,19 +1473,24 @@ public partial class Interpreter : IDisposable
         var argv = ProcessBuiltIns.GetArgv();
         // Pass argv only if main expects it
         object? result = mainFunc.Parameters.Count == 0
-            ? mainFn.Call(this, [])
-            : mainFn.Call(this, [argv]);
+            ? mainFn.CallBoxed(this, [])
+            : mainFn.CallBoxed(this, [argv]);
 
-        // If result is a Promise, await it
+        // If result is a Promise, await it — pumping the event loop, because an
+        // async main() typically awaits timers/I-O whose continuations only run
+        // on this thread, and RunEventLoop starts only after this method returns.
+        // A bare GetResult() here deadlocked. If the promise can provably never
+        // settle, WaitForPromise returns with it still pending → no exit code.
         if (result is SharpTSPromise promise)
         {
-            result = promise.Task.GetAwaiter().GetResult();
+            WaitForPromise(promise);
+            result = promise.Task.IsCompletedSuccessfully ? promise.Task.Result : null;
         }
 
         // If result is a number, use it as exit code
         if (result is double exitCode)
         {
-            System.Environment.Exit((int)exitCode);
+            ProcessControl.Exit((int)exitCode);
         }
 
         // Note: RunEventLoop is called by the caller (Interpret or InterpretModules)
@@ -1864,32 +1930,6 @@ public partial class Interpreter : IDisposable
         }
 
         return ExecutionResult.Success();
-    }
-
-    /// <summary>
-    /// Checks if the statements begin with a "use strict" directive.
-    /// </summary>
-    /// <param name="statements">The list of statements to check.</param>
-    /// <returns>True if "use strict" directive is found at the beginning.</returns>
-    private static bool CheckForUseStrict(List<Stmt> statements)
-    {
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Directive directive)
-            {
-                if (directive.Value == "use strict")
-                {
-                    return true;
-                }
-                // Continue checking other directives at the start
-            }
-            else
-            {
-                // Non-directive statement encountered, stop checking
-                break;
-            }
-        }
-        return false;
     }
 
     /// <summary>

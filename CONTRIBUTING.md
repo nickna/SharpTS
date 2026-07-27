@@ -38,10 +38,9 @@ Thank you for your interest in contributing to SharpTS! This project is a TypeSc
 
 ### Understanding the Codebase
 
-Before diving in, we recommend reading [ARCHITECTURE.md](ARCHITECTURE.md) which explains:
-- The compiler/interpreter pipeline
-- How the type system works
-- Key design patterns used throughout
+Before diving in, we recommend reading [ARCHITECTURE.md](ARCHITECTURE.md) and
+[CLAUDE.md](CLAUDE.md) (the concise architecture contract — pipeline, directory
+map, and the standalone-DLL constraint that governs all `Compilation/` work).
 
 ## How to Contribute
 
@@ -74,15 +73,7 @@ Before diving in, we recommend reading [ARCHITECTURE.md](ARCHITECTURE.md) which 
 
 4. Ensure all tests pass in both interpreter and compiler modes
 
-5. Commit with clear, descriptive messages:
-   ```
-   Add support for [feature]
-
-   - Updated Lexer.cs to handle new tokens
-   - Added AST nodes in AST.cs
-   - Implemented type checking in TypeChecker.cs
-   - etc.
-   ```
+5. Commit with clear, descriptive messages
 
 6. Push and open a pull request against `main`
 
@@ -102,125 +93,110 @@ Tests are xUnit tests in the `SharpTS.Tests/` directory:
 dotnet test
 ```
 
-**Important:** When adding or modifying features, verify they work in BOTH modes:
-1. Interpretation (`dotnet run -- file.ts`)
-2. Compilation (`dotnet run -- --compile file.ts` then `dotnet file.dll`)
+### Writing Tests: The Dual-Mode Contract
 
-### Creating Test Files
+Almost every feature must behave identically in the interpreter and the IL
+compiler, and the test suite enforces that mechanically. The convention (used
+by `SharpTS.Tests/SharedTests/`, ~60% of the suite) is a theory parameterized
+over both modes:
 
-Add new test classes to `SharpTS.Tests/` following the existing patterns (e.g., `InterpreterTests/`, `CompilerTests/`).
+```csharp
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+public class MyFeatureTests
+{
+    [Theory, ModeData]   // runs once Interpreted, once Compiled
+    public void MyFeature_DoesTheThing(ExecutionMode mode)
+    {
+        var source = """
+            console.log(1 + 1);
+            """;
+        Assert.Equal("2\n", TestHarness.Run(source, mode));
+    }
+}
+```
+
+- `TestHarness.Run(source, mode)` executes the guest source in the given mode
+  and returns captured console output (line endings normalized to `\n`).
+- Multi-file programs use `TestHarness.RunModules(files, entryPoint, mode)`.
+- `[InterpretedOnlyData]` / `[CompiledOnlyData]` exist for genuinely
+  single-mode behavior — use them sparingly and say why in a comment.
+- New shared tests belong in `SharedTests/` (or `SharedTests/BuiltInModules/`
+  for Node-module surface). `InterpreterTests/` and `CompilerTests/` are only
+  for tests of one engine's internals.
+
+Manual verification of both modes:
+1. Interpretation: `dotnet run -- file.ts`
+2. Compilation: `dotnet run -- --compile file.ts` then `dotnet file.dll`
+
+Two conformance suites (not in `SharpTS.sln`, run explicitly) pin SharpTS
+against external corpora: `SharpTS.Test262/` (ECMA-262) and
+`SharpTS.TypeScriptConformance/` (type checker vs `tsc`). If your change could
+affect JS semantics or checker behavior, run the relevant suite — CI compiles
+them but does not execute them.
 
 ## Code Style Guidelines
 
 ### C# Conventions
 
-- **C# Version:** 12/13 with .NET 10 features
+- **C# Version:** `LangVersion=latest` on .NET 10
 - **Nullable Reference Types:** Always enabled
 - **Records:** Use for immutable data (AST nodes, type representations)
-- **Primary Constructors:** Preferred for simple classes
+- **Analyzers:** IDE0051/IDE0052 (unused/unread private members) are build
+  warnings — keep the count at zero
+- **Comments:** State constraints the code can't show; don't narrate the code
 
 ### AST Node Pattern
 
-All AST nodes should be immutable records:
+All AST nodes are immutable records in `Parsing/AST.cs`:
 
 ```csharp
-// In AST.cs
 public record MyNewExpr(Token Operator, Expr Operand) : Expr;
 public record MyNewStmt(Expr Value, Token Keyword) : Stmt;
 ```
 
-### Visitor Pattern
-
-Use switch expressions for AST traversal:
-
-```csharp
-return expr switch
-{
-    Expr.MyNewExpr e => HandleMyNewExpr(e),
-    // ... other cases
-    _ => throw new Exception($"Unknown expression type: {expr.GetType()}")
-};
-```
+A registry (`Parsing/Visitors/NodeRegistry` + `AstNodeCatalog`) derives the
+node set by reflection and fails fast at startup if a visitor misses a node —
+so adding a node immediately tells you every dispatch site to extend.
 
 ### Error Messages
 
-Use consistent prefixes:
-- Type errors: `throw new Exception("Type Error: message");`
-- Runtime errors: `throw new Exception("Runtime Error: message");`
+Type-checker diagnostics carry a canonical `TSnnnn` code where one exists
+(`tsCode:` on `TypeCheckException`); the structured model lives in
+`Diagnostics/Diagnostic.cs`. Human-facing prefixes in output are
+`"Type Error:"` and `"Runtime Error:"`.
 
 ## Adding New Language Features
 
-When adding a new TypeScript feature, you typically need to modify these files in order:
+The parser, type checker, interpreter, and IL compiler are all partial-class
+families, not single files. A new feature typically touches, in order:
 
-### 1. Token.cs
-Add new token types if needed:
-```csharp
-public enum TokenType
-{
-    // ...
-    MY_NEW_TOKEN,
-}
-```
-
-### 2. Lexer.cs
-Handle tokenization of new syntax in `ScanToken()`.
-
-### 3. AST.cs
-Add new expression/statement record types.
-
-### 4. Parser.cs
-Parse the new syntax and build AST nodes.
-
-### 5. TypeChecker.cs
-Add type checking logic in `CheckExpr()` or `CheckStmt()`.
-
-### 6. Interpreter.cs
-Implement runtime behavior in `Evaluate()` or `Execute()`.
-
-### 7. Compilation/ILEmitter.cs
-Generate IL instructions in `EmitExpression()` or `EmitStatement()`.
-
-### 8. SharpTS.Tests/
-Add a test class demonstrating the feature.
-
-### Example: Adding a New Operator
-
-1. Add token: `TokenType.MY_OP`
-2. Lexer: Recognize the operator characters
-3. AST: Reuse `Expr.Binary` or create new node
-4. Parser: Add to appropriate precedence level
-5. TypeChecker: Validate operand types
-6. Interpreter: Implement the operation
-7. ILEmitter: Emit equivalent IL
-8. Test: Add tests to `SharpTS.Tests/`
+1. **`Parsing/Token.cs` + `Parsing/Lexer.cs`** — new tokens, if any
+2. **`Parsing/AST.cs`** — new record node(s)
+3. **`Parsing/Parser.*.cs`** — the parser partials (e.g. `Parser.Expressions.cs`,
+   `Parser.Classes.cs`; per-parameter units live in `Parser.Parameters.cs`)
+4. **`TypeSystem/TypeChecker.*.cs`** — static checking (`CheckExpr`/`Check`)
+5. **`Execution/Interpreter.*.cs`** — runtime behavior (`Evaluate`/`Execute`)
+6. **`Compilation/`** — IL emission (`ILEmitter.*.cs` for statement/expression
+   codegen; `RuntimeEmitter.*.cs` if the emitted runtime needs new surface).
+   Read the standalone-DLL constraint in CLAUDE.md first: compiled output must
+   never gain a metadata reference to SharpTS.dll.
+7. **`SharpTS.Tests/SharedTests/`** — dual-mode tests (see above)
 
 ## Areas Needing Help
 
-We especially welcome contributions in these areas:
+Ongoing work is organized under five standing issues (they stay open; new work
+attaches to them rather than spawning new epics):
 
-### TypeScript Features
-- Generics (`<T>`)
-- Enums
-- Modules and imports
-- Decorators
-- Union and intersection types
-- Type guards
-- Async/await
+- **#1278 — Performance:** the standing hunt for the next perf gap
+- **#1279 — JS conformance:** close the interpreter's Test262 gap to the compiler
+- **#1280 — JS conformance:** grow Test262 coverage and mature the harness
+- **#1281 — TS conformance:** chip away at type-checker divergence from `tsc`
+- **#1282 — Node.js:** expand built-in module coverage (breadth and depth)
 
-### IL Compiler Parity
-- Ensure all interpreter features work when compiled
-- Fix any behavioral differences between modes
-- Improve generated IL efficiency
-
-### Performance
-- Lexer/parser optimization
-- Compiled code performance
-- Interpreter evaluation speed
-
-### Test Coverage
-- Add tests for edge cases
-- Add tests for error conditions
-- Improve existing test comprehensiveness
+Check those issues for a live scoreboard and prioritized checklists. Test
+coverage for edge cases and error conditions is always welcome.
 
 ---
 

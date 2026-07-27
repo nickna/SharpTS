@@ -52,12 +52,12 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         {
             // Literal double - push directly
             _il.Emit(OpCodes.Ldc_R8, d);
-            _stackType = StackType.Double;
+            _helpers.StackType = StackType.Double;
         }
         else if (expr is Expr.Literal intLit && intLit.Value is int i)
         {
             _il.Emit(OpCodes.Ldc_R8, (double)i);
-            _stackType = StackType.Double;
+            _helpers.StackType = StackType.Double;
         }
         else
         {
@@ -88,13 +88,6 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
 
     // Current await point being processed
     private int _currentAwaitState = 0;
-
-    // Stack type tracking via shared helpers (use base class _helpers)
-    private StackType _stackType
-    {
-        get => _helpers.StackType;
-        set => _helpers.StackType = value;
-    }
 
     // Exception handling
     private LocalBuilder? _exceptionLocal;

@@ -292,10 +292,6 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitThrow(t);
                 break;
 
-            case Stmt.Print p:
-                EmitPrint(p);
-                break;
-
             case Stmt.DeclareModule:
             case Stmt.DeclareGlobal:
                 // Module/global augmentations are type-only - no IL emission needed
@@ -1272,16 +1268,6 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         EnsureBoxed();
         IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateException);
         IL.Emit(OpCodes.Throw);
-    }
-
-    /// <summary>
-    /// Emits a print/console.log statement.
-    /// </summary>
-    protected virtual void EmitPrint(Stmt.Print p)
-    {
-        EmitExpression(p.Expr);
-        EnsureBoxed();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ConsoleLog);
     }
 
     #endregion

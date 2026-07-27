@@ -12,8 +12,7 @@ public class FsAsyncTests
 {
     #region fs/promises module - Basic Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_WriteFile_And_ReadFile_WithEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -36,8 +35,7 @@ public class FsAsyncTests
         Assert.Equal("Hello Async World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_WriteFile_And_ReadFile_AsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -60,8 +58,7 @@ public class FsAsyncTests
         Assert.Equal("Buffer Test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_AppendFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -89,8 +86,7 @@ public class FsAsyncTests
 
     #region fs/promises module - File Stats
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Stat_File(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -113,8 +109,7 @@ public class FsAsyncTests
         Assert.Equal("true false 12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Stat_Directory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -141,8 +136,7 @@ public class FsAsyncTests
 
     #region fs/promises module - Directory Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Mkdir_And_Rmdir(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -166,8 +160,7 @@ public class FsAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Mkdir_Recursive(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -193,8 +186,7 @@ public class FsAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Readdir(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -225,8 +217,7 @@ public class FsAsyncTests
 
     #region fs/promises module - File Operations
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Rename(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -250,8 +241,7 @@ public class FsAsyncTests
         Assert.Equal("content\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_CopyFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -276,8 +266,7 @@ public class FsAsyncTests
         Assert.Equal("copy content\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Access(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -305,8 +294,7 @@ public class FsAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Access_NonExistent_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -335,8 +323,7 @@ public class FsAsyncTests
 
     #region fs.promises namespace
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromisesNamespace_WriteFile_And_ReadFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -359,8 +346,7 @@ public class FsAsyncTests
         Assert.Equal("Namespace Test\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromisesNamespace_Stat(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -383,8 +369,7 @@ public class FsAsyncTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromisesNamespace_Constants(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -402,8 +387,7 @@ public class FsAsyncTests
         Assert.Equal("true\n0\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromisesNamespace_AppendFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -431,8 +415,7 @@ public class FsAsyncTests
 
     #region Error Handling
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_ReadFile_NonExistent_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -457,8 +440,7 @@ public class FsAsyncTests
         Assert.Equal("threw true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Unlink_NonExistent_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -487,8 +469,7 @@ public class FsAsyncTests
 
     #region Truncate
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_Truncate(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

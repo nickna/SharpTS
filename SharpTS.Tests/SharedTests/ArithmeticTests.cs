@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArithmeticTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Addition_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -21,8 +20,7 @@ public class ArithmeticTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtraction_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +32,7 @@ public class ArithmeticTests
         Assert.Equal("12\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Multiplication_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -46,8 +43,7 @@ public class ArithmeticTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Division_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -58,8 +54,7 @@ public class ArithmeticTests
         Assert.Equal("25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Modulo_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +65,7 @@ public class ArithmeticTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ComplexExpression_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +77,7 @@ public class ArithmeticTests
         Assert.Equal("27\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_LessThan_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -96,8 +89,7 @@ public class ArithmeticTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_GreaterThan_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +101,7 @@ public class ArithmeticTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_Equality_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -122,8 +113,7 @@ public class ArithmeticTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_NotEqual_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -135,8 +125,7 @@ public class ArithmeticTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_LessThanOrEqual_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -149,8 +138,7 @@ public class ArithmeticTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Comparison_GreaterThanOrEqual_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -163,8 +151,7 @@ public class ArithmeticTests
         Assert.Equal("true\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void UnaryMinus_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +163,7 @@ public class ArithmeticTests
         Assert.Equal("-5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalNot_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -189,8 +175,7 @@ public class ArithmeticTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalAnd_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """
@@ -204,8 +189,7 @@ public class ArithmeticTests
         Assert.Equal("true\nfalse\nfalse\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LogicalOr_ReturnsCorrectResult(ExecutionMode mode)
     {
         var source = """

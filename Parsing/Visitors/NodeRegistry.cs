@@ -25,7 +25,6 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     private readonly Dictionary<Type, Func<Stmt, TContext, ValueTask<TStmtResult>>>? _asyncStmtHandlers;
 
     private bool _frozen;
-    private readonly bool _supportAsync;
 
     /// <summary>
     /// Creates a new NodeRegistry.
@@ -33,7 +32,6 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     /// <param name="supportAsync">Whether to support async expression and statement handlers.</param>
     public NodeRegistry(bool supportAsync = false)
     {
-        _supportAsync = supportAsync;
         if (supportAsync)
         {
             _asyncExprHandlers = new();

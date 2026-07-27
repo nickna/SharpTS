@@ -20,8 +20,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class MapSetDuckTypingTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_TypeofMethodsIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -43,8 +42,7 @@ public class MapSetDuckTypingTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_TypeofMethodsIsFunction(ExecutionMode mode)
     {
         var source = @"
@@ -65,8 +63,7 @@ public class MapSetDuckTypingTests
             output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_SizeIsNumber(ExecutionMode mode)
     {
         var source = @"
@@ -80,8 +77,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("number\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_SizeIsNumber(ExecutionMode mode)
     {
         var source = @"
@@ -95,8 +91,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("number\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_CapturedMethodDirectInvocation(ExecutionMode mode)
     {
         var source = @"
@@ -111,8 +106,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("42\n7\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_CapturedMethodDirectInvocation(ExecutionMode mode)
     {
         var source = @"
@@ -127,8 +121,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_CrossModule_DuckTypingCheck(ExecutionMode mode)
     {
         // The util.types.isMap polyfill pattern — exactly what the util migration
@@ -164,8 +157,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("true\nfalse\nfalse\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_CrossModule_DuckTypingCheck(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -199,8 +191,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("true\nfalse\nfalse\ntrue\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_CrossModule_DynamicMethodAccess(ExecutionMode mode)
     {
         // Receiving a Map typed as `unknown` / `any` must still allow dynamic
@@ -231,8 +222,7 @@ public class MapSetDuckTypingTests
         Assert.Equal("99\ntrue\nfalse\n2\nfalse\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Set_CrossModule_DynamicMethodAccess(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

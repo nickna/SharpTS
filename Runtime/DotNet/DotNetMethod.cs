@@ -14,14 +14,12 @@ internal sealed class DotNetMethod : ISharpTSCallable
 {
     private readonly MethodInfo[] _overloads;
     private readonly object? _receiver; // null for static methods
-    private readonly string _jsName;
     private readonly string? _overloadHint;
 
     public DotNetMethod(MethodInfo[] overloads, object? receiver, string jsName, string? overloadHint)
     {
         _overloads = overloads;
         _receiver = receiver;
-        _jsName = jsName;
         _overloadHint = overloadHint;
     }
 

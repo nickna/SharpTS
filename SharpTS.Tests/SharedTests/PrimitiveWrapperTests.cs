@@ -12,24 +12,21 @@ public class PrimitiveWrapperTests
 {
     // ── typeof ───────────────────────────────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NewWrapper_TypeofIsObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof new Number(5));", mode);
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_NewWrapper_TypeofIsObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof new String('x'));", mode);
         Assert.Equal("object\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_NewWrapper_TypeofIsObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof new Boolean(true));", mode);
@@ -38,24 +35,21 @@ public class PrimitiveWrapperTests
 
     // ── instanceof Object ────────────────────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NewWrapper_InstanceofObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new Number(5) instanceof Object);", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_NewWrapper_InstanceofObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new String('x') instanceof Object);", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_NewWrapper_InstanceofObject(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new Boolean(true) instanceof Object);", mode);
@@ -64,24 +58,21 @@ public class PrimitiveWrapperTests
 
     // ── instanceof own constructor ───────────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NewWrapper_InstanceofNumber(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new Number(5) instanceof Number);", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_NewWrapper_InstanceofString(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new String('x') instanceof String);", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_NewWrapper_InstanceofBoolean(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new Boolean(false) instanceof Boolean);", mode);
@@ -93,24 +84,21 @@ public class PrimitiveWrapperTests
     // its wrapper constructor; only boxed `new Number(5)` wrappers are. Both modes
     // now agree (#360 interp, #375 compiled).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_Bare_NotInstanceofNumber(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((5 as any) instanceof Number);", mode);
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Bare_NotInstanceofString(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(('x' as any) instanceof String);", mode);
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_Bare_NotInstanceofBoolean(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((true as any) instanceof Boolean);", mode);
@@ -121,16 +109,14 @@ public class PrimitiveWrapperTests
     // Symbol has no `new` form, so its only boxed form is `Object(Symbol())`.
     // A bare symbol primitive is NOT an instance; the boxed wrapper IS.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Bare_NotInstanceofSymbol(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((Symbol('s') as any) instanceof Symbol);", mode);
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Boxed_InstanceofSymbol(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((Object(Symbol('s')) as any) instanceof Symbol);", mode);
@@ -139,24 +125,21 @@ public class PrimitiveWrapperTests
 
     // ── call form still coerces (no wrapper) ────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_CallForm_ReturnsPrimitive(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof Number('42'));", mode);
         Assert.Equal("number\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CallForm_ReturnsPrimitive(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof String(42));", mode);
         Assert.Equal("string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_CallForm_ReturnsPrimitive(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof Boolean(1));", mode);
@@ -165,24 +148,21 @@ public class PrimitiveWrapperTests
 
     // ── wrapper primitive value / conversion ─────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_NoArg_WrapsZero(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new Number() instanceof Number);", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Length_MatchesPrimitive(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(new String('hello').length);", mode);
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_IndexedAccess_ReturnsChar(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((new String('hi') as any)[0]);", mode);
@@ -191,24 +171,21 @@ public class PrimitiveWrapperTests
 
     // ── method dispatch on wrappers ──────────────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_ToFixed_WorksOnWrapper(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((new Number(5) as any).toFixed(2));", mode);
         Assert.Equal("5.00\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_ToUpperCase_WorksOnWrapper(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((new String('hello') as any).toUpperCase());", mode);
         Assert.Equal("HELLO\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Boolean_ToString_WorksOnWrapper(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log((new Boolean(true) as any).toString());", mode);
@@ -219,8 +196,7 @@ public class PrimitiveWrapperTests
     // ECMA-262 7.1.1: `+` and `==` ToPrimitive (default hint) an object operand,
     // which calls an own valueOf override before reading the wrapper's slot.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_ValueOfOverride_HonoredInAddition(ExecutionMode mode)
     {
         var source = """
@@ -231,8 +207,7 @@ public class PrimitiveWrapperTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_ValueOfOverride_HonoredInLooseEquality(ExecutionMode mode)
     {
         var source = """
@@ -250,15 +225,13 @@ public class PrimitiveWrapperTests
     // string coercion; an own toString override does. Interpreter and compiled
     // must agree (the divergence these tests pin down).
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_Wrapper_TemplateLiteral_UsesPrimitive(ExecutionMode mode)
     {
         Assert.Equal("v:1\n", TestHarness.Run("const n: any = new Number(1); console.log(`v:${n}`);", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_Wrapper_TemplateLiteral_IgnoresValueOfOverride(ExecutionMode mode)
     {
         // String hint resolves toString first (inherited → primitive), so a
@@ -271,8 +244,7 @@ public class PrimitiveWrapperTests
         Assert.Equal("v:1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Number_Wrapper_TemplateLiteral_HonorsToStringOverride(ExecutionMode mode)
     {
         var source = """
@@ -283,22 +255,19 @@ public class PrimitiveWrapperTests
         Assert.Equal("v:NUM\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_Wrapper_TemplateLiteral_UsesPrimitive(ExecutionMode mode)
     {
         Assert.Equal("v:x\n", TestHarness.Run("const s: any = new String(\"x\"); console.log(`v:${s}`);", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CallForm_CoercesBoxedNumber(ExecutionMode mode)
     {
         Assert.Equal("1\n", TestHarness.Run("console.log(String(new Number(1)));", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CallForm_BoxedNumber_IgnoresValueOfOverride(ExecutionMode mode)
     {
         var source = """
@@ -309,8 +278,7 @@ public class PrimitiveWrapperTests
         Assert.Equal("1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CallForm_BoxedString_HonorsToStringOverride(ExecutionMode mode)
     {
         var source = """
@@ -321,8 +289,7 @@ public class PrimitiveWrapperTests
         Assert.Equal("STR\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void String_CallForm_CoercesBoxedBoolean(ExecutionMode mode)
     {
         Assert.Equal("true\n", TestHarness.Run("console.log(String(new Boolean(true)));", mode));

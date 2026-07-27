@@ -273,15 +273,6 @@ public abstract record Expr
         _ => null
     };
 
-    /// <summary>
-    /// Extracts the Token from a superclass expression for line number reporting.
-    /// </summary>
-    public static Token? GetSuperclassToken(Expr? superclassExpr) => superclassExpr switch
-    {
-        Variable v => v.Name,
-        Get g => g.Name,
-        _ => null
-    };
 }
 
 /// <summary>
@@ -444,7 +435,6 @@ public abstract record Stmt
     // (assignment to an existing lvalue) — the latter's target type is validated (TS2405).
     public record ForIn(Token Variable, string? TypeAnnotation, Expr Object, Stmt Body, bool IsDeclaration = true) : Stmt;
     public record If(Expr Condition, Stmt ThenBranch, Stmt? ElseBranch) : Stmt;
-    public record Print(Expr Expr) : Stmt; // Temporary for console.log
     public record Break(Token Keyword, Token? Label = null) : Stmt;
     public record Continue(Token Keyword, Token? Label = null) : Stmt;
     /// <summary>

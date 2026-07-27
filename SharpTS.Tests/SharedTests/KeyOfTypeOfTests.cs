@@ -12,8 +12,7 @@ public class KeyOfTypeOfTests
 {
     #region keyof Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_InterfaceExtractsKeysAsUnion(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("name\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_InterfaceAgeKey(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("age\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_WithTypeAlias(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("host\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_InvalidKeyAssignment_Throws(ExecutionMode mode)
     {
         var source = """
@@ -67,8 +63,7 @@ public class KeyOfTypeOfTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_InlineObjectType(ExecutionMode mode)
     {
         var source = """
@@ -80,8 +75,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("x\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_EmptyInterface_NeverType(ExecutionMode mode)
     {
         // keyof {} should be never, so no value can be assigned
@@ -95,8 +89,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_WithOptionalProperties(ExecutionMode mode)
     {
         var source = """
@@ -115,8 +108,7 @@ public class KeyOfTypeOfTests
 
     #region typeof Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_SimpleVariable(ExecutionMode mode)
     {
         var source = """
@@ -129,8 +121,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_NumberVariable(ExecutionMode mode)
     {
         var source = """
@@ -143,8 +134,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_ObjectVariable(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +148,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("example.com\n443\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_Function(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +163,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("Hi, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_PropertyAccess(ExecutionMode mode)
     {
         var source = """
@@ -188,8 +176,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_NestedProperty(ExecutionMode mode)
     {
         var source = """
@@ -202,8 +189,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_ArrayElement(ExecutionMode mode)
     {
         var source = """
@@ -216,8 +202,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_TupleElement(ExecutionMode mode)
     {
         var source = """
@@ -233,8 +218,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("world\n100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_ObjectIndexAccess(ExecutionMode mode)
     {
         var source = """
@@ -247,8 +231,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("another value\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_UndefinedVariable_Throws(ExecutionMode mode)
     {
         // Type aliases are lazily evaluated, so we need to use T to trigger the error
@@ -260,8 +243,7 @@ public class KeyOfTypeOfTests
         Assert.Contains("undefinedVar", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_ClassInstance(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +268,7 @@ public class KeyOfTypeOfTests
 
     #region keyof typeof Combined Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOfTypeOf_ObjectLiteral(ExecutionMode mode)
     {
         var source = """
@@ -300,8 +281,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("host\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOfTypeOf_AllKeys(ExecutionMode mode)
     {
         var source = """
@@ -316,8 +296,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("theme\nfontSize\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOfTypeOf_InvalidKey_Throws(ExecutionMode mode)
     {
         var source = """
@@ -329,8 +308,7 @@ public class KeyOfTypeOfTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOfTypeOf_NestedObject(ExecutionMode mode)
     {
         var source = """
@@ -347,8 +325,7 @@ public class KeyOfTypeOfTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_WithArrayMethods(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +338,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_WithIndexSignature(ExecutionMode mode)
     {
         var source = """
@@ -375,8 +351,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_MultipleLevelDeepAccess(ExecutionMode mode)
     {
         var source = """
@@ -389,8 +364,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void KeyOf_Interface_UseInFunction(ExecutionMode mode)
     {
         var source = """
@@ -415,8 +389,7 @@ public class KeyOfTypeOfTests
 
     #region Runtime typeof on Undeclared Variables
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_UndeclaredVariable_ReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -426,8 +399,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_UndeclaredVariable_InComparison(ExecutionMode mode)
     {
         var source = """
@@ -441,8 +413,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("not defined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_DeclaredVariable_StillWorks(ExecutionMode mode)
     {
         var source = """
@@ -461,8 +432,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("number\nstring\nboolean\nundefined\nobject\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_UndeclaredVariable_MultipleChecks(ExecutionMode mode)
     {
         var source = """
@@ -482,8 +452,7 @@ public class KeyOfTypeOfTests
     // `typeof a & typeof b`) handed the whole "a & typeof b" string to the custom typeof-path
     // parser, which spun forever on the first '&'/'|'. These exercise both composites end to end.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_IntersectionOfTwoTypeOf(ExecutionMode mode)
     {
         var source = """
@@ -498,8 +467,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_UnionWithNull(ExecutionMode mode)
     {
         // Resolving `typeof a | null` to a real union (rather than hanging) means null is a genuine
@@ -516,8 +484,7 @@ public class KeyOfTypeOfTests
         Assert.Equal("1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOf_IntersectionEnforcesBothMembers(ExecutionMode mode)
     {
         // The intersection must require members from BOTH operands — a value missing `y` is invalid.

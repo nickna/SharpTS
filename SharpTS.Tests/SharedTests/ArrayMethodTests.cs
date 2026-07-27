@@ -11,8 +11,7 @@ public class ArrayMethodTests
 {
     #region Find Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Find_ReturnsMatchingElement(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class ArrayMethodTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Find_ReturnsUndefinedWhenNotFound(ExecutionMode mode)
     {
         // ECMA-262 23.1.3.10: Array.prototype.find returns undefined when no element matches.
@@ -44,8 +42,7 @@ public class ArrayMethodTests
 
     #region FindIndex Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindIndex_ReturnsIndex(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class ArrayMethodTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindIndex_ReturnsMinusOneWhenNotFound(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class ArrayMethodTests
 
     #region Some/Every Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Some_ReturnsTrueWhenMatch(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class ArrayMethodTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Some_ReturnsFalseWhenNoMatch(ExecutionMode mode)
     {
         var source = """
@@ -100,8 +94,7 @@ public class ArrayMethodTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Every_ReturnsTrueWhenAllMatch(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +106,7 @@ public class ArrayMethodTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Every_ReturnsFalseWhenSomeDontMatch(ExecutionMode mode)
     {
         var source = """
@@ -130,8 +122,7 @@ public class ArrayMethodTests
 
     #region Reduce Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Reduce_WithInitialValue_ReturnsResult(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +135,7 @@ public class ArrayMethodTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Reduce_WithoutInitialValue_UsesFirstElement(ExecutionMode mode)
     {
         var source = """
@@ -162,8 +152,7 @@ public class ArrayMethodTests
 
     #region ReduceRight Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_WithInitialValue_ReturnsResult(ExecutionMode mode)
     {
         var source = """
@@ -176,8 +165,7 @@ public class ArrayMethodTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_OutOfBounds_ThrowsRangeError(ExecutionMode mode)
     {
         // Array.prototype.with must throw a real RangeError for out-of-bounds indices. Compiled
@@ -201,8 +189,7 @@ public class ArrayMethodTests
         Assert.Equal("true/true\ntrue/true\n1,9,3\n1,2,9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_WithoutInitialValue_UsesLastElement(ExecutionMode mode)
     {
         var source = """
@@ -215,8 +202,7 @@ public class ArrayMethodTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_IteratesRightToLeft(ExecutionMode mode)
     {
         var source = """
@@ -229,8 +215,7 @@ public class ArrayMethodTests
         Assert.Equal("dcba\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_WithIndex_PassesCorrectIndices(ExecutionMode mode)
     {
         var source = """
@@ -247,8 +232,7 @@ public class ArrayMethodTests
         Assert.Equal("2,1,0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_SingleElement_WithInitial(ExecutionMode mode)
     {
         var source = """
@@ -261,8 +245,7 @@ public class ArrayMethodTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ReduceRight_SingleElement_WithoutInitial(ExecutionMode mode)
     {
         var source = """
@@ -279,8 +262,7 @@ public class ArrayMethodTests
 
     #region Includes/IndexOf Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Includes_ReturnsTrueWhenFound(ExecutionMode mode)
     {
         var source = """
@@ -292,8 +274,7 @@ public class ArrayMethodTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Includes_ReturnsFalseWhenNotFound(ExecutionMode mode)
     {
         var source = """
@@ -305,8 +286,7 @@ public class ArrayMethodTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IndexOf_ReturnsIndex(ExecutionMode mode)
     {
         var source = """
@@ -318,8 +298,7 @@ public class ArrayMethodTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_IndexOf_ReturnsMinusOneWhenNotFound(ExecutionMode mode)
     {
         var source = """
@@ -335,8 +314,7 @@ public class ArrayMethodTests
 
     #region Join/Concat/Reverse Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_ReturnsJoinedString(ExecutionMode mode)
     {
         var source = """
@@ -348,8 +326,7 @@ public class ArrayMethodTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_WithEmptySeparator_ConcatenatesElements(ExecutionMode mode)
     {
         var source = """
@@ -361,8 +338,7 @@ public class ArrayMethodTests
         Assert.Equal("123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_NestedArrays_JoinRecursively(ExecutionMode mode)
     {
         // ECMA-262 23.1.3.16: each element is ToString-coerced, so a nested array
@@ -377,8 +353,7 @@ public class ArrayMethodTests
         Assert.Equal("1,2-3\n1,2,3\n1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_PlainObject_UsesObjectObject(ExecutionMode mode)
     {
         // A plain object element ToString-coerces to "[object Object]" (its inherited
@@ -390,8 +365,7 @@ public class ArrayMethodTests
         Assert.Equal("[object Object], [object Object]\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_ErrorElement_DispatchesToString(ExecutionMode mode)
     {
         // An Error element in a joined/coerced array dispatches Error.prototype.toString
@@ -407,8 +381,7 @@ public class ArrayMethodTests
         Assert.Equal("RangeError: boom, y\nRangeError: boom\nRangeError: boom\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Join_UserToString_DispatchesToString(ExecutionMode mode)
     {
         // A user class with its own toString() is dispatched per element (#922
@@ -422,8 +395,7 @@ public class ArrayMethodTests
         Assert.Equal("(1,2)|(1,2)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Concat_ReturnsNewArray(ExecutionMode mode)
     {
         var source = """
@@ -439,8 +411,7 @@ public class ArrayMethodTests
         Assert.Equal("4\n1\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {
         var source = """
@@ -458,8 +429,7 @@ public class ArrayMethodTests
 
     #region Chained Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ChainedMethods_Work(ExecutionMode mode)
     {
         var source = """
@@ -478,8 +448,7 @@ public class ArrayMethodTests
 
     #region ES2023 FindLast/FindLastIndex
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLast_ReturnsLastMatchingElement(ExecutionMode mode)
     {
         var source = """
@@ -492,8 +461,7 @@ public class ArrayMethodTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLast_ReturnsUndefinedWhenNotFound(ExecutionMode mode)
     {
         // ECMA-262 23.1.3.11: Array.prototype.findLast returns undefined when no element matches.
@@ -507,8 +475,7 @@ public class ArrayMethodTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLast_EmptyArrayReturnsUndefined(ExecutionMode mode)
     {
         var source = """
@@ -521,8 +488,7 @@ public class ArrayMethodTests
         Assert.Equal("undefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLastIndex_ReturnsLastMatchingIndex(ExecutionMode mode)
     {
         var source = """
@@ -534,8 +500,7 @@ public class ArrayMethodTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLastIndex_ReturnsMinusOneWhenNotFound(ExecutionMode mode)
     {
         var source = """
@@ -547,8 +512,7 @@ public class ArrayMethodTests
         Assert.Equal("-1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_FindLastIndex_EmptyArrayReturnsMinusOne(ExecutionMode mode)
     {
         var source = """
@@ -564,8 +528,7 @@ public class ArrayMethodTests
 
     #region ES2023 ToReversed
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToReversed_ReturnsNewReversedArray(ExecutionMode mode)
     {
         var source = """
@@ -580,8 +543,7 @@ public class ArrayMethodTests
         Assert.Equal("5\n1\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToReversed_OriginalUnchanged(ExecutionMode mode)
     {
         var source = """
@@ -595,8 +557,7 @@ public class ArrayMethodTests
         Assert.Equal("1,2,3\n3,2,1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToReversed_EmptyArrayReturnsEmpty(ExecutionMode mode)
     {
         var source = """
@@ -609,8 +570,7 @@ public class ArrayMethodTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_ToReversed_SingleElementArray(ExecutionMode mode)
     {
         var source = """
@@ -627,8 +587,7 @@ public class ArrayMethodTests
 
     #region ES2023 With
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_ReplacesElementAtIndex(ExecutionMode mode)
     {
         var source = """
@@ -642,8 +601,7 @@ public class ArrayMethodTests
         Assert.Equal("1,99,3\n1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_NegativeIndex(ExecutionMode mode)
     {
         var source = """
@@ -656,8 +614,7 @@ public class ArrayMethodTests
         Assert.Equal("1,2,99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_FirstElement(ExecutionMode mode)
     {
         var source = """
@@ -670,8 +627,7 @@ public class ArrayMethodTests
         Assert.Equal("99,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_LastElement(ExecutionMode mode)
     {
         var source = """
@@ -684,8 +640,7 @@ public class ArrayMethodTests
         Assert.Equal("1,2,99\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_With_OriginalUnchanged(ExecutionMode mode)
     {
         var source = """
@@ -703,8 +658,7 @@ public class ArrayMethodTests
 
     #region ES2022 At
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_At_PositiveIndex(ExecutionMode mode)
     {
         var source = """
@@ -718,8 +672,7 @@ public class ArrayMethodTests
         Assert.Equal("1\n3\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_At_NegativeIndex(ExecutionMode mode)
     {
         var source = """
@@ -733,8 +686,7 @@ public class ArrayMethodTests
         Assert.Equal("5\n4\n1\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_At_OutOfBoundsReturnsUndefined(ExecutionMode mode)
     {
         // ECMA-262 23.1.3.1 specifies `at()` returns undefined (not null) for
@@ -749,8 +701,7 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_At_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -763,8 +714,7 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_At_SingleElement(ExecutionMode mode)
     {
         var source = """

@@ -49,7 +49,6 @@ public sealed class RuntimeFeatureDetector
             UsesBroadcastChannel = false,
             UsesAsyncLocalStorage = false,
             UsesReadline = false,
-            UsesUtilPromisify = false,
             UsesTextEncoding = false,
             UsesFinalizationRegistry = false,
             UsesReflectMetadata = false,
@@ -57,7 +56,6 @@ public sealed class RuntimeFeatureDetector
             UsesJSON = false,
             UsesIntl = false,
             UsesReflect = false,
-            UsesUtilFormat = false,
             UsesIteratorHelpers = false,
             UsesDate = false,
             UsesRegExp = false,
@@ -229,13 +227,9 @@ public sealed class RuntimeFeatureDetector
             case "readline":
             case "readline/promises":
                 _set.UsesReadline = true; break;
-            case "util":
-            case "util/types":
-                // `import 'util'` brings both promisify-family and format-family
-                // surface into scope. Trigger both flags conservatively.
-                _set.UsesUtilPromisify = true;
-                _set.UsesUtilFormat = true;
-                break;
+            // `import 'util'` needs no runtime feature flags: the util module is
+            // pure stdlib TS compiled with the program (only console.dir's
+            // inspect helpers remain emitted, and those are unconditional).
             case "worker_threads":
                 _set.UsesBroadcastChannel = true;
                 _set.UsesAsyncLocalStorage = true;
@@ -456,13 +450,6 @@ public sealed class RuntimeFeatureDetector
             case "Set":
                 _set.UsesSet = true; break;
 
-            // util module identifiers — `util` (CommonJS bare reference),
-            // `format`, `inspect`, `parseArgs`, `promisify`/etc. would land
-            // here only if the user does `import { format, ... } from 'util'`
-            // and then uses them as bare identifiers. The detector already
-            // tracks `import 'util'` as both UsesUtilPromisify and UsesUtilFormat
-            // via HandleModulePath. This catches the bare-identifier case.
-
             // globalThis / global escape hatch — many runtime identifiers can be
             // resolved through these. Set the broad-net features as a safety
             // valve; the fine-grained ones still get set by their own triggers.
@@ -476,7 +463,6 @@ public sealed class RuntimeFeatureDetector
                 _set.UsesJSON = true;
                 _set.UsesIntl = true;
                 _set.UsesReflect = true;
-                _set.UsesUtilFormat = true;
                 _set.TypedArrays = RuntimeFeatureSet.TypedArrayKinds.All;
                 break;
         }
@@ -486,26 +472,6 @@ public sealed class RuntimeFeatureDetector
 
     private void HandleMemberAccess(string objectName, string memberName)
     {
-        if (objectName == "util" || objectName == "Util")
-        {
-            switch (memberName)
-            {
-                case "promisify":
-                case "callbackify":
-                case "deprecate":
-                    _set.UsesUtilPromisify = true; break;
-                case "format":
-                case "inspect":
-                case "parseArgs":
-                case "getSystemErrorName":
-                case "getSystemErrorMap":
-                case "toUSVString":
-                case "stripVTControlCharacters":
-                case "isDeepStrictEqual":
-                case "inherits":
-                    _set.UsesUtilFormat = true; break;
-            }
-        }
         if (objectName == "Reflect")
         {
             if (memberName == "metadata" || memberName == "defineMetadata" || memberName == "getMetadata")
@@ -596,10 +562,6 @@ public sealed class RuntimeFeatureDetector
 
             case Stmt.Sequence seq:
                 foreach (var s in seq.Statements) VisitStmt(s);
-                break;
-
-            case Stmt.Print pr:
-                VisitExpr(pr.Expr);
                 break;
 
             case Stmt.Using usg:

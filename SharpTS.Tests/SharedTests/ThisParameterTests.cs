@@ -11,8 +11,7 @@ public class ThisParameterTests
 {
     #region Basic Function Parsing
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_BasicFunction_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_WithOtherParams_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -41,8 +39,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_OnlyThisParam_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ThisParameterTests
 
     #region Interface and Type Alias
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_InInterface_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -74,8 +70,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_InTypeAlias_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -87,8 +82,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_FunctionTypeAnnotation_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +98,7 @@ public class ThisParameterTests
 
     #region Class Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_InAbstractMethod_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -124,8 +117,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_ClassMethod_ParsesCorrectly(ExecutionMode mode)
     {
         // This test focuses on parsing - the this parameter allows explicit this type annotation
@@ -152,8 +144,7 @@ public class ThisParameterTests
 
     #region Object Literal Methods
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_ObjectLiteralMethod_ParsesCorrectly(ExecutionMode mode)
     {
         // This test focuses on parsing - the this parameter is a compile-time annotation
@@ -175,8 +166,7 @@ public class ThisParameterTests
 
     #region With Other Parameter Types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_WithRestParams_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -190,8 +180,7 @@ public class ThisParameterTests
         Assert.Equal("parsed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_WithDefaultParams_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +198,7 @@ public class ThisParameterTests
 
     #region Generic Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_GenericFunction_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -228,8 +216,7 @@ public class ThisParameterTests
 
     #region Overloaded Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_OverloadedFunction_ParsesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -249,8 +236,7 @@ public class ThisParameterTests
 
     #region Type Checking
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_TypeChecksThisAccess(ExecutionMode mode)
     {
         // This test verifies that accessing properties on 'this' is type-checked
@@ -269,8 +255,7 @@ public class ThisParameterTests
         Assert.Equal("type checked\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThisParameter_ValidThisPropertyAccess_TypeChecks(ExecutionMode mode)
     {
         // Verify that accessing valid properties on the declared this type works

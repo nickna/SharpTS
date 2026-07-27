@@ -36,13 +36,6 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
     // Current yield point being processed
     private int _currentYieldState = 0;
 
-    // Stack type tracking via shared helpers (use base class _helpers)
-    private StackType _stackType
-    {
-        get => _helpers.StackType;
-        set => _helpers.StackType = value;
-    }
-
     // Compilation context for access to functions, classes, etc.
     private CompilationContext? _ctx;
 

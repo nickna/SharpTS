@@ -9,63 +9,6 @@ namespace SharpTS.Compilation;
 public static class ScryptImpl
 {
     /// <summary>
-    /// Derives a key with options parsing (for compiled mode).
-    /// </summary>
-    public static byte[] DeriveWithOptions(byte[] password, byte[] salt, int dkLen, object? options)
-    {
-        // Default scrypt parameters (Node.js defaults)
-        int N = 16384;  // cost parameter (must be power of 2)
-        int r = 8;      // block size
-        int p = 1;      // parallelization
-
-        // Parse options if provided
-        if (options != null)
-        {
-            N = GetOptionInt(options, "N", N);
-            N = GetOptionInt(options, "cost", N);
-            r = GetOptionInt(options, "r", r);
-            r = GetOptionInt(options, "blockSize", r);
-            p = GetOptionInt(options, "p", p);
-            p = GetOptionInt(options, "parallelization", p);
-        }
-
-        // Validate N is a power of 2
-        if (N < 2 || (N & (N - 1)) != 0)
-            throw new ArgumentException("scryptSync: N must be a power of 2 greater than 1");
-
-        return DeriveBytes(password, salt, N, r, p, dkLen);
-    }
-
-    /// <summary>
-    /// Gets an integer option from an object (supports both SharpTSObject and $Object).
-    /// </summary>
-    private static int GetOptionInt(object options, string name, int defaultValue)
-    {
-        var type = options.GetType();
-
-        // Try GetProperty method first (for $Object)
-        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
-        if (getPropertyMethod != null)
-        {
-            var value = getPropertyMethod.Invoke(options, [name]);
-            if (value is double d)
-                return (int)d;
-            return defaultValue;
-        }
-
-        // Try Fields property (for SharpTSObject)
-        var fieldsProperty = type.GetProperty("Fields");
-        if (fieldsProperty != null)
-        {
-            var fields = fieldsProperty.GetValue(options) as System.Collections.Generic.IReadOnlyDictionary<string, object?>;
-            if (fields != null && fields.TryGetValue(name, out var val) && val is double dVal)
-                return (int)dVal;
-        }
-
-        return defaultValue;
-    }
-
-    /// <summary>
     /// Derives a key using the scrypt key derivation function.
     /// </summary>
     public static byte[] DeriveBytes(byte[] password, byte[] salt, int N, int r, int p, int dkLen)

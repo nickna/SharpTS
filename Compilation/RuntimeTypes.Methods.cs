@@ -6,40 +6,6 @@ public static partial class RuntimeTypes
 {
     #region Methods
 
-    public static object? InvokeMethod(object? receiver, string methodName, int argCount)
-    {
-        // This is a simplified implementation
-        // In practice, arguments would need to be passed differently
-        if (receiver == null) return null;
-
-        // Array methods
-        if (receiver is List<object?> list)
-        {
-            return methodName switch
-            {
-                "push" => null, // Would need args
-                "pop" => list.Count > 0 ? list[^1] : null,
-                "length" => (double)list.Count,
-                _ => null
-            };
-        }
-
-        // String methods
-        if (receiver is string s)
-        {
-            return methodName switch
-            {
-                "toUpperCase" => s.ToUpperInvariant(),
-                "toLowerCase" => s.ToLowerInvariant(),
-                "trim" => s.Trim(),
-                "length" => (double)s.Length,
-                _ => null
-            };
-        }
-
-        return null;
-    }
-
     public static object? InvokeValue(object? value, object?[] args)
     {
         // If value is a TSFunction, call its Invoke method

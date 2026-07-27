@@ -16,8 +16,7 @@ public class CommandLineArgumentTests
 {
     #region process.argv.slice(2) — User Arguments
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_SliceTwo_ReturnsUserArgs(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class CommandLineArgumentTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_SliceTwo_JoinsCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class CommandLineArgumentTests
         Assert.Equal("hello world\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_EmptyArgs_SliceTwoIsEmpty(ExecutionMode mode)
     {
         var source = """
@@ -59,8 +56,7 @@ public class CommandLineArgumentTests
 
     #region Argument Preservation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_ArgsWithSpaces_PreservedCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +69,7 @@ public class CommandLineArgumentTests
         Assert.Equal("hello world\nfoo bar\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_ManyArguments_AllPreserved(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +83,7 @@ public class CommandLineArgumentTests
         Assert.Equal("10\narg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 arg9 arg10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_SpecialCharacters_PreservedCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -109,8 +103,7 @@ public class CommandLineArgumentTests
 
     #region argv Structure
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_LengthIncludesRuntimeAndScript(ExecutionMode mode)
     {
         // argv = [runtime_path, script_or_dll_path, ...user_args]
@@ -123,8 +116,7 @@ public class CommandLineArgumentTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessArgv_IndexOneIsNonEmptyString(ExecutionMode mode)
     {
         // argv[1] is the script path (interpreter) or DLL path (compiled)

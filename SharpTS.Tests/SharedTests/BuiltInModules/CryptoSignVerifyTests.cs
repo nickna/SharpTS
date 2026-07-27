@@ -54,8 +54,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Object Creation Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateSign_ReturnsSignObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -73,8 +72,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateVerify_ReturnsVerifyObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -92,8 +90,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_UpdateReturnsThis(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -110,8 +107,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Verify_UpdateReturnsThis(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -132,8 +128,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Algorithm Support Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_SupportsRsaSha256Algorithm(ExecutionMode mode)
     {
         // RSA-SHA256 prefixed algorithm should work the same as sha256
@@ -150,8 +145,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_SupportsSha384Algorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -167,8 +161,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_SupportsSha512Algorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -188,8 +181,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Sign and Verify Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_SignAndVerify_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -221,8 +213,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Verify_ReturnsFalseForInvalidSignature(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -251,8 +242,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_MultipleUpdates(ExecutionMode mode)
     {
         // Multiple updates should work the same as a single update with concatenated data
@@ -284,8 +274,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_MethodChaining(ExecutionMode mode)
     {
         // Test that update().sign() chaining works
@@ -310,8 +299,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Encoding Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_Base64Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -335,8 +323,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_SignAndVerify_Base64(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -365,8 +352,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_ReturnsBuffer_WhenNoEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -394,8 +380,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_ThrowsOnUnsupportedAlgorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -415,8 +400,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_ThrowsOnDoubleSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -443,8 +427,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sign_ThrowsOnUpdateAfterSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -471,8 +454,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Verify_ThrowsOnDoubleVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

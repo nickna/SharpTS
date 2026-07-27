@@ -374,16 +374,7 @@ public partial class CompilationContext
         NamespaceVarFields = namespaceVarFields;
         Types = types ?? TypeProvider.Runtime;
         Locals = new LocalsManager(il);
-        ILBuilder = new ValidatedILBuilder(il, Types);
-    }
-
-    /// <summary>
-    /// Updates the validated IL builder for a new ILGenerator (when switching methods).
-    /// Call this when the IL property changes to a new method's generator.
-    /// </summary>
-    public void UpdateILBuilder(ILGenerator newIL)
-    {
-        ILBuilder = new ValidatedILBuilder(newIL, Types);
+        ILBuilder = new ValidatedILBuilder(il);
     }
 
     public void DefineParameter(string name, int argIndex, Type? paramType = null)
@@ -428,12 +419,6 @@ public partial class CompilationContext
             il.Emit(OpCodes.Unbox_Any, pt);
         else
             il.Emit(OpCodes.Castclass, pt);
-    }
-
-    public void ClearParameters()
-    {
-        _parameters.Clear();
-        _parameterTypes.Clear();
     }
 
     public void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)

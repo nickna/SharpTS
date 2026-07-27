@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class NumericEqualityFastPathTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RuntimeNaN_NeverEqual(ExecutionMode mode)
     {
         // NaN from a runtime computation (not the literal) — must never equal itself.
@@ -34,8 +33,7 @@ public class NumericEqualityFastPathTests
         Assert.Equal("false\ntrue\nfalse\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RuntimeSignedZero_ComparesEqual(ExecutionMode mode)
     {
         // +0 === -0 is true per ===, even though Object.is would say false.
@@ -49,8 +47,7 @@ public class NumericEqualityFastPathTests
         Assert.Equal("true\ntrue\nfalse\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void RuntimeInfinity_Equality(ExecutionMode mode)
     {
         var source = """
@@ -63,8 +60,7 @@ public class NumericEqualityFastPathTests
         Assert.Equal("true\nfalse\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OrdinaryNumberEquality(ExecutionMode mode)
     {
         // Variables defeat constant folding; covers strict + loose + negated forms.
@@ -83,8 +79,7 @@ public class NumericEqualityFastPathTests
         Assert.Equal("true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DispatchChain_LikeBrainfuck(ExecutionMode mode)
     {
         // The shape the fast path was built for: a tight loop whose control flow is driven by
@@ -108,8 +103,7 @@ public class NumericEqualityFastPathTests
         Assert.Equal("300\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CharCodeEquality(ExecutionMode mode)
     {
         // charCodeAt returns number; comparing it against numeric literals is the brainfuck idiom.

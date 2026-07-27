@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CryptoWebCryptoTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Digest_Sha256_KnownVector(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -32,8 +31,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GetRandomValues_FillsAndReturnsSameArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -53,8 +51,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GlobalThisCrypto_RandomUUID_And_WebcryptoAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -72,8 +69,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_AesGcm_GenerateEncryptDecrypt_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -99,8 +95,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_AesCbc_RoundTrip_WithAad_Gcm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -129,8 +124,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Hmac_SignVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -151,8 +145,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Subtle_Hmac_MatchesCreateHmac_InterpOnly(ExecutionMode mode)
     {
         // Interp-only: compiled createHmac's named-import key conversion doesn't
@@ -176,8 +169,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Ecdsa_SignVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -203,8 +195,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Rsa_OaepRoundTrip_And_PssSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -239,8 +230,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Pbkdf2_DeriveBits_MatchesPbkdf2Sync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -262,8 +252,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Hkdf_DeriveBits_MatchesHkdfSync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -285,8 +274,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_Ecdh_DeriveBits_TwoParty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -309,8 +297,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_DeriveKey_Pbkdf2ToAesGcm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -342,8 +329,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_ImportExport_RawAndSpkiPkcs8_RoundTrips(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -379,8 +365,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_ExportKey_Jwk_SecretOct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -402,8 +387,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_WrapUnwrapKey_RawAesGcm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -428,8 +412,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_UnsupportedAlgorithms_ThrowClearErrors(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -458,8 +441,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Subtle_ExportKey_NotExtractable_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -487,8 +469,7 @@ public class CryptoWebCryptoTests
     // ── Interpreted-only: jwk import/export of asymmetric keys is a documented
     //    compiled-mode ceiling (use spki/pkcs8 there). ─────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void Subtle_Jwk_AsymmetricExportImport_InterpOnly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -519,8 +500,7 @@ public class CryptoWebCryptoTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void GetRandomValues_QuotaExceeded_InterpOnly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

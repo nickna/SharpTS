@@ -503,35 +503,11 @@ public class SharpTSClass(
     }
 
     /// <summary>
-    /// Checks if this class has an instance private field with the given name.
-    /// </summary>
-    public bool HasInstancePrivateField(string name)
-    {
-        return _instancePrivateFields.Any(f => f.Name.Lexeme == name);
-    }
-
-    /// <summary>
-    /// Checks if this class has an instance private method with the given name.
-    /// </summary>
-    public bool HasPrivateMethod(string name)
-    {
-        return _privateMethods.ContainsKey(name);
-    }
-
-    /// <summary>
     /// Checks if this class has a static private field with the given name.
     /// </summary>
     public bool HasStaticPrivateField(string name)
     {
         return _staticPrivateFields.ContainsKey(name);
-    }
-
-    /// <summary>
-    /// Checks if this class has a static private method with the given name.
-    /// </summary>
-    public bool HasStaticPrivateMethod(string name)
-    {
-        return _staticPrivateMethods.ContainsKey(name);
     }
 
     #endregion

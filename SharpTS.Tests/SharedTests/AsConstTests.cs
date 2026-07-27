@@ -10,8 +10,7 @@ public class AsConstTests
 {
     #region Basic as const Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_ArrayToTuple_TypeInferredCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -25,8 +24,7 @@ public class AsConstTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_MixedTypeArray_Works(ExecutionMode mode)
     {
         var source = """
@@ -40,8 +38,7 @@ public class AsConstTests
         Assert.Equal("1\ntwo\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_ObjectLiteral_Works(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class AsConstTests
         Assert.Equal("1\nhello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_NestedStructure_Works(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class AsConstTests
         Assert.Equal("1\n2\ntest\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_RuntimePassThrough_Works(ExecutionMode mode)
     {
         var source = """
@@ -86,8 +81,7 @@ public class AsConstTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_StringLiterals_Works(ExecutionMode mode)
     {
         var source = """
@@ -100,8 +94,7 @@ public class AsConstTests
         Assert.Equal("pending\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_EmptyArray_Works(ExecutionMode mode)
     {
         var source = """
@@ -113,8 +106,7 @@ public class AsConstTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_BooleanLiterals_Works(ExecutionMode mode)
     {
         var source = """
@@ -131,8 +123,7 @@ public class AsConstTests
 
     #region Complex as const Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_DeeplyNestedObject_Works(ExecutionMode mode)
     {
         var source = """
@@ -152,8 +143,7 @@ public class AsConstTests
         Assert.Equal("localhost\n8080\nauth\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_ArrayOfObjects_Works(ExecutionMode mode)
     {
         var source = """
@@ -169,8 +159,7 @@ public class AsConstTests
         Assert.Equal("0\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_NullValue_Works(ExecutionMode mode)
     {
         var source = """
@@ -184,8 +173,7 @@ public class AsConstTests
         Assert.Equal("1\nnull\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_InFunctionReturn_Works(ExecutionMode mode)
     {
         var source = """
@@ -201,8 +189,7 @@ public class AsConstTests
         Assert.Equal("dark\n14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_SpreadIntoArray_Works(ExecutionMode mode)
     {
         var source = """
@@ -217,8 +204,7 @@ public class AsConstTests
         Assert.Equal("5\n1\n5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_SpreadIntoObject_Works(ExecutionMode mode)
     {
         var source = """
@@ -233,8 +219,7 @@ public class AsConstTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_WithMethodCalls_Works(ExecutionMode mode)
     {
         var source = """
@@ -249,8 +234,7 @@ public class AsConstTests
         Assert.Equal("6\n2\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_FilterOperation_Works(ExecutionMode mode)
     {
         var source = """
@@ -265,8 +249,7 @@ public class AsConstTests
         Assert.Equal("2\n2\n4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_ReduceOperation_Works(ExecutionMode mode)
     {
         var source = """
@@ -279,8 +262,7 @@ public class AsConstTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_IndexAccess_Works(ExecutionMode mode)
     {
         var source = """
@@ -293,8 +275,7 @@ public class AsConstTests
         Assert.Equal("east\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsConst_ObjectWithArrayProperty_Works(ExecutionMode mode)
     {
         var source = """

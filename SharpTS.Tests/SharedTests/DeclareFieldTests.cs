@@ -11,8 +11,7 @@ public class DeclareFieldTests
 {
     #region Instance Declare Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_Instance_ReturnsNull(ExecutionMode mode)
     {
         var source = """
@@ -27,8 +26,7 @@ public class DeclareFieldTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_Instance_CanBeSetExternally(ExecutionMode mode)
     {
         var source = """
@@ -44,8 +42,7 @@ public class DeclareFieldTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_MultipleInstances_IndependentValues(ExecutionMode mode)
     {
         var source = """
@@ -68,8 +65,7 @@ public class DeclareFieldTests
 
     #region Static Declare Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_Static_ReturnsNull(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +79,7 @@ public class DeclareFieldTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_Static_CanBeSetExternally(ExecutionMode mode)
     {
         var source = """
@@ -103,8 +98,7 @@ public class DeclareFieldTests
 
     #region Mixed Fields
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_MixedWithRegularFields(ExecutionMode mode)
     {
         var source = """
@@ -121,8 +115,7 @@ public class DeclareFieldTests
         Assert.Equal("null\ndefault\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_StaticWithOtherStaticFields(ExecutionMode mode)
     {
         var source = """
@@ -146,8 +139,7 @@ public class DeclareFieldTests
 
     #region Access Modifiers
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_WithReadonly_AccessUninitialized(ExecutionMode mode)
     {
         // Readonly declare fields exist but can only be read (not assigned after construction)
@@ -163,8 +155,7 @@ public class DeclareFieldTests
         Assert.Equal("null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_WithPrivateAccess(ExecutionMode mode)
     {
         var source = """
@@ -193,8 +184,7 @@ public class DeclareFieldTests
 
     #region Class Expression
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclareField_ClassExpression(ExecutionMode mode)
     {
         var source = """

@@ -120,28 +120,12 @@ public static class SemanticOperatorResolver
     };
 
     /// <summary>
-    /// Returns true if the operator supports BigInt operands.
-    /// </summary>
-    /// <param name="op">The operator token type.</param>
-    /// <returns>True if BigInt is supported; false for unsigned right shift.</returns>
-    public static bool SupportsBigInt(TokenType op) => op != TokenType.GREATER_GREATER_GREATER;
-
-    /// <summary>
     /// Returns true if the operator returns a boolean result.
     /// </summary>
     /// <param name="op">The operator token type.</param>
     /// <returns>True for comparison, equality, and special operators.</returns>
     public static bool ReturnsBoolean(TokenType op) => GetCategory(op) is
         OperatorCategory.Comparison or OperatorCategory.Equality or OperatorCategory.Special;
-
-    /// <summary>
-    /// Returns true if the operator requires numeric operands (number or bigint).
-    /// </summary>
-    /// <param name="op">The operator token type.</param>
-    /// <returns>True for arithmetic, comparison, bitwise, and unsigned shift operators.</returns>
-    public static bool RequiresNumeric(TokenType op) => GetCategory(op) is
-        OperatorCategory.Arithmetic or OperatorCategory.Comparison or
-        OperatorCategory.Bitwise or OperatorCategory.UnsignedShift;
 
     /// <summary>
     /// Returns true if the operator is an equality check (==, ===, !=, !==).

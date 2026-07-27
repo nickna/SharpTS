@@ -900,7 +900,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipWriteLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableType.GetMethod("SetWriteCallback")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetWriteCallback!);
             IL.MarkLabel(skipWriteLabel);
 
             // Extract 'final' callback
@@ -914,7 +914,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipFinalLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, finalCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableType.GetMethod("SetFinalCallback")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetFinalCallback!);
             IL.MarkLabel(skipFinalLabel);
 
             // Extract 'objectMode' — check if value is boxed true (not just non-null)
@@ -934,7 +934,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Brfalse, skipObjectModeLabel);
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableType.GetMethod("SetObjectMode")!);
+                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableSetObjectMode!);
                 IL.MarkLabel(skipObjectModeLabel);
             }
 
@@ -1013,7 +1013,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, skipWriteLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexType.GetMethod("SetWriteCallback")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetWriteCallback!);
             IL.MarkLabel(skipWriteLabel);
 
             // Extract 'objectMode'
@@ -1026,7 +1026,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexType.GetMethod("SetObjectMode")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetObjectMode!);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);
@@ -1079,7 +1079,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, afterFlushLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, flushCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSTransformType.GetMethod("SetFlushCallback")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSTransformSetFlushCallback!);
             IL.MarkLabel(afterFlushLabel);
 
             // Extract 'objectMode' (Transform extends Duplex)
@@ -1092,7 +1092,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldc_I4_1);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexType.GetMethod("SetObjectMode")!);
+            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSDuplexSetObjectMode!);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(skipObjectModeLabel);
             IL.Emit(OpCodes.Pop);

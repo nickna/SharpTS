@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class CrossModuleNameCollisionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportedFunctionSurvivesConstShadowingInImporter(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -34,8 +33,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("from-lib\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LibModuleReferencesOwnExportedFunctionDespiteImporterConflict(ExecutionMode mode)
     {
         // lib.ts should see its OWN `foo` via hoisting even when main.ts has
@@ -58,8 +56,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("lib: function\nmain: ok\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesDeclaringSameConstName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -88,8 +85,7 @@ public class CrossModuleNameCollisionTests
     // was a flat map keyed by local name, so the second module to load
     // clobbered the first's binding. With `os` imported before `process`,
     // os.ts's `__platform()` call was mis-routed to process's binding.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void OsBeforeProcess_PlatformAndArchResolveCorrectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -111,8 +107,7 @@ public class CrossModuleNameCollisionTests
         Assert.Contains("pid-typeof: number", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ProcessBeforeOs_PlatformAndArchResolveCorrectly(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -145,8 +140,7 @@ public class CrossModuleNameCollisionTests
     // sync. These run in BOTH modes: compiled pins the fix, interpreted guards the (already
     // correct) reference behavior.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesDeclaringSameAsyncFunctionName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -168,8 +162,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("A B\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesDeclaringSameGeneratorFunctionName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -191,8 +184,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("A1,A2\nB1,B2\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesDeclaringSameAsyncGeneratorFunctionName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -217,8 +209,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("A1\nA2\nB1\nB2\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesDefaultExportingSameAsyncFunctionName(ExecutionMode mode)
     {
         // The `export default` store branch is distinct from named exports; cover the
@@ -242,8 +233,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("DA DB\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesMixingAsyncAndSyncSameFunctionName(ExecutionMode mode)
     {
         // One module's `dup` is async (qualified state-machine stub), the other's is sync
@@ -267,8 +257,7 @@ public class CrossModuleNameCollisionTests
         Assert.Equal("async sync\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TwoModulesSameAsyncFunctionNameEachCapturingOwnModuleConst(ExecutionMode mode)
     {
         // Each colliding async function captures a module-level const of the same name. Beyond

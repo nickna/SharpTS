@@ -11,8 +11,7 @@ public class IntlListFormatTests
 {
     // ========== Conjunction (default) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_ConjunctionThreeItems(ExecutionMode mode)
     {
         var source = @"
@@ -23,8 +22,7 @@ public class IntlListFormatTests
         Assert.Equal("Apple, Banana, and Cherry\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_ConjunctionTwoItems(ExecutionMode mode)
     {
         var source = @"
@@ -35,8 +33,7 @@ public class IntlListFormatTests
         Assert.Equal("Alice and Bob\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_ConjunctionOneItem(ExecutionMode mode)
     {
         var source = @"
@@ -47,8 +44,7 @@ public class IntlListFormatTests
         Assert.Equal("Solo\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_ConjunctionEmpty(ExecutionMode mode)
     {
         var source = @"
@@ -61,8 +57,7 @@ public class IntlListFormatTests
 
     // ========== Disjunction ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_DisjunctionThreeItems(ExecutionMode mode)
     {
         var source = @"
@@ -73,8 +68,7 @@ public class IntlListFormatTests
         Assert.Equal("Apple, Banana, or Cherry\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_DisjunctionTwoItems(ExecutionMode mode)
     {
         var source = @"
@@ -87,8 +81,7 @@ public class IntlListFormatTests
 
     // ========== Unit ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_UnitShort(ExecutionMode mode)
     {
         var source = @"
@@ -99,8 +92,7 @@ public class IntlListFormatTests
         Assert.Equal("6 hours, 30 minutes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_UnitNarrow(ExecutionMode mode)
     {
         var source = @"
@@ -113,8 +105,7 @@ public class IntlListFormatTests
 
     // ========== Resolved Options ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_ResolvedOptions(ExecutionMode mode)
     {
         var source = @"
@@ -129,8 +120,7 @@ public class IntlListFormatTests
 
     // ========== Format To Parts ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_FormatToParts(ExecutionMode mode)
     {
         var source = @"
@@ -146,8 +136,7 @@ public class IntlListFormatTests
         Assert.Contains("element:B", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_FormatToPartsReturnsArray(ExecutionMode mode)
     {
         var source = @"
@@ -161,8 +150,7 @@ public class IntlListFormatTests
 
     // ========== Default (No Arguments) ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_DefaultNoArgs(ExecutionMode mode)
     {
         var source = @"
@@ -176,8 +164,7 @@ public class IntlListFormatTests
 
     // ========== Four+ Items ==========
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void IntlListFormat_FourItems(ExecutionMode mode)
     {
         var source = @"

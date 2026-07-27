@@ -16,8 +16,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class MemberIncrementCoercionTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_NumericStringMember_ReturnsOldNumber_StoresIncremented(ExecutionMode mode)
     {
         // o.x = "5": (o.x++) is ToNumber("5") === 5; o.x becomes 6.
@@ -29,8 +28,7 @@ public class MemberIncrementCoercionTests
         Assert.Equal("5|6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_UndefinedMember_IsNaN(ExecutionMode mode)
     {
         // ToNumber(undefined) is NaN; NaN + 1 is NaN (no longer throws).
@@ -42,8 +40,7 @@ public class MemberIncrementCoercionTests
         Assert.Equal("NaN\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PrefixIncrement_NumericStringMember_ReturnsNewNumber(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class MemberIncrementCoercionTests
         Assert.Equal("6|6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixDecrement_NumericStringMember_Coerces(ExecutionMode mode)
     {
         var source = """
@@ -66,8 +62,7 @@ public class MemberIncrementCoercionTests
         Assert.Equal("4\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_NumericStringElement_Coerces(ExecutionMode mode)
     {
         // arr[i]++ has the identical divergence as o.x++.
@@ -79,8 +74,7 @@ public class MemberIncrementCoercionTests
         Assert.Equal("7|8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PostfixIncrement_NumericStringVariable_Coerces(ExecutionMode mode)
     {
         // The variable l-value path shared the same latent gap (it asserted a boxed double via

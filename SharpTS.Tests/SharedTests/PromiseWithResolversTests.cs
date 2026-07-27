@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PromiseWithResolversTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WithResolvers_BasicResolve(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class PromiseWithResolversTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WithResolvers_BasicReject(ExecutionMode mode)
     {
         var source = """
@@ -47,8 +45,7 @@ public class PromiseWithResolversTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WithResolvers_ResolveWithString(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +62,7 @@ public class PromiseWithResolversTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WithResolvers_HasAllProperties(ExecutionMode mode)
     {
         var source = """
@@ -83,8 +79,7 @@ public class PromiseWithResolversTests
         Assert.Equal("object\nfunction\nfunction\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WithResolvers_ResolveWithNumber(ExecutionMode mode)
     {
         var source = """

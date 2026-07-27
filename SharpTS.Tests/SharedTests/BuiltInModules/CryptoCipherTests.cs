@@ -10,8 +10,7 @@ public class CryptoCipherTests
 {
     #region CBC Mode Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes256Cbc_RoundTrip(ExecutionMode mode)
     {
         // Encrypt then decrypt, verify match
@@ -40,8 +39,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes128Cbc_RoundTrip(ExecutionMode mode)
     {
         // Test with AES-128-CBC
@@ -70,8 +68,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes192Cbc_RoundTrip(ExecutionMode mode)
     {
         // Test with AES-192-CBC
@@ -98,8 +95,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Cbc_MultipleUpdates(ExecutionMode mode)
     {
         // Multiple update() calls should work correctly
@@ -129,8 +125,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Cbc_EmptyInput(ExecutionMode mode)
     {
         // Empty plaintext should still work
@@ -157,8 +152,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Cbc_Base64Encoding(ExecutionMode mode)
     {
         // Test with base64 encoding
@@ -187,8 +181,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Cbc_BufferOutput(ExecutionMode mode)
     {
         // Test with Buffer output (default)
@@ -216,8 +209,7 @@ public class CryptoCipherTests
 
     #region GCM Mode Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip_String(ExecutionMode mode)
     {
         // GCM mode with auth tag using string output
@@ -246,8 +238,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip_Buffer(ExecutionMode mode)
     {
         // GCM mode with auth tag using Buffer output
@@ -276,8 +267,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Aes128Gcm_RoundTrip(ExecutionMode mode)
     {
         // AES-128-GCM mode
@@ -306,8 +296,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Gcm_WithAAD(ExecutionMode mode)
     {
         // GCM with additional authenticated data
@@ -339,8 +328,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Gcm_GetAuthTagReturnsBuffer(ExecutionMode mode)
     {
         // getAuthTag should return a Buffer
@@ -369,8 +357,7 @@ public class CryptoCipherTests
 
     #region Error Handling Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_InvalidAlgorithm(ExecutionMode mode)
     {
         // Unknown algorithm should throw
@@ -394,8 +381,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_WrongKeySize(ExecutionMode mode)
     {
         // Wrong key size should throw
@@ -419,8 +405,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_WrongIVSize(ExecutionMode mode)
     {
         // Wrong IV size should throw
@@ -444,8 +429,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_UpdateAfterFinal(ExecutionMode mode)
     {
         // Calling update after final should throw
@@ -473,8 +457,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_DoubleFinal(ExecutionMode mode)
     {
         // Calling final twice should throw
@@ -502,8 +485,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateDecipheriv_Gcm_MissingAuthTag(ExecutionMode mode)
     {
         // GCM decryption without setAuthTag should throw
@@ -529,8 +511,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Gcm_GetAuthTagBeforeFinal(ExecutionMode mode)
     {
         // Calling getAuthTag before final should throw
@@ -557,8 +538,7 @@ public class CryptoCipherTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Cbc_GetAuthTagThrows(ExecutionMode mode)
     {
         // getAuthTag on CBC cipher should throw
@@ -590,8 +570,7 @@ public class CryptoCipherTests
 
     #region Buffer Input Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_BufferInput(ExecutionMode mode)
     {
         // Using Buffer as input with hex encoding for simpler output handling
@@ -623,8 +602,7 @@ public class CryptoCipherTests
 
     #region Chaining Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_SetAutoPaddingChaining(ExecutionMode mode)
     {
         // setAutoPadding should return this for chaining
@@ -646,8 +624,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_SetAADChaining(ExecutionMode mode)
     {
         // setAAD should return this for chaining
@@ -674,8 +651,7 @@ public class CryptoCipherTests
 
     #region Input Encoding Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_HexInputEncoding(ExecutionMode mode)
     {
         // Test hex input encoding for cipher
@@ -707,8 +683,7 @@ public class CryptoCipherTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_CreateCipheriv_Base64InputEncoding(ExecutionMode mode)
     {
         // Test base64 input encoding for cipher

@@ -11,8 +11,7 @@ public class ArrayIteratorTests
 {
     #region entries() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_ReturnsIndexValuePairs(ExecutionMode mode)
     {
         var source = """
@@ -26,8 +25,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:10\n1:20\n2:30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithManualDestructuring(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class ArrayIteratorTests
         Assert.Equal("0=a\n1=b\n2=c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -60,8 +57,7 @@ public class ArrayIteratorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithMixedTypes(ExecutionMode mode)
     {
         var source = """
@@ -75,8 +71,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:1\n1:two\n2:3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithArrayFrom(ExecutionMode mode)
     {
         var source = """
@@ -95,8 +90,7 @@ public class ArrayIteratorTests
 
     #region keys() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_ReturnsIndices(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +104,7 @@ public class ArrayIteratorTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -127,8 +120,7 @@ public class ArrayIteratorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_CanAccessArrayElements(ExecutionMode mode)
     {
         var source = """
@@ -142,8 +134,7 @@ public class ArrayIteratorTests
         Assert.Equal("100\n200\n300\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_WithArrayFrom(ExecutionMode mode)
     {
         var source = """
@@ -160,8 +151,7 @@ public class ArrayIteratorTests
 
     #region values() Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_ReturnsElements(ExecutionMode mode)
     {
         var source = """
@@ -175,8 +165,7 @@ public class ArrayIteratorTests
         Assert.Equal("10\n20\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -192,8 +181,7 @@ public class ArrayIteratorTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_WithStrings(ExecutionMode mode)
     {
         var source = """
@@ -207,8 +195,7 @@ public class ArrayIteratorTests
         Assert.Equal("hello\nworld\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_WithArrayFrom(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +208,7 @@ public class ArrayIteratorTests
         Assert.Equal("1-2-3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_CountsNullAndUndefined(ExecutionMode mode)
     {
         var source = """
@@ -242,8 +228,7 @@ public class ArrayIteratorTests
 
     #region Break/Continue Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithBreak(ExecutionMode mode)
     {
         var source = """
@@ -261,8 +246,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:1\n1:2\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_WithContinue(ExecutionMode mode)
     {
         var source = """
@@ -277,8 +261,7 @@ public class ArrayIteratorTests
         Assert.Equal("0\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_WithBreak(ExecutionMode mode)
     {
         var source = """
@@ -297,8 +280,7 @@ public class ArrayIteratorTests
 
     #region Null and Boolean Stringification Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithNull_StringifiesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -312,8 +294,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:1\n1:null\n2:2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_WithBoolean_StringifiesCorrectly(ExecutionMode mode)
     {
         var source = """
@@ -327,8 +308,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:1\n1:true\n2:2\n3:false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringConcat_WithNull_JavaScriptStyle(ExecutionMode mode)
     {
         var source = """
@@ -340,8 +320,7 @@ public class ArrayIteratorTests
         Assert.Equal("value:null\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringConcat_WithBoolean_LowercaseTrue(ExecutionMode mode)
     {
         var source = """
@@ -353,8 +332,7 @@ public class ArrayIteratorTests
         Assert.Equal("bool:true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringConcat_WithBoolean_LowercaseFalse(ExecutionMode mode)
     {
         var source = """
@@ -366,8 +344,7 @@ public class ArrayIteratorTests
         Assert.Equal("bool:false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StringConcat_MultipleNullsAndBooleans(ExecutionMode mode)
     {
         var source = """
@@ -385,8 +362,7 @@ public class ArrayIteratorTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_SingleElement(ExecutionMode mode)
     {
         var source = """
@@ -400,8 +376,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Keys_LargeArray(ExecutionMode mode)
     {
         var source = """
@@ -418,8 +393,7 @@ public class ArrayIteratorTests
         Assert.Equal("45\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Values_WithObjects(ExecutionMode mode)
     {
         var source = """
@@ -433,8 +407,7 @@ public class ArrayIteratorTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Array_Entries_NestedArrays(ExecutionMode mode)
     {
         var source = """
@@ -454,8 +427,7 @@ public class ArrayIteratorTests
 
     #region Destructuring in for...of Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_EntriesPattern(ExecutionMode mode)
     {
         var source = """
@@ -471,8 +443,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:a,1:b,2:c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_MapEntries(ExecutionMode mode)
     {
         var source = """
@@ -490,8 +461,7 @@ public class ArrayIteratorTests
         Assert.Equal("x=10;y=20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ObjectDestructuring(ExecutionMode mode)
     {
         var source = """
@@ -510,8 +480,7 @@ public class ArrayIteratorTests
         Assert.Equal("Alice is 30; Bob is 25\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_WithRest(ExecutionMode mode)
     {
         var source = """
@@ -527,8 +496,7 @@ public class ArrayIteratorTests
         Assert.Equal("1:3; 5:3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_WithBreak(ExecutionMode mode)
     {
         var source = """
@@ -545,8 +513,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:a,1:b\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_WithContinue(ExecutionMode mode)
     {
         var source = """
@@ -563,8 +530,7 @@ public class ArrayIteratorTests
         Assert.Equal("0:a,2:c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ObjectDestructuring_WithRename(ExecutionMode mode)
     {
         var source = """
@@ -580,8 +546,7 @@ public class ArrayIteratorTests
         Assert.Equal("1,2; 3,4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_WithHole(ExecutionMode mode)
     {
         var source = """
@@ -597,8 +562,7 @@ public class ArrayIteratorTests
         Assert.Equal("1,3; 4,6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_WithLet(ExecutionMode mode)
     {
         var source = """
@@ -614,8 +578,7 @@ public class ArrayIteratorTests
         Assert.Equal("a=1,b=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_MapWithTypedValues(ExecutionMode mode)
     {
         // Tests destructuring Map entries with typed key/value
@@ -638,8 +601,7 @@ public class ArrayIteratorTests
         Assert.Equal("alpha,beta,gamma\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_NestedArrays(ExecutionMode mode)
     {
         // Tests destructuring nested arrays in for...of
@@ -656,8 +618,7 @@ public class ArrayIteratorTests
         Assert.Equal("1-2-3; 4-5-6; 7-8-9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForOf_ArrayDestructuring_ArrayEntries_Computation(ExecutionMode mode)
     {
         // Tests using destructured values in computation
@@ -675,8 +636,7 @@ public class ArrayIteratorTests
         Assert.Equal("200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ForAwaitOf_ArrayDestructuring(ExecutionMode mode)
     {
         var source = """
@@ -705,8 +665,7 @@ public class ArrayIteratorTests
 
     #region Spread Iterator Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_ArrayEntries_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -722,8 +681,7 @@ public class ArrayIteratorTests
         Assert.Equal("3\n0:a\n1:b\n2:c\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_ArrayKeys_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -736,8 +694,7 @@ public class ArrayIteratorTests
         Assert.Equal("0,1,2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_ArrayValues_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -750,8 +707,7 @@ public class ArrayIteratorTests
         Assert.Equal("10,20,30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Set_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -764,8 +720,7 @@ public class ArrayIteratorTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Map_CreatesArrayOfTuples(ExecutionMode mode)
     {
         var source = """
@@ -781,8 +736,7 @@ public class ArrayIteratorTests
         Assert.Equal("2\nx,10; y,20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Map_NestedElementAccess(ExecutionMode mode)
     {
         // Tests that arr[i][0] and arr[i][1] work correctly on spread Map entries
@@ -802,8 +756,7 @@ public class ArrayIteratorTests
         Assert.Equal("a\n100\nb\n200\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Map_JsonStringify_ProducesArrayOfPairs(ExecutionMode mode)
     {
         // #953: in compiled mode spread Map entries were boxed KeyValuePair structs, not real
@@ -818,8 +771,7 @@ public class ArrayIteratorTests
         Assert.Equal("[[0,0.5],[1,1.5]]\n[[\"a\",1],[\"b\",2]]\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Map_Iteration_MaterializesRealArrays(ExecutionMode mode)
     {
         // #953 root-cause fix is shared across for-of / Array.from / Object.fromEntries.
@@ -833,8 +785,7 @@ public class ArrayIteratorTests
         Assert.Equal("1 2\n[[1,2],[3,4]]\n{\"x\":1}\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_MapEntries_NestedElementAccess(ExecutionMode mode)
     {
         // Tests explicit .entries() call with nested access
@@ -851,8 +802,7 @@ public class ArrayIteratorTests
         Assert.Equal("x=1\ny=2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Map_AccessInLoop(ExecutionMode mode)
     {
         // Tests iterating over spread Map entries with element access
@@ -871,8 +821,7 @@ public class ArrayIteratorTests
         Assert.Equal("one:1\ntwo:2\nthree:3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_String_CreatesCharArray(ExecutionMode mode)
     {
         var source = """
@@ -884,8 +833,7 @@ public class ArrayIteratorTests
         Assert.Equal("h-e-l-l-o\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Generator_CreatesArray(ExecutionMode mode)
     {
         var source = """
@@ -902,8 +850,7 @@ public class ArrayIteratorTests
         Assert.Equal("1,2,3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Spread_Iterator_WithOtherElements(ExecutionMode mode)
     {
         // Use any[] type to handle mixed number and tuple elements

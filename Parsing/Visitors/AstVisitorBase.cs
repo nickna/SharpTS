@@ -111,7 +111,6 @@ public abstract class AstVisitorBase
             case Stmt.ForIn s: VisitForIn(s); break;
             case Stmt.For s: VisitFor(s); break;
             case Stmt.If s: VisitIf(s); break;
-            case Stmt.Print s: VisitPrint(s); break;
             case Stmt.Break s: VisitBreak(s); break;
             case Stmt.Continue s: VisitContinue(s); break;
             case Stmt.LabeledStatement s: VisitLabeledStatement(s); break;
@@ -571,11 +570,6 @@ public abstract class AstVisitorBase
         Visit(stmt.ThenBranch);
         if (stmt.ElseBranch != null)
             Visit(stmt.ElseBranch);
-    }
-
-    protected virtual void VisitPrint(Stmt.Print stmt)
-    {
-        Visit(stmt.Expr);
     }
 
     protected virtual void VisitBreak(Stmt.Break stmt)

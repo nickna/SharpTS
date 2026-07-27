@@ -47,8 +47,7 @@ public class StreamsWebSemanticTests
     /// <c>done:true</c> immediately. Fixing requires async state machine
     /// emission.</para>
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStream_PendingReadResolvedByLaterEnqueue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -83,8 +82,7 @@ public class StreamsWebSemanticTests
     /// Pull callback returns a Promise that resolves after a tick. Reader
     /// should wait for the pull promise before dequeueing.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_AsyncPullCallback(ExecutionMode mode)
     {
         // Compiled mode: pure-IL $ReadableStream.Read() now sync-awaits a
@@ -127,8 +125,7 @@ public class StreamsWebSemanticTests
     /// (via <c>EmitUnwrapResultToTask</c>) correctly unwraps a compiled async
     /// function's returned task.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WritableStream_AsyncWriteCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -164,8 +161,7 @@ public class StreamsWebSemanticTests
     /// User <c>write(chunk, controller)</c> accesses the second argument.
     /// Tests whether the stream actually passes a controller object.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void WritableStream_WriteCallbackReceivesController(ExecutionMode mode)
     {
         // Compiled mode: $WritableStream now instantiates a real
@@ -201,8 +197,7 @@ public class StreamsWebSemanticTests
     /// Concurrent writes (not awaited individually) should be serialized
     /// internally — only one user write callback runs at a time.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void WritableStream_ConcurrentWritesAreSerialized(ExecutionMode mode)
     {
         // KNOWN LIMITATION in compiled mode: the emitted $WritableStream has
@@ -255,8 +250,7 @@ public class StreamsWebSemanticTests
     /// <c>chunk.byteLength</c> (or the strategy's <c>size(chunk)</c>), not by
     /// 1 per chunk.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStream_ByteLengthStrategyWeighting(ExecutionMode mode)
     {
         // KNOWN LIMITATION in compiled mode: $ReadableStreamDefaultController.DesiredSize
@@ -299,8 +293,7 @@ public class StreamsWebSemanticTests
     /// lost. Fixed by switching to the eager-drain approach that the pure-IL
     /// emitted <c>$ReadableStream.Tee</c> already used.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_Tee_BothBranchesReceiveAllChunks(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -372,8 +365,7 @@ public class StreamsWebSemanticTests
     /// Ref, #325) and <c>EventLoopParkedResumeTests</c> (visible parked-resume
     /// handoff, #1211/#1212).
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStream_PipeTo_AbortSignalCancelsSourceAndAbortsDest(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -514,8 +506,7 @@ public class StreamsWebSemanticTests
 
     #region TransformStream controller.terminate
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TransformStream_ControllerTerminateInsideTransform(ExecutionMode mode)
     {
         // Interpreter-side: FIXED. terminate() now closes the readable (per
@@ -565,8 +556,7 @@ public class StreamsWebSemanticTests
 
     #region ReadableStream Symbol.asyncIterator
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStream_AsyncIteratorForAwaitOf(ExecutionMode mode)
     {
         // KNOWN LIMITATION in both modes (gap from original review): neither
@@ -618,8 +608,7 @@ public class StreamsWebSemanticTests
     /// is a separate known-broken path (timer-driven async resumption) and
     /// orthogonal to the parking feature being validated here.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PendingReadResolvedByLaterEnqueue_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -651,8 +640,7 @@ public class StreamsWebSemanticTests
     /// reader drains the pending-reads queue with <c>{value:undefined, done:true}</c>,
     /// not leaving the reader hanging forever.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PendingReadResolvedByLaterClose_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -690,8 +678,7 @@ public class StreamsWebSemanticTests
     /// abort is needed, and issue #22 (timer-callback dispatch of
     /// $PromiseResolveCallback) does not apply.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PipeTo_PreAbortedSignal_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -746,8 +733,7 @@ public class StreamsWebSemanticTests
     /// the entire sequence runs synchronously on the main thread, so there is
     /// no thread-pool continuation race and the assertion is load-independent.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PipeTo_MidPipeAbortSignal_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -800,8 +786,7 @@ public class StreamsWebSemanticTests
     /// the chunk flows. The interpreter already handled this via its real async
     /// pump (<c>WebStreamsHelpers.PipeTo</c>).</para>
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReadableStream_PipeTo_PushSourceViaTimer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -835,8 +820,7 @@ public class StreamsWebSemanticTests
     /// <see cref="ReadableStream_PipeTo_AbortSignalCancelsSourceAndAbortsDest"/>),
     /// whereas the compiled pump runs synchronously and is deterministic.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PipeTo_PushSourceDelayedAbort_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -876,8 +860,7 @@ public class StreamsWebSemanticTests
     /// pump the way a push source read does. CompiledOnly: this is a compiled-pump
     /// gap; the interpreter's async pump already awaits writes.
     /// </remarks>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PipeTo_PushStyleWrite_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -903,8 +886,7 @@ public class StreamsWebSemanticTests
     /// Verifies that erroring a <c>$ReadableStream</c> that has a parked
     /// reader rejects the pending-reads queue via <c>TrySetException</c>.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, CompiledOnlyData]
     public void ReadableStream_PendingReadRejectedByLaterError_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -941,8 +923,7 @@ public class StreamsWebSemanticTests
     /// must return Promise objects usable with <c>.then()</c>/<c>.catch()</c>,
     /// not raw Tasks whose property access throws.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void ReadableStreamReader_ReadAndClosed_AreThenable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -965,8 +946,7 @@ public class StreamsWebSemanticTests
     /// #223 audit follow-through: writer <c>write()</c>/<c>close()</c>/<c>ready</c>/
     /// <c>closed</c> must be thenable Promise objects as well.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [Theory, InterpretedOnlyData]
     public void WritableStreamWriter_WriteReadyClosed_AreThenable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

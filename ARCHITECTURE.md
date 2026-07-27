@@ -550,7 +550,17 @@ It drives live diagnostics, hover, completion, and signature help over SharpTS's
 | File | Purpose |
 |------|---------|
 | `ReadTsConfigTask.cs` | tsconfig.json processing |
-| `TsConfigModels.cs` | Configuration models |
+| `TsConfigSourceGenerationContext.cs` | System.Text.Json source-generation context for the task |
+
+**External References** (`References/`) — the `sharpts.json` manifest subsystem
+(third-party DLLs + NuGet packages for guest programs):
+| File | Purpose |
+|------|---------|
+| `DotNetReferences.cs` | Entry point: `Resolve` (paths only — used by the LSP, which must not execute workspace code) and `Load` (resolve + `Assembly.LoadFrom`) |
+| `SharpTsManifestLoader.cs` / `SharpTsManifest.cs` | Upward `sharpts.json` discovery (shared `Configuration/FileDiscovery`) and parsing |
+| `NuGetRestorer.cs` | Generates a temp project and shells `dotnet restore` for `packages` entries |
+| `ProjectAssetsReader.cs` | Parses `project.assets.json` into runtime assets + per-package closures |
+| `ReferenceSet.cs` | `ResolvedReference`/`ReferenceOrigin` model consumed by the CLI (co-location, packaging) |
 
 ### Partial Class Organization
 

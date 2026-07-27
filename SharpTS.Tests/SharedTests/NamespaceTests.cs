@@ -17,8 +17,7 @@ public class NamespaceTests
     // to the member function body, throwing "Undefined variable". The fix also backs each with a static
     // field surfaced to the function's resolver. These pin every variant from the issue.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_ReadsNamespaceConst(ExecutionMode mode)
     {
         var code = @"
@@ -28,8 +27,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_ReadsNamespaceLet(ExecutionMode mode)
     {
         var code = @"
@@ -39,8 +37,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -50,8 +47,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_ReadsExportedConst_AndExternalAccessStillWorks(ExecutionMode mode)
     {
         var code = @"
@@ -61,8 +57,7 @@ public class NamespaceTests
         Assert.Equal("7,7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_ReadsOuterAndInnerVars(ExecutionMode mode)
     {
         var code = @"
@@ -86,8 +81,7 @@ public class NamespaceTests
     // resolve a namespace var by bare name — silently returning undefined (state machines)
     // or throwing "Undefined variable" (class members). These pin each path.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceGenerator_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -97,8 +91,7 @@ public class NamespaceTests
         Assert.Equal("4\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceAsyncFunction_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -108,8 +101,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceClassMethod_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -119,8 +111,7 @@ public class NamespaceTests
         Assert.Equal("3\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceClassStaticMethod_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -130,8 +121,7 @@ public class NamespaceTests
         Assert.Equal("5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceClassAccessor_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -141,8 +131,7 @@ public class NamespaceTests
         Assert.Equal("8\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceClassConstructor_ReadsNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -152,8 +141,7 @@ public class NamespaceTests
         Assert.Equal("6\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceGenerator_ReadsOuterNamespaceVar(ExecutionMode mode)
     {
         var code = @"
@@ -180,8 +168,7 @@ public class NamespaceTests
     // write), instead of the namespace object's declaration-time member. const members never
     // change, so their external value is unaffected.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MutableExportedLet_MutationVisibleViaExternalAccess(ExecutionMode mode)
     {
         var code = @"
@@ -198,8 +185,7 @@ public class NamespaceTests
         Assert.Equal("2\n2\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MutableExportedVar_MutationVisibleViaExternalAccess(ExecutionMode mode)
     {
         var code = @"
@@ -215,8 +201,7 @@ public class NamespaceTests
         Assert.Equal("3\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MutableExportedLet_ExternalAccessReflectsEachMutation(ExecutionMode mode)
     {
         var code = @"
@@ -233,8 +218,7 @@ public class NamespaceTests
         Assert.Equal("1\n10\n20\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ConstExportedMember_ExternalAccessUnaffected(ExecutionMode mode)
     {
         var code = @"
@@ -248,8 +232,7 @@ public class NamespaceTests
         Assert.Equal("5\n5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_MutableExport_LiveViaExternalAccess(ExecutionMode mode)
     {
         var code = @"
@@ -270,8 +253,7 @@ public class NamespaceTests
 
     #region Basic Namespace Features (Both Modes)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BasicNamespaceWithFunction(ExecutionMode mode)
     {
         var code = @"
@@ -283,8 +265,7 @@ public class NamespaceTests
         Assert.Equal("42\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceWithVariable(ExecutionMode mode)
     {
         var code = @"
@@ -296,8 +277,7 @@ public class NamespaceTests
         Assert.Equal("3.14159\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace(ExecutionMode mode)
     {
         var code = @"
@@ -311,8 +291,7 @@ public class NamespaceTests
         Assert.Equal("Hello\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DottedNamespaceSyntax(ExecutionMode mode)
     {
         var code = @"
@@ -324,8 +303,7 @@ public class NamespaceTests
         Assert.Equal("123\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeclarationMerging(ExecutionMode mode)
     {
         var code = @"
@@ -340,8 +318,7 @@ public class NamespaceTests
         Assert.Equal("3\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceMultipleFunctions(ExecutionMode mode)
     {
         var code = @"
@@ -355,8 +332,7 @@ public class NamespaceTests
         Assert.Equal("5\n20\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeeplyNestedDottedNamespace(ExecutionMode mode)
     {
         var code = @"
@@ -368,8 +344,7 @@ public class NamespaceTests
         Assert.Equal("1.0.0\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceMergingWithDottedSyntax(ExecutionMode mode)
     {
         var code = @"
@@ -388,8 +363,7 @@ public class NamespaceTests
 
     #region Namespace with Classes (Both Modes)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceWithClass(ExecutionMode mode)
     {
         var code = @"
@@ -409,8 +383,7 @@ public class NamespaceTests
         Assert.StartsWith("12.566", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeepNestedNamespaceClass(ExecutionMode mode)
     {
         var code = @"
@@ -426,8 +399,7 @@ public class NamespaceTests
         Assert.Equal("Click me\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceWithGenericClass(ExecutionMode mode)
     {
         var code = @"
@@ -445,8 +417,7 @@ public class NamespaceTests
         Assert.Equal("42\nhello\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceClassInheritance(ExecutionMode mode)
     {
         var code = @"
@@ -470,8 +441,7 @@ public class NamespaceTests
 
     #region Namespace with Enums (Both Modes)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceWithEnum(ExecutionMode mode)
     {
         var code = @"
@@ -491,8 +461,7 @@ public class NamespaceTests
     // Compiled mode previously only carried the namespace static field on a subset of emission
     // contexts, so a top-level function reading `N.c` threw "Undefined variable 'N'".
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_ResolvableByBareName_FromTopLevelFunction(ExecutionMode mode)
     {
         var code = @"
@@ -503,8 +472,7 @@ public class NamespaceTests
         Assert.Equal("5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_MemberCall_FromTopLevelFunction(ExecutionMode mode)
     {
         var code = @"
@@ -515,8 +483,7 @@ public class NamespaceTests
         Assert.Equal("9\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Namespace_ExportedVar_IsLiveBinding_FromAsyncFunctionBody(ExecutionMode mode)
     {
         // The async function reads N.count AFTER two mutations; it must observe the live
@@ -534,8 +501,7 @@ public class NamespaceTests
     // #657 — namespace var/function members must not collide with module-level or
     // sibling-namespace bindings of the same name.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceVar_DoesNotClobber_ModuleVar(ExecutionMode mode)
     {
         var code = @"
@@ -546,8 +512,7 @@ public class NamespaceTests
         Assert.Equal("100 5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SiblingNamespaceFunctions_SameName_DoNotCollide(ExecutionMode mode)
     {
         var code = @"
@@ -558,8 +523,7 @@ public class NamespaceTests
         Assert.Equal("1 2\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_CallsNonExportedSibling(ExecutionMode mode)
     {
         var code = @"
@@ -569,8 +533,7 @@ public class NamespaceTests
         Assert.Equal("42\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_Recursive(ExecutionMode mode)
     {
         var code = @"
@@ -580,8 +543,7 @@ public class NamespaceTests
         Assert.Equal("55\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_FallsBackToTopLevelFunction(ExecutionMode mode)
     {
         var code = @"
@@ -592,8 +554,7 @@ public class NamespaceTests
         Assert.Equal("9\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceFunction_ShadowsTopLevelFunctionOfSameName(ExecutionMode mode)
     {
         // A namespace member function with the same simple name as a top-level function must
@@ -609,8 +570,7 @@ public class NamespaceTests
 
     // #659 — arrow-function and async-generator namespace members must be callable via N.member.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ArrowFunctionNamespaceMember_IsCallable(ExecutionMode mode)
     {
         var code = @"
@@ -620,8 +580,7 @@ public class NamespaceTests
         Assert.Equal("42\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncGeneratorNamespaceMember_IsCallableAndIterable(ExecutionMode mode)
     {
         // The async-generator member is callable and iterable via `for await` inside an async
@@ -637,8 +596,7 @@ public class NamespaceTests
 
     // #660 — a nested function declaration inside a namespace member function must be callable.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedFunctionDeclaration_InsideNamespaceMemberFunction(ExecutionMode mode)
     {
         var code = @"
@@ -656,8 +614,7 @@ public class NamespaceTests
     // #467 — a namespace-scoped `export const` parses as Stmt.Const, so it carries the narrowed
     // literal type (and reassignment is rejected), matching tsc and the module-export fix #428.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceExportConst_HasLiteralType(ExecutionMode mode)
     {
         // Before #467 this raised TS2322 ("Type 'number' is not assignable to type '5'") because
@@ -690,8 +647,7 @@ public class NamespaceTests
     // nested namespace is fully checked during the enclosing namespace's first pass, before its
     // sibling functions were registered; CheckNamespace now hoists function declarations first.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_CallsNonExportedEnclosingFunction(ExecutionMode mode)
     {
         // The exact issue repro: O.I.f() reaches O's non-exported helper by bare name.
@@ -707,8 +663,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_ForwardReferencesEnclosingFunction(ExecutionMode mode)
     {
         // The enclosing helper is declared AFTER the nested namespace — function hoisting makes it
@@ -725,8 +680,7 @@ public class NamespaceTests
         Assert.Equal("7\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_ReferencesEnclosingClassByBareName(ExecutionMode mode)
     {
         var code = @"
@@ -741,8 +695,7 @@ public class NamespaceTests
         Assert.Equal("42\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_ReferencesSiblingNamespaceByBareName(ExecutionMode mode)
     {
         // B.f names sibling namespace A by its simple name (A is a member of the enclosing O). The
@@ -759,8 +712,7 @@ public class NamespaceTests
         Assert.Equal("5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeeplyNestedNamespaceFunction_ReferencesOutermostFunction(ExecutionMode mode)
     {
         var code = @"
@@ -777,8 +729,7 @@ public class NamespaceTests
         Assert.Equal("1\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespaceFunction_OwnHelperShadowsEnclosingOfSameName(ExecutionMode mode)
     {
         // The nested namespace declares its own `help`; the bare reference resolves to the inner
@@ -796,8 +747,7 @@ public class NamespaceTests
         Assert.Equal("2\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_ShadowsSameNamedTopLevelNamespace(ExecutionMode mode)
     {
         // Nested O.A shadows the top-level A for bare references from sibling O.B.
@@ -829,8 +779,7 @@ public class NamespaceTests
     // the own dotted name; an enclosing function/var by the namespace's own name (`O.outerFunc()`)
     // is not covered — its bare form works via #665.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_ReferencesEnclosingNamespaceByOwnDottedName(ExecutionMode mode)
     {
         // The exact issue repro: O.B.f names O by its own name to reach O.A.g.
@@ -844,8 +793,7 @@ public class NamespaceTests
         Assert.Equal("5\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DeeplyNested_ReferencesOutermostNamespaceByDottedName(ExecutionMode mode)
     {
         // A three-level-deep member names the outermost namespace by its own dotted name.
@@ -863,8 +811,7 @@ public class NamespaceTests
         Assert.Equal("9\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_BareAndOwnDottedNameCoexist(ExecutionMode mode)
     {
         // The same body uses both the bare sibling form (A.g(), #665) and the own dotted name
@@ -879,8 +826,7 @@ public class NamespaceTests
         Assert.Equal("10\n", TestHarness.Run(code, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedNamespace_OwnDottedNameIsUnambiguousVsSameNamedTopLevel(ExecutionMode mode)
     {
         // A top-level A exists, but the dotted path O.A is unambiguous: it resolves the nested

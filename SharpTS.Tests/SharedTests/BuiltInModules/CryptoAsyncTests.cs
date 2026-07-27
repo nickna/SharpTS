@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CryptoAsyncTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2_Async_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -28,8 +27,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Pbkdf2_Async_MatchesSync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -48,8 +46,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Scrypt_Async_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -68,8 +65,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Scrypt_Async_WithOptions(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -87,8 +83,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenerateKeyPair_Async_Rsa(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -109,8 +104,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void GenerateKeyPair_Async_Ec(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -129,8 +123,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Hkdf_Async_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -149,8 +142,7 @@ public class CryptoAsyncTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Hkdf_Async_MatchesSync(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

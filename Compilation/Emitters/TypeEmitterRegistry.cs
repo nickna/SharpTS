@@ -11,9 +11,11 @@ public sealed class TypeEmitterRegistry
     private readonly Dictionary<Type, ITypeEmitterStrategy> _instanceStrategies = new();
     private readonly Dictionary<string, IStaticTypeEmitterStrategy> _staticStrategies = new();
 
-    // Special strategies for Instance types that need context-aware dispatch
-    private ITypeEmitterStrategy? _externalTypeEmitter;
-    private ITypeEmitterStrategy? _classInstanceEmitter;
+    // Special strategies for Instance types that need context-aware dispatch.
+    // Never registered (the registration methods were removed as dead code), so
+    // Instance dispatch currently always falls through to null.
+    private readonly ITypeEmitterStrategy? _externalTypeEmitter = null;
+    private readonly ITypeEmitterStrategy? _classInstanceEmitter = null;
 
     // Reference to external types for Instance dispatch
     private IReadOnlyDictionary<string, Type>? _externalTypes;
@@ -34,22 +36,6 @@ public sealed class TypeEmitterRegistry
     public void Register<TTypeInfo>(ITypeEmitterStrategy strategy) where TTypeInfo : TypeInfo
     {
         _instanceStrategies[typeof(TTypeInfo)] = strategy;
-    }
-
-    /// <summary>
-    /// Registers the emitter for external .NET types (@DotNetType).
-    /// </summary>
-    public void RegisterExternalTypeEmitter(ITypeEmitterStrategy strategy)
-    {
-        _externalTypeEmitter = strategy;
-    }
-
-    /// <summary>
-    /// Registers the emitter for user-defined class instances.
-    /// </summary>
-    public void RegisterClassInstanceEmitter(ITypeEmitterStrategy strategy)
-    {
-        _classInstanceEmitter = strategy;
     }
 
     /// <summary>
@@ -107,24 +93,5 @@ public sealed class TypeEmitterRegistry
 
         // It's a user-defined class
         return _classInstanceEmitter;
-    }
-
-    /// <summary>
-    /// Checks if a strategy is registered for the given TypeInfo type.
-    /// </summary>
-    public bool HasStrategy(TypeInfo typeInfo)
-    {
-        if (typeInfo is TypeInfo.Instance)
-            return _externalTypeEmitter != null || _classInstanceEmitter != null;
-
-        return _instanceStrategies.ContainsKey(typeInfo.GetType());
-    }
-
-    /// <summary>
-    /// Checks if a static strategy is registered for the given type name.
-    /// </summary>
-    public bool HasStaticStrategy(string typeName)
-    {
-        return _staticStrategies.ContainsKey(typeName);
     }
 }

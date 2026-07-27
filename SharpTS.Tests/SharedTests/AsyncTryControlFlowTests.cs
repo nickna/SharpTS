@@ -17,8 +17,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncTryControlFlowTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakOutOfSimpleTry_InAsync(ExecutionMode mode)
     {
         // The exact #727 break repro.
@@ -36,8 +35,7 @@ public class AsyncTryControlFlowTests
         Assert.Equal("n=2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ContinueOutOfSimpleTry_InAsync(ExecutionMode mode)
     {
         // The exact #727 continue repro.
@@ -55,8 +53,7 @@ public class AsyncTryControlFlowTests
         Assert.Equal("sum=9\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakOutOfTryContainingAwait_InAsync(ExecutionMode mode)
     {
         // break leaves a try whose body awaits → the flag-based try path. The escaping break must be
@@ -80,8 +77,7 @@ public class AsyncTryControlFlowTests
         Assert.Equal("n=1\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakOutOfTryWithFinally_NoAwait_RunsFinally(ExecutionMode mode)
     {
         // A try with no awaits is a real IL try/finally (EmitSimpleTryCatch). The break Leaves it,
@@ -100,8 +96,7 @@ public class AsyncTryControlFlowTests
         Assert.Equal("t0f0t1f1f2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BreakToInnerLoopInsideTry_DoesNotEscapeTry(ExecutionMode mode)
     {
         // The break targets a loop nested INSIDE the try, so it stays a legal in-region branch and the
@@ -121,8 +116,7 @@ public class AsyncTryControlFlowTests
         Assert.Equal("j0after\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchBreakInsideTry_InAsync(ExecutionMode mode)
     {
         // An unlabeled break inside a switch that is inside a try belongs to the switch, not the loop.

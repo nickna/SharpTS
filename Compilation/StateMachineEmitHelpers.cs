@@ -1292,28 +1292,6 @@ public class StateMachineEmitHelpers
         SetStackUnknown();
     }
 
-    /// <summary>
-    /// Emits prefix increment for a variable that can be loaded and stored via actions.
-    /// This is the simplest form where load/store are straightforward.
-    /// Stack: [] -> [boxed new value]
-    /// </summary>
-    public void EmitPrefixIncrementVariable(TokenType op, Action loadVariable, Action storeVariable)
-    {
-        loadVariable();                         // Stack: [object value]
-        EmitPrefixIncrementCore(op, storeVariable);
-    }
-
-    /// <summary>
-    /// Emits postfix increment for a variable that can be loaded and stored via actions.
-    /// Stack: [] -> [boxed old value]
-    /// </summary>
-    public void EmitPostfixIncrementVariable(TokenType op, Action loadVariable, Action storeVariable)
-    {
-        var tempLocal = _il.DeclareLocal(_types.Double);
-        loadVariable();                         // Stack: [object value]
-        EmitPostfixIncrementCore(op, storeVariable, tempLocal);
-    }
-
     #endregion
 
     #region Console Intrinsics

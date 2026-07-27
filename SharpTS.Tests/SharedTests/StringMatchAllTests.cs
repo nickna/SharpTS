@@ -8,8 +8,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringMatchAllTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_BasicGlobalRegex_ReturnsAllMatches(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class StringMatchAllTests
         Assert.Equal("3\ntest1\ntest2\ntest3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_AccessIndexProperty(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class StringMatchAllTests
         Assert.Equal("0\n6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_AccessInputProperty(ExecutionMode mode)
     {
         var source = """
@@ -57,8 +54,7 @@ public class StringMatchAllTests
         Assert.Equal("abc 123\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_CaptureGroups(ExecutionMode mode)
     {
         var source = """
@@ -77,8 +73,7 @@ public class StringMatchAllTests
         Assert.Equal("2\n12-ab\n12\nab\n34-cd\n34\ncd\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_NoMatches_ReturnsEmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -91,8 +86,7 @@ public class StringMatchAllTests
         Assert.Equal("0\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_NonGlobalRegex_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -108,8 +102,7 @@ public class StringMatchAllTests
         Assert.Contains("non-global", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_ForOfIteration(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +118,7 @@ public class StringMatchAllTests
         Assert.Equal("a1,b2,c3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MatchAll_StringPattern_MatchesLiterally(ExecutionMode mode)
     {
         var source = """

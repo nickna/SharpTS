@@ -10,8 +10,7 @@ public class SymbolTests
 {
     #region Basic Symbol Creation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_CreateWithoutDescription_Works(ExecutionMode mode)
     {
         var source = """
@@ -23,8 +22,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_CreateWithDescription_Works(ExecutionMode mode)
     {
         var source = """
@@ -36,8 +34,7 @@ public class SymbolTests
         Assert.Equal("Symbol(mySymbol)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Uniqueness_Works(ExecutionMode mode)
     {
         var source = """
@@ -55,8 +52,7 @@ public class SymbolTests
 
     #region Symbol as Object Key
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_AsObjectKey_Works(ExecutionMode mode)
     {
         var source = """
@@ -70,8 +66,7 @@ public class SymbolTests
         Assert.Equal("hello\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_MultipleSymbolKeys_Works(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +83,7 @@ public class SymbolTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ObjectKey_OverwriteValue(ExecutionMode mode)
     {
         var source = """
@@ -104,8 +98,7 @@ public class SymbolTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ObjectKey_CoexistsWithStringKey(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +118,7 @@ public class SymbolTests
 
     #region Symbol Type Annotation
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """
@@ -138,8 +130,7 @@ public class SymbolTests
         Assert.Equal("Symbol(typed)\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_InFunction_Works(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +149,7 @@ public class SymbolTests
 
     #region Well-Known Symbols
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Iterator_Exists(ExecutionMode mode)
     {
         var source = """
@@ -171,8 +161,7 @@ public class SymbolTests
         Assert.Equal("symbol\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_AsyncIterator_Exists(ExecutionMode mode)
     {
         var source = """
@@ -184,8 +173,7 @@ public class SymbolTests
         Assert.Equal("symbol\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ToStringTag_Exists(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +185,7 @@ public class SymbolTests
         Assert.Equal("symbol\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_HasInstance_Exists(ExecutionMode mode)
     {
         var source = """
@@ -209,8 +196,7 @@ public class SymbolTests
         Assert.Equal("symbol\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ToPrimitive_Exists(ExecutionMode mode)
     {
         var source = """
@@ -221,8 +207,7 @@ public class SymbolTests
         Assert.Equal("symbol\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_WellKnown_AreUnique(ExecutionMode mode)
     {
         var source = """
@@ -239,8 +224,7 @@ public class SymbolTests
 
     #region Symbol Identity and Equality
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_SameSymbolEqualsItself(ExecutionMode mode)
     {
         var source = """
@@ -252,8 +236,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_StoredInVariable_MaintainsIdentity(ExecutionMode mode)
     {
         var source = """
@@ -266,8 +249,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_PassedToFunction_MaintainsIdentity(ExecutionMode mode)
     {
         var source = """
@@ -286,8 +268,7 @@ public class SymbolTests
 
     #region Symbol.for() and Symbol.keyFor() - Global Registry
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolFor_ReturnsSameSymbolForSameKey(ExecutionMode mode)
     {
         var source = """
@@ -300,8 +281,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolFor_ReturnsDifferentSymbolsForDifferentKeys(ExecutionMode mode)
     {
         var source = """
@@ -314,8 +294,7 @@ public class SymbolTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolFor_DifferentFromRegularSymbol(ExecutionMode mode)
     {
         var source = """
@@ -328,8 +307,7 @@ public class SymbolTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolKeyFor_ReturnsKeyForGlobalSymbol(ExecutionMode mode)
     {
         var source = """
@@ -341,8 +319,7 @@ public class SymbolTests
         Assert.Equal("myKey\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolKeyFor_ReturnsUndefinedForLocalSymbol(ExecutionMode mode)
     {
         var source = """
@@ -355,8 +332,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SymbolKeyFor_WellKnownSymbolsNotInRegistry(ExecutionMode mode)
     {
         var source = """
@@ -372,8 +348,7 @@ public class SymbolTests
 
     #region Symbol Description Property
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Description_ReturnsDescription(ExecutionMode mode)
     {
         var source = """
@@ -385,8 +360,7 @@ public class SymbolTests
         Assert.Equal("myDesc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Description_UndefinedWhenNoDescription(ExecutionMode mode)
     {
         var source = """
@@ -402,8 +376,7 @@ public class SymbolTests
 
     #region Symbol Object Property Operations (Not Yet Implemented)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ObjectKey_DeleteProperty(ExecutionMode mode)
     {
         var source = """
@@ -419,8 +392,7 @@ public class SymbolTests
         Assert.Equal("value\nundefined\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_InOperator_Works(ExecutionMode mode)
     {
         var source = """
@@ -442,8 +414,7 @@ public class SymbolTests
     /// <summary>
     /// Tests computed property names with symbols in class fields.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_AsClassPropertyKey(ExecutionMode mode)
     {
         var source = """
@@ -475,8 +446,7 @@ public class SymbolTests
 
     #region Symbol.prototype Surface (#237)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ToString_ReturnsDescriptiveString(ExecutionMode mode)
     {
         var source = """
@@ -490,8 +460,7 @@ public class SymbolTests
         Assert.Equal("Symbol(d)\nSymbol()\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ValueOf_ReturnsSelf(ExecutionMode mode)
     {
         var source = """
@@ -503,8 +472,7 @@ public class SymbolTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_StringCallForm_ReturnsDescriptiveString(ExecutionMode mode)
     {
         // ECMA-262 §22.1.1.1: the String() call form is exempt from ToString's
@@ -518,8 +486,7 @@ public class SymbolTests
         Assert.Equal("Symbol(d)\nSymbol()\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_AnyTyped_PrototypeMembers_Work(ExecutionMode mode)
     {
         // Dynamic-dispatch path (receiver statically `any`) must resolve the
@@ -539,8 +506,7 @@ public class SymbolTests
 
     #region Implicit Symbol-to-String Coercion Throws (#245)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_TemplateLiteralInterpolation_ThrowsTypeError(ExecutionMode mode)
     {
         // ECMA-262 §7.1.17 ToString: implicit coercion of a Symbol throws.
@@ -558,8 +524,7 @@ public class SymbolTests
         Assert.Equal("true Cannot convert a Symbol value to a string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_StringPlusConcat_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -584,8 +549,7 @@ public class SymbolTests
             "true Cannot convert a Symbol value to a string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_PlusEqualConcat_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
@@ -603,8 +567,7 @@ public class SymbolTests
         Assert.Equal("true Cannot convert a Symbol value to a string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_TemplateLiteralInAsyncFunction_ThrowsTypeError(ExecutionMode mode)
     {
         // The async/generator state-machine emitters build template literals
@@ -629,8 +592,7 @@ public class SymbolTests
         Assert.Equal("true Cannot convert a Symbol value to a string\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_ExplicitForms_StillStringify(ExecutionMode mode)
     {
         // Only implicit coercion throws: String(sym), sym.toString(), and
@@ -650,8 +612,7 @@ public class SymbolTests
 
     #region Symbol as First-Class Global (#234)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_TypeofGlobal_IsFunction(ExecutionMode mode)
     {
         var source = """
@@ -662,8 +623,7 @@ public class SymbolTests
         Assert.Equal("function\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_TypeofCallResult_IsSymbol(ExecutionMode mode)
     {
         var source = """
@@ -675,8 +635,7 @@ public class SymbolTests
         Assert.Equal("symbol\nsymbol\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Aliased_CallCreatesSymbol(ExecutionMode mode)
     {
         var source = """
@@ -690,8 +649,7 @@ public class SymbolTests
         Assert.Equal("symbol\naliased\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Aliased_WellKnownIdentity(ExecutionMode mode)
     {
         var source = """
@@ -705,8 +663,7 @@ public class SymbolTests
         Assert.Equal("true\ntrue\nsymbol\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_Aliased_ForAndKeyFor(ExecutionMode mode)
     {
         var source = """
@@ -720,8 +677,7 @@ public class SymbolTests
         Assert.Equal("true\nregistry-key\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Symbol_CastExpression_MemberAccess(ExecutionMode mode)
     {
         var source = """

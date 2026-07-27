@@ -10,8 +10,7 @@ public class AutoAccessorTests
 {
     #region Basic Auto-Accessor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_BasicGetSet(ExecutionMode mode)
     {
         var code = @"
@@ -26,8 +25,7 @@ public class AutoAccessorTests
         Assert.Equal("10\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_MultipleProperties(ExecutionMode mode)
     {
         var code = @"
@@ -44,8 +42,7 @@ public class AutoAccessorTests
         Assert.Equal("15\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithStringType(ExecutionMode mode)
     {
         var code = @"
@@ -60,8 +57,7 @@ public class AutoAccessorTests
         Assert.Equal("Alice\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithInitializer(ExecutionMode mode)
     {
         var code = @"
@@ -75,8 +71,7 @@ public class AutoAccessorTests
         Assert.Equal("42\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithoutInitializer(ExecutionMode mode)
     {
         var code = @"
@@ -94,8 +89,7 @@ public class AutoAccessorTests
 
     #region Static Auto-Accessor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Static_BasicGetSet(ExecutionMode mode)
     {
         var code = @"
@@ -109,8 +103,7 @@ public class AutoAccessorTests
         Assert.Equal("5\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Static_SharedAcrossInstances(ExecutionMode mode)
     {
         var code = @"
@@ -129,8 +122,7 @@ public class AutoAccessorTests
         Assert.Equal("3\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Static_WithInitializer(ExecutionMode mode)
     {
         var code = @"
@@ -147,8 +139,7 @@ public class AutoAccessorTests
 
     #region Readonly Auto-Accessor Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Readonly_CanRead(ExecutionMode mode)
     {
         var code = @"
@@ -162,8 +153,7 @@ public class AutoAccessorTests
         Assert.Equal("abc123\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Readonly_ThrowsOnSet(ExecutionMode mode)
     {
         var code = @"
@@ -182,8 +172,7 @@ public class AutoAccessorTests
 
     #region Inheritance Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Inheritance_InheritedFromParent(ExecutionMode mode)
     {
         var code = @"
@@ -200,8 +189,7 @@ public class AutoAccessorTests
         Assert.Equal("Rex\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_Inheritance_Override(ExecutionMode mode)
     {
         var code = @"
@@ -222,8 +210,7 @@ public class AutoAccessorTests
 
     #region Multiple Instances Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_MultipleInstances_IsolatedStorage(ExecutionMode mode)
     {
         var code = @"
@@ -244,8 +231,7 @@ public class AutoAccessorTests
 
     #region Type Inference Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_TypeInference_FromInitializer(ExecutionMode mode)
     {
         // When no explicit type annotation is provided, the type is inferred from initializer.
@@ -266,8 +252,7 @@ public class AutoAccessorTests
 
     #region Mixed Member Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithRegularFields(ExecutionMode mode)
     {
         var code = @"
@@ -282,8 +267,7 @@ public class AutoAccessorTests
         Assert.Equal("3\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithMethods(ExecutionMode mode)
     {
         var code = @"
@@ -303,8 +287,7 @@ public class AutoAccessorTests
         Assert.Equal("2\n", result);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_WithManualAccessor(ExecutionMode mode)
     {
         var code = @"
@@ -326,8 +309,7 @@ public class AutoAccessorTests
 
     #region Mixed Static and Instance Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AutoAccessor_MixedStaticAndInstance(ExecutionMode mode)
     {
         var code = @"

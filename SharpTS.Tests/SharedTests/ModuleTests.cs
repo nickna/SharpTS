@@ -12,8 +12,7 @@ public class ModuleTests
 {
     #region Named Exports and Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_SingleVariable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -31,8 +30,7 @@ public class ModuleTests
         Assert.Equal("3.14159\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_MultipleVariables(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -52,8 +50,7 @@ public class ModuleTests
         Assert.Equal("60\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_Function(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -81,8 +78,7 @@ public class ModuleTests
     // case — the broader gap #417 also fixed — is covered by ExportSyncFunction_SingleFile below.
     // Compiled cross-module execution of these exports is additionally covered by the
     // *_CrossModule tests further down (#395).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAsyncFunction_Parses(ExecutionMode mode)
     {
         // Regression: `export async function` previously failed to parse
@@ -98,8 +94,7 @@ public class ModuleTests
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportGeneratorFunction_Parses(ExecutionMode mode)
     {
         // Regression: `export function*` previously failed to parse ("Expect
@@ -115,8 +110,7 @@ public class ModuleTests
         Assert.Equal("1\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportAsyncGeneratorFunction_Parses(ExecutionMode mode)
     {
         // Regression: `export async function*` shares the same export dispatcher
@@ -133,8 +127,7 @@ public class ModuleTests
         Assert.Equal("1\n2\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportSyncFunction_SingleFile(ExecutionMode mode)
     {
         // Regression for #417: a plain `export function` in a single-file (script-mode)
@@ -159,8 +152,7 @@ public class ModuleTests
     // interpreter (which was already correct). The CLI routes any file with import/export through
     // the module path, so no production program hit this — only the in-process single-file harness.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_SingleFile(ExecutionMode mode)
     {
         // The canonical #424 repro: a non-captured exported const must still be
@@ -173,8 +165,7 @@ public class ModuleTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportLet_SingleFile(ExecutionMode mode)
     {
         // `export let` is mutable — exercises the Stmt.Var arm and a later reassignment.
@@ -187,8 +178,7 @@ public class ModuleTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportVar_SingleFile(ExecutionMode mode)
     {
         var source = """
@@ -199,8 +189,7 @@ public class ModuleTests
         Assert.Equal("hi\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_CapturedByClosure_SingleFile(ExecutionMode mode)
     {
         // When a function (a separate compiled method) reads the exported binding, the
@@ -217,8 +206,7 @@ public class ModuleTests
         Assert.Equal("15\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_MultiDeclarator_SingleFile(ExecutionMode mode)
     {
         // `export const a = 1, b = 2` desugars to Stmt.Export { Declaration: Stmt.Sequence };
@@ -238,8 +226,7 @@ public class ModuleTests
     // type-checker/interpreter export helpers (GetDeclarationName / GetDeclaredType /
     // GetDeclaredName / GetDeclaredValue) gained the Stmt.Const arm they previously lacked.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_Reassignment_IsTypeError(ExecutionMode mode)
     {
         // The canonical #428 repro: reassigning an `export const` must be rejected, just like
@@ -253,8 +240,7 @@ public class ModuleTests
         Assert.Contains("'y'", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_LiteralTypeNarrowed(ExecutionMode mode)
     {
         // `export const x = 5` must infer the literal type `5`, not the widened `number`.
@@ -268,8 +254,7 @@ public class ModuleTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_NarrowedType_FlowsCrossModule(ExecutionMode mode)
     {
         // The narrowed literal type of an exported const must survive import into another
@@ -289,8 +274,7 @@ public class ModuleTests
         Assert.Equal("100\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExportConst_CrossModule_Runs(ExecutionMode mode)
     {
         // A plain exported const imported and used across modules still binds and runs
@@ -318,8 +302,7 @@ public class ModuleTests
     // simple name) — the import field stayed null and the call threw "object is not a function".
     // They run in BOTH modes to pin the fix and guard the interpreter.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_AsyncFunction_CrossModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -339,8 +322,7 @@ public class ModuleTests
         Assert.Equal("7\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_GeneratorFunction_CrossModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -361,8 +343,7 @@ public class ModuleTests
         Assert.Equal("1\n2\n3\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_AsyncGeneratorFunction_CrossModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -385,8 +366,7 @@ public class ModuleTests
         Assert.Equal("10\n20\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedListExport_StateMachineFunctions_CrossModule(ExecutionMode mode)
     {
         // The `export { a, b, c }` list form is a distinct export-store branch from the
@@ -413,8 +393,7 @@ public class ModuleTests
         Assert.Equal("15\n7\n8\n99\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_AsyncFunction_CrossModule(ExecutionMode mode)
     {
         // `export default async function` / `export default function*` additionally required a
@@ -436,8 +415,7 @@ public class ModuleTests
         Assert.Equal("42\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_GeneratorFunction_CrossModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -454,8 +432,7 @@ public class ModuleTests
         Assert.Equal("5\n6\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_AsyncGeneratorFunction_CrossModule(ExecutionMode mode)
     {
         // Guards the `async`+`*` combination in the `export default` parser branch.
@@ -474,8 +451,7 @@ public class ModuleTests
         Assert.Equal("1\n2\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_AsyncArrow_StillParsesAsExpression(ExecutionMode mode)
     {
         // Guard: the `export default async function` parser branch must NOT swallow
@@ -497,8 +473,7 @@ public class ModuleTests
         Assert.Equal("42\n", TestHarness.RunModules(files, "./main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_Class(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -525,8 +500,7 @@ public class ModuleTests
         Assert.Equal("Hello, Alice\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedImport_WithAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -544,8 +518,7 @@ public class ModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_List(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -566,8 +539,7 @@ public class ModuleTests
         Assert.Equal("6\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedExport_ListWithAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -590,8 +562,7 @@ public class ModuleTests
 
     #region Default Exports and Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_Expression(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -609,8 +580,7 @@ public class ModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_Function(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -630,8 +600,7 @@ public class ModuleTests
         Assert.Equal("Hello, World\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_Class(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -660,8 +629,7 @@ public class ModuleTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DefaultExport_ArrowFunction(ExecutionMode mode)
     {
         // Note: anonymous function export default not supported, use arrow function
@@ -685,8 +653,7 @@ public class ModuleTests
 
     #region Combined Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CombinedImport_DefaultAndNamed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -710,8 +677,7 @@ public class ModuleTests
 
     #region Namespace Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceImport_AllExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -739,8 +705,7 @@ public class ModuleTests
 
     #region Re-exports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReExport_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -761,8 +726,7 @@ public class ModuleTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReExport_NamedWithAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -783,8 +747,7 @@ public class ModuleTests
         Assert.Equal("100\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ReExport_All(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -810,8 +773,7 @@ public class ModuleTests
 
     #region Multi-Level Dependencies
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultiLevel_ThreeModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -833,8 +795,7 @@ public class ModuleTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultiLevel_DiamondDependency(ExecutionMode mode)
     {
         // a -> b -> d
@@ -875,8 +836,7 @@ public class ModuleTests
 
     #region Circular Dependency Detection
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CircularDependency_ThrowsError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -901,8 +861,7 @@ public class ModuleTests
             $"Expected circular or module error, got: {ex.Message}");
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CircularDependency_IndirectCycle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -935,8 +894,7 @@ public class ModuleTests
 
     #region Side-Effect Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SideEffectImport_ExecutesModule(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -954,8 +912,7 @@ public class ModuleTests
         Assert.Equal("Side effect executed\nMain executed\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutionOrder_MultipleModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -981,8 +938,7 @@ public class ModuleTests
 
     #region Module Execution Order
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ExecutionOrder_DependenciesFirst(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1011,8 +967,7 @@ public class ModuleTests
 
     #region Path Resolution
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathResolution_OmittedExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1030,8 +985,7 @@ public class ModuleTests
         Assert.Equal("Helping!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathResolution_WithExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1049,8 +1003,7 @@ public class ModuleTests
         Assert.Equal("Helping!\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void PathResolution_NestedDirectories(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1074,8 +1027,7 @@ public class ModuleTests
 
     #region Export Types (Interface, Type Alias, Enum)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Export_InterfaceWithFactory(ExecutionMode mode)
     {
         // Note: Interfaces are type-only exports (erased at runtime).
@@ -1103,8 +1055,7 @@ public class ModuleTests
         Assert.Equal("Alice\n30\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Export_TypeAliasUsedLocally(ExecutionMode mode)
     {
         // Note: Type aliases are type-only exports (erased at runtime).
@@ -1127,8 +1078,7 @@ public class ModuleTests
         Assert.Equal("42000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Export_Enum(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1155,8 +1105,7 @@ public class ModuleTests
 
     #region Complex Scenarios
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Complex_MultipleExportsAndImports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1188,8 +1137,7 @@ public class ModuleTests
         Assert.Equal("3.14159\n5\n20\n15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Complex_ClassInheritanceAcrossModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1227,8 +1175,7 @@ public class ModuleTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Complex_FunctionUsingImportedClass(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1266,8 +1213,7 @@ public class ModuleTests
     /// Tests that two different modules can each define a class with the same name,
     /// and they should be treated as separate types.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DuplicateClassNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1302,8 +1248,7 @@ public class ModuleTests
     /// Tests that two different modules can each define a function with the same name,
     /// and they should be treated as separate functions.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DuplicateFunctionNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1335,8 +1280,7 @@ public class ModuleTests
     /// Tests that two different modules can each define an enum with the same name,
     /// and they should be treated as separate enums.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DuplicateEnumNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1372,8 +1316,7 @@ public class ModuleTests
     /// Tests that a class exported from one module can be imported, instantiated,
     /// and have its methods called from another module.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_ClassInstantiationAndMethodCall(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1416,8 +1359,7 @@ public class ModuleTests
     /// Tests that a function exported from one module can be imported and called
     /// from another module with arguments and return values.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_FunctionCall(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1453,8 +1395,7 @@ public class ModuleTests
     /// Tests that an enum exported from one module can be imported and its
     /// members accessed from another module.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_EnumAccess(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1491,8 +1432,7 @@ public class ModuleTests
     /// Tests that multiple modules can import from the same shared module,
     /// and each gets the correct types without interference.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_SharedDependency(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1552,8 +1492,7 @@ public class ModuleTests
     /// Tests a complex scenario with classes, functions, and enums all being
     /// imported and used across modules.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_MixedTypes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

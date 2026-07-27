@@ -380,11 +380,6 @@ public partial class RuntimeEmitter
         EmitFunctionBranch(runtime.FunctionCallWrapperType);
         EmitFunctionBranch(runtime.FunctionApplyWrapperType);
         EmitFunctionBranch(_types.Delegate);
-        if (_features.UsesUtilPromisify)
-        {
-            EmitFunctionBranch(runtime.TSPromisifiedFunctionType);
-            EmitFunctionBranch(runtime.TSDeprecatedFunctionType);
-        }
         EmitFunctionBranch(runtime.BoundArrayMethodType);
         if (_features.UsesMap)
             EmitFunctionBranch(runtime.BoundMapMethodType);

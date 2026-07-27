@@ -24,8 +24,7 @@ public class FetchRedirectTests : IDisposable
 
     #region redirect: "follow" (default)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectFollow_Default_FollowsRedirect(ExecutionMode mode)
     {
         var source = $$"""
@@ -42,8 +41,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("200\nredirected content\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectFollow_Explicit_FollowsRedirect(ExecutionMode mode)
     {
         var source = $$"""
@@ -64,8 +62,7 @@ public class FetchRedirectTests : IDisposable
 
     #region redirect: "manual"
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectManual_Returns302(ExecutionMode mode)
     {
         var source = $$"""
@@ -80,8 +77,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("302\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectManual_Returns301(ExecutionMode mode)
     {
         var source = $$"""
@@ -96,8 +92,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("301\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectManual_OkIsFalse(ExecutionMode mode)
     {
         var source = $$"""
@@ -112,8 +107,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectManual_NonRedirectWorksNormally(ExecutionMode mode)
     {
         // When redirect is "manual" but the response is not a redirect, it should work normally
@@ -134,8 +128,7 @@ public class FetchRedirectTests : IDisposable
 
     #region Response properties
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_Response_TypeProperty(ExecutionMode mode)
     {
         var source = $$"""
@@ -150,8 +143,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("basic\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_Response_RedirectedProperty_NoRedirect(ExecutionMode mode)
     {
         var source = $$"""
@@ -170,8 +162,7 @@ public class FetchRedirectTests : IDisposable
 
     #region redirect: "error"
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectError_ThrowsOnRedirect(ExecutionMode mode)
     {
         var source = $$"""
@@ -190,8 +181,7 @@ public class FetchRedirectTests : IDisposable
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fetch_RedirectError_NonRedirectWorksNormally(ExecutionMode mode)
     {
         // When redirect is "error" but the response is not a redirect, it should work normally

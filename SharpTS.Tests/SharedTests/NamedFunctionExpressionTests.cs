@@ -12,8 +12,7 @@ public class NamedFunctionExpressionTests
 {
     #region Basic NFE Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_BasicRecursion_Works(ExecutionMode mode)
     {
         var source = """
@@ -28,8 +27,7 @@ public class NamedFunctionExpressionTests
         Assert.Equal("120\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_NameNotVisibleOutside(ExecutionMode mode)
     {
         // The function name is only visible inside the function body, not outside
@@ -45,8 +43,7 @@ public class NamedFunctionExpressionTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_ParameterShadowsName(ExecutionMode mode)
     {
         // If a parameter has the same name as the function, parameter wins
@@ -65,8 +62,7 @@ public class NamedFunctionExpressionTests
 
     #region Nested Functions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_NestedFunctions(ExecutionMode mode)
     {
         var source = """
@@ -88,8 +84,7 @@ public class NamedFunctionExpressionTests
 
     #region Object Literals
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_InObjectLiteral(ExecutionMode mode)
     {
         var source = """
@@ -110,8 +105,7 @@ public class NamedFunctionExpressionTests
 
     #region Callback Arguments
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_AsCallbackArgument(ExecutionMode mode)
     {
         var source = """
@@ -134,8 +128,7 @@ public class NamedFunctionExpressionTests
 
     #region Recursion Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_FibonacciRecursion(ExecutionMode mode)
     {
         var source = """
@@ -150,8 +143,7 @@ public class NamedFunctionExpressionTests
         Assert.Equal("55\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_MutualRecursionWithClosure(ExecutionMode mode)
     {
         var source = """
@@ -177,8 +169,7 @@ public class NamedFunctionExpressionTests
 
     #region Default Parameters
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_WithDefaultParameters(ExecutionMode mode)
     {
         var source = """
@@ -197,8 +188,7 @@ public class NamedFunctionExpressionTests
 
     #region Anonymous Function Expressions
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_Anonymous_StillWorks(ExecutionMode mode)
     {
         // Anonymous function expressions should still work
@@ -217,8 +207,7 @@ public class NamedFunctionExpressionTests
 
     #region Closure Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_ClosureCapture(ExecutionMode mode)
     {
         var source = """
@@ -244,8 +233,7 @@ public class NamedFunctionExpressionTests
 
     #region IIFE Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_ImmediatelyInvoked(ExecutionMode mode)
     {
         // IIFE (Immediately Invoked Function Expression) with name
@@ -265,8 +253,7 @@ public class NamedFunctionExpressionTests
 
     #region Rest Parameters
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_WithRestParameters(ExecutionMode mode)
     {
         var source = """
@@ -285,8 +272,7 @@ public class NamedFunctionExpressionTests
 
     #region Can Log Function
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamedFunctionExpression_CanLogFunction(ExecutionMode mode)
     {
         // Named function expressions have their name in the string representation

@@ -13,20 +13,10 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class HttpServerResponseTests
 {
-    private static int GetAvailablePort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ServerResponse_StatusMessage_Writable(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -44,11 +34,10 @@ public class HttpServerResponseTests
         Assert.Contains("msg=Custom OK", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ServerResponse_ExtraMethods_Callable(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -79,11 +68,10 @@ public class HttpServerResponseTests
         Assert.Contains("all-ok", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ServerResponse_Write_ReturnsBoolean(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -101,11 +89,10 @@ public class HttpServerResponseTests
         Assert.Contains("writeType=boolean", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ServerResponse_ChunkedStreaming_BodyReceived(ExecutionMode mode)
     {
-        var port = GetAvailablePort();
+        var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""

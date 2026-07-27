@@ -18,8 +18,7 @@ public class ArrayLocalPromotionTests
 {
     // ── Positive cases: promotable shapes ──────────────────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_BoolSieve_CountsPrimes(ExecutionMode mode)
     {
         // The count-primes shape: const boolean[] built by push, then index read/write.
@@ -45,8 +44,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_NumberArray_PushIndexLength(ExecutionMode mode)
     {
         var source = """
@@ -65,8 +63,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("120\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_IndexWrite_ReturnsAssignedValue(ExecutionMode mode)
     {
         // `arr[i] = v` is an expression whose value is the assigned RHS.
@@ -85,8 +82,7 @@ public class ArrayLocalPromotionTests
 
     // ── Escape cases: must fall back, must stay correct ────────────────────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_PassedToFunctionThatPushes(ExecutionMode mode)
     {
         // Passing the array as an argument escapes — a bare List<T> can't be mutated
@@ -106,8 +102,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_Returned(ExecutionMode mode)
     {
         var source = """
@@ -125,8 +120,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("2\n8\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_Spread(ExecutionMode mode)
     {
         var source = """
@@ -144,8 +138,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_ForOf(ExecutionMode mode)
     {
         var source = """
@@ -162,8 +155,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("60\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_OtherMethod_Map(ExecutionMode mode)
     {
         // .map is not a permitted use → no promotion; result must still be correct.
@@ -182,8 +174,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_OutOfRangeReadIsUndefined(ExecutionMode mode)
     {
         // A read past the end must yield undefined (JS semantics). Reading `xs[5]`
@@ -201,8 +192,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("[1]\nundefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Escape_AnyTypedElementWrite_NotPromoted(ExecutionMode mode)
     {
         // An `any`-typed element write disqualifies promotion (the typed setter would
@@ -224,8 +214,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("42\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_AutoExtendOnIndexWrite(ExecutionMode mode)
     {
         // Writing at index == length extends the array by one (auto-extend path).
@@ -245,8 +234,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Promoted_PerScope_NameCollisionDoesNotPoison(ExecutionMode mode)
     {
         // `xs` in build() is a clean push/index/length array and must promote even though an
@@ -276,8 +264,7 @@ public class ArrayLocalPromotionTests
 
     // ── Typed-HOF pipeline (#861): typed reduce over a promoted number[] ────
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReduce_PromotedNumberArray(ExecutionMode mode)
     {
         // arr used only via push + reduce(non-capturing typed numeric reducer) → promoted to
@@ -295,8 +282,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("10\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedReduce_CapturingReducer_FallsBackCorrectly(ExecutionMode mode)
     {
         // The reducer captures `base`, so it cannot bind as a direct typed delegate — the analyzer
@@ -316,8 +302,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("303\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedMap_ThenIndexLength(ExecutionMode mode)
     {
         // `doubled` = arr.map(typed mapper) is itself promoted to List<double> (its source arr is
@@ -338,8 +323,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedMap_ThenReduce_Chain(ExecutionMode mode)
     {
         // Full typed chain: arr (List<double>) → map → doubled (List<double>) → reduce → double.
@@ -357,8 +341,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedMap_ResultReturned_FallsBackCorrectly(ExecutionMode mode)
     {
         // The map result escapes (returned), so it must NOT be a bare List<double> — falls back to
@@ -378,8 +361,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("3\n10\n12\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedFilter_ThenLength(ExecutionMode mode)
     {
         var source = """
@@ -398,8 +380,7 @@ public class ArrayLocalPromotionTests
         Assert.Equal("20\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypedPipeline_MapFilterReduce(ExecutionMode mode)
     {
         // The full array-methods benchmark shape: build → map → filter → reduce, every stage typed.

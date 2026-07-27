@@ -410,6 +410,11 @@ public static class ChildProcessModuleInterpreter
             {
                 stdinStream.SetWriteCallback(BuiltInMethod.CreateV2("write", 1, 3, (interp, recv, wargs) =>
                 {
+                    // A dead/closed child stdin must surface through the write
+                    // callback (err-first). Swallowing it and invoking the
+                    // callback with null made a failed child.stdin.write()
+                    // undetectable from guest code.
+                    object? writeError = null;
                     if (wargs.Length > 0 && !wargs[0].IsNull)
                     {
                         try
@@ -417,13 +422,16 @@ public static class ChildProcessModuleInterpreter
                             process.StandardInput.Write(wargs[0].ToObject()!.ToString());
                             process.StandardInput.Flush();
                         }
-                        catch { }
+                        catch
+                        {
+                            writeError = new SharpTSError("write EPIPE") { Code = "EPIPE" };
+                        }
                     }
                     if (wargs.Length > 2 && wargs[2].ToObject() is ISharpTSCallable cb)
-                        cb.Call(interpreter, [null]);
+                        cb.Call(interpreter, [writeError]);
                     else if (wargs.Length > 1 && wargs[1].ToObject() is ISharpTSCallable cb2)
-                        cb2.Call(interpreter, [null]);
-                    return RuntimeValue.True;
+                        cb2.Call(interpreter, [writeError]);
+                    return RuntimeValue.FromBoolean(writeError == null);
                 }));
 
                 // stdin.end() closes the child's StandardInput so it sees EOF.

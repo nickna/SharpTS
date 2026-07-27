@@ -11,8 +11,7 @@ public class LabeledStatementTests
 {
     #region Basic Labeled Loop Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledWhile_Break_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class LabeledStatementTests
         Assert.Equal("3\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledWhile_Continue_RestartsLoop(ExecutionMode mode)
     {
         var source = """
@@ -51,8 +49,7 @@ public class LabeledStatementTests
         Assert.Equal("12\n", output);  // 1 + 2 + 4 + 5 = 12 (skips 3)
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForOf_Break_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +66,7 @@ public class LabeledStatementTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledDoWhile_Break_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +89,7 @@ public class LabeledStatementTests
 
     #region Nested Loop Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoops_BreakOuter_ExitsBoth(ExecutionMode mode)
     {
         var source = """
@@ -112,8 +107,7 @@ public class LabeledStatementTests
         Assert.Equal("inner\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoops_ContinueOuter_SkipsInner(ExecutionMode mode)
     {
         var source = """
@@ -135,8 +129,7 @@ public class LabeledStatementTests
         Assert.Equal("1\n1\n1\n", output);  // Only prints 1 from inner loop each time
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedLoops_BreakInner_OnlyExitsInner(ExecutionMode mode)
     {
         var source = """
@@ -158,8 +151,7 @@ public class LabeledStatementTests
         Assert.Equal("1\n2\n1\n2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ThreeLevelNesting_BreakMiddle(ExecutionMode mode)
     {
         var source = """
@@ -191,8 +183,7 @@ public class LabeledStatementTests
     // non-loop label and escaped). These pin the correct behavior: continue runs the loop's own
     // step. Note the pre-existing suite only exercised labeled while/for-of/do-while continue.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledFor_ContinueOuter_RunsIncrementNotInitializer(ExecutionMode mode)
     {
         // The exact #558 repro: continue to the outer `for` must advance i (not reset it).
@@ -212,8 +203,7 @@ public class LabeledStatementTests
         Assert.Equal("0,10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledFor_ContinueSelf_SkipsIteration(ExecutionMode mode)
     {
         var source = """
@@ -229,8 +219,7 @@ public class LabeledStatementTests
         Assert.Equal("013\n", output);  // skips 2, but keeps advancing
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledFor_BreakOuter_ExitsBoth(ExecutionMode mode)
     {
         var source = """
@@ -248,8 +237,7 @@ public class LabeledStatementTests
         Assert.Equal("13\n", output);  // 0+1+2 (i=0) + 10 (i=1,j=0), then break
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForOf_ContinueOuter_SkipsRestOfInner(ExecutionMode mode)
     {
         var source = """
@@ -267,8 +255,7 @@ public class LabeledStatementTests
         Assert.Equal("11;12;13;\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledForIn_ContinueOuter_SkipsRestOfInner(ExecutionMode mode)
     {
         var source = """
@@ -287,8 +274,7 @@ public class LabeledStatementTests
         Assert.Equal("aa;ba;\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledDoWhile_ContinueOuter_RetestsCondition(ExecutionMode mode)
     {
         var source = """
@@ -310,8 +296,7 @@ public class LabeledStatementTests
         Assert.Equal("11;21;31;\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Generator_LabeledContinueOuterFor_YieldsAcrossIterations(ExecutionMode mode)
     {
         // #558 generator repro: the yield suspends inside the inner loop; continue outer must
@@ -335,8 +320,7 @@ public class LabeledStatementTests
         Assert.Equal("0;10;\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_While_ContinueOuter(ExecutionMode mode)
     {
         // Both labels wrap the same while; `continue a` re-tests the outer condition.
@@ -359,8 +343,7 @@ public class LabeledStatementTests
         Assert.Equal("63\n", output);  // 11 + 21 + 31
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_For_ContinueOuter(ExecutionMode mode)
     {
         // A chain of labels on a `for` (p: q: for) — `continue p` to the OUTER label of the chain
@@ -382,8 +365,7 @@ public class LabeledStatementTests
         Assert.Equal("30\n", output);  // 0 + 10 + 20
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ChainedLabels_For_ContinueOuter(ExecutionMode mode)
     {
         // #704 repro: a chain of labels on a `for` inside an async function — `continue p` (the OUTER
@@ -407,8 +389,7 @@ public class LabeledStatementTests
         Assert.Equal("30\n", TestHarness.Run(source, mode));  // 0 + 10 + 20
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_For_ContinueInner(ExecutionMode mode)
     {
         // `continue q` to the INNER label of the chain targets the same for — same result as the
@@ -428,8 +409,7 @@ public class LabeledStatementTests
         Assert.Equal("30\n", output);  // 0 + 10 + 20
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ChainedLabels_For_BreakOuter(ExecutionMode mode)
     {
         // `break a` to the outer label of a chain inside an async function must exit the outer for.
@@ -450,8 +430,7 @@ public class LabeledStatementTests
         Assert.Equal("4\n", TestHarness.Run(source, mode));  // x=0: 3 iters; x=1: 1 iter then break
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_For_BreakOuter(ExecutionMode mode)
     {
         // `break a` to the outer label of a chain on a `for` exits the loop entirely.
@@ -470,8 +449,7 @@ public class LabeledStatementTests
         Assert.Equal("00;01;02;10;\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ChainedLabels_While_ContinueOuter(ExecutionMode mode)
     {
         // Chained labels on a `while` inside an async function — `continue a` re-tests the outer
@@ -497,8 +475,7 @@ public class LabeledStatementTests
         Assert.Equal("63\n", TestHarness.Run(source, mode));  // 11 + 21 + 31
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_For_TripleChain_ContinueOutermost(ExecutionMode mode)
     {
         // Three labels on one `for`; `continue a` to the outermost resolves to the loop's increment.
@@ -517,8 +494,7 @@ public class LabeledStatementTests
         Assert.Equal("30\n", output);  // 0 + 10 + 20
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Async_ChainedLabels_ForOf_ContinueOuter(ExecutionMode mode)
     {
         // Chained labels on a (synchronous) `for…of` inside an async function — `continue p` must
@@ -540,8 +516,7 @@ public class LabeledStatementTests
         Assert.Equal("30\n", TestHarness.Run(source, mode));  // 0 + 10 + 20
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ChainedLabels_ForOf_ContinueOuter(ExecutionMode mode)
     {
         // A chain on a `for-of`; `continue m` to the outer label advances the outer iterator.
@@ -564,8 +539,7 @@ public class LabeledStatementTests
 
     #region Labeled Block Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledBlock_Break_ExitsBlock(ExecutionMode mode)
     {
         var source = """
@@ -582,8 +556,7 @@ public class LabeledStatementTests
         Assert.Equal("before\nin block\nafter\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledBlock_Nested_BreakOuter(ExecutionMode mode)
     {
         var source = """
@@ -603,8 +576,7 @@ public class LabeledStatementTests
         Assert.Equal("outer start\ninner start\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledBlock_InLoop_BreakBlockNotLoop(ExecutionMode mode)
     {
         var source = """
@@ -628,8 +600,7 @@ public class LabeledStatementTests
 
     #region Switch Nesting Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchInLoop_BreakLabel_ExitsLoop(ExecutionMode mode)
     {
         var source = """
@@ -649,8 +620,7 @@ public class LabeledStatementTests
         Assert.Equal("case 1\ndone\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchInLoop_UnlabeledBreak_ExitsSwitch(ExecutionMode mode)
     {
         var source = """
@@ -673,8 +643,7 @@ public class LabeledStatementTests
         Assert.Equal("case 1\nafter switch\ncase 2\nafter switch\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SwitchInLoop_ContinueLabel_ContinuesLoop(ExecutionMode mode)
     {
         var source = """
@@ -697,8 +666,7 @@ public class LabeledStatementTests
 
     #region Edge Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabeledEmptyStatement_Allowed(ExecutionMode mode)
     {
         var source = """
@@ -711,8 +679,7 @@ public class LabeledStatementTests
         Assert.Equal("5\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleLabels_DifferentStatements(ExecutionMode mode)
     {
         var source = """
@@ -736,8 +703,7 @@ public class LabeledStatementTests
 
     #region Error Cases
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Break_NonexistentLabel_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -750,8 +716,7 @@ public class LabeledStatementTests
         Assert.Contains("Label 'missing' not found", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Continue_NonexistentLabel_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -764,8 +729,7 @@ public class LabeledStatementTests
         Assert.Contains("Label 'missing' not found", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Continue_ToNonLoopLabel_ThrowsError(ExecutionMode mode)
     {
         var source = """
@@ -778,8 +742,7 @@ public class LabeledStatementTests
         Assert.Contains("Cannot continue to non-loop label", ex.Message);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void LabelShadowing_ThrowsError(ExecutionMode mode)
     {
         var source = """

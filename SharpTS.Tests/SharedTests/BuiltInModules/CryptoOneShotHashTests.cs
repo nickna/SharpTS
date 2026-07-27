@@ -10,8 +10,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class CryptoOneShotHashTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Hash_OneShot_MatchesCreateHash(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -29,8 +28,7 @@ public class CryptoOneShotHashTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Hash_DefaultsToHex(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -45,8 +43,7 @@ public class CryptoOneShotHashTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_HashCopy_MatchesIndependentDigest(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -68,8 +65,7 @@ public class CryptoOneShotHashTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Sha3_256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -84,8 +80,7 @@ public class CryptoOneShotHashTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_Shake256_HonorsOutputLength(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -102,8 +97,7 @@ public class CryptoOneShotHashTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Crypto_GetHashes_IncludesSha3(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

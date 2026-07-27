@@ -39,8 +39,7 @@ public class DotNetImportTests
 
     #region Single-type form
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void SingleTypeForm_ConstructChainAndProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -94,8 +93,7 @@ public class DotNetImportTests
 
     #region Namespace form, aliases, nested types
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NamespaceForm_ResolvesEachNamedImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -112,8 +110,7 @@ public class DotNetImportTests
         Assert.Equal("36\n9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AliasImport_BindsLocalName(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -130,8 +127,7 @@ public class DotNetImportTests
         Assert.Equal("aliased\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void StaticReadonlyField_Resolves(ExecutionMode mode)
     {
         // Guid.empty is a static FIELD (not property) — the member surface must include
@@ -148,8 +144,7 @@ public class DotNetImportTests
         Assert.Equal("00000000-0000-0000-0000-000000000000\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedType_ResolvesThroughDeclaringTypeSpecifier(ExecutionMode mode)
     {
         // System.Environment is a type; SpecialFolder is its nested enum — the namespace-form
@@ -166,8 +161,7 @@ public class DotNetImportTests
         Assert.Equal("Desktop\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void EnumImport_MembersAndToString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -187,8 +181,7 @@ public class DotNetImportTests
 
     #region Cross-module and type identity
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CrossModule_InstanceFlowsBetweenModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -214,8 +207,7 @@ public class DotNetImportTests
         Assert.Equal("from-maker+main\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BothSpecifierForms_YieldTheSameType(ExecutionMode mode)
     {
         // The synthesized class is cached per CLR type, so the namespace form and the
@@ -240,8 +232,7 @@ public class DotNetImportTests
         Assert.Equal("same\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TypeOnlyImport_UsableInAnnotations(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -268,8 +259,7 @@ public class DotNetImportTests
 
     #region Discovery-tool alignment
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DiscoveryToolImportLine_RoundTripsThroughThePipeline(ExecutionMode mode)
     {
         // The exact import line `--gen-decl` prints must load, type-check, and run —

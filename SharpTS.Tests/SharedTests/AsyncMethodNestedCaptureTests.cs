@@ -14,8 +14,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncMethodNestedCaptureTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncInstanceMethod_SyncArrowWritesCapturedLocal(ExecutionMode mode)
     {
         var source = """
@@ -34,8 +33,7 @@ public class AsyncMethodNestedCaptureTests
         Assert.Equal("6,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncStaticMethod_SyncArrowWritesCapturedLocal(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +52,7 @@ public class AsyncMethodNestedCaptureTests
         Assert.Equal("6,6\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_SyncArrowCompoundAssignCapturedLocal(ExecutionMode mode)
     {
         // `+=` and `++` go through distinct emitter paths than plain `=` — both must route to the DC.
@@ -75,8 +72,7 @@ public class AsyncMethodNestedCaptureTests
         Assert.Equal("7,7\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_TwoArrowsWriteDistinctCapturedLocals(ExecutionMode mode)
     {
         // Two independent captured locals, each written by its own arrow, must not cross-contaminate.
@@ -98,8 +94,7 @@ public class AsyncMethodNestedCaptureTests
         Assert.Equal("2,11,2,11\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_WriteCapturedBlockScopeShadow_DoesNotLeak(ExecutionMode mode)
     {
         // Combines this fix with #838: the written capture is a nested-block shadow of an outer binding;
@@ -127,8 +122,7 @@ public class AsyncMethodNestedCaptureTests
         Assert.Equal("6,6,100\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AsyncMethod_AsyncArrowWriteCaptureStillWorks(ExecutionMode mode)
     {
         // Regression guard for #682: a direct-child ASYNC arrow writing a captured method local still

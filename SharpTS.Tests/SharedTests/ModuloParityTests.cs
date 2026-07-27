@@ -18,8 +18,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ModuloParityTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void AscendingCounter_BasicDivisor(ExecutionMode mode)
     {
         var source = """
@@ -30,8 +29,7 @@ public class ModuloParityTests
         Assert.Equal("0,1,2,0,1,2,0,1,2,0,\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void CounterPlusMinusLiteral_Dividend(ExecutionMode mode)
     {
         // `(i + k) % m` and `(i - k) % m` — the counter±literal dividend shapes the fast path recognizes.
@@ -43,8 +41,7 @@ public class ModuloParityTests
         Assert.Equal("1:-2 2:-1 3:0 0:1 1:2 2:3 3:4 0:0 \n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DescendingCounter_NegativeDividend_AndNegativeDivisor(ExecutionMode mode)
     {
         // Truncated remainder: the result takes the dividend's sign; a negative divisor does not
@@ -57,8 +54,7 @@ public class ModuloParityTests
         Assert.Equal("0/0 2/2 1/1 0/0 -1/-1 -2/-2 0/0 \n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DivisorOne_AlwaysZero(ExecutionMode mode)
     {
         var source = """
@@ -69,8 +65,7 @@ public class ModuloParityTests
         Assert.Equal("0,0,0,0,0,\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void DivisorZero_FallsBackToNaN_DoesNotThrow(ExecutionMode mode)
     {
         // `i % 0` is NaN in JS (fmod(x, 0)). The fast path explicitly declines divisor 0 so it never
@@ -83,8 +78,7 @@ public class ModuloParityTests
         Assert.Equal("NaN,NaN,NaN,\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NonCounterDividend_FallsBackToDoublePath(ExecutionMode mode)
     {
         // `(i * 2) % 5` — the dividend is a multiply, not a recognized counter expression, so the
@@ -97,8 +91,7 @@ public class ModuloParityTests
         Assert.Equal("0,2,4,1,3,0,\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ModuloInFloat64WriteKernel(ExecutionMode mode)
     {
         // The real kernel shape: a modulo embedded in a mixed-double store expression into a
@@ -113,8 +106,7 @@ public class ModuloParityTests
         Assert.Equal("342\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void ModuloInInt32WriteKernel_ToInt32Truncation(ExecutionMode mode)
     {
         // Int32Array store path: the int64 modulo result feeds a store that ToInt32-truncates.

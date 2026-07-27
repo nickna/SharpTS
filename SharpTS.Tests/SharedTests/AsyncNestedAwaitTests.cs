@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncNestedAwaitTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_GlobalFunction_SingleArg(ExecutionMode mode)
     {
         var source = """
@@ -31,8 +30,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_GlobalFunction_MultipleArgs(ExecutionMode mode)
     {
         var source = """
@@ -53,8 +51,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("10\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_ArrowFunction_SingleArg(ExecutionMode mode)
     {
         var source = """
@@ -73,8 +70,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("20\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_ArrowFunction_MultipleArgs(ExecutionMode mode)
     {
         var source = """
@@ -93,8 +89,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("9\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_ChainedCalls(ExecutionMode mode)
     {
         var source = """
@@ -114,8 +109,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("11\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_MixedArgsWithLiteral(ExecutionMode mode)
     {
         var source = """
@@ -136,8 +130,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("15\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_InMethodCall(ExecutionMode mode)
     {
         var source = """
@@ -161,8 +154,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("14\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_DeeplyNested(ExecutionMode mode)
     {
         var source = """
@@ -180,8 +172,7 @@ public class AsyncNestedAwaitTests
         Assert.Equal("4\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void NestedAwait_WithAwaitInCallee(ExecutionMode mode)
     {
         // Callee itself is loaded via await

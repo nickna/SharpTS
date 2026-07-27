@@ -32,12 +32,6 @@ public record SourceLocation(
         => new(filePath, line);
 
     /// <summary>
-    /// Creates a location from line and column.
-    /// </summary>
-    public static SourceLocation FromPosition(int line, int column, string? filePath = null)
-        => new(filePath, line, column);
-
-    /// <summary>
     /// Formats as "file:line:column" or "line:column" if no file.
     /// </summary>
     public override string ToString()

@@ -19,8 +19,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class GeneratorYieldSpillTests
 {
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void BinaryConcat_PrefixSurvivesYield(ExecutionMode mode)
     {
         var source = """
@@ -32,8 +31,7 @@ public class GeneratorYieldSpillTests
         Assert.Equal("PFX:undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MultipleYields_PrefixSurvives(ExecutionMode mode)
     {
         var source = """
@@ -43,8 +41,7 @@ public class GeneratorYieldSpillTests
         Assert.Equal("TAG:undefined|undefined\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void TemplateLiteral_PrefixSurvivesYield(ExecutionMode mode)
     {
         var source = """
@@ -54,8 +51,7 @@ public class GeneratorYieldSpillTests
         Assert.Equal("[head-undefined]\n", TestHarness.Run(source, mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void YieldStar_PrefixSurvivesDelegation(ExecutionMode mode)
     {
         var source = """

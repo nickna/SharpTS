@@ -9,8 +9,7 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 public class FsModuleTests
 {
     private static string Uid() => Guid.NewGuid().ToString("N")[..8];
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ExistsSync_ReturnsTrueForExistingFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -27,8 +26,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ExistsSync_ReturnsFalseForNonexistentFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -43,8 +41,7 @@ public class FsModuleTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_WriteFileSync_And_ReadFileSync_WorkTogether(ExecutionMode mode)
     {
         var uid = Uid();
@@ -69,8 +66,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_AppendFileSync_AppendsToFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -96,8 +92,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_MkdirSync_And_RmdirSync_WorkTogether(ExecutionMode mode)
     {
         var uid = Uid();
@@ -120,8 +115,7 @@ public class FsModuleTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ReaddirSync_ListsDirectoryContents(ExecutionMode mode)
     {
         var uid = Uid();
@@ -150,8 +144,7 @@ public class FsModuleTests
         Assert.Equal("2\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_StatSync_ReturnsFileInfo(ExecutionMode mode)
     {
         var uid = Uid();
@@ -179,8 +172,7 @@ public class FsModuleTests
         Assert.Equal("true\nfalse\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_StatSync_ReturnsDirectoryInfo(ExecutionMode mode)
     {
         var uid = Uid();
@@ -206,8 +198,7 @@ public class FsModuleTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CopyFileSync_CopiesFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -237,8 +228,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_RenameSync_RenamesFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -265,8 +255,7 @@ public class FsModuleTests
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_UnlinkSync_DeletesFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -289,8 +278,7 @@ public class FsModuleTests
         Assert.Equal("true\nfalse\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_AccessSync_DoesNotThrowForExistingFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -320,8 +308,7 @@ public class FsModuleTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_AccessSync_ThrowsForNonexistentFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -343,8 +330,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_RmdirSync_WithRecursive_DeletesNestedDirectories(ExecutionMode mode)
     {
         var uniqueDir = $"test_rmdir_recursive_{Guid.NewGuid():N}";
@@ -368,8 +354,7 @@ public class FsModuleTests
         Assert.Equal("false\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Constants_ExportsAccessConstants(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -387,8 +372,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_TruncateSync_TruncatesFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -419,8 +403,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_TruncateSync_ExtendsFileWithZeros(ExecutionMode mode)
     {
         var uid = Uid();
@@ -446,8 +429,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_SymlinkSync_CreatesSymbolicLink(ExecutionMode mode)
     {
         var uid = Uid();
@@ -474,8 +456,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_RealpathSync_ResolvesAbsolutePath(ExecutionMode mode)
     {
         var uid = Uid();
@@ -502,8 +483,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_UtimesSync_SetsFileTimes(ExecutionMode mode)
     {
         var uid = Uid();
@@ -532,8 +512,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LstatSync_ReturnsSymlinkInfo(ExecutionMode mode)
     {
         var uid = Uid();
@@ -561,8 +540,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ReaddirSync_WithFileTypes_ReturnsDirentObjects(ExecutionMode mode)
     {
         var uid = Uid();
@@ -610,8 +588,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ChmodSync_DoesNotThrowOnUnix(ExecutionMode mode)
     {
         // This test checks that chmodSync doesn't throw on Unix
@@ -643,8 +620,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ReadlinkSync_ThrowsForNonSymlink(ExecutionMode mode)
     {
         var uid = Uid();
@@ -674,8 +650,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_TruncateSync_ThrowsForNonexistentFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -697,8 +672,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_RealpathSync_ThrowsForNonexistentFile(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -722,8 +696,7 @@ public class FsModuleTests
 
     #region File Descriptor APIs
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_OpenSync_ReturnsFileDescriptor(ExecutionMode mode)
     {
         var uid = Uid();
@@ -748,8 +721,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CloseSync_ClosesDescriptor(ExecutionMode mode)
     {
         var uid = Uid();
@@ -779,8 +751,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CloseSync_ThrowsForInvalidFd(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -802,8 +773,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ReadSync_ReadsIntoBuffer(ExecutionMode mode)
     {
         var uid = Uid();
@@ -833,8 +803,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_WriteSync_WritesFromBuffer(ExecutionMode mode)
     {
         var uid = Uid();
@@ -864,8 +833,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_FstatSync_ReturnsStats(ExecutionMode mode)
     {
         var uid = Uid();
@@ -893,8 +861,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_FtruncateSync_TruncatesFile(ExecutionMode mode)
     {
         var uid = Uid();
@@ -926,8 +893,7 @@ public class FsModuleTests
 
     #region Directory Utilities
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_MkdtempSync_CreatesUniqueDirectory(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -948,8 +914,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_ReaddirSync_Recursive_ListsAllEntries(ExecutionMode mode)
     {
         var uid = Uid();
@@ -981,8 +946,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_OpendirSync_ReturnsDir(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1015,8 +979,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Dir_ReadSync_ReturnsNullWhenDone(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1056,8 +1019,7 @@ public class FsModuleTests
 
     #region Hard Links
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LinkSync_CreatesHardLink(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1087,8 +1049,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LinkSync_ThrowsForMissingSource(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1110,8 +1071,7 @@ public class FsModuleTests
         Assert.Equal("true\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LinkSync_ThrowsForExistingDest(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1148,8 +1108,7 @@ public class FsModuleTests
 
     #region Mixed Module Imports
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void MixedModuleImports_WorkTogether(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1182,8 +1141,7 @@ public class FsModuleTests
     // the callback forms from the promise primitives, so they run identically in
     // both modes. These tests pin that parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackReadFile_ReturnsData(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1205,8 +1163,7 @@ public class FsModuleTests
         Assert.Equal("DATA:callback-data\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackReadFile_NoEncoding_ReturnsBuffer(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1229,8 +1186,7 @@ public class FsModuleTests
         Assert.Equal("3:abc\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackWriteFile_ThenReadBack(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1252,8 +1208,7 @@ public class FsModuleTests
         Assert.Equal("READBACK:written-via-cb\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackReadFile_MissingFile_PassesError(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1273,8 +1228,7 @@ public class FsModuleTests
         Assert.Equal("ERR:yes\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_PromisesReadFile_RoundTrips(ExecutionMode mode)
     {
         // fs.promises.write/readFile round-trips through await in both modes and
@@ -1308,8 +1262,7 @@ public class FsModuleTests
 
     // Identical asserts across ExecutionModes.All enforce interp==compiled parity.
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_WriteReadBuffer_BinaryRoundTrip(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1330,8 +1283,7 @@ public class FsModuleTests
         Assert.Equal("true\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Encoding_HexAndBase64(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1353,8 +1305,7 @@ public class FsModuleTests
         Assert.Equal("Hello\n48656c6c6f\nHi\nSGk\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Encoding_Latin1AndUtf16le(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1380,8 +1331,7 @@ public class FsModuleTests
 
     #region Sync option semantics + constants (#979)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_MkdirSync_NonRecursive_ThrowsEexistAndEnoent(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1403,8 +1353,7 @@ public class FsModuleTests
         Assert.Equal("EEXIST\nENOENT\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_MkdirSync_Recursive_ReturnsFirstCreated(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1424,8 +1373,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_AccessSync_WriteOk_ThrowsOnReadOnly(ExecutionMode mode)
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"ro_{Uid()}.txt");
@@ -1455,8 +1403,7 @@ public class FsModuleTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Constants_AreComplete(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1478,8 +1425,7 @@ public class FsModuleTests
 
     #region Stats/Dirent unification (#977)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Stat_SyncAndAsyncSameShapeAndPredicates(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1509,8 +1455,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Stat_BigIntOption(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1531,8 +1476,7 @@ public class FsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_Dirent_ParentPathAndPredicates(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1566,8 +1510,7 @@ public class FsModuleTests
 
     #region mkdtemp absolute prefix (#984)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_MkdtempSync_AbsolutePrefix_NotDoubled(ExecutionMode mode)
     {
         // Canonical usage mkdtempSync(path.join(os.tmpdir(), 'foo-')) — the compiled
@@ -1589,8 +1532,7 @@ public class FsModuleTests
 
     #region promises.opendir + watch (#975)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_PromisesOpendir_AsyncIteratesEntries(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1618,8 +1560,7 @@ public class FsModuleTests
         Assert.Equal("count:3 sawDir:true\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_PromisesWatch_AsyncIteratorTerminatesOnAbort(ExecutionMode mode)
     {
         // Real FSWatcher event timing is non-deterministic (and flaky under load), so
@@ -1668,8 +1609,7 @@ public class FsModuleTests
 
     #region async chown + callback fd ops (#974)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackFdOps_OpenReadWriteFstatClose(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1705,8 +1645,7 @@ public class FsModuleTests
         Assert.Equal("5:WORLD\n11:true\n2:XY\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CallbackFd_BadFd_And_Chown_Invoke(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1736,8 +1675,7 @@ public class FsModuleTests
     // #986: every sync fd op on a stale descriptor surfaces EBADF (not EINVAL) in both
     // modes. The compiled fd table already threw EBADF, but EmitWithFsErrorHandling's
     // catch-all re-mapped any non-BCL exception to the EINVAL default before the fix.
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_SyncFdOps_BadFd_ReturnEBADF(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1763,8 +1701,7 @@ public class FsModuleTests
     // modes — the compiled side threw ENOSYS but the catch-all clobbered it to EINVAL.
     // Windows-gated: on Unix the compiled side is a documented no-op (P/Invoke from IL),
     // so it diverges from the interpreter's real syscall there (out of scope for #986).
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_SyncChownLchown_Windows_ReturnENOSYS(ExecutionMode mode)
     {
         if (!OperatingSystem.IsWindows())
@@ -1791,8 +1728,7 @@ public class FsModuleTests
 
     #region rm / cp (#973)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_RmSync_RecursiveForceAndEisdir(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1817,8 +1753,7 @@ public class FsModuleTests
         Assert.Equal("true\nok\nERR_FS_EISDIR\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_CpSync_RecursiveErrorOnExistAndFilter(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1850,8 +1785,7 @@ public class FsModuleTests
 
     #region FileHandle / fsPromises.open (#972)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_FileHandle_OpenWriteReadStatTruncateClose(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1885,8 +1819,7 @@ public class FsModuleTests
         Assert.Equal("11\n5:WORLD\n11:true\n5\nHELLO\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_FileHandle_CreateReadStream_And_OpenMissingRejects(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1926,8 +1859,7 @@ public class FsModuleTests
 
     #region long-tail ops (#976)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LongTail_DurabilityAndFdMetadata(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1965,8 +1897,7 @@ public class FsModuleTests
         Assert.Equal("rt:true\nfchown:true\ncbfsync:ok\nbadfd:true\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LongTail_VectoredIo(ExecutionMode mode)
     {
         var uid = Uid();
@@ -1994,8 +1925,7 @@ public class FsModuleTests
         Assert.Equal("4:4:ABCD\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LongTail_Statfs(ExecutionMode mode)
     {
         var uid = Uid();
@@ -2022,8 +1952,7 @@ public class FsModuleTests
         Assert.Equal("sync:true\nbigint:true\npromise:true\ncb:4096\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LongTail_Glob(ExecutionMode mode)
     {
         var uid = Uid();
@@ -2057,8 +1986,7 @@ public class FsModuleTests
         Assert.Equal("star:a.txt\nss:a.txt,sub/c.txt\nq:b.log\nnone:0\ncb:a.txt\niter:a.txt\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void Fs_LongTail_LchmodEnosys_Lutimes_Exists(ExecutionMode mode)
     {
         var uid = Uid();
@@ -2093,8 +2021,7 @@ public class FsModuleTests
 
     #region fs/promises real backgrounding (#971)
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory, ModeData]
     public void FsPromises_RealAsync_ParityLivenessConcurrency(ExecutionMode mode)
     {
         var uid = Uid();
