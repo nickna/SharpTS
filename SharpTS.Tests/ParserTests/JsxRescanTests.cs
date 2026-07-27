@@ -16,38 +16,29 @@ public class JsxRescanTests
             .WithJsx(source, JsxParseOptions.Default)
             .Parse();
 
-    /// <summary>Digs the lowered {type, props, children} object out of `let view = &lt;jsx&gt;;`.</summary>
-    private static Expr.ObjectLiteral JsxObject(ParseDiagnosticResult parsed)
+    /// <summary>Digs the lowered JSX factory call out of `let view = &lt;jsx&gt;;`.</summary>
+    private static Expr.Call JsxCallOf(ParseDiagnosticResult parsed)
     {
         Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
         var initializer = parsed.Statements.OfType<Stmt.Var>().First(v => v.Name.Lexeme == "view").Initializer;
-        var assertion = Assert.IsType<Expr.TypeAssertion>(initializer);
-        return Assert.IsType<Expr.ObjectLiteral>(assertion.Expression);
+        var call = Assert.IsType<Expr.Call>(initializer);
+        Assert.NotNull(call.JsxOrigin);
+        return call;
     }
 
-    private static List<Expr> Children(ParseDiagnosticResult parsed)
-    {
-        var obj = JsxObject(parsed);
-        var childrenProp = obj.Properties.First(
-            p => p.Key is Expr.IdentifierKey { Name.Lexeme: "children" });
-        return Assert.IsType<Expr.ArrayLiteral>(childrenProp.Value).Elements;
-    }
+    private static IReadOnlyList<Expr> Children(ParseDiagnosticResult parsed) =>
+        JsxCallOf(parsed).JsxOrigin!.ChildExprs;
 
     private static string TextChild(ParseDiagnosticResult parsed, int index = 0)
     {
-        var child = Children(parsed)[index];
-        var literal = Assert.IsType<Expr.Literal>(child);
+        var literal = Assert.IsType<Expr.Literal>(Children(parsed)[index]);
         return Assert.IsType<string>(literal.Value);
     }
 
     private static Expr AttributeValue(ParseDiagnosticResult parsed, string name)
     {
-        var obj = JsxObject(parsed);
-        var propsProp = obj.Properties.First(p => p.Key is Expr.IdentifierKey { Name.Lexeme: "props" });
-        Expr props = propsProp.Value;
-        if (props is Expr.Satisfies satisfies) props = satisfies.Expression;
-        var propsObj = Assert.IsType<Expr.ObjectLiteral>(props);
-        return propsObj.Properties.First(p => p.Key is Expr.IdentifierKey k && k.Name.Lexeme == name).Value;
+        var props = Assert.IsType<Expr.ObjectLiteral>(JsxCallOf(parsed).JsxOrigin!.PropsExpr);
+        return props.Properties.First(p => p.Key is Expr.IdentifierKey k && k.Name.Lexeme == name).Value;
     }
 
     #region Text fidelity — corrupted upfront streams

@@ -518,7 +518,16 @@ public abstract record Stmt
         Token? NamespaceImport,
         string ModulePath,
         bool IsTypeOnly = false
-    ) : Stmt;
+    ) : Stmt
+    {
+        /// <summary>
+        /// True for the parser-synthesized automatic-JSX-runtime import
+        /// (<c>import { jsx as __sharpts_jsx, … } from "react/jsx-runtime"</c>). Single-file
+        /// checking binds its names leniently instead of demanding module mode, so isolated
+        /// buffers (tests, LSP hover) still check .tsx content.
+        /// </summary>
+        public bool IsSynthesizedJsxRuntime { get; init; } = false;
+    }
 
     /// <summary>
     /// Individual import specifier: { x } or { x as y } or { type x }

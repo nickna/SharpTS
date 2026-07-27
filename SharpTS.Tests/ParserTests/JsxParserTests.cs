@@ -87,6 +87,8 @@ public class JsxParserTests
             .CheckWithRecovery(parsed.Statements)
             .Diagnostics;
 
-        Assert.Contains(diagnostics, d => d.TsCode == "TS1360");
+        // tsc's code for a bad intrinsic attribute type (was TS1360 under the old
+        // satisfies-based interim lowering).
+        Assert.Contains(diagnostics, d => d.TsCode == "TS2322");
     }
 }

@@ -131,6 +131,17 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             }
         }
 
+        // Automatic-jsx-runtime import: injected only when the file actually lowered JSX,
+        // after the directive prologue and before hoisting/lifting, so the module resolver
+        // walks it like any user-written import.
+        if (_jsx is not null && JsxUsedAutomaticRuntime)
+        {
+            int insertAt = 0;
+            while (insertAt < statements.Count && statements[insertAt] is Stmt.Directive)
+                insertAt++;
+            statements.Insert(insertAt, BuildJsxRuntimeImport());
+        }
+
         // Apply var hoisting to the top-level (module/script) statement list. Function bodies
         // and arrow function bodies are hoisted at their respective parse sites.
         statements = VarHoister.Hoist(statements);

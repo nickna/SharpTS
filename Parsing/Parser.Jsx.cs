@@ -388,10 +388,21 @@ public partial class Parser
         throw new ParseError("JSX attribute value must be a string, expression, or element.", "TS17000");
     }
 
+    // Automatic-runtime usage flags: which names the synthesized
+    // `import { … } from "<jsxImportSource>/jsx-runtime"` must bind.
+    private bool _jsxUsedJsx;
+    private bool _jsxUsedJsxs;
+    private bool _jsxUsedJsxDev;
+    private bool _jsxUsedFragment;
+    private bool JsxUsedAutomaticRuntime => _jsxUsedJsx || _jsxUsedJsxs || _jsxUsedJsxDev || _jsxUsedFragment;
+
+    /// <summary>Reserved local-name prefix for the synthesized runtime bindings (documented).</summary>
+    private const string JsxLocalPrefix = "__sharpts_";
+
     /// <summary>
-    /// Interim lowering target (replaced by factory-call desugaring in the transform work):
-    /// <c>{type, props, children} as any</c>, with intrinsic props wrapped in
-    /// <c>satisfies JSX.IntrinsicElements["tag"]</c>.
+    /// Lowers a parsed JSX element to its factory call per the configured jsx mode. Every
+    /// lowered call carries <see cref="JsxCallInfo"/> so the checker runs JSX semantics
+    /// (its Expr references are aliases of nodes reachable from the call's arguments).
     /// </summary>
     private Expr LowerJsxElement(
         Token open,
@@ -401,31 +412,210 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children)
     {
-        Expr props = new Expr.ObjectLiteral(attributes);
-        if (!isFragment && tagExpression is Expr.Literal)
+        return _jsx!.Mode == JsxMode.React
+            ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children)
+            : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children);
+    }
+
+    /// <summary>
+    /// Classic transform: <c>jsxFactory(type, propsOrNull, ...children)</c>. Fragments use
+    /// jsxFragmentFactory as the type. <c>key</c> stays in props (createElement extracts it
+    /// at runtime). An intrinsic with no attributes passes an empty object literal rather
+    /// than tsc's <c>null</c> so required-prop checking still fires (runtime-equivalent).
+    /// </summary>
+    private Expr LowerJsxClassic(
+        Token open,
+        bool isFragment,
+        string tagName,
+        Expr tagExpression,
+        List<Expr.Property> attributes,
+        List<Expr> children)
+    {
+        bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
+        Expr tag = isFragment ? BuildDottedExpr(_jsx!.FragmentFactory, open.Line) : tagExpression;
+
+        Expr.ObjectLiteral? propsLiteral = null;
+        Expr propsArgument;
+        if (attributes.Count > 0 || isIntrinsic)
         {
-            string target = $"JSX.IntrinsicElements[\"{tagName}\"]";
-            props = new Expr.Satisfies(
-                props,
-                target,
-                Parser.TryParseTypeFragment(target));
+            propsLiteral = new Expr.ObjectLiteral(attributes);
+            propsArgument = propsLiteral;
+        }
+        else
+        {
+            propsArgument = new Expr.Literal(null);
         }
 
-        var fields = new List<Expr.Property>
+        var arguments = new List<Expr> { tag, propsArgument };
+        arguments.AddRange(children);
+
+        return new Expr.Call(
+            BuildDottedExpr(_jsx!.Factory, open.Line),
+            SynthesizedToken(TokenType.LEFT_PAREN, "(", open.Line),
+            null,
+            arguments)
         {
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "type", null, open.Line)),
-                tagExpression),
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "props", null, open.Line)),
-                props),
-            new(
-                new Expr.IdentifierKey(new Token(TokenType.IDENTIFIER, "children", null, open.Line)),
-                new Expr.ArrayLiteral(children)),
+            JsxOrigin = new JsxCallInfo(
+                isFragment ? JsxElementKind.Fragment
+                    : isIntrinsic ? JsxElementKind.Intrinsic : JsxElementKind.Component,
+                isFragment ? null : tagName,
+                propsLiteral,
+                children,
+                KeyExpr: null,
+                _jsx.Mode,
+                open.Line),
         };
-        return new Expr.TypeAssertion(
-            new Expr.ObjectLiteral(fields),
-            "any",
-            new NamedTypeNode("any", null, open.Line));
+    }
+
+    /// <summary>
+    /// Automatic transform: <c>__sharpts_jsx(type, propsWithChildren[, key])</c> —
+    /// <c>jsxs</c> for 2+ static children or a spread child; <c>jsxDEV</c> in dev mode with
+    /// the full dev signature. Children fold into the props object (1 child = the
+    /// expression, otherwise an array); <c>key</c> is extracted from the attributes to the
+    /// third argument.
+    /// </summary>
+    private Expr LowerJsxAutomatic(
+        Token open,
+        bool isFragment,
+        string tagName,
+        Expr tagExpression,
+        List<Expr.Property> attributes,
+        List<Expr> children)
+    {
+        bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
+        bool dev = _jsx!.Mode == JsxMode.ReactJsxDev;
+
+        Expr? keyExpr = null;
+        var props = new List<Expr.Property>(attributes.Count + 1);
+        foreach (var attribute in attributes)
+        {
+            if (!attribute.IsSpread && attribute.Key is Expr.IdentifierKey { Name.Lexeme: "key" })
+            {
+                keyExpr = attribute.Value;
+                continue;
+            }
+            props.Add(attribute);
+        }
+
+        bool useJsxs = children.Count > 1 || children.Any(c => c is Expr.Spread);
+        if (children.Count > 0)
+        {
+            Expr childrenValue = useJsxs || children.Count > 1
+                ? new Expr.ArrayLiteral([.. children])
+                : children[0];
+            props.Add(new Expr.Property(
+                new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "children", open.Line)),
+                childrenValue));
+        }
+        var propsLiteral = new Expr.ObjectLiteral(props);
+
+        string calleeName;
+        if (dev)
+        {
+            calleeName = JsxLocalPrefix + "jsxDEV";
+            _jsxUsedJsxDev = true;
+        }
+        else if (useJsxs)
+        {
+            calleeName = JsxLocalPrefix + "jsxs";
+            _jsxUsedJsxs = true;
+        }
+        else
+        {
+            calleeName = JsxLocalPrefix + "jsx";
+            _jsxUsedJsx = true;
+        }
+
+        Expr tag;
+        if (isFragment)
+        {
+            _jsxUsedFragment = true;
+            tag = new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, JsxLocalPrefix + "Fragment", open.Line));
+        }
+        else
+        {
+            tag = tagExpression;
+        }
+
+        var arguments = new List<Expr> { tag, propsLiteral };
+        if (keyExpr is not null || dev)
+            arguments.Add(keyExpr ?? new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance));
+        if (dev)
+        {
+            // jsxDEV(type, props, key, isStaticChildren, {fileName, lineNumber, columnNumber}, this)
+            // Tokens carry no column info, so columnNumber is pinned to 1; `this` is null.
+            arguments.Add(new Expr.Literal(useJsxs));
+            arguments.Add(new Expr.ObjectLiteral(
+            [
+                new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "fileName", open.Line)),
+                    new Expr.Literal(_filePath ?? "")),
+                new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "lineNumber", open.Line)),
+                    new Expr.Literal((double)open.Line)),
+                new(new Expr.IdentifierKey(SynthesizedToken(TokenType.IDENTIFIER, "columnNumber", open.Line)),
+                    new Expr.Literal(1d)),
+            ]));
+            arguments.Add(new Expr.Literal(null));
+        }
+
+        return new Expr.Call(
+            new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, calleeName, open.Line)),
+            SynthesizedToken(TokenType.LEFT_PAREN, "(", open.Line),
+            null,
+            arguments)
+        {
+            JsxOrigin = new JsxCallInfo(
+                isFragment ? JsxElementKind.Fragment
+                    : isIntrinsic ? JsxElementKind.Intrinsic : JsxElementKind.Component,
+                isFragment ? null : tagName,
+                propsLiteral,
+                children,
+                keyExpr,
+                _jsx.Mode,
+                open.Line),
+        };
+    }
+
+    /// <summary>Builds the value expression for a dotted factory name ("React.createElement" → React.createElement).</summary>
+    private static Expr BuildDottedExpr(string dottedName, int line)
+    {
+        string[] parts = dottedName.Split('.');
+        Expr expr = new Expr.Variable(SynthesizedToken(TokenType.IDENTIFIER, parts[0], line));
+        for (int i = 1; i < parts.Length; i++)
+            expr = new Expr.Get(expr, SynthesizedToken(TokenType.IDENTIFIER, parts[i], line));
+        return expr;
+    }
+
+    private static Token SynthesizedToken(TokenType type, string lexeme, int line) =>
+        new(type, lexeme, null, line);
+
+    /// <summary>
+    /// The synthesized automatic-runtime import: only the names actually used, aliased under
+    /// the reserved <c>__sharpts_</c> prefix, from "&lt;jsxImportSource&gt;/jsx-runtime" (or
+    /// the dev runtime). Inserted by <c>Parse()</c> after the directive prologue, before var
+    /// hoisting, so the module resolver chases it like any user import.
+    /// </summary>
+    private Stmt.Import BuildJsxRuntimeImport()
+    {
+        bool dev = _jsx!.Mode == JsxMode.ReactJsxDev;
+        var named = new List<Stmt.ImportSpecifier>();
+        void Add(string imported) => named.Add(new Stmt.ImportSpecifier(
+            SynthesizedToken(TokenType.IDENTIFIER, imported, 1),
+            SynthesizedToken(TokenType.IDENTIFIER, JsxLocalPrefix + imported, 1)));
+
+        if (_jsxUsedJsx) Add("jsx");
+        if (_jsxUsedJsxs) Add("jsxs");
+        if (_jsxUsedJsxDev) Add("jsxDEV");
+        if (_jsxUsedFragment) Add("Fragment");
+
+        string modulePath = _jsx.ImportSource + (dev ? "/jsx-dev-runtime" : "/jsx-runtime");
+        return new Stmt.Import(
+            SynthesizedToken(TokenType.IMPORT, "import", 1),
+            named,
+            DefaultImport: null,
+            NamespaceImport: null,
+            modulePath)
+        {
+            IsSynthesizedJsxRuntime = true,
+        };
     }
 }
