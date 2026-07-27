@@ -2,7 +2,8 @@
 
 Status: **design + de-risking spike complete; not yet started.** This is the
 high-leverage representation project identified by the post-typed-array perf
-session (see `MEMORY` / `project_compiled_perf_sort_json`).
+work (compiled sort/json workloads); ongoing perf work is tracked on
+[#1278](https://github.com/nickna/SharpTS/issues/1278).
 
 ## Goal
 

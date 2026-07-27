@@ -1,5 +1,8 @@
 # Plan: De-virtualize non-escaping local arrows to a direct call (#858)
 
+**Status:** implemented — closures benchmark reached ~1.02× vs Node via this
+work (STATUS.md §18).
+
 ## Context
 
 In **compiled** mode, an arrow bound to a local and then called directly is

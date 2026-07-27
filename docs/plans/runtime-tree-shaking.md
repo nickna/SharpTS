@@ -4,7 +4,9 @@
 types on whether the user's source actually needs them. The same mechanism makes
 production-shipped DLLs smaller.
 
-**Status:** investigation complete; Phase 1 ready to implement.
+**Status:** Phases 1–5a landed (see `archive/runtime-tree-shaking-phase1-results.md`,
+`runtime-tree-shaking-phase5.md`, and `archive/runtime-tree-shaking-phase5-audit.md`;
+cumulative DLL ~387KB → ~159.5KB). Phase 5b+ remains open.
 
 ## What's there now
 

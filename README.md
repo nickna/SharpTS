@@ -47,7 +47,7 @@ SharpTS supports two execution modes:
 ### Compiler Features
 
 - Static type checking with helpful error messages
-- Nominal typing for classes, structural typing for interfaces
+- Structural typing for interfaces and classes (matching `tsc`; a class branded by a private/protected member is nominal, like `tsc`)
 - Compile to standalone executables or .NET assemblies
 - Reference assembly output for C# interop (`--ref-asm`)
 - IL verification (`--verify`)
@@ -80,7 +80,7 @@ dotnet tool install -g SharpTS
 **Or use TypeScript in a .NET project:**
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.8">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -311,6 +311,11 @@ string greeting = person.greet();        // Typed return values
 - [**Using .NET Types**](docs/dotnet-types.md) - Use .NET BCL and libraries from TypeScript
 - [**.NET Integration**](docs/dotnet-integration.md) - Consume compiled TypeScript from C#
 - [**MSBuild SDK Guide**](docs/msbuild-sdk.md) - Integrate SharpTS into your .NET build process
+- [**Code Samples**](docs/code-samples.md) - Task-oriented snippets across both modes
+- [**Execution Modes**](docs/execution-modes.md) - Interpreter vs compiled: differences and trade-offs
+- [**Node.js Module API**](docs/node-modules-api.md) - Per-module API coverage reference
+- [**Node.js Module Status**](STATUS-NODE.md) - Detailed per-module implementation status
+- [**npm Compatibility**](docs/npm-compatibility.md) - Real-package smoke testing
 - [**Architecture Guide**](ARCHITECTURE.md) - Deep dive into the compiler/interpreter internals
 - [**Contributing Guide**](CONTRIBUTING.md) - How to contribute to the project
 
