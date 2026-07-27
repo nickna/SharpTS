@@ -491,8 +491,6 @@ public partial class Interpreter
 
     private enum PrimitiveHint { Default, Number, String }
 
-    private static readonly List<object?> _toPrimitiveNoArgs = new();
-
     /// <summary>
     /// True when <paramref name="value"/> is a boxed <c>new Number/String/Boolean</c>
     /// wrapper (carries a <c>__primitiveType</c> tag); yields its <c>__primitiveValue</c>.
@@ -562,7 +560,10 @@ public partial class Interpreter
         var fn = obj.GetProperty(name);
         if (fn is SharpTSArrowFunction af && af.HasOwnThis) fn = af.Bind(obj);
         if (fn is not ISharpTSCallable callable) return false;
-        var r = callable.CallBoxed(this, _toPrimitiveNoArgs);
+        // Zero-arg span, not a shared List: a callee mutating its arguments must
+        // not corrupt other calls (the old shared static list was handed to
+        // arbitrary guest callables).
+        var r = callable.CallV2(this, ReadOnlySpan<RuntimeValue>.Empty).ToObject();
         if (IsObjectLike(r)) return false;
         result = r;
         return true;
@@ -581,7 +582,7 @@ public partial class Interpreter
         result = "";
         var resolved = instance.Get(new Token(TokenType.IDENTIFIER, "toString", null, 0));
         if (resolved is not ISharpTSCallable toString) return false;
-        var coerced = toString.CallBoxed(this, _toPrimitiveNoArgs);
+        var coerced = toString.CallV2(this, ReadOnlySpan<RuntimeValue>.Empty).ToObject();
         if (IsObjectLike(coerced)) return false;
         result = coerced as string ?? Stringify(coerced);
         return true;

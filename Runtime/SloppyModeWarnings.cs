@@ -7,9 +7,13 @@ namespace SharpTS.Runtime;
 public static class SloppyModeWarnings
 {
     /// <summary>
-    /// Controls whether sloppy-mode warnings are emitted. Defaults to true.
+    /// Controls whether sloppy-mode warnings are emitted. Off by default: these
+    /// silent failures are spec-legal JavaScript and Node prints nothing for
+    /// them, so warning on stderr polluted ordinary program output. Opt in for
+    /// debugging with SHARPTS_SLOPPY_WARNINGS=1 (or set this when embedding).
     /// </summary>
-    public static bool Enabled { get; set; } = true;
+    public static bool Enabled { get; set; } =
+        Environment.GetEnvironmentVariable("SHARPTS_SLOPPY_WARNINGS") is "1" or "true";
 
     /// <summary>
     /// Emits a warning to stderr when an operation silently fails in sloppy mode.

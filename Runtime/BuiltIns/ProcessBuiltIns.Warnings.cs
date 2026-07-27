@@ -115,8 +115,8 @@ public static partial class ProcessBuiltIns
     private static object? Abort(Interpreter i, object? r, List<object?> args)
     {
         // Abnormal termination — no 'exit' event, nonzero exit, like SIGABRT.
-        Environment.FailFast("process.abort() called");
-        return null; // Never reached
+        ProcessControl.Abort("process.abort() called");
+        return null; // Reached only when an embedder's AbortHandler returns
     }
 
     /// <summary>

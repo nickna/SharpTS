@@ -72,7 +72,7 @@ public class SharpTSFinalizationRegistry : ITypeCategorized
         {
             try
             {
-                _cleanupCallback.Call(interpreter!, [heldValue]);
+                _cleanupCallback.CallBoxed(interpreter!, [heldValue]);
             }
             catch
             {
@@ -80,6 +80,13 @@ public class SharpTSFinalizationRegistry : ITypeCategorized
             }
         }
     }
+
+    /// <summary>
+    /// Test seam: enqueues a heldValue exactly as a GC-triggered finalizer would,
+    /// so the event-loop drain wiring can be exercised deterministically (real GC
+    /// timing is unobservable from a test).
+    /// </summary>
+    internal void EnqueueCleanupForTest(object? heldValue) => _pendingCleanups.Enqueue(heldValue);
 
     /// <summary>
     /// Returns true if there are pending cleanups.

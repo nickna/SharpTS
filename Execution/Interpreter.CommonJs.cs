@@ -152,7 +152,11 @@ public partial class Interpreter
                         object? result = Evaluate(exprStmt.Expr);
                         if (result is SharpTSPromise promise)
                         {
-                            promise.Task.GetAwaiter().GetResult();
+                            // Pump the event loop while waiting: a bare GetResult()
+                            // here hard-hangs when the promise needs a timer or I/O
+                            // continuation to settle, because those continuations
+                            // only ever run on this thread.
+                            WaitForPromise(promise);
                         }
                     }
                     catch (ThrowException tex)
