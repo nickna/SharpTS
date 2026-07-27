@@ -11,17 +11,17 @@ public enum TripleSlashReferenceType
     Path,
 
     /// <summary>
-    /// /// &lt;reference types="..." /&gt; - references type declarations (future).
+    /// /// &lt;reference types="..." /&gt; - references a visible declaration package.
     /// </summary>
     Types,
 
     /// <summary>
-    /// /// &lt;reference lib="..." /&gt; - references built-in lib declarations (future).
+    /// /// &lt;reference lib="..." /&gt; - references an installed TypeScript lib declaration.
     /// </summary>
     Lib,
 
     /// <summary>
-    /// /// &lt;reference no-default-lib="true" /&gt; - excludes default lib (future).
+    /// /// &lt;reference no-default-lib="true" /&gt; - excludes TypeScript's default lib set.
     /// </summary>
     NoDefaultLib
 }

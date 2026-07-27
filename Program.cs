@@ -50,6 +50,7 @@ using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
+using SharpTS.Projects;
 using SharpTS.References;
 using SharpTS.TypeSystem;
 
@@ -75,6 +76,49 @@ switch (command)
         if (error.ShowCompileUsage)
             PrintCompileUsage();
         Environment.Exit(error.ExitCode);
+        break;
+
+    case ParsedCommand.Project project:
+        try
+        {
+            string projectPath = TsConfigLoader.ResolveProjectPath(project.Options.ProjectPath!);
+            var projectConfig = TsConfigLoader.Load(projectPath);
+            if (project.Options.ShowConfig)
+            {
+                var (resolvedOptions, _) = ApplyTsConfig(
+                    project.Options, Path.GetDirectoryName(projectPath) ?? ".");
+                PrintResolvedConfig(resolvedOptions, project.Options.Strictness, projectConfig);
+                return;
+            }
+
+            Environment.ExitCode = project.Options.Watch
+                ? ProjectCommandRunner.Watch([projectPath], project.Options, buildMode: false)
+                : ProjectCommandRunner.Run(
+                    [projectPath], project.Options, buildMode: false, force: project.Options.Force);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            Environment.ExitCode = 1;
+        }
+        break;
+
+    case ParsedCommand.Build build:
+        try
+        {
+            var projectPaths = build.ProjectPaths
+                .Select(TsConfigLoader.ResolveProjectPath)
+                .ToArray();
+            Environment.ExitCode = build.Options.Watch
+                ? ProjectCommandRunner.Watch(projectPaths, build.Options, buildMode: true)
+                : ProjectCommandRunner.Run(
+                    projectPaths, build.Options, buildMode: true, force: build.Options.Force);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            Environment.ExitCode = 1;
+        }
         break;
 
     case ParsedCommand.Repl repl:
@@ -103,7 +147,7 @@ switch (command)
             PrintResolvedConfig(scriptOptions, script.Options.Strictness, scriptConfig);
             return;
         }
-        RunFile(script.ScriptPath, scriptOptions, script.ScriptArgs);
+        RunFile(script.ScriptPath, scriptOptions, script.ScriptArgs, scriptConfig);
         break;
 
     case ParsedCommand.Compile compile:
@@ -129,7 +173,8 @@ switch (command)
             compile.CompileOptions.References,
             compile.CompileOptions.Target,
             compile.CompileOptions.Bundler,
-            compileOptions
+            compileOptions,
+            compileConfig
         );
         break;
 
@@ -248,6 +293,18 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
             ["decoratorMode"] = options.DecoratorMode.ToString(),
             ["entryPoint"] = config?.EntryFile,
             ["outDir"] = config?.OutDir,
+            ["rootFiles"] = config?.RootFiles ?? [],
+            ["declarationFiles"] = config?.DeclarationFiles ?? [],
+            ["projectReferences"] = config?.ProjectReferences ?? [],
+            ["moduleResolution"] = config?.ModuleResolution.Mode.ToString(),
+            ["baseUrl"] = config?.ModuleResolution.BaseUrl,
+            ["paths"] = config?.ModuleResolution.Paths,
+            ["lib"] = config?.Lib,
+            ["types"] = config?.Types,
+            ["typeRoots"] = config?.TypeRoots,
+            ["incremental"] = options.Incremental || config?.Incremental == true,
+            ["composite"] = config?.Composite,
+            ["buildInfoFile"] = config?.BuildInfoFile,
             ["provenance"] = new Dictionary<string, object?>
             {
                 ["strictNullChecks"] = OriginVia(cliLayer.StrictNullChecks, configLayer.StrictNullChecks),
@@ -281,7 +338,11 @@ static ReferenceSet LoadDotNetReferences(string startDirectory, IReadOnlyList<st
     }
 }
 
-static void RunFile(string path, GlobalOptions options, string[]? scriptArgs = null)
+static void RunFile(
+    string path,
+    GlobalOptions options,
+    string[]? scriptArgs = null,
+    TsConfigResult? project = null)
 {
     string absolutePath = Path.GetFullPath(path);
     string source = File.ReadAllText(absolutePath);
@@ -305,9 +366,10 @@ static void RunFile(string path, GlobalOptions options, string[]? scriptArgs = n
         && (source.Contains("require(") || source.Contains("module.exports") || source.Contains("exports."));
 
     // Check if the file contains imports/exports or path references - if so, use module mode
-    if (hasPathReferences || source.Contains("import ") || source.Contains("export ") || isCjsFile)
+    if (hasPathReferences || source.Contains("import ") || source.Contains("export ") || isCjsFile ||
+        project?.DeclarationFiles.Count > 0)
     {
-        RunModuleFile(absolutePath, options, scriptArgs);
+        RunModuleFile(absolutePath, options, scriptArgs, project);
     }
     else
     {
@@ -316,15 +378,26 @@ static void RunFile(string path, GlobalOptions options, string[]? scriptArgs = n
     }
 }
 
-static void RunModuleFile(string absolutePath, GlobalOptions options, string[]? scriptArgs = null)
+static void RunModuleFile(
+    string absolutePath,
+    GlobalOptions options,
+    string[]? scriptArgs = null,
+    TsConfigResult? project = null)
 {
     var decoratorMode = options.DecoratorMode;
     try
     {
         // Load the entry module and all dependencies
-        var resolver = new ModuleResolver(absolutePath);
+        var resolver = project is null
+            ? new ModuleResolver(absolutePath)
+            : new ModuleResolver(absolutePath, project.ModuleResolution);
+        var declarationModules = (project?.DeclarationFiles ?? [])
+            .Select(path => resolver.LoadModule(path, decoratorMode))
+            .ToArray();
+        resolver.RegisterAmbientModuleDeclarations(declarationModules);
         var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
-        var allModules = resolver.GetModulesInOrder(entryModule);
+        var runtimeModules = resolver.GetModulesInOrder(entryModule);
+        var allModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
 
         // Type checking across all modules (still uses Check-style API for modules)
         // Module type checking has its own error handling
@@ -362,13 +435,13 @@ static void RunModuleFile(string absolutePath, GlobalOptions options, string[]? 
 
         // Variable Resolution Phase (enables O(1) lookups)
         var varResolver = new VariableResolver(interpreter);
-        foreach (var module in allModules)
+        foreach (var module in runtimeModules)
         {
             if (!module.IsBuiltIn)
                 varResolver.Resolve(module.Statements);
         }
 
-        interpreter.InterpretModules(allModules, resolver, typeMap);
+        interpreter.InterpretModules(runtimeModules, resolver, typeMap);
 
         // Node default: an unhandled promise rejection makes the process
         // exit nonzero. The rejection itself was already reported to stderr
@@ -488,7 +561,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions, TsConfigResult? project = null)
 {
     try
     {
@@ -568,7 +641,9 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         // Check AST for import/export statements or path references
         // Include ImportRequire for CommonJS-style: import X = require('./module')
-        bool hasModules = hasPathReferences || statements.Any(s => s is Stmt.Import or Stmt.Export or Stmt.ImportRequire);
+        bool hasModules = hasPathReferences ||
+            statements.Any(s => s is Stmt.Import or Stmt.Export or Stmt.ImportRequire) ||
+            project?.DeclarationFiles.Count > 0;
 
         // CommonJS files (.cjs, or .js classified as CJS) also need module-mode compilation
         // because they use the CJS module pipeline (per-file class with $exports field).
@@ -585,7 +660,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs, globalOptions);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs, globalOptions, project);
         }
         else
         {
@@ -622,17 +697,24 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions, TsConfigResult? project = null)
 {
     // Phase 1: Load all static dependencies via ModuleResolver
-    var resolver = new ModuleResolver(absolutePath);
+    var resolver = project is null
+        ? new ModuleResolver(absolutePath)
+        : new ModuleResolver(absolutePath, project.ModuleResolution);
+    var declarationModules = (project?.DeclarationFiles ?? [])
+        .Select(path => resolver.LoadModule(path, decoratorMode))
+        .ToArray();
+    resolver.RegisterAmbientModuleDeclarations(declarationModules);
     var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
     var allModules = resolver.GetModulesInOrder(entryModule);
+    var typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
 
     // Phase 2: Initial type checking to discover dynamic import paths
     var checker = new TypeChecker(globalOptions.TypeCheckerOptions);
     checker.SetDecoratorMode(decoratorMode);
-    var typeMap = checker.CheckModules(allModules, resolver);
+    var typeMap = checker.CheckModules(typeModules, resolver);
 
     // Phase 3: Load modules discovered through dynamic import string literals
     // These modules aren't in the static dependency graph but need to be compiled
@@ -645,10 +727,11 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         {
             // Re-get the module list to include newly discovered modules
             allModules = resolver.GetModulesInOrder(entryModule);
+            typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
 
             // Re-run type checking with the expanded module list
             // (CheckModules is incremental - only checks newly added modules)
-            typeMap = checker.CheckModules(allModules, resolver);
+            typeMap = checker.CheckModules(typeModules, resolver);
         }
     }
 
@@ -1195,6 +1278,8 @@ static void PrintHelp()
     Console.WriteLine("Usage:");
     Console.WriteLine("  sharpts [options] [script.ts] [args...]");
     Console.WriteLine("  sharpts [options] script.ts -- [script-args...]");
+    Console.WriteLine("  sharpts -p <tsconfig> [--watch] [--incremental]");
+    Console.WriteLine("  sharpts --build [project ...] [--watch] [--force]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
     Console.WriteLine("  sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]");
     Console.WriteLine();
@@ -1220,17 +1305,22 @@ static void PrintHelp()
     Console.WriteLine();
     Console.WriteLine("Configuration (tsconfig.json):");
     Console.WriteLine("  -p, --project <path>          Use this tsconfig.json (file or directory)");
+    Console.WriteLine("  -b, --build [project ...]     Check project references in dependency order");
+    Console.WriteLine("  -w, --watch                   Recheck a project graph when inputs change");
+    Console.WriteLine("  --incremental                 Reuse SharpTS build state when inputs are unchanged");
+    Console.WriteLine("  --force                       Ignore build state and check every project");
     Console.WriteLine("  --no-tsconfig                 Skip tsconfig.json discovery entirely");
     Console.WriteLine("  --showConfig                  Print the resolved config as JSON and exit");
     Console.WriteLine();
     Console.WriteLine("  A tsconfig.json next to (or above) the entry script is discovered");
     Console.WriteLine("  automatically. Command-line flags win over it. 'extends' chains are");
-    Console.WriteLine("  followed. SharpTS reads the strictness options, checkJs, the decorator");
-    Console.WriteLine("  options, preserveConstEnums, outDir, and files[0]; emit options such as");
-    Console.WriteLine("  target/module/jsx do not apply because SharpTS compiles to .NET IL.");
+    Console.WriteLine("  followed. With no script, -p checks the roots selected by files/include/");
+    Console.WriteLine("  exclude. Project references, incremental/watch builds, lib/types/typeRoots,");
+    Console.WriteLine("  baseUrl/paths, and classic/node10/node16/nodenext/bundler resolution are");
+    Console.WriteLine("  supported. target/module/jsx do not apply to .NET IL output.");
     Console.WriteLine("  Set SHARPTS_TSCONFIG_VERBOSE=1 to list every option that was ignored.");
-    Console.WriteLine("  SharpTS compiles the entry file and everything it imports; include/exclude");
-    Console.WriteLine("  do not select inputs.");
+    Console.WriteLine("  Script and --compile commands still use their named file as the runtime");
+    Console.WriteLine("  entry point; project commands are type-check-only.");
     Console.WriteLine();
     Console.WriteLine(".NET References:");
     Console.WriteLine("  A sharpts.json next to (or above) the entry script supplies project-level");
@@ -1269,6 +1359,9 @@ static void PrintHelp()
     Console.WriteLine("  sharpts script.ts arg1 arg2       Run script with arguments");
     Console.WriteLine("  sharpts script.ts -- --flag val   Pass flags to script (use -- separator)");
     Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
+    Console.WriteLine("  sharpts -p .                      Check every tsconfig project root");
+    Console.WriteLine("  sharpts --build                   Check referenced projects incrementally");
+    Console.WriteLine("  sharpts --build --watch           Keep the project graph up to date");
     Console.WriteLine("  sharpts --compile app.ts -t exe   Compile to executable");
     Console.WriteLine("  sharpts --compile app.ts --pack   Compile and create NuGet package");
     Console.WriteLine("  sharpts --gen-decl System.Text.StringBuilder   Inspect a .NET type for interop");

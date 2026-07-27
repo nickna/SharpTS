@@ -54,6 +54,9 @@ namespace SharpTS.Cli;
 /// <c>--showConfig</c>: print the resolved configuration, with the source of each value, then
 /// exit 0.
 /// </param>
+/// <param name="Watch">Recheck a project when its inputs change.</param>
+/// <param name="Incremental">Reuse SharpTS project build state when inputs are unchanged.</param>
+/// <param name="Force">Ignore build state and check every project.</param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
@@ -63,7 +66,10 @@ public record GlobalOptions(
     bool NoEmit = false,
     string? ProjectPath = null,
     bool NoTsConfig = false,
-    bool ShowConfig = false
+    bool ShowConfig = false,
+    bool Watch = false,
+    bool Incremental = false,
+    bool Force = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -137,6 +143,12 @@ public abstract record ParsedCommand
     /// <param name="Options">Global options for the session</param>
     public sealed record Repl(GlobalOptions Options) : ParsedCommand;
 
+    /// <summary>Type-check every root selected by a tsconfig project.</summary>
+    public sealed record Project(GlobalOptions Options) : ParsedCommand;
+
+    /// <summary>Type-check one or more project-reference graphs in dependency order.</summary>
+    public sealed record Build(IReadOnlyList<string> ProjectPaths, GlobalOptions Options) : ParsedCommand;
+
     /// <summary>Execute a TypeScript file with optional arguments.</summary>
     /// <param name="ScriptPath">Path to the TypeScript file</param>
     /// <param name="ScriptArgs">Arguments passed to the script (process.argv)</param>
@@ -204,10 +216,42 @@ public class CommandLineParser
         var (globalOptions, remainingArgs, scriptArgs, globalError) = ParseGlobalOptions(args);
         if (globalError is not null)
             return globalError;
+        if (globalOptions.ProjectPath is not null && globalOptions.NoTsConfig)
+        {
+            return new ParsedCommand.Error(
+                "Error: --project cannot be combined with --no-tsconfig.",
+                64);
+        }
 
         if (remainingArgs.Length == 0)
         {
+            if (globalOptions.ProjectPath is not null)
+                return new ParsedCommand.Project(globalOptions);
+            if (globalOptions.Watch || globalOptions.Incremental || globalOptions.Force)
+            {
+                return new ParsedCommand.Error(
+                    "Error: --watch, --incremental, and --force require -p/--project or --build.",
+                    64);
+            }
             return new ParsedCommand.Repl(globalOptions);
+        }
+
+        // Handle project-reference build mode.
+        if (remainingArgs[0] is "--build" or "-b")
+        {
+            if (globalOptions.ProjectPath is not null)
+                return new ParsedCommand.Error("Error: --build cannot be combined with --project.", 64);
+            var projects = remainingArgs.Skip(1).ToArray();
+            if (projects.Any(path => path.StartsWith('-')))
+                return new ParsedCommand.Error($"Error: Unknown build option '{projects.First(path => path.StartsWith('-'))}'.", 64);
+            return new ParsedCommand.Build(projects.Length == 0 ? ["."] : projects, globalOptions);
+        }
+
+        if (globalOptions.Watch || globalOptions.Incremental || globalOptions.Force)
+        {
+            return new ParsedCommand.Error(
+                "Error: --watch, --incremental, and --force apply to a project command or --build, not a script/compile command.",
+                64);
         }
 
         // Handle --compile / -c
@@ -294,6 +338,9 @@ public class CommandLineParser
         var noEmit = false;
         var noTsConfig = false;
         var showConfig = false;
+        var watch = false;
+        var incremental = false;
+        var force = false;
         string? projectPath = null;
         var strictness = new StrictnessOptions();
         List<string> references = [];
@@ -373,6 +420,19 @@ public class CommandLineParser
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     showConfig = flag;
                     break;
+                case "-w":
+                case "--watch":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    watch = flag;
+                    break;
+                case "--incremental":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    incremental = flag;
+                    break;
+                case "--force":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    force = flag;
+                    break;
                 case "-p" or "--project" when value is not null:
                     projectPath = value;
                     break;
@@ -397,7 +457,7 @@ public class CommandLineParser
 
         var options = new GlobalOptions(
             decoratorMode, emitDecoratorMetadata, checkJs, references, strictness, noEmit,
-            projectPath, noTsConfig, showConfig);
+            projectPath, noTsConfig, showConfig, watch, incremental, force);
         return (options, remaining.ToArray(), scriptArgs.ToArray(), null);
     }
 
