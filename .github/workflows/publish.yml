@@ -30,8 +30,11 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      # Same exclusion as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
+      # calls and can false-red on runner network hiccups — which here would block
+      # a tagged release after build but before pack/push.
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive"
 
       - name: Publish SharpTS for SDK bundling
         run: dotnet publish SharpTS.csproj --configuration Release --no-build
@@ -59,7 +62,7 @@ jobs:
         run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: ./nupkg/*

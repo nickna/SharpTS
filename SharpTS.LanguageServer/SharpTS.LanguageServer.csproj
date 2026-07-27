@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
+    <PackageReference Include="OmniSharp.Extensions.LanguageServer" />
   </ItemGroup>
 
 </Project>

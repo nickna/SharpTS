@@ -38,7 +38,7 @@
   </ItemGroup>
 
   <!-- Embed TypeScript standard library sources. Loaded by EmbeddedStdlibProvider
-       at user-compile time; see docs/plans/embedded-stdlib.md. -->
+       at user-compile time; see stdlib/CONTRIBUTING.md and Modules/Stdlib/. -->
   <ItemGroup>
     <EmbeddedResource Include="stdlib\**\*.ts" />
     <None Remove="stdlib\**\*.ts" />
@@ -62,8 +62,6 @@
     <None Remove="SharpTS.Microbenchmarks/**" />
     <Compile Remove="SharpTS.LanguageServer/**" />
     <None Remove="SharpTS.LanguageServer/**" />
-    <Compile Remove="SharpTS.Example.Interop/**" />
-    <None Remove="SharpTS.Example.Interop/**" />
     <Compile Remove="Examples/**" />
     <None Remove="Examples/**" />
     <Compile Remove="SharpTS.Sdk/**" />
@@ -91,8 +89,11 @@
     <ItemGroup>
       <!-- Sibling project files anywhere beneath the repo root (this project, the
            build output, and the external submodules excluded). -->
+      <!-- Dot-directories (.claude worktrees, .perf-* scratch dirs) hold full repo
+           copies whose .csproj files are not siblings of this build — same skip
+           rule as ProjectStructureTests.HasSkippedSegment (#1214). -->
       <_GuardSiblingProject Include="$(MSBuildProjectDirectory)\**\*.csproj"
-                            Exclude="$(MSBuildProjectFullPath);$(MSBuildProjectDirectory)\external\**;$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\obj\**" />
+                            Exclude="$(MSBuildProjectFullPath);$(MSBuildProjectDirectory)\external\**;$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\.*\**" />
       <!-- Every .cs that lives under one of those sibling projects' directories. -->
       <_GuardForeignSource Include="%(_GuardSiblingProject.RootDir)%(_GuardSiblingProject.Directory)**\*.cs" />
       <!-- Set intersection Compile ∩ ForeignSource = foreign sources leaking in.
@@ -108,14 +109,14 @@
 
   <ItemGroup>
     <!-- MinVer is inherited from Directory.Build.props (repo-wide versioning). -->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-    <PackageReference Include="NickNa.PEPacker" Version="1.0.2" />
-    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="9.0.0" />
-    <PackageReference Include="Microsoft.ILVerification" Version="10.0.0" />
-    <PackageReference Include="NuGet.Packaging" Version="7.3.1" />
-    <PackageReference Include="NuGet.Protocol" Version="7.3.1" />
-    <PackageReference Include="PrettyPrompt" Version="4.1.*" />
-    <PackageReference Include="ZstdSharp.Port" Version="0.8.1" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <PackageReference Include="NickNa.PEPacker" />
+    <PackageReference Include="System.Reflection.MetadataLoadContext" />
+    <PackageReference Include="Microsoft.ILVerification" />
+    <PackageReference Include="NuGet.Packaging" />
+    <PackageReference Include="NuGet.Protocol" />
+    <PackageReference Include="PrettyPrompt" />
+    <PackageReference Include="ZstdSharp.Port" />
   </ItemGroup>
 
 </Project>

@@ -208,9 +208,9 @@ public partial class RuntimeEmitter
         var freshLocal = il.DeclareLocal(typeof(Regex));
         var hitLabel = il.DefineLabel();
 
-        // key = pattern + " " + ((int)options).ToString()
+        // key = pattern + "\0" + ((int)options).ToString()
         il.Emit(OpCodes.Ldarg_0);                                        // pattern
-        il.Emit(OpCodes.Ldstr, " ");                                // separator
+        il.Emit(OpCodes.Ldstr, "\0");                                // separator
         var optionsLocal = il.DeclareLocal(typeof(int));
         il.Emit(OpCodes.Ldarg_1);                                        // options as int (RegexOptions is enum:int)
         il.Emit(OpCodes.Stloc, optionsLocal);
