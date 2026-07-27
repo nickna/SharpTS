@@ -4,6 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using PEPacker;
+using SharpTS.Compilation.Symbols;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Compilation.Registries;
@@ -206,6 +207,25 @@ public partial class ILCompiler
     // Output target type (DLL or EXE)
     private readonly OutputTarget _outputTarget;
 
+    // Simple name of the emitted assembly, used to derive a default PDB file name.
+    private readonly string _assemblyName;
+
+    /// <summary>
+    /// When set, <see cref="SaveArtifacts"/> and <see cref="Save(string)"/> also produce a portable
+    /// PDB describing the emitted IL, and stamp a matching debug directory into the assembly.
+    /// Off by default: non-debug builds pay none of the PDB cost.
+    /// </summary>
+    public bool EmitDebugSymbols { get; set; }
+
+    // Source documents and sequence points gathered while emitting, when EmitDebugSymbols is set.
+    private readonly DebugInfoCollector _debugInfo = new();
+
+    /// <summary>
+    /// Sink for source documents and sequence points. Emitters record into it only while
+    /// <see cref="EmitDebugSymbols"/> is set; otherwise it stays empty and costs nothing.
+    /// </summary>
+    internal DebugInfoCollector DebugInfo => _debugInfo;
+
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
     /// </summary>
@@ -288,6 +308,7 @@ public partial class ILCompiler
         _sdkPath = sdkPath;
         _outputTarget = target;
         _inMemoryOnly = inMemoryOnly;
+        _assemblyName = assemblyName;
 
         // Initialize reference loader if external assemblies are provided
         if (references != null && references.Count > 0)
@@ -1309,14 +1330,31 @@ public partial class ILCompiler
         return _assemblyBuilder;
     }
 
-    public byte[] SaveToBytes()
+    /// <summary>
+    /// Serializes the assembly, returning it together with debug symbols when
+    /// <see cref="EmitDebugSymbols"/> is set.
+    /// </summary>
+    /// <param name="pdbPath">
+    /// Path to record in the assembly's CodeView entry so debuggers can locate the PDB. Defaults to
+    /// <c>&lt;assembly name&gt;.pdb</c>, which resolves next to the assembly.
+    /// </param>
+    /// <remarks>
+    /// Symbols are attached after assembly-reference rewriting, not before: the rewriter rebuilds
+    /// the PE without a debug directory. The PDB is therefore serialized against the row counts of
+    /// the finished image, and the rewriter's row-for-row preservation of <c>MethodDef</c> is
+    /// verified rather than assumed. See <see cref="Symbols.DebugDirectoryInjector"/>.
+    /// </remarks>
+    public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
     {
         if (_inMemoryOnly)
             throw new InvalidOperationException(
-                "SaveToBytes() is unavailable in inMemoryOnly mode. Use GetEmittedAssembly() to access " +
+                "SaveToBytes()/SaveArtifacts() are unavailable in inMemoryOnly mode. Use GetEmittedAssembly() to access " +
                 "the live dynamic assembly directly, or construct ILCompiler without inMemoryOnly=true.");
 
-        MetadataBuilder metadataBuilder = ((PersistedAssemblyBuilder)_assemblyBuilder).GenerateMetadata(
+        // The PDB tables are built from _debugInfo rather than from GenerateMetadata's own pdb
+        // builder — see DebugInfoCollector for why that overload cannot be used here.
+        var persisted = (PersistedAssemblyBuilder)_assemblyBuilder;
+        MetadataBuilder metadataBuilder = persisted.GenerateMetadata(
             out BlobBuilder ilStream,
             out BlobBuilder fieldData);
 
@@ -1345,27 +1383,80 @@ public partial class ILCompiler
         var hasSharpTsReference = HasAssemblyReference(tempStream, "SharpTS");
         tempStream.Position = 0;
 
-        if (_useReferenceAssemblies || hasSharpTsReference)
+        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference;
+
+        // Kept only to verify the rewriter preserved MethodDef identity, so it is not materialized
+        // for builds that will not emit symbols.
+        byte[]? beforeRewrite = EmitDebugSymbols && rewritingReferences ? tempStream.ToArray() : null;
+
+        byte[] image;
+        if (rewritingReferences)
         {
             var refAssemblyPath = _sdkPath ?? SdkResolver.FindReferenceAssembliesPath()
                 ?? throw new CompileException(
                     "Could not find SDK reference assemblies for post-processing. " +
                     "Ensure the .NET SDK is installed.");
 
+            tempStream.Position = 0;
             using var rewriter = new AssemblyReferenceRewriter(tempStream, refAssemblyPath);
             rewriter.Rewrite();
 
             using var outMem = new MemoryStream();
             rewriter.Save(outMem);
-            return outMem.ToArray();
+            image = outMem.ToArray();
         }
-        return tempStream.ToArray();
+        else
+        {
+            image = tempStream.ToArray();
+        }
+
+        if (!EmitDebugSymbols)
+            return new CompilationArtifacts(image, null, null);
+
+        // The rewriter rebuilds the PE from scratch; prove it kept MethodDef identities before
+        // describing the result with symbols derived from the pre-rewrite emit.
+        if (beforeRewrite is not null)
+            PdbEmitter.VerifyMethodMappingPreserved(beforeRewrite, image);
+
+        pdbPath ??= _assemblyName + ".pdb";
+        var pdbMetadata = _debugInfo.BuildPdbMetadata(
+            metadataBuilder.GetRowCounts()[(int)TableIndex.MethodDef],
+            PdbEmitter.ReadLocalSignatureRids(image));
+        var pdb = PdbEmitter.Serialize(
+            pdbMetadata,
+            PdbEmitter.ReadTypeSystemRowCounts(image),
+            entryPointHandle);
+
+        image = DebugDirectoryInjector.Inject(
+            image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
+
+        return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
 
-    public void Save(string outputPath)
+    public byte[] SaveToBytes() => SaveArtifacts().Assembly;
+
+    public void Save(string outputPath) => Save(outputPath, pdbPath: null);
+
+    /// <summary>
+    /// Writes the assembly to <paramref name="outputPath"/>, plus a portable PDB when
+    /// <see cref="EmitDebugSymbols"/> is set.
+    /// </summary>
+    /// <param name="pdbPath">
+    /// Where to write the PDB, and the path recorded in the assembly's CodeView entry. Defaults to
+    /// <paramref name="outputPath"/> with a <c>.pdb</c> extension. EXE builds pass the final
+    /// executable's location explicitly, because the assembly itself is emitted to a temporary
+    /// file before being bundled.
+    /// </param>
+    public void Save(string outputPath, string? pdbPath)
     {
-        var bytes = SaveToBytes();
-        File.WriteAllBytes(outputPath, bytes);
+        if (EmitDebugSymbols)
+            pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
+
+        var artifacts = SaveArtifacts(pdbPath);
+
+        File.WriteAllBytes(outputPath, artifacts.Assembly);
+        if (artifacts.Pdb is not null)
+            File.WriteAllBytes(pdbPath!, artifacts.Pdb);
     }
 
     private static bool HasAssemblyReference(Stream assemblyStream, string assemblyName)
