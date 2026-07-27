@@ -15,6 +15,9 @@
     <SharpTSExperimentalDecorators Condition="'$(SharpTSExperimentalDecorators)' == ''">false</SharpTSExperimentalDecorators>
     <SharpTSDecorators Condition="'$(SharpTSDecorators)' == ''">false</SharpTSDecorators>
     <SharpTSEmitDecoratorMetadata Condition="'$(SharpTSEmitDecoratorMetadata)' == ''">false</SharpTSEmitDecoratorMetadata>
+    <SharpTSGenerateDeclarations Condition="'$(SharpTSGenerateDeclarations)' == ''">false</SharpTSGenerateDeclarations>
+    <SharpTSEmitDeclarationOnly Condition="'$(SharpTSEmitDeclarationOnly)' == ''">false</SharpTSEmitDeclarationOnly>
+    <SharpTSDeclarationDir Condition="'$(SharpTSDeclarationDir)' == ''"></SharpTSDeclarationDir>
     <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
     <SharpTSUseReferenceAssemblies Condition="'$(SharpTSUseReferenceAssemblies)' == ''">false</SharpTSUseReferenceAssemblies>
 

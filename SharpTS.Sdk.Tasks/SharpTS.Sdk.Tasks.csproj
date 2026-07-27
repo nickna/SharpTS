@@ -32,7 +32,7 @@
       would also have to be packed there. Linking a single .cs keeps the contract shared with
       zero packaging impact and keeps Microsoft.Build.* out of the SharpTS CLI.
 
-      Only the shared six-key subset is linked. The CLI-only members (extends, strictness,
+      Only the shared compiler-option subset is linked. The CLI-only members (extends, strictness,
       include/exclude, [JsonExtensionData]) live in the sibling TsConfigJson.Cli.cs partial,
       which is intentionally NOT linked.
     -->

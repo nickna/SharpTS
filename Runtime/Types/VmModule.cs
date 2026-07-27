@@ -350,6 +350,9 @@ public sealed class VmSourceTextModule : VmModuleBase
 
     private static void CollectExport(Stmt.Export exp, List<Stmt> toRun, List<(string, string)> exported)
     {
+        if (exp.IsTypeOnly)
+            return;
+
         if (exp.Declaration != null)
         {
             toRun.Add(exp.Declaration);
@@ -359,7 +362,11 @@ public sealed class VmSourceTextModule : VmModuleBase
         else if (exp.NamedExports != null)
         {
             foreach (var spec in exp.NamedExports)
+            {
+                if (spec.IsTypeOnly)
+                    continue;
                 exported.Add((spec.LocalName.Lexeme, (spec.ExportedName ?? spec.LocalName).Lexeme));
+            }
         }
         else if (exp.IsDefaultExport && exp.DefaultExpr != null)
         {

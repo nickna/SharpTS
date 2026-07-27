@@ -232,6 +232,12 @@ static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(GlobalOptio
             },
             CheckJs = cli.CheckJs || (config.CheckJs ?? false),
             EmitDecoratorMetadata = cli.EmitDecoratorMetadata || (config.EmitDecoratorMetadata ?? false),
+            Declaration = cli.Declaration || config.Declaration == true ||
+                config.EmitDeclarationOnly == true || config.Composite == true,
+            EmitDeclarationOnly = cli.EmitDeclarationOnly || config.EmitDeclarationOnly == true,
+            DeclarationDir = cli.DeclarationDir is not null
+                ? Path.GetFullPath(cli.DeclarationDir)
+                : config.DeclarationDir,
             DecoratorMode = cli.DecoratorMode == DecoratorMode.Stage3 && config.DecoratorMode is { } m
                 ? m
                 : cli.DecoratorMode,
@@ -285,6 +291,9 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
             ["noImplicitAny"] = effective.NoImplicitAny,
             ["checkJs"] = options.CheckJs,
             ["emitDecoratorMetadata"] = options.EmitDecoratorMetadata,
+            ["declaration"] = options.Declaration,
+            ["emitDeclarationOnly"] = options.EmitDeclarationOnly,
+            ["declarationDir"] = options.DeclarationDir,
         },
         ["sharpts"] = new Dictionary<string, object?>
         {
@@ -664,11 +673,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas, externalRefs, globalOptions);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas, externalRefs, globalOptions, project);
         }
 
-        // --noEmit stopped before any assembly was written, so there is nothing to pack.
-        if (globalOptions.NoEmit) return;
+        // These modes stopped before any assembly was written, so there is nothing to pack.
+        if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return;
 
         // Package if requested
         if (packOptions.Pack)
@@ -747,6 +756,36 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
             Environment.Exit(1);
         return;
     }
+
+    if (globalOptions.Declaration)
+    {
+        var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
+        var diagnostics = checker.GetDiagnostics();
+        reporter.ReportAll(diagnostics);
+        if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+            Environment.Exit(1);
+
+        IReadOnlyList<string> sources = project is null
+            ? allModules
+                .Select(module => module.Path)
+                .Where(path => IsDeclarationSource(path) && !IsNodeModulesPath(path))
+                .ToArray()
+            : project.RootFiles;
+        var declarations = SourceDeclarationEmitter.EmitModules(
+            typeModules,
+            typeMap,
+            sources,
+            project?.RootDir,
+            globalOptions.DeclarationDir,
+            project?.OutDir);
+        SourceDeclarationEmitter.WriteAll(declarations);
+        if (!outputOptions.QuietMode)
+            foreach (var declaration in declarations)
+                Console.WriteLine($"Declaration emitted to {declaration.OutputPath}");
+    }
+
+    if (globalOptions.EmitDeclarationOnly)
+        return;
 
     // Dead Code Analysis
     DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
@@ -844,7 +883,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null, ReferenceSet? externalRefs = null, GlobalOptions? globalOptions = null)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null, ReferenceSet? externalRefs = null, GlobalOptions? globalOptions = null, TsConfigResult? project = null)
 {
     externalRefs ??= ReferenceSet.Empty;
     globalOptions ??= new GlobalOptions();
@@ -878,6 +917,23 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     // --noEmit: type-check only, never produce an assembly.
     if (globalOptions.NoEmit) return;
 
+    if (globalOptions.Declaration && sourcePath is not null && IsDeclarationSource(sourcePath))
+    {
+        var declaration = SourceDeclarationEmitter.EmitSingleFile(
+            sourcePath,
+            statements,
+            typeMap,
+            project?.RootDir,
+            globalOptions.DeclarationDir,
+            project?.OutDir);
+        SourceDeclarationEmitter.WriteAll([declaration]);
+        if (!outputOptions.QuietMode)
+            Console.WriteLine($"Declaration emitted to {declaration.OutputPath}");
+    }
+
+    if (globalOptions.EmitDeclarationOnly)
+        return;
+
     // Dead Code Analysis Phase
     DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
     DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
@@ -886,6 +942,19 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs,
         compiler => compiler.Compile(statements, typeMap, deadCodeInfo));
 }
+
+static bool IsDeclarationSource(string path) =>
+    !path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase) &&
+    !path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase) &&
+    !path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase) &&
+    (path.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
+     path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+     path.EndsWith(".mts", StringComparison.OrdinalIgnoreCase) ||
+     path.EndsWith(".cts", StringComparison.OrdinalIgnoreCase));
+
+static bool IsNodeModulesPath(string path) =>
+    Path.GetFullPath(path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        .Any(part => part.Equals("node_modules", StringComparison.OrdinalIgnoreCase));
 
 /// <summary>
 /// Prints the compiler's collected non-fatal warnings to stderr. They are collected on the
@@ -1292,6 +1361,9 @@ static void PrintHelp()
     Console.WriteLine("  -r, --reference <asm.dll>     Add a .NET assembly reference (repeatable; all modes)");
     Console.WriteLine("  --checkJs                     Type-check .js/.cjs/.mjs/.jsx files too");
     Console.WriteLine("  --noEmit                      Type-check only; don't run or emit an assembly");
+    Console.WriteLine("  --declaration                 Emit .d.ts declarations for TypeScript sources");
+    Console.WriteLine("  --emitDeclarationOnly         Emit declarations without a .NET assembly");
+    Console.WriteLine("  --declarationDir <path>       Directory for generated declarations");
     Console.WriteLine();
     Console.WriteLine("Type Checking (tsc-compatible; all accept =false, e.g. --strict=false):");
     Console.WriteLine("  --strict                      Umbrella for the three flags below");
@@ -1318,9 +1390,11 @@ static void PrintHelp()
     Console.WriteLine("  exclude. Project references, incremental/watch builds, lib/types/typeRoots,");
     Console.WriteLine("  baseUrl/paths, and classic/node10/node16/nodenext/bundler resolution are");
     Console.WriteLine("  supported. target/module/jsx do not apply to .NET IL output.");
+    Console.WriteLine("  declaration, emitDeclarationOnly, declarationDir, rootDir, and outDir");
+    Console.WriteLine("  control .d.ts output for --compile and project commands.");
     Console.WriteLine("  Set SHARPTS_TSCONFIG_VERBOSE=1 to list every option that was ignored.");
     Console.WriteLine("  Script and --compile commands still use their named file as the runtime");
-    Console.WriteLine("  entry point; project commands are type-check-only.");
+    Console.WriteLine("  entry point; project commands emit no runtime assembly but may emit declarations.");
     Console.WriteLine();
     Console.WriteLine(".NET References:");
     Console.WriteLine("  A sharpts.json next to (or above) the entry script supplies project-level");
@@ -1340,6 +1414,9 @@ static void PrintHelp()
     Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
+    Console.WriteLine("  --declaration                 Emit .d.ts declarations alongside the assembly");
+    Console.WriteLine("  --emitDeclarationOnly         Emit declarations without a .NET assembly");
+    Console.WriteLine("  --declarationDir <path>       Directory for generated declarations");
     Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
     Console.WriteLine("  --sdk-path <path>             Path to .NET SDK reference assemblies");
     Console.WriteLine("  --verify                      Verify emitted IL");
@@ -1359,6 +1436,7 @@ static void PrintHelp()
     Console.WriteLine("  sharpts script.ts arg1 arg2       Run script with arguments");
     Console.WriteLine("  sharpts script.ts -- --flag val   Pass flags to script (use -- separator)");
     Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
+    Console.WriteLine("  sharpts --compile lib.ts --emitDeclarationOnly --declarationDir types");
     Console.WriteLine("  sharpts -p .                      Check every tsconfig project root");
     Console.WriteLine("  sharpts --build                   Check referenced projects incrementally");
     Console.WriteLine("  sharpts --build --watch           Keep the project graph up to date");
@@ -1379,6 +1457,9 @@ static void PrintCompileUsage()
     Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
+    Console.WriteLine("  --declaration          Emit .d.ts declarations alongside the assembly");
+    Console.WriteLine("  --emitDeclarationOnly  Emit declarations without a .NET assembly");
+    Console.WriteLine("  --declarationDir <dir> Declaration output directory");
     Console.WriteLine("  --ref-asm              Emit reference-assembly-compatible output");
     Console.WriteLine("  --sdk-path <path>      Path to .NET SDK reference assemblies");
     Console.WriteLine("  --verify               Verify emitted IL");

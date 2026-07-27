@@ -191,9 +191,9 @@ public static class TsConfigLoader
     {
         var strictness = new StrictnessOptions();
         bool? checkJs = null, allowJs = null, preserveConstEnums = null, emitDecoratorMetadata = null;
-        bool? incremental = null, composite = null;
+        bool? incremental = null, composite = null, declaration = null, emitDeclarationOnly = null;
         DecoratorMode? decoratorMode = null;
-        string? rootDir = null, outDir = null, baseUrl = null, buildInfoFile = null;
+        string? rootDir = null, outDir = null, declarationDir = null, baseUrl = null, buildInfoFile = null;
         IReadOnlyList<string>? files = null, includes = null, excludes = null;
         IReadOnlyList<string>? libs = null, types = null, typeRoots = null;
         IReadOnlyDictionary<string, IReadOnlyList<string>> paths =
@@ -225,6 +225,8 @@ public static class TsConfigLoader
                 emitDecoratorMetadata = opts.EmitDecoratorMetadata ?? emitDecoratorMetadata;
                 incremental = opts.Incremental ?? incremental;
                 composite = opts.Composite ?? composite;
+                declaration = opts.Declaration ?? declaration;
+                emitDeclarationOnly = opts.EmitDeclarationOnly ?? emitDeclarationOnly;
 
                 // `decorators` (Stage 3) wins over `experimentalDecorators` (Legacy) when both
                 // are set — the same precedence the CLI's last-wins switch gives the arguments
@@ -236,6 +238,8 @@ public static class TsConfigLoader
                     rootDir = Path.GetFullPath(Path.Combine(dir, opts.RootDir!));
                 if (!string.IsNullOrWhiteSpace(opts.OutDir))
                     outDir = Path.GetFullPath(Path.Combine(dir, opts.OutDir!));
+                if (!string.IsNullOrWhiteSpace(opts.DeclarationDir))
+                    declarationDir = Path.GetFullPath(Path.Combine(dir, opts.DeclarationDir!));
                 if (!string.IsNullOrWhiteSpace(opts.BaseUrl))
                     baseUrl = Path.GetFullPath(Path.Combine(dir, opts.BaseUrl!));
                 if (!string.IsNullOrWhiteSpace(opts.TsBuildInfoFile))
@@ -293,6 +297,9 @@ public static class TsConfigLoader
             EmitDecoratorMetadata: emitDecoratorMetadata,
             RootDir: rootDir,
             OutDir: outDir,
+            Declaration: declaration,
+            EmitDeclarationOnly: emitDeclarationOnly,
+            DeclarationDir: declarationDir,
             EntryFile: files?.FirstOrDefault(),
             RootFiles: rootFiles,
             DeclarationFiles: declarationFiles,
@@ -374,6 +381,9 @@ public sealed record TsConfigResult(
     bool? EmitDecoratorMetadata,
     string? RootDir,
     string? OutDir,
+    bool? Declaration,
+    bool? EmitDeclarationOnly,
+    string? DeclarationDir,
     string? EntryFile,
     IReadOnlyList<string> RootFiles,
     IReadOnlyList<string> DeclarationFiles,

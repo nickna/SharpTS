@@ -214,6 +214,13 @@ public partial class Parser
     private Stmt ExportDeclaration(List<Decorator>? classDecorators = null)
     {
         Token keyword = Previous();
+        bool isTypeOnlyExport = false;
+        if (Check(TokenType.TYPE) &&
+            PeekNext().Type is TokenType.LEFT_BRACE or TokenType.STAR)
+        {
+            Advance();
+            isTypeOnlyExport = true;
+        }
 
         // Decorators are only valid on the class-producing export forms below. Every other
         // branch calls this first so `@dec export function/const/{…}/…` reports the same
@@ -290,7 +297,8 @@ public partial class Parser
             }
 
             ConsumeSemicolon("Expect ';' after export.");
-            return new Stmt.Export(keyword, null, namedExports, null, fromPath, IsDefaultExport: false);
+            return new Stmt.Export(keyword, null, namedExports, null, fromPath,
+                IsDefaultExport: false, IsTypeOnly: isTypeOnlyExport);
         }
 
         // export * from './module' (re-export all) or
@@ -309,7 +317,7 @@ public partial class Parser
 
             // Represent as export with null named exports and a fromPath (meaning all)
             return new Stmt.Export(keyword, null, null, null, fromPath, IsDefaultExport: false,
-                NamespaceExportName: namespaceExportName);
+                NamespaceExportName: namespaceExportName, IsTypeOnly: isTypeOnlyExport);
         }
 
         // export import X = Namespace.Member (re-export alias)
@@ -441,6 +449,19 @@ public partial class Parser
         {
             do
             {
+                bool isTypeOnly = false;
+                if (Check(TokenType.TYPE))
+                {
+                    TokenType nextType = PeekNext().Type;
+                    if (nextType != TokenType.AS &&
+                        nextType != TokenType.COMMA &&
+                        nextType != TokenType.RIGHT_BRACE)
+                    {
+                        Advance();
+                        isTypeOnly = true;
+                    }
+                }
+
                 Token localName = ConsumeSpecifierName("Expect export name.");
                 Token? exportedName = null;
 
@@ -449,7 +470,7 @@ public partial class Parser
                     exportedName = ConsumeIdentifierName("Expect exported name after 'as'.");
                 }
 
-                specifiers.Add(new Stmt.ExportSpecifier(localName, exportedName));
+                specifiers.Add(new Stmt.ExportSpecifier(localName, exportedName, isTypeOnly));
                 if (!Match(TokenType.COMMA)) break;
             } while (!Check(TokenType.RIGHT_BRACE));
         }

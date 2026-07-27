@@ -530,6 +530,7 @@ public abstract record Stmt
     /// <param name="IsDefaultExport">True for 'export default'</param>
     /// <param name="ExportAssignment">CommonJS export assignment: export = expr</param>
     /// <param name="NamespaceExportName">Namespace re-export alias: export * as ns from './file'</param>
+    /// <param name="IsTypeOnly">True for a statement-level <c>export type</c>.</param>
     public record Export(
         Token Keyword,
         Stmt? Declaration,
@@ -538,7 +539,8 @@ public abstract record Stmt
         string? FromModulePath,
         bool IsDefaultExport,
         Expr? ExportAssignment = null,
-        Token? NamespaceExportName = null
+        Token? NamespaceExportName = null,
+        bool IsTypeOnly = false
     ) : Stmt;
 
     /// <summary>
@@ -546,7 +548,8 @@ public abstract record Stmt
     /// </summary>
     /// <param name="LocalName">Name in current module</param>
     /// <param name="ExportedName">Exported as (null = same as local)</param>
-    public record ExportSpecifier(Token LocalName, Token? ExportedName);
+    /// <param name="IsTypeOnly">True for an inline <c>type</c> modifier.</param>
+    public record ExportSpecifier(Token LocalName, Token? ExportedName, bool IsTypeOnly = false);
 
     /// <summary>
     /// File-level directive decorators (e.g., @Namespace("MyCompany.Libraries"))

@@ -1,5 +1,6 @@
 using SharpTS.Cli;
 using SharpTS.Configuration;
+using SharpTS.Declaration;
 using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
@@ -31,14 +32,17 @@ public static class ProjectCommandRunner
                     continue;
                 }
 
-                if (!CheckProject(project, cliOptions, out var inputs))
+                if (!CheckProject(project, cliOptions, out var inputs, out var outputs))
                 {
                     return 1;
                 }
 
                 if (useIncremental)
-                    ProjectBuildState.Write(project, optionsKey, inputs);
-                Console.WriteLine($"{project.ConfigPath}: checked {project.RootFiles.Count} root file(s)");
+                    ProjectBuildState.Write(project, optionsKey, inputs, outputs);
+                string emitted = outputs.Count == 0
+                    ? ""
+                    : $"; emitted {outputs.Count} declaration file(s)";
+                Console.WriteLine($"{project.ConfigPath}: checked {project.RootFiles.Count} root file(s){emitted}");
             }
             return 0;
         }
@@ -124,9 +128,11 @@ public static class ProjectCommandRunner
     private static bool CheckProject(
         TsConfigResult project,
         GlobalOptions cliOptions,
-        out IReadOnlyList<string> inputs)
+        out IReadOnlyList<string> inputs,
+        out IReadOnlyList<string> outputs)
     {
         inputs = [];
+        outputs = [];
         foreach (string warning in project.Warnings)
             Console.WriteLine(warning);
 
@@ -156,7 +162,7 @@ public static class ProjectCommandRunner
 
         var checker = new TypeChecker(options.TypeCheckerOptions);
         checker.SetDecoratorMode(options.DecoratorMode);
-        checker.CheckModules(modules, resolver);
+        TypeMap typeMap = checker.CheckModules(modules, resolver);
 
         var errors = checker.GetDiagnostics()
             .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
@@ -165,7 +171,25 @@ public static class ProjectCommandRunner
             Console.WriteLine($"Error: {diagnostic}");
 
         inputs = resolver.LoadedFilePaths;
-        return errors.Length == 0;
+        if (errors.Length > 0)
+            return false;
+
+        if (options.Declaration && !options.NoEmit)
+        {
+            var declarations = SourceDeclarationEmitter.EmitModules(
+                modules,
+                typeMap,
+                modules
+                    .Select(module => module.Path)
+                    .Where(IsProjectDeclarationSource)
+                    .Where(path => !IsNodeModulesPath(path)),
+                project.RootDir,
+                options.DeclarationDir,
+                project.OutDir);
+            SourceDeclarationEmitter.WriteAll(declarations);
+            outputs = declarations.Select(output => output.OutputPath).ToArray();
+        }
+        return true;
     }
 
     private static GlobalOptions MergeOptions(GlobalOptions cli, TsConfigResult project) =>
@@ -180,6 +204,12 @@ public static class ProjectCommandRunner
             },
             CheckJs = cli.CheckJs || project.CheckJs == true,
             EmitDecoratorMetadata = cli.EmitDecoratorMetadata || project.EmitDecoratorMetadata == true,
+            Declaration = cli.Declaration || project.Declaration == true ||
+                project.EmitDeclarationOnly == true || project.Composite == true,
+            EmitDeclarationOnly = cli.EmitDeclarationOnly || project.EmitDeclarationOnly == true,
+            DeclarationDir = cli.DeclarationDir is not null
+                ? Path.GetFullPath(cli.DeclarationDir)
+                : project.DeclarationDir,
             DecoratorMode = cli.DecoratorMode == DecoratorMode.Stage3 && project.DecoratorMode is { } configured
                 ? configured
                 : cli.DecoratorMode,
@@ -216,6 +246,19 @@ public static class ProjectCommandRunner
                fileName.EndsWith(".cjs", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsProjectDeclarationSource(string path) =>
+        !path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase) &&
+        !path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase) &&
+        !path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase) &&
+        (path.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".mts", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".cts", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNodeModulesPath(string path) =>
+        Path.GetFullPath(path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(part => part.Equals("node_modules", StringComparison.OrdinalIgnoreCase));
+
     private static IEnumerable<string> WatchDirectories(TsConfigResult project)
     {
         yield return Path.GetDirectoryName(project.ConfigPath)!;
@@ -250,6 +293,9 @@ public static class ProjectCommandRunner
             options.CheckJs.ToString(),
             options.DecoratorMode.ToString(),
             options.EmitDecoratorMetadata.ToString(),
+            options.Declaration.ToString(),
+            options.EmitDeclarationOnly.ToString(),
+            options.DeclarationDir is null ? "" : Path.GetFullPath(options.DeclarationDir),
             .. options.References
                 .Select(Path.GetFullPath)
                 .OrderBy(path => path, PathComparer),

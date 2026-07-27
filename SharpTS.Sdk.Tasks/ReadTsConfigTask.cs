@@ -61,6 +61,18 @@ public sealed class ReadTsConfigTask : Task
     [Output]
     public string OutDir { get; set; } = string.Empty;
 
+    /// <summary>Output: Whether TypeScript declarations should be generated.</summary>
+    [Output]
+    public bool Declaration { get; set; }
+
+    /// <summary>Output: Whether declarations are the only requested output.</summary>
+    [Output]
+    public bool EmitDeclarationOnly { get; set; }
+
+    /// <summary>Output: The declarationDir from compilerOptions, if present.</summary>
+    [Output]
+    public string DeclarationDir { get; set; } = string.Empty;
+
     public override bool Execute()
     {
         // Validate input path
@@ -104,6 +116,9 @@ public sealed class ReadTsConfigTask : Task
                 EmitDecoratorMetadata = opts.EmitDecoratorMetadata ?? false;
                 RootDir = opts.RootDir ?? string.Empty;
                 OutDir = opts.OutDir ?? string.Empty;
+                Declaration = opts.Declaration ?? false;
+                EmitDeclarationOnly = opts.EmitDeclarationOnly ?? false;
+                DeclarationDir = opts.DeclarationDir ?? string.Empty;
             }
 
             // Extract entry file using collection expressions and pattern matching
@@ -117,7 +132,9 @@ public sealed class ReadTsConfigTask : Task
                 $"Successfully loaded tsconfig.json from '{TsConfigPath}': " +
                 $"preserveConstEnums={PreserveConstEnums}, " +
                 $"experimentalDecorators={ExperimentalDecorators}, decorators={Decorators}, " +
-                $"emitDecoratorMetadata={EmitDecoratorMetadata}, entryFile={EntryFile}");
+                $"emitDecoratorMetadata={EmitDecoratorMetadata}, declaration={Declaration}, " +
+                $"emitDeclarationOnly={EmitDeclarationOnly}, declarationDir={DeclarationDir}, " +
+                $"entryFile={EntryFile}");
 
             return true;
         }

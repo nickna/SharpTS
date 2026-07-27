@@ -7,7 +7,7 @@ namespace SharpTS.Projects;
 /// <summary>SharpTS-owned incremental project state. The format is intentionally not tsc's.</summary>
 internal static class ProjectBuildState
 {
-    private const int FormatVersion = 1;
+    private const int FormatVersion = 2;
 
     private static readonly string ToolVersion =
         typeof(ProjectBuildState).Assembly.GetName().Version?.ToString() ?? "unknown";
@@ -17,7 +17,8 @@ internal static class ProjectBuildState
         string ToolVersion,
         string ConfigPath,
         string OptionsKey,
-        Dictionary<string, string> Inputs);
+        Dictionary<string, string> Inputs,
+        Dictionary<string, string> Outputs);
 
     public static bool IsUpToDate(TsConfigResult project, string optionsKey)
     {
@@ -47,6 +48,11 @@ internal static class ProjectBuildState
                 if (!File.Exists(path) || !string.Equals(Hash(path), expectedHash, StringComparison.Ordinal))
                     return false;
             }
+            foreach (var (path, expectedHash) in state.Outputs)
+            {
+                if (!File.Exists(path) || !string.Equals(Hash(path), expectedHash, StringComparison.Ordinal))
+                    return false;
+            }
             return true;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -58,7 +64,8 @@ internal static class ProjectBuildState
     public static void Write(
         TsConfigResult project,
         string optionsKey,
-        IEnumerable<string> inputPaths)
+        IEnumerable<string> inputPaths,
+        IEnumerable<string>? outputPaths = null)
     {
         var comparer = OperatingSystem.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
@@ -69,12 +76,16 @@ internal static class ProjectBuildState
             .Concat(project.ExtendsChain)
             .Distinct(comparer)
             .ToDictionary(path => Path.GetFullPath(path), Hash, comparer);
+        var outputs = (outputPaths ?? [])
+            .Where(File.Exists)
+            .Distinct(comparer)
+            .ToDictionary(path => Path.GetFullPath(path), Hash, comparer);
 
         string? directory = Path.GetDirectoryName(project.BuildInfoFile);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var state = new State(FormatVersion, ToolVersion, project.ConfigPath, optionsKey, inputs);
+        var state = new State(FormatVersion, ToolVersion, project.ConfigPath, optionsKey, inputs, outputs);
         File.WriteAllText(
             project.BuildInfoFile,
             JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));

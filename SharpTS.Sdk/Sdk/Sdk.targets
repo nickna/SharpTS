@@ -13,6 +13,9 @@
       <Output TaskParameter="ExperimentalDecorators" PropertyName="_TsConfigExperimentalDecorators" />
       <Output TaskParameter="Decorators" PropertyName="_TsConfigDecorators" />
       <Output TaskParameter="EmitDecoratorMetadata" PropertyName="_TsConfigEmitDecoratorMetadata" />
+      <Output TaskParameter="Declaration" PropertyName="_TsConfigDeclaration" />
+      <Output TaskParameter="EmitDeclarationOnly" PropertyName="_TsConfigEmitDeclarationOnly" />
+      <Output TaskParameter="DeclarationDir" PropertyName="_TsConfigDeclarationDir" />
       <Output TaskParameter="EntryFile" PropertyName="_TsConfigEntryFile" />
     </ReadTsConfigTask>
 
@@ -22,6 +25,10 @@
       <SharpTSExperimentalDecorators Condition="'$(SharpTSExperimentalDecorators)' == 'false' and '$(_TsConfigExperimentalDecorators)' == 'true'">true</SharpTSExperimentalDecorators>
       <SharpTSDecorators Condition="'$(SharpTSDecorators)' == 'false' and '$(_TsConfigDecorators)' == 'true'">true</SharpTSDecorators>
       <SharpTSEmitDecoratorMetadata Condition="'$(SharpTSEmitDecoratorMetadata)' == 'false' and '$(_TsConfigEmitDecoratorMetadata)' == 'true'">true</SharpTSEmitDecoratorMetadata>
+      <SharpTSGenerateDeclarations Condition="'$(SharpTSGenerateDeclarations)' == 'false' and '$(_TsConfigDeclaration)' == 'true'">true</SharpTSGenerateDeclarations>
+      <SharpTSEmitDeclarationOnly Condition="'$(SharpTSEmitDeclarationOnly)' == 'false' and '$(_TsConfigEmitDeclarationOnly)' == 'true'">true</SharpTSEmitDeclarationOnly>
+      <SharpTSGenerateDeclarations Condition="'$(SharpTSEmitDeclarationOnly)' == 'true'">true</SharpTSGenerateDeclarations>
+      <SharpTSDeclarationDir Condition="'$(SharpTSDeclarationDir)' == ''">$(_TsConfigDeclarationDir)</SharpTSDeclarationDir>
       <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">$(_TsConfigEntryFile)</SharpTSEntryPoint>
     </PropertyGroup>
 
@@ -70,6 +77,9 @@
       <_SharpTSArgs Condition="'$(SharpTSExperimentalDecorators)' == 'true'">$(_SharpTSArgs) --experimentalDecorators</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSDecorators)' == 'true'">$(_SharpTSArgs) --decorators</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSEmitDecoratorMetadata)' == 'true'">$(_SharpTSArgs) --emitDecoratorMetadata</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSGenerateDeclarations)' == 'true'">$(_SharpTSArgs) --declaration</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSEmitDeclarationOnly)' == 'true'">$(_SharpTSArgs) --emitDeclarationOnly</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSDeclarationDir)' != ''">$(_SharpTSArgs) --declarationDir "$(SharpTSDeclarationDir)"</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSArgs) --verify</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSUseReferenceAssemblies)' == 'true'">$(_SharpTSArgs) --ref-asm</_SharpTSArgs>
       <!-- Pass assembly references from ReferencePath (populated by ResolveAssemblyReferences) -->

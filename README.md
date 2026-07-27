@@ -201,6 +201,27 @@ The project model also supports:
 - `lib`, `types`, and `typeRoots`, loaded as type-only declaration inputs. Named `lib` entries
   come from an installed `typescript` package under `node_modules/typescript/lib`.
 
+**TypeScript declaration output:**
+
+SharpTS can emit checked `.d.ts` files for TypeScript consumers while continuing to compile
+runtime code directly to .NET IL:
+
+```bash
+sharpts --compile src/library.ts --declaration
+sharpts --compile src/library.ts --emitDeclarationOnly --declarationDir types
+sharpts -p .                                  # emits when tsconfig enables declaration
+```
+
+The matching `tsconfig.json` options are `declaration`, `emitDeclarationOnly`, and
+`declarationDir`. `rootDir` controls the preserved source hierarchy; when `declarationDir` is
+absent, `outDir` is used, then the source directory. `.mts` and `.cts` inputs produce `.d.mts`
+and `.d.cts`. Project, build, incremental, watch, and MSBuild SDK paths all use the same emitter.
+Type-only imports and exports are preserved, implementation bodies are removed, and inferred
+public types come from SharpTS's checker. Declaration output is not written when checking fails.
+
+JavaScript output remains an intentional non-goal: SharpTS does not emit JavaScript, bundle or
+minify it, or generate JavaScript source maps. Declaration maps are not currently supported.
+
 Reference ordering and the `composite` requirement follow the
 [TypeScript project-reference model](https://www.typescriptlang.org/docs/handbook/project-references).
 
@@ -209,15 +230,17 @@ adds a `.sharpts` suffix rather than overwriting tsc's incompatible file. Watch 
 re-evaluates the graph after a relevant change and uses that state to skip unchanged projects;
 parsed module and package caches are reused within each affected project check.
 
-`-p` without a script and `--build` are type-check-only. Script and `--compile` commands retain
-an explicit runtime entry point, but use the loaded project's module-resolution and declaration
-settings. Project-reference edges currently orchestrate semantic checks and build ordering; they
-do not yet emit or consume cross-project `.d.ts`/CLR artifacts, so imports between projects must
-still resolve through normal `paths` or package mappings.
+`-p` without a script and `--build` do not produce runtime assemblies, but emit declarations
+when configured. Script and `--compile` commands retain an explicit runtime entry point and use
+the loaded project's module-resolution and declaration settings. Project-reference edges
+orchestrate semantic checks and build ordering and can emit
+each project's `.d.ts` files. They do not yet automatically consume cross-project `.d.ts`/CLR
+artifacts, so imports between projects must still resolve through normal `paths` or package
+mappings.
 
-Emit options such as `target`, `module`, `jsx` and `sourceMap` do not apply — SharpTS compiles to
-.NET IL, not JavaScript — and are ignored silently; set `SHARPTS_TSCONFIG_VERBOSE=1` to list
-them. An unrecognized key is reported with a suggestion.
+JavaScript emit options such as `target`, `module`, `jsx` and `sourceMap` do not apply — SharpTS
+compiles to .NET IL, not JavaScript — and are ignored silently; set
+`SHARPTS_TSCONFIG_VERBOSE=1` to list them. An unrecognized key is reported with a suggestion.
 
 ## Examples
 

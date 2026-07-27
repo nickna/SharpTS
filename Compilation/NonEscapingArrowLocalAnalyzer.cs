@@ -131,10 +131,12 @@ public static class NonEscapingArrowLocalAnalyzer
             // callable is expected ("object is not a function", #1229). Disqualify the exported
             // name(s), then fall through to the base walk so uses INSIDE the declaration's
             // initializer still count toward other candidates.
-            DisqualifyExportedNames(stmt.Declaration);
+            if (!stmt.IsTypeOnly)
+                DisqualifyExportedNames(stmt.Declaration);
             if (stmt.NamedExports != null)
                 foreach (var spec in stmt.NamedExports)
-                    Disqualified.Add(spec.LocalName.Lexeme);
+                    if (!stmt.IsTypeOnly && !spec.IsTypeOnly)
+                        Disqualified.Add(spec.LocalName.Lexeme);
 
             base.VisitExport(stmt);
         }
