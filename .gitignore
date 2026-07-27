@@ -60,6 +60,10 @@ Thumbs.db
 # Dependencies
 packages/
 .nuget/packages/
+node_modules/
+
+# SharpTS CLI NuGet-restore cache (created beside user scripts by sharpts.json restore)
+.sharpts/
 
 # NuGet
 *.nupkg
@@ -72,12 +76,15 @@ packages/
 TestResults/
 *.trx
 *.coverage
+coverage*.xml
+[Cc]overage/
 
 # Local perf probes & test-suite profiling artifacts (TRX dumps, CPU samples, ad-hoc benchmarks)
 .perf-*/
 
 # AI tools
 .claude/
+.agents/
 /.cursor/
 /.cursorrules/
 /.aider*
@@ -87,8 +94,9 @@ TestResults/
 /SharpTS.dll
 /NUL
 
-# BenchmarkDotNet
+# BenchmarkDotNet (incl. EtwProfiler native payload extracted to /out)
 BenchmarkDotNet.Artifacts/
+/out/
 **/CompiledTS/
 *.benchmarklog
 # VS Code Extension / Node.js
