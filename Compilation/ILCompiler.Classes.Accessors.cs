@@ -165,7 +165,7 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = !accessor.IsStatic;
         ctx.CurrentClassName = className;

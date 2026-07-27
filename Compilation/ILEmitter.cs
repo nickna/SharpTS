@@ -127,12 +127,8 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
     #endregion
 
-    public override void EmitStatement(Stmt stmt)
+    protected override void EmitStatementCore(Stmt stmt)
     {
-        // Skip dead statements (unreachable code)
-        if (_ctx.DeadCode?.IsDead(stmt) == true)
-            return;
-
         switch (stmt)
         {
             case Stmt.Expression e:

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -32,7 +33,7 @@ internal sealed class DebugInfoCollector
     internal const int HiddenLine = 0xfeefee;
 
     private readonly Dictionary<string, SourceFile> _documents = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<MethodBuilder, List<Point>> _methods = [];
+    private readonly Dictionary<MethodBase, List<Point>> _methods = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Whether anything worth writing to a PDB has been recorded.</summary>
     internal bool IsEmpty => _methods.Count == 0;
@@ -92,7 +93,7 @@ internal sealed class DebugInfoCollector
     /// in one place.
     /// </remarks>
     internal void RecordSequencePoint(
-        MethodBuilder method, SourceFile document, int ilOffset, int startLine, int startColumn, int endLine, int endColumn)
+        MethodBase method, SourceFile document, int ilOffset, int startLine, int startColumn, int endLine, int endColumn)
     {
         Add(method, new Point(ilOffset, document, startLine, startColumn, endLine, endColumn));
     }
@@ -101,12 +102,12 @@ internal sealed class DebugInfoCollector
     /// Marks <paramref name="ilOffset"/> as compiler-generated code with no source of its own, so a
     /// debugger steps over it instead of attributing it to whichever statement came before.
     /// </summary>
-    internal void RecordHiddenSequencePoint(MethodBuilder method, int ilOffset)
+    internal void RecordHiddenSequencePoint(MethodBase method, int ilOffset)
     {
         Add(method, new Point(ilOffset, null, HiddenLine, 0, HiddenLine, 0));
     }
 
-    private void Add(MethodBuilder method, Point point)
+    private void Add(MethodBase method, Point point)
     {
         if (!_methods.TryGetValue(method, out var points))
             _methods[method] = points = [];

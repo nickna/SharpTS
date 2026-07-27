@@ -140,6 +140,97 @@ public class DebugSymbolsTests
             ReadPdb(artifacts.Pdb!).MethodDebugInformation.Count);
     }
 
+    // ---------------------------------------------------------------- statement sequence points
+
+    /// <summary>
+    /// Every executable statement gets a point on its own line, which is what makes a breakpoint
+    /// bind to TypeScript rather than to emitted IL.
+    /// </summary>
+    [Fact]
+    public void EachExecutableStatementGetsAPointOnItsOwnLine()
+    {
+        var artifacts = CompileTypeScript(SourceText, emitDebugSymbols: true);
+        var lines = AllSequencePointLines(artifacts);
+
+        // add()'s two body statements, then the two top-level statements.
+        Assert.Equal([2, 3, 5], lines);
+    }
+
+    /// <summary>
+    /// A block or a <c>try</c> emits no instructions of its own, so the statement inside it must
+    /// own the offset they would otherwise share — otherwise stepping lands on a brace.
+    /// </summary>
+    [Fact]
+    public void ContainersDoNotClaimTheirContentsPoint()
+    {
+        const string source = """
+            let n = 0;
+            if (n === 0) {
+              n = 1;
+            }
+            try {
+              n = 2;
+            } catch (e) {
+              n = 3;
+            }
+            """;
+
+        var lines = AllSequencePointLines(CompileTypeScript(source, emitDebugSymbols: true));
+
+        // Line 1 the declaration, 2 the `if` test, 3 its body; `try` (5) yields to its body (6),
+        // and the catch body is 8. No point sits on a line that is only a brace.
+        Assert.Equal([1, 2, 3, 6, 8], lines);
+    }
+
+    /// <summary>
+    /// Loops and their bodies stay distinguishable, including the desugared update expression.
+    /// </summary>
+    [Fact]
+    public void LoopHeadersAndBodiesGetSeparatePoints()
+    {
+        const string source = """
+            let total = 0;
+            for (let i = 0; i < 3; i++) {
+              total = total + i;
+            }
+            """;
+
+        var lines = AllSequencePointLines(CompileTypeScript(source, emitDebugSymbols: true));
+
+        Assert.Equal([1, 2, 3], lines);
+    }
+
+    /// <summary>
+    /// Hoisting moves a <c>var</c>'s binding to the top of the body. The synthesized declaration is
+    /// marked hidden so stepping passes over it instead of jumping back to the original line.
+    /// </summary>
+    [Fact]
+    public void HoistedVarDeclarationsBecomeHiddenPoints()
+    {
+        const string source = """
+            function f(): number {
+              if (true) { var x = 1; }
+              return x;
+            }
+            f();
+            """;
+
+        var artifacts = CompileTypeScript(source, emitDebugSymbols: true);
+        var points = AllSequencePoints(artifacts);
+
+        Assert.Contains(points, p => p.IsHidden);
+        // The user's own statements still resolve to the lines they were written on.
+        Assert.Contains(points, p => !p.IsHidden && p.StartLine == 2);
+        Assert.Contains(points, p => !p.IsHidden && p.StartLine == 3);
+    }
+
+    [Fact]
+    public void DebugBuildsAreMarkedDebuggableAndOthersAreNot()
+    {
+        Assert.True(HasDebuggableAttribute(CompileTypeScript(SourceText, emitDebugSymbols: true).Assembly));
+        Assert.False(HasDebuggableAttribute(CompileTypeScript(SourceText, emitDebugSymbols: false).Assembly));
+    }
+
     [Fact]
     public void CompilingWithoutDebugSymbolsEmitsNoDebugDirectory()
     {
@@ -174,7 +265,10 @@ public class DebugSymbolsTests
 
     private static CompilationArtifacts CompileTypeScript(string source, bool emitDebugSymbols, string? saveTo = null)
     {
-        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var document = new SourceDocument(Path.Combine(Path.GetTempPath(), "program.ts"), source);
+        var statements = new Parser(new Lexer(source).ScanTokens())
+            .WithSourceDocument(document)
+            .ParseOrThrow();
         var typeMap = new TypeChecker().Check(statements);
         var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(statements);
 
@@ -188,6 +282,7 @@ public class DebugSymbolsTests
         {
             EmitDebugSymbols = emitDebugSymbols,
         };
+        compiler.SetSourceDocument(document);
         compiler.Compile(statements, typeMap, deadCode);
 
         if (saveTo is null)
@@ -330,6 +425,49 @@ public class DebugSymbolsTests
                 return $"{metadata.GetString(declaringType.Name)}::{metadata.GetString(method.Name)}";
             })
             .ToArray();
+    }
+
+    /// <summary>Every sequence point in the artifacts' PDB, in method then offset order.</summary>
+    private static List<SequencePoint> AllSequencePoints(CompilationArtifacts artifacts)
+    {
+        var pdb = ReadPdb(artifacts.Pdb!);
+        var points = new List<SequencePoint>();
+
+        foreach (var handle in pdb.MethodDebugInformation)
+        {
+            var info = pdb.GetMethodDebugInformation(handle);
+            if (info.SequencePointsBlob.IsNil) continue;
+            points.AddRange(info.GetSequencePoints());
+        }
+        return points;
+    }
+
+    /// <summary>The distinct source lines a debugger could stop on, ascending.</summary>
+    private static int[] AllSequencePointLines(CompilationArtifacts artifacts) =>
+        AllSequencePoints(artifacts)
+            .Where(p => !p.IsHidden)
+            .Select(p => p.StartLine)
+            .Distinct()
+            .Order()
+            .ToArray();
+
+    private static bool HasDebuggableAttribute(byte[] image)
+    {
+        using var reader = new PEReader(new MemoryStream(image, writable: false));
+        var metadata = reader.GetMetadataReader();
+
+        foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
+        {
+            var attribute = metadata.GetCustomAttribute(handle);
+            if (attribute.Constructor.Kind != HandleKind.MemberReference) continue;
+
+            var constructor = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
+            if (constructor.Parent.Kind != HandleKind.TypeReference) continue;
+
+            var type = metadata.GetTypeReference((TypeReferenceHandle)constructor.Parent);
+            if (metadata.GetString(type.Name) == "DebuggableAttribute") return true;
+        }
+        return false;
     }
 
     private static List<SequencePoint> SequencePoints(MetadataReader pdb, int methodRid)

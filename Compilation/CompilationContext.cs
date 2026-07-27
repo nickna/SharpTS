@@ -146,6 +146,18 @@ public partial class CompilationContext
     public Type? CurrentMethodReturnType { get; set; }
 
     /// <summary>
+    /// The method whose body <see cref="IL"/> emits into. Sequence points are recorded against it,
+    /// so any context emitting a body users can step through has to set it.
+    /// </summary>
+    internal System.Reflection.MethodBase? CurrentMethod { get; set; }
+
+    /// <summary>
+    /// Source document and symbol sink for the code being emitted, or null when the build is not
+    /// producing debug symbols. See <see cref="Symbols.DebugEmitScope"/>.
+    /// </summary>
+    internal Symbols.DebugEmitScope? DebugScope { get; set; }
+
+    /// <summary>
     /// Whether the current compilation context is in JavaScript strict mode.
     /// Affects property assignment behavior on frozen/sealed objects.
     /// </summary>

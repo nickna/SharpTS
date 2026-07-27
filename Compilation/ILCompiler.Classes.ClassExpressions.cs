@@ -488,11 +488,12 @@ public partial class ILCompiler
         ILGenerator il,
         Expr.ClassExpr classExpr,
         TypeBuilder typeBuilder,
-        FieldInfo? fieldsField)
+        FieldInfo? fieldsField,
+        System.Reflection.MethodBase? method = null)
     {
         string className = _classExprs.Names[classExpr];
 
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, method);
         ctx.FieldsField = fieldsField;
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
@@ -546,7 +547,7 @@ public partial class ILCompiler
         );
 
         var il = cctor.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null);
+        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, cctor);
         ctx.IsStaticConstructorContext = true;
         var emitter = new ILEmitter(ctx);
 
@@ -603,7 +604,7 @@ public partial class ILCompiler
         var constructor = classExpr.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField);
+        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, ctorBuilder);
         ctx.IsInstanceMethod = true;
 
         // Add generic type parameters to context
@@ -819,7 +820,7 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField);
+        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, methodBuilder);
         ctx.IsInstanceMethod = true;
 
         // Define parameters with typed parameter types from method signature
@@ -895,7 +896,7 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null);
+        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, methodBuilder);
         ctx.IsInstanceMethod = false;
 
         // Define parameters with typed parameter types from method signature (starting at index 0 for static)
@@ -951,7 +952,7 @@ public partial class ILCompiler
         foreach (var (accessor, methodBuilder) in list)
         {
             var il = methodBuilder.GetILGenerator();
-            var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, accessor.IsStatic ? null : fieldsField);
+            var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, accessor.IsStatic ? null : fieldsField, methodBuilder);
             ctx.IsInstanceMethod = !accessor.IsStatic;
 
             if (accessor.Kind.Type == TokenType.SET && accessor.SetterParam != null)
@@ -1064,7 +1065,7 @@ public partial class ILCompiler
         if (methodBuilder == null) return;
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField);
+        var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, methodBuilder);
         ctx.IsInstanceMethod = true;
 
         if (accessor.Kind.Type == TokenType.SET && accessor.SetterParam != null)

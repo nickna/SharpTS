@@ -220,11 +220,113 @@ public partial class ILCompiler
     // Source documents and sequence points gathered while emitting, when EmitDebugSymbols is set.
     private readonly DebugInfoCollector _debugInfo = new();
 
+    // Symbol scopes, by the same normalized module path emission already tracks, plus the scope for
+    // a single-file compile (which has no module path). Null unless EmitDebugSymbols is set, which
+    // is what makes symbol emission free otherwise.
+    private Dictionary<string, DebugEmitScope>? _debugScopesByModule;
+    private DebugEmitScope? _entryPointDebugScope;
+
+    /// <summary>
+    /// The document whose statements are being emitted right now.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from <c>_modules.CurrentPath</c>, which every emission phase already sets and clears
+    /// around each module, rather than from a parallel "current document" that each phase would have
+    /// to remember to maintain. Falls back to the entry-point scope, which is what a single-file
+    /// compile uses.
+    /// </remarks>
+    private DebugEmitScope? CurrentDebugScope
+    {
+        get
+        {
+            if (_modules.CurrentPath is { } path
+                && _debugScopesByModule?.TryGetValue(path, out var scope) == true)
+            {
+                return scope;
+            }
+            return _entryPointDebugScope;
+        }
+    }
+
     /// <summary>
     /// Sink for source documents and sequence points. Emitters record into it only while
     /// <see cref="EmitDebugSymbols"/> is set; otherwise it stays empty and costs nothing.
     /// </summary>
     internal DebugInfoCollector DebugInfo => _debugInfo;
+
+    /// <summary>
+    /// Declares which source file the statements emitted from now on came from.
+    /// </summary>
+    /// <remarks>
+    /// Compilation proceeds one module at a time, so the document is ambient rather than carried on
+    /// every statement — a per-node map would cost every build to serve only debug ones. Callers
+    /// that compile several modules set this before emitting each. Passing null (or building
+    /// without <see cref="EmitDebugSymbols"/>) means the code that follows gets no sequence points,
+    /// which is the right outcome for generated code with no source of its own.
+    /// </remarks>
+    public void SetSourceDocument(SourceDocument? document)
+    {
+        _entryPointDebugScope = CreateDebugScope(document);
+    }
+
+    /// <summary>
+    /// Indexes each module's source document by the path emission uses, so every body compiled for
+    /// that module resolves to the right file without each phase tracking it.
+    /// </summary>
+    private void RegisterModuleDocuments(List<ParsedModule> modules)
+    {
+        if (!EmitDebugSymbols) return;
+
+        _debugScopesByModule = [];
+        DebugEmitScope? entryScope = null;
+
+        foreach (var module in modules)
+        {
+            if (CreateDebugScope(module.Document) is not { } scope) continue;
+
+            // Phases are not consistent about whether CurrentPath is normalized, so index both
+            // spellings rather than depending on which one a given phase happens to use.
+            _debugScopesByModule[NormalizeToEmissionPath(module.Path)] = scope;
+            _debugScopesByModule[module.Path] = scope;
+            entryScope = scope;
+        }
+
+        // Modules arrive in dependency order, so the last is the entry module. Its statements are
+        // what the entry point emits, and that emission runs with no module path set.
+        _entryPointDebugScope = entryScope;
+    }
+
+    /// <summary>
+    /// Marks the assembly as debuggable with optimizations disabled, so the JIT keeps the emitted
+    /// IL's shape and a debugger sees the locals and stepping order the PDB describes.
+    /// </summary>
+    /// <remarks>
+    /// Applied only when symbols are requested. Without it the JIT is free to reorder and elide,
+    /// and breakpoints bind to instructions that no longer correspond to the recorded offsets.
+    /// </remarks>
+    private void ApplyDebuggableAttribute()
+    {
+        var constructor = typeof(System.Diagnostics.DebuggableAttribute)
+            .GetConstructor([typeof(System.Diagnostics.DebuggableAttribute.DebuggingModes)])!;
+
+        _assemblyBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+            constructor,
+            [System.Diagnostics.DebuggableAttribute.DebuggingModes.Default
+                | System.Diagnostics.DebuggableAttribute.DebuggingModes.DisableOptimizations]));
+    }
+
+    private DebugEmitScope? CreateDebugScope(SourceDocument? document)
+    {
+        if (!EmitDebugSymbols || document is null) return null;
+
+        return new DebugEmitScope(
+            _debugInfo,
+            // Embedded stdlib and other virtual documents have no file a debugger could open, so
+            // their text travels inside the PDB instead of being referenced by path.
+            _debugInfo.AddDocument(document.Path, document.Text, embedSource: document.IsVirtual),
+            document.Spans,
+            document.Lines);
+    }
 
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
@@ -433,7 +535,7 @@ public partial class ILCompiler
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to the module top level so the mature top-level state-machine pipeline can lower them
         // (#470, #501). Compile-path only — the interpreter handles nested declarations natively.
-        statements = NestedFunctionLifter.Lift(statements);
+        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
 
         // Walk the AST to determine which runtime feature categories the program
         // actually needs, so Phase 1 can skip emitting unused helper types.
@@ -959,13 +1061,15 @@ public partial class ILCompiler
         // Entry module is last in dependency order (mirrors Interpreter.EntryModulePath).
         _entryModulePath = modules.Count > 0 ? Path.GetFullPath(modules[^1].Path) : null;
 
+        RegisterModuleDocuments(modules);
+
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to each module's top level (#470, #501). Compile-path only. The Statements property is
         // read-only but the underlying list is shared by reference across all phases, so mutate it
         // in place.
         foreach (var m in modules)
         {
-            var lifted = NestedFunctionLifter.Lift(m.Statements);
+            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans);
             if (!ReferenceEquals(lifted, m.Statements))
             {
                 m.Statements.Clear();
@@ -1350,6 +1454,9 @@ public partial class ILCompiler
             throw new InvalidOperationException(
                 "SaveToBytes()/SaveArtifacts() are unavailable in inMemoryOnly mode. Use GetEmittedAssembly() to access " +
                 "the live dynamic assembly directly, or construct ILCompiler without inMemoryOnly=true.");
+
+        if (EmitDebugSymbols)
+            ApplyDebuggableAttribute();
 
         // The PDB tables are built from _debugInfo rather than from GenerateMetadata's own pdb
         // builder — see DebugInfoCollector for why that overload cannot be used here.

@@ -432,6 +432,10 @@ public partial class ILCompiler
     /// </remarks>
     private void EmitExpressionWithAsyncWait(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
     {
+        // This path drives expression emission itself instead of going through EmitStatement, so it
+        // has to mark the statement or every top-level expression would be unsteppable.
+        emitter.MarkStatementStart(exprStmt);
+
         emitter.EmitExpression(exprStmt.Expr);
 
         // Box value types first (e.g., delete returns boolean)
@@ -545,7 +549,7 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule can scope to this module.
         var savedPath = _modules.CurrentPath;
         _modules.CurrentPath = module.Path;
-        var ctx = CreateModuleTopLevelContext(il);
+        var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
@@ -623,7 +627,7 @@ public partial class ILCompiler
         // returns the global dict (non-captured field is visible across script-merged files).
         var savedPath = _modules.CurrentPath;
         _modules.CurrentPath = null;
-        var ctx = CreateModuleTopLevelContext(il);
+        var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
         ctx.CurrentModulePath = script.Path;
         ctx.ModuleExportFields = _modules.ExportFields;

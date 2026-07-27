@@ -171,7 +171,7 @@ public partial class ILCompiler
         // ESM does the same dance.)
         var savedPath = _modules.CurrentPath;
         _modules.CurrentPath = module.Path;
-        var ctx = CreateModuleTopLevelContext(il);
+        var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;

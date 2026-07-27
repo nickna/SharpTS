@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -35,7 +36,7 @@ public partial class ILCompiler
     /// values (current module/namespace/class, strict-mode overrides, captured-variable maps,
     /// state-machine wiring) are applied by the specialized factories and call-site overlays.
     /// </summary>
-    private CompilationContext CreateBaseCompilationContext(ILGenerator il)
+    private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
         return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
@@ -71,6 +72,10 @@ public partial class ILCompiler
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             // Ambient strict mode; bodies with their own "use strict" prologue override this.
             IsStrictMode = _isStrictMode,
+            // Symbol emission: null unless this build asked for debug symbols, which is what keeps
+            // ordinary builds from paying for any of it.
+            CurrentMethod = method,
+            DebugScope = CurrentDebugScope,
         };
     }
 
@@ -80,9 +85,9 @@ public partial class ILCompiler
     /// module/namespace scope. Does NOT set IsModuleTopLevel — declarations in these bodies are
     /// locals, never module-level bindings.
     /// </summary>
-    private CompilationContext CreateModuleMemberContext(ILGenerator il)
+    private CompilationContext CreateModuleMemberContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyModuleMaps(ctx);
         ctx.CurrentModulePath = _modules.CurrentPath;
         ctx.CurrentNamespacePath = _currentNamespacePath;
@@ -92,9 +97,9 @@ public partial class ILCompiler
     /// <summary>
     /// Creates the context that emits a module's (ESM or CommonJS) top-level statements.
     /// </summary>
-    private CompilationContext CreateModuleTopLevelContext(ILGenerator il)
+    private CompilationContext CreateModuleTopLevelContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyModuleMaps(ctx);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
@@ -117,9 +122,9 @@ public partial class ILCompiler
     /// IsModuleTopLevel (#562), but carries entry-point display-class construction state and
     /// class-expression lowering maps instead of per-module export tables.
     /// </summary>
-    private CompilationContext CreateEntryPointTopLevelContext(ILGenerator il)
+    private CompilationContext CreateEntryPointTopLevelContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -146,7 +151,7 @@ public partial class ILCompiler
     /// state machine's context rather than from compiler state (the parent may itself be a
     /// state-machine context whose maps were already scoped).
     /// </summary>
-    private CompilationContext CreateNestedAsyncArrowContext(ILGenerator il, CompilationContext parentCtx)
+    private CompilationContext CreateNestedAsyncArrowContext(ILGenerator il, CompilationContext parentCtx, MethodBase? method = null)
     {
         return new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.NamespaceFields, parentCtx.NamespaceVarFields, parentCtx.Types)
         {
@@ -197,6 +202,8 @@ public partial class ILCompiler
             // Follow-up to #838: lets this nested async arrow's MoveNext populate a nested sync arrow's
             // $functionDC from this arrow's OWN DC (EmitCapturingArrowInAsyncArrow).
             ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
+            CurrentMethod = method,
+            DebugScope = parentCtx.DebugScope,
         };
     }
 

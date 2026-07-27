@@ -717,7 +717,7 @@ public partial class ILCompiler
         // "Yield not supported" (the public static async-generator gap, #761), not invalid IL.
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FieldsField = isStatic ? null : fieldsField;
         ctx.IsInstanceMethod = !isStatic;
         ctx.CurrentClassBuilder = typeBuilder;
@@ -964,7 +964,7 @@ public partial class ILCompiler
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = true;
         // Async arrow support (for async arrows inside non-async methods)

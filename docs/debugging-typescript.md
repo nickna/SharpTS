@@ -1,0 +1,77 @@
+# Debugging compiled TypeScript
+
+`sharpts --compile app.ts -g` (or `--debug`) emits `app.dll` plus a portable `app.pdb` whose
+documents and sequence points refer to the original `.ts` files. Any debugger that understands
+portable PDBs — the C# extension for VS Code, Rider, Visual Studio, `netcoredbg` — can then bind
+breakpoints in TypeScript source and step through it.
+
+```bash
+sharpts --compile app.ts -g       # app.dll + app.pdb
+sharpts --compile app.ts          # app.dll only; no debug directory, no PDB cost
+```
+
+Symbols are attached after assembly-reference rewriting, so `--ref-asm` builds and programs that
+reach into the SharpTS runtime carry working symbols too. Keep the `.pdb` beside the `.dll`.
+
+## What you can expect today
+
+Breakpoints bind and stepping follows executable TypeScript statements, in ordinary functions,
+class members, module top level, `async` functions, and generators — the state machines go through
+the same emission path, so their `MoveNext` bodies carry line information for the statements you
+wrote. Imported modules resolve to their own files.
+
+Statements the compiler synthesized are marked hidden and stepped over rather than attributed to a
+nearby line: the `var` declarations hoisting moves to the top of a body, the aliases left where a
+nested function was relocated, and the declarations generator-arrow lifting creates.
+
+A brace never takes a stop on its own. `{ … }` blocks, the sequences a lowering returns, and `try`
+emit no instructions of their own, so the first real statement inside them owns that position.
+Conditions do execute, so `if`, `while`, `for`, and `switch` headers keep their own points.
+
+Not yet done: named locals and lexical scopes (variables show as slot numbers), Just My Code, and
+the "SharpTS: Debug Current File" VS Code command. Interpreter debugging is out of scope.
+
+## Editor setup
+
+None of this needs a SharpTS-specific debug adapter — the assembly is an ordinary .NET one.
+
+**VS Code** — install the C# extension (it supplies the `coreclr` adapter), then:
+
+```json
+{
+  "type": "coreclr",
+  "request": "launch",
+  "name": "Debug app.ts",
+  "program": "${workspaceFolder}/app.dll",
+  "cwd": "${workspaceFolder}",
+  "console": "internalConsole"
+}
+```
+
+Compile with `-g` first; the launch config points at the `.dll`, not the `.ts`.
+
+**Rider / Visual Studio** — open or attach to the compiled assembly as you would any .NET program;
+both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
+
+**netcoredbg** — `netcoredbg --interpreter=cli -- dotnet app.dll`, then
+`break app.ts:12` and `run`.
+
+## Manual smoke checklist
+
+Automating a real debugger session is not yet justified, so run this by hand when changing
+statement emission, the span model, or the symbol pipeline. The PDB-level assertions in
+`SharpTS.Tests/Compilation/DebugSymbolsTests.cs` cover the mechanics; this checks that a debugger
+agrees.
+
+Use a program with a function, a loop, a conditional, a `try`/`catch`, a class method, an `async`
+function, a generator, and an `import`.
+
+1. `sharpts --compile main.ts -g`, then launch under the debugger.
+2. Set a breakpoint on a top-level statement — it binds, and hits with the expected call stack.
+3. Set one inside a function body and one inside a class method — both bind and hit.
+4. Step over a `{`-only line: the debugger moves to the first statement inside, never onto the brace.
+5. Step through a loop: the header and the body alternate rather than sticking on one line.
+6. Break inside a `catch` and confirm the frame is the catch body, not the `try` line.
+7. Break inside an `async` function after an `await`, and inside a generator after a `yield`.
+8. Break in an imported module's function and confirm the debugger opens that file, not the entry file.
+9. Rebuild without `-g`, confirm no `.pdb` is produced and the program still runs.
