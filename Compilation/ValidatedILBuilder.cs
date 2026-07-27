@@ -119,7 +119,6 @@ public enum ValidationMode
 public sealed partial class ValidatedILBuilder
 {
     private readonly ILGenerator _il;
-    private readonly TypeProvider _types;
     private readonly ValidationMode _mode;
     private readonly List<string> _collectedErrors = [];
 
@@ -143,12 +142,10 @@ public sealed partial class ValidatedILBuilder
     /// Creates a new validated IL builder wrapping the given ILGenerator.
     /// </summary>
     /// <param name="il">The underlying ILGenerator.</param>
-    /// <param name="types">Type provider for type resolution.</param>
     /// <param name="mode">Validation mode (default: FailFast).</param>
-    public ValidatedILBuilder(ILGenerator il, TypeProvider types, ValidationMode mode = ValidationMode.FailFast)
+    public ValidatedILBuilder(ILGenerator il, ValidationMode mode = ValidationMode.FailFast)
     {
         _il = il;
-        _types = types;
         _mode = mode;
     }
 
@@ -178,12 +175,6 @@ public sealed partial class ValidatedILBuilder
 
     #region Stack Tracking Helpers
 
-    private void PushStack(StackEntryType type, Type? clrType = null)
-    {
-        _stackDepth++;
-        _typeStack.Push(new StackEntry(type, clrType));
-    }
-
     private StackEntry PopStack()
     {
         if (_typeStack.Count > 0)
@@ -193,11 +184,6 @@ public sealed partial class ValidatedILBuilder
         }
         _stackDepth--;
         return new StackEntry(StackEntryType.Unknown);
-    }
-
-    private StackEntry PeekStack()
-    {
-        return _typeStack.Count > 0 ? _typeStack.Peek() : new StackEntry(StackEntryType.Unknown);
     }
 
     private void RequireStackDepth(int required, string operation)
@@ -211,38 +197,6 @@ public sealed partial class ValidatedILBuilder
         //     ThrowOrRecord($"{operation} requires {required} value(s) on stack, found {_stackDepth}");
         // }
     }
-
-    private static StackEntryType GetStackEntryType(Type type)
-    {
-        if (type == typeof(int) || type == typeof(bool) || type == typeof(char) ||
-            type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) ||
-            type == typeof(ushort) || type == typeof(uint))
-            return StackEntryType.Int32;
-
-        if (type == typeof(long) || type == typeof(ulong))
-            return StackEntryType.Int64;
-
-        if (type == typeof(double))
-            return StackEntryType.Double;
-
-        if (type == typeof(float))
-            return StackEntryType.Float;
-
-        if (type == typeof(string))
-            return StackEntryType.String;
-
-        if (type == typeof(IntPtr) || type == typeof(UIntPtr))
-            return StackEntryType.NativeInt;
-
-        if (type.IsValueType)
-            return StackEntryType.ValueType;
-
-        return StackEntryType.Reference;
-    }
-
-    #endregion
-
-    #region Validation Helpers
 
     private void ValidateLabelDefined(Label label, string operation)
     {

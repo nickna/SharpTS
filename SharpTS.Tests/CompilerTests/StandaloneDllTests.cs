@@ -53,7 +53,7 @@ public class StandaloneDllTests
     ///
     /// WRONG: typeof(RuntimeTypes).GetMethod(...) - embeds SharpTS.dll reference
     /// RIGHT: EmitReflectionHelper(typeBuilder, "SomeMethod", argCount) or
-    ///        EmitReflectionCall/EmitReflectionCallVoid/EmitReflectionCreateInstance
+    ///        EmitReflectionCall/EmitReflectionCreateInstance
     ///        (Compilation/RuntimeEmitter.ReflectionHelpers.cs) - emit a
     ///        Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS") runtime lookup
     /// </summary>

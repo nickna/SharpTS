@@ -374,7 +374,7 @@ public partial class CompilationContext
         NamespaceVarFields = namespaceVarFields;
         Types = types ?? TypeProvider.Runtime;
         Locals = new LocalsManager(il);
-        ILBuilder = new ValidatedILBuilder(il, Types);
+        ILBuilder = new ValidatedILBuilder(il);
     }
 
     public void DefineParameter(string name, int argIndex, Type? paramType = null)

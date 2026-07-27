@@ -15,10 +15,8 @@ public sealed class ClassRegistry
 {
     // Core class builders
     private readonly Dictionary<string, TypeBuilder> _builders;
-    private readonly Dictionary<string, Type> _externalTypes;
     private readonly Dictionary<string, string?> _superclass;
     private readonly Dictionary<string, ConstructorBuilder> _constructors;
-    private readonly Dictionary<string, List<ConstructorBuilder>> _constructorOverloads;
 
     // Instance members
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceMethods;
@@ -51,10 +49,8 @@ public sealed class ClassRegistry
     /// </summary>
     public ClassRegistry(
         Dictionary<string, TypeBuilder> builders,
-        Dictionary<string, Type> externalTypes,
         Dictionary<string, string?> superclass,
         Dictionary<string, ConstructorBuilder> constructors,
-        Dictionary<string, List<ConstructorBuilder>> constructorOverloads,
         Dictionary<string, Dictionary<string, MethodBuilder>> instanceMethods,
         Dictionary<string, Dictionary<string, MethodBuilder>> instanceGetters,
         Dictionary<string, Dictionary<string, MethodBuilder>> instanceSetters,
@@ -73,10 +69,8 @@ public sealed class ClassRegistry
         Func<string?>? getDotNetNamespace = null)
     {
         _builders = builders;
-        _externalTypes = externalTypes;
         _superclass = superclass;
         _constructors = constructors;
-        _constructorOverloads = constructorOverloads;
         _instanceMethods = instanceMethods;
         _instanceGetters = instanceGetters;
         _instanceSetters = instanceSetters;

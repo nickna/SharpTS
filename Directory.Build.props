@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
 
+    <!-- Run the IDE-style analyzers during build so the .editorconfig-enabled
+         dead-code rules (IDE0051/IDE0052) surface as build warnings. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
     <!-- Single version source of truth: MinVer derives the version from Git tags
          (prefix `v`) for every packable project, replacing the former hard-coded
          <Version>. At release time CI passes -p:Version explicitly to `dotnet pack`

@@ -144,46 +144,6 @@ public static class OverloadGenerator
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits conversion from stack value to target type if needed.
-    /// </summary>
-    private static void EmitConversionIfNeeded(
-        ILGenerator il,
-        ILEmitter emitter,
-        Expr sourceExpr,
-        Type targetType)
-    {
-        // If target is object, box value types
-        if (targetType == typeof(object))
-        {
-            emitter.EmitBoxIfNeeded(sourceExpr);
-            return;
-        }
-
-        // If source is a literal that might need boxing
-        if (sourceExpr is Expr.Literal lit)
-        {
-            if (lit.Value is double && targetType == typeof(double))
-            {
-                // Already correct type, no conversion needed
-                return;
-            }
-            if (lit.Value is bool && targetType == typeof(bool))
-            {
-                return;
-            }
-            if (lit.Value is string && targetType == typeof(string))
-            {
-                return;
-            }
-        }
-
-        // For non-literal expressions that return object, unbox if target is value type
-        if (targetType.IsValueType)
-        {
-            il.Emit(OpCodes.Unbox_Any, targetType);
-        }
-    }
 
     /// <summary>
     /// Emits the default value for a type (0 for numbers, false for bool, null for references).

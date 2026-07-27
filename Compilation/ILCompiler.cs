@@ -355,10 +355,8 @@ public partial class ILCompiler
     {
         return _classRegistry ??= new ClassRegistry(
             builders: _classes.Builders,
-            externalTypes: _classes.ExternalTypes,
             superclass: _classes.Superclass,
             constructors: _classes.Constructors,
-            constructorOverloads: _classes.ConstructorOverloads,
             instanceMethods: _classes.InstanceMethods,
             instanceGetters: _classes.InstanceGetters,
             instanceSetters: _classes.InstanceSetters,

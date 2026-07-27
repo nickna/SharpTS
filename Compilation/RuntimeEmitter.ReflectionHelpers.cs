@@ -104,17 +104,6 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// <see cref="EmitReflectionCall"/> for void-returning (or discarded-result)
-    /// targets — same idiom followed by a <c>pop</c>; leaves nothing on the stack.
-    /// </summary>
-    private void EmitReflectionCallVoid(ILGenerator il, string typeName, string methodName, int argCount,
-        System.Action<int>? emitArg = null, System.Action? onMissing = null)
-    {
-        EmitReflectionCall(il, typeName, methodName, argCount, emitArg, onMissing);
-        il.Emit(OpCodes.Pop);
-    }
-
-    /// <summary>
     /// Emits the late-bound construction idiom:
     /// <c>Activator.CreateInstance(Type.GetType(typeName), new object[argCount] { … })</c>,
     /// leaving the new instance on the IL stack. Used where the soft dependency is a

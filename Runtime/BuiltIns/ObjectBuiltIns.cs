@@ -1226,25 +1226,6 @@ public static partial class ObjectBuiltIns
         }
     }
 
-    /// <summary>
-    /// Checks if an object is a primitive value (not extensible).
-    /// </summary>
-    private static bool IsPrimitive(object? obj)
-    {
-        return obj is double or int or float or decimal or string or bool or char;
-    }
-
-    /// <summary>
-    /// Checks if an object is a compiled class instance (has _fields dictionary).
-    /// </summary>
-    private static bool IsCompiledClassInstance(object obj)
-    {
-        var type = obj.GetType();
-        // Compiled class instances typically have a _fields field
-        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        return fieldsField != null;
-    }
-
     private static object? GroupBy(Interpreter interp, List<object?> args)
     {
         var iterable = args[0] as SharpTSArray

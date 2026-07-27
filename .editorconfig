@@ -1,0 +1,9 @@
+root = true
+
+# Dead-code analyzers. The 2026-07 cleanup audit drove unused/unread private
+# members to zero across the repo; these keep the count there by surfacing any
+# new ones as build warnings (EnforceCodeStyleInBuild in Directory.Build.props
+# makes them fire during `dotnet build`, not just in the IDE).
+[*.cs]
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
