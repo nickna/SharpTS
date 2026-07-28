@@ -19,14 +19,14 @@ public class SharpTSDate : ITypeCategorized
     private bool _isInvalid;
     private readonly SharpTSObject _extras = new([]);
 
-    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
-    public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
-    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    internal bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    internal object? TryGetExtra(string name) => _extras.GetProperty(name);
+    internal void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    internal bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _extras.DefineProperty(name, descriptor);
-    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
-    public bool DeleteExtra(string name) => _extras.DeleteProperty(name);
+    internal bool DeleteExtra(string name) => _extras.DeleteProperty(name);
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     /// <summary>Unix epoch (January 1, 1970 00:00:00 UTC)</summary>

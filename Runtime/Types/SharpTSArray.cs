@@ -851,7 +851,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Dictionary<uint, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _indexAccessors;
 
-    public bool TryGetIndexAccessor(
+    internal bool TryGetIndexAccessor(
         long index, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
         if (index >= 0 && index <= uint.MaxValue
@@ -886,7 +886,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// Checks the array's own properties, including its non-enumerable length
     /// property, present numeric indices, and user-defined named properties.
     /// </summary>
-    public bool HasOwnProperty(string name)
+    internal bool HasOwnProperty(string name)
     {
         if (name == "length") return true;
         if (uint.TryParse(name, out uint index) && index < uint.MaxValue)
@@ -898,7 +898,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// Enumerates this array's own enumerable string keys, honoring explicit
     /// descriptors on both indexed and named properties.
     /// </summary>
-    public IEnumerable<string> OwnEnumerableKeys()
+    internal IEnumerable<string> OwnEnumerableKeys()
     {
         long limit = Math.Min(_length, int.MaxValue);
         for (long index = 0; index < limit; index++)
@@ -917,7 +917,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
     }
 
-    public bool IsPropertyEnumerable(string name)
+    internal bool IsPropertyEnumerable(string name)
         => HasOwnProperty(name)
             && (_descriptors?.TryGetValue(name, out var flags) != true || flags.Enumerable);
 
