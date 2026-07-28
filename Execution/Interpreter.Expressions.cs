@@ -844,7 +844,13 @@ public partial class Interpreter
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
     private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
     {
-        (SharpTSArray array, double idx) => new IndexTarget.Array(array, (long)idx),
+        (SharpTSArray array, double idx)
+            when idx >= 0
+                && idx <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(idx) == idx
+            => new IndexTarget.Array(array, (long)idx),
+        (SharpTSArray array, _) => new IndexTarget.ArrayString(
+            array, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
@@ -1051,6 +1057,9 @@ public partial class Interpreter
         return RuntimeValue.FromBoxed(ResolveIndexTarget(obj, index) switch
         {
             IndexTarget.Array t => GetArrayIndexValue(t.Target, t.Index),
+            IndexTarget.ArrayString t => t.Target.HasNamedProperty(t.Key)
+                ? t.Target.GetNamedProperty(t.Key)
+                : SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
@@ -1304,6 +1313,10 @@ public partial class Interpreter
                 {
                     t.Target.Set(t.Index, value);
                 }
+                break;
+
+            case IndexTarget.ArrayString t:
+                t.Target.SetNamedProperty(t.Key, value);
                 break;
 
             case IndexTarget.TypedArray t:

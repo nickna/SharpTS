@@ -1085,17 +1085,47 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         // Named-property path
-        if (IsSealed && (_namedProperties == null || !_namedProperties.ContainsKey(name)))
+        bool hasNamedProperty = _namedProperties?.ContainsKey(name) ?? false;
+        PropertyDescriptorFlags namedFlags = PropertyDescriptorFlags.Default;
+        if (hasNamedProperty && _descriptors?.TryGetValue(name, out namedFlags) != true)
+            namedFlags = PropertyDescriptorFlags.Default;
+
+        // Named properties use ordinary descriptor validation. This storage
+        // currently represents data properties, so a non-configurable named
+        // data property cannot be converted to an accessor.
+        if (hasNamedProperty && namedFlags.HasExplicitDescriptor && !namedFlags.Configurable)
+        {
+            if ((descriptor.HasConfigurable && descriptor.Configurable)
+                || (descriptor.HasEnumerable
+                    && descriptor.Enumerable != namedFlags.Enumerable)
+                || descriptor.HasGet
+                || descriptor.HasSet)
+            {
+                return false;
+            }
+            if (!namedFlags.Writable
+                && ((descriptor.HasWritable && descriptor.Writable)
+                    || (descriptor.HasValue
+                        && !SameValue(descriptor.Value, _namedProperties![name]))))
+            {
+                return false;
+            }
+        }
+
+        if (!IsExtensible && !hasNamedProperty)
             return false;
 
         _namedProperties ??= new Dictionary<string, object?>();
-        _namedProperties[name] = descriptor.Value;
+        if (descriptor.HasValue)
+            _namedProperties[name] = descriptor.Value;
+        else if (!hasNamedProperty)
+            _namedProperties[name] = SharpTSUndefined.Instance;
 
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
         _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-            descriptor.Writable,
-            descriptor.Enumerable,
-            descriptor.Configurable);
+            descriptor.HasWritable ? descriptor.Writable : hasNamedProperty && namedFlags.Writable,
+            descriptor.HasEnumerable ? descriptor.Enumerable : hasNamedProperty && namedFlags.Enumerable,
+            descriptor.HasConfigurable ? descriptor.Configurable : hasNamedProperty && namedFlags.Configurable);
         return true;
     }
 

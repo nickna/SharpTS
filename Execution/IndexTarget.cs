@@ -17,6 +17,11 @@ public abstract record IndexTarget
     /// uint32 array index range) route correctly through SharpTSArray's long APIs.
     /// </summary>
     public sealed record Array(SharpTSArray Target, long Index) : IndexTarget;
+    /// <summary>
+    /// Array property key that is not an array index (for example 2^32 - 1,
+    /// a negative number, or a fractional number).
+    /// </summary>
+    public sealed record ArrayString(SharpTSArray Target, string Key) : IndexTarget;
     public sealed record TypedArray(SharpTSTypedArray Target, int Index) : IndexTarget;
     public sealed record Buffer(SharpTSBuffer Target, int Index) : IndexTarget;
     public sealed record ObjectString(SharpTSObject Target, string Key) : IndexTarget;
