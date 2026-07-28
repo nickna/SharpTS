@@ -1,6 +1,7 @@
 using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -23,15 +24,15 @@ public static class ArrayBuiltIns
             // §23.1.3. thisArg is forwarded as the callback's `this`.
             // CallbackIterator.Create reads args[1] and BindThis-es a
             // SharpTSFunction callback when present.
-            .MethodV2("map", 1, 2, specLength: 1, MapV2)
-            .MethodV2("filter", 1, 2, specLength: 1, FilterV2)
-            .MethodV2("forEach", 1, 2, specLength: 1, ForEachV2)
-            .MethodV2("find", 1, 2, specLength: 1, FindV2)
-            .MethodV2("findIndex", 1, 2, specLength: 1, FindIndexV2)
-            .MethodV2("some", 1, 2, specLength: 1, SomeV2)
-            .MethodV2("every", 1, 2, specLength: 1, EveryV2)
-            .MethodV2("reduce", 1, 2, ReduceV2)
-            .MethodV2("reduceRight", 1, 2, ReduceRightV2)
+            .MethodV2("map", 0, int.MaxValue, specLength: 1, MapV2)
+            .MethodV2("filter", 0, int.MaxValue, specLength: 1, FilterV2)
+            .MethodV2("forEach", 0, int.MaxValue, specLength: 1, ForEachV2)
+            .MethodV2("find", 0, int.MaxValue, specLength: 1, FindV2)
+            .MethodV2("findIndex", 0, int.MaxValue, specLength: 1, FindIndexV2)
+            .MethodV2("some", 0, int.MaxValue, specLength: 1, SomeV2)
+            .MethodV2("every", 0, int.MaxValue, specLength: 1, EveryV2)
+            .MethodV2("reduce", 0, int.MaxValue, specLength: 1, ReduceV2)
+            .MethodV2("reduceRight", 0, int.MaxValue, specLength: 1, ReduceRightV2)
             .MethodV2("includes", 1, IncludesV2)
             .MethodV2("indexOf", 1, 2, IndexOfV2)
             .MethodV2("lastIndexOf", 1, 2, LastIndexOfV2)
@@ -43,13 +44,13 @@ public static class ArrayBuiltIns
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
             .MethodV2("reverse", 0, ReverseV2)
             .MethodV2("flat", 0, 1, FlatV2)
-            .MethodV2("flatMap", 1, 2, specLength: 1, FlatMapV2)
+            .MethodV2("flatMap", 0, int.MaxValue, specLength: 1, FlatMapV2)
             .MethodV2("sort", 0, 1, specLength: 1, SortV2)
             .MethodV2("toSorted", 0, 1, specLength: 1, ToSortedV2)
             .MethodV2("splice", 0, int.MaxValue, specLength: 2, SpliceV2)
             .MethodV2("toSpliced", 0, int.MaxValue, specLength: 2, ToSplicedV2)
-            .MethodV2("findLast", 1, 2, specLength: 1, FindLastV2)
-            .MethodV2("findLastIndex", 1, 2, specLength: 1, FindLastIndexV2)
+            .MethodV2("findLast", 0, int.MaxValue, specLength: 1, FindLastV2)
+            .MethodV2("findLastIndex", 0, int.MaxValue, specLength: 1, FindLastIndexV2)
             .MethodV2("toReversed", 0, ToReversedV2)
             .MethodV2("with", 2, WithV2)
             .MethodV2("at", 1, AtV2)
@@ -800,8 +801,7 @@ public static class ArrayBuiltIns
         // ECMA-262 23.1.3.24: skip holes. Initial accumulator, if none supplied,
         // is the first PRESENT element. TypeError if the array has no present
         // elements and no initial value is provided.
-        var callback = args[0].ToObject() as ISharpTSCallable
-            ?? throw new Exception("Runtime Error: reduce requires a function argument.");
+        var callback = RequireCallable(args, "reduce");
 
         int len = arr.Length;
         int startIndex = 0;
@@ -820,7 +820,7 @@ public static class ArrayBuiltIns
                 if (arr.HasIndex(i)) { firstPresent = i; break; }
             }
             if (firstPresent < 0)
-                throw new Exception("TypeError: Reduce of empty array with no initial value.");
+                throw TypeError("Reduce of empty array with no initial value");
             accumulator = arr[firstPresent];
             startIndex = firstPresent + 1;
         }
@@ -851,8 +851,7 @@ public static class ArrayBuiltIns
     private static RuntimeValue ReduceRightV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         // ECMA-262 23.1.3.25: skip holes; symmetric to reduce.
-        var callback = args[0].ToObject() as ISharpTSCallable
-            ?? throw new Exception("Runtime Error: reduceRight requires a function argument.");
+        var callback = RequireCallable(args, "reduceRight");
 
         int len = arr.Length;
         int startIndex;
@@ -871,7 +870,7 @@ public static class ArrayBuiltIns
                 if (arr.HasIndex(i)) { lastPresent = i; break; }
             }
             if (lastPresent < 0)
-                throw new Exception("TypeError: Reduce of empty array with no initial value.");
+                throw TypeError("Reduce of empty array with no initial value");
             accumulator = arr[lastPresent];
             startIndex = lastPresent - 1;
         }
@@ -928,6 +927,19 @@ public static class ArrayBuiltIns
     {
         return obj is SharpTSUndefined;
     }
+
+    private static ISharpTSCallable RequireCallable(
+        ReadOnlySpan<RuntimeValue> args,
+        string methodName)
+    {
+        if (args.Length > 0 && args[0].ToObject() is ISharpTSCallable callback)
+            return callback;
+
+        throw TypeError($"{methodName} callback must be callable");
+    }
+
+    private static ThrowException TypeError(string message)
+        => new(new SharpTSTypeError(message));
 
     private static bool IsEqual(object? a, object? b)
     {
@@ -989,8 +1001,10 @@ public static class ArrayBuiltIns
 
         public static CallbackIterator Create(List<object?> args, SharpTSArray arr, string methodName)
         {
-            var callback = args[0] as ISharpTSCallable
-                ?? throw new Exception($"Runtime Error: {methodName} requires a function argument.");
+            var callback = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+            if (callback is null)
+                throw TypeError($"{methodName} callback must be callable");
+
             // ECMA-262 §23.1.3 callback methods accept (cb, thisArg). If thisArg
             // is supplied, re-bind regular functions and function expressions.
             // Arrow functions (HasOwnThis=false) ignore the binding per spec.
@@ -1001,8 +1015,7 @@ public static class ArrayBuiltIns
 
         public static CallbackIterator CreateFromRV(ReadOnlySpan<RuntimeValue> args, SharpTSArray arr, string methodName)
         {
-            var callback = args[0].ToObject() as ISharpTSCallable
-                ?? throw new Exception($"Runtime Error: {methodName} requires a function argument.");
+            var callback = RequireCallable(args, methodName);
             if (args.Length >= 2)
                 callback = BindCallbackThis(callback, args[1].ToObject());
             return new CallbackIterator(callback, RuntimeValue.FromObject(arr));

@@ -724,6 +724,8 @@ public partial class Interpreter
     internal string ToStringForBuiltInArgument(object? value)
     {
         ThrowIfSymbolStringCoercion(value);
+        if (value is SharpTSArray array)
+            return ArrayBuiltIns.ToJsString(this, array);
         if (value is not SharpTSObject obj)
             return Stringify(value);
 

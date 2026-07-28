@@ -86,11 +86,11 @@ public class SharpTSObjectNamespace : ISharpTSCallable
                 ["__primitiveType"] = "Symbol",
                 ["__primitiveValue"] = value,
             });
-        // Primitives (string/number/bool) — wrap in a plain object holding the primitive.
-        // Good enough for lodash's use case where the wrapper is iterated over, not read.
-        // A fuller implementation would materialize String/Number/Boolean wrapper objects.
-        if (value is string or double or int or long or bool)
-            return new SharpTSObject(new Dictionary<string, object?> { ["valueOf"] = value });
+        // Primitives use the same internal-slot wrappers as their dedicated
+        // constructors. This preserves Object(value)'s primitive identity for
+        // later ToPrimitive operations.
+        if (value is string or double or bool)
+            return BuiltInConstructorFactory.ToObject(value);
         return value;
     }
 

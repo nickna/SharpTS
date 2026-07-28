@@ -285,6 +285,80 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-9.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-11.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-12.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-13.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-14.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-1-11.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-1-13.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-1-14.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-1-9.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-1-12.js")]
+    public void Array_prototype_methods_support_generic_receivers_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-4-1.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-4-1.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-4-1.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-4-1.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-4-1.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-4-1.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-4-1.js")]
+    public void Array_callback_methods_throw_TypeError_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-1-13.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-1-15.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-1-15.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-1-15.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-15.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-1-15.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-1-15.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-1-15.js")]
+    [InlineData("built-ins/Object/prototype/toString/Object.prototype.toString.call-arguments.js")]
+    public void Arguments_objects_have_distinct_identity_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/charAt/S15.5.4.4_A1.1.js")]
+    [InlineData("built-ins/String/prototype/charAt/pos-coerce-string.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1.1.js")]
+    [InlineData("built-ins/String/prototype/codePointAt/return-abrupt-from-object-pos-to-integer.js")]
+    [InlineData("built-ins/String/prototype/indexOf/searchstring-tostring.js")]
+    [InlineData("built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T3.js")]
+    [InlineData("built-ins/String/prototype/includes/coerced-values-of-position.js")]
+    [InlineData("built-ins/String/prototype/startsWith/searchstring-found-with-position.js")]
+    [InlineData("built-ins/String/prototype/endsWith/coerced-values-of-position.js")]
+    [InlineData("built-ins/String/prototype/endsWith/searchstring-is-regexp-throws.js")]
+    [InlineData("built-ins/String/prototype/slice/S15.5.4.13_A1_T1.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A2_T4.js")]
+    public void String_character_and_search_methods_coerce_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/fromCharCode/touint16-tonumber-throws-valueof.js")]
+    [InlineData("built-ins/String/fromCodePoint/to-number-conversions.js")]
+    [InlineData("built-ins/String/fromCodePoint/number-is-out-of-range.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T1.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T2.js")]
+    [InlineData("built-ins/String/prototype/localeCompare/15.5.4.9_3.js")]
+    [InlineData("built-ins/String/prototype/repeat/count-coerced-to-zero-returns-empty-string.js")]
+    [InlineData("built-ins/String/prototype/repeat/count-less-than-zero-throws.js")]
+    [InlineData("built-ins/String/prototype/padStart/fill-string-non-strings.js")]
+    [InlineData("built-ins/String/prototype/padEnd/normal-operation.js")]
+    [InlineData("built-ins/String/prototype/normalize/form-is-not-valid-throws.js")]
+    public void Remaining_string_methods_coerce_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

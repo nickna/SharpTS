@@ -1066,6 +1066,13 @@ public partial class Interpreter
         if (right is SharpTSBooleanNamespace)
             return IsBoxedPrimitiveOfType(left, "Boolean");
 
+        // The Function global is represented by a namespace-style callable
+        // rather than SharpTSBuiltInConstructor. OrdinaryHasInstance for it
+        // accepts every callable guest value, including declarations,
+        // expressions/arrows, classes, and native built-ins.
+        if (right is SharpTSFunctionGlobal)
+            return left is ISharpTSCallable;
+
         // Bare-value constructors for the built-in binary types (ArrayBuffer,
         // SharedArrayBuffer, DataView, typed arrays) are plain ISharpTSCallables,
         // so they carry their own instance predicate (#334).
@@ -1120,7 +1127,8 @@ public partial class Interpreter
         // Real arrays AND the Array.prototype dict itself satisfy the check
         // (ECMA-262 23.1.3 — Array.prototype is itself an Array exotic object).
         if (right is SharpTSArrayGlobal)
-            return left is SharpTSArray || left is SharpTSArrayPrototype;
+            return left is SharpTSArray and not SharpTSArguments
+                || left is SharpTSArrayPrototype;
 
         // Constructor-function instanceof (JS `new Func()` pattern).
         // An object is `instanceof Func` when any link in its prototype

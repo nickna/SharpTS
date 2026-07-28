@@ -1,6 +1,7 @@
 using System.Text;
 using SharpTS.Execution;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -10,12 +11,12 @@ public static class StringBuiltIns
     private static readonly BuiltInTypeMemberLookup<string> _lookup =
         BuiltInTypeBuilder<string>.ForInstanceType()
             .Property("length", s => (double)s.Length)
-            .MethodV2("charAt", 1, CharAtV2)
-            // Spec lengths (ECMA-262 §22.1.3): substring/slice/split/substr
-            // all take two optional args, so spec length is 2 even though
-            // MinArity is 1. concat is variadic with spec length 1.
-            .MethodV2("substring", 1, 2, specLength: 2, SubstringV2)
-            .MethodV2("indexOf", 1, 2, IndexOfV2)
+            .MethodV2("charAt", 0, int.MaxValue, specLength: 1, CharAtV2)
+            // Spec lengths (ECMA-262 §22.1.3) are metadata, independent of
+            // runtime argument acceptance: JavaScript methods coerce omitted
+            // values and ignore extras. concat is variadic with spec length 1.
+            .MethodV2("substring", 0, int.MaxValue, specLength: 2, SubstringV2)
+            .MethodV2("indexOf", 0, int.MaxValue, specLength: 1, IndexOfV2)
             .MethodV2("toUpperCase", 0, ToUpperCaseV2)
             .MethodV2("toLowerCase", 0, ToLowerCaseV2)
             .MethodV2("toLocaleUpperCase", 0, ToUpperCaseV2)
@@ -26,24 +27,24 @@ public static class StringBuiltIns
             .MethodV2("match", 1, MatchV2)
             .MethodV2("matchAll", 1, MatchAllV2)
             .MethodV2("search", 1, SearchV2)
-            .MethodV2("includes", 1, IncludesV2)
-            .MethodV2("startsWith", 1, StartsWithV2)
-            .MethodV2("endsWith", 1, EndsWithV2)
-            .MethodV2("slice", 1, 2, specLength: 2, SliceV2)
-            .MethodV2("substr", 1, 2, specLength: 2, SubstrV2)
-            .MethodV2("repeat", 1, RepeatV2)
-            .MethodV2("padStart", 1, 2, PadStartV2)
-            .MethodV2("padEnd", 1, 2, PadEndV2)
-            .MethodV2("charCodeAt", 1, CharCodeAtV2)
-            .MethodV2("codePointAt", 1, CodePointAtV2)
+            .MethodV2("includes", 0, int.MaxValue, specLength: 1, IncludesV2)
+            .MethodV2("startsWith", 0, int.MaxValue, specLength: 1, StartsWithV2)
+            .MethodV2("endsWith", 0, int.MaxValue, specLength: 1, EndsWithV2)
+            .MethodV2("slice", 0, int.MaxValue, specLength: 2, SliceV2)
+            .MethodV2("substr", 0, int.MaxValue, specLength: 2, SubstrV2)
+            .MethodV2("repeat", 0, int.MaxValue, specLength: 1, RepeatV2)
+            .MethodV2("padStart", 0, int.MaxValue, specLength: 1, PadStartV2)
+            .MethodV2("padEnd", 0, int.MaxValue, specLength: 1, PadEndV2)
+            .MethodV2("charCodeAt", 0, int.MaxValue, specLength: 1, CharCodeAtV2)
+            .MethodV2("codePointAt", 0, int.MaxValue, specLength: 1, CodePointAtV2)
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
-            .MethodV2("lastIndexOf", 1, LastIndexOfV2)
+            .MethodV2("lastIndexOf", 0, int.MaxValue, specLength: 1, LastIndexOfV2)
             .MethodV2("trimStart", 0, TrimStartV2)
             .MethodV2("trimEnd", 0, TrimEndV2)
             .MethodV2("replaceAll", 2, ReplaceAllV2)
-            .MethodV2("at", 1, AtV2)
-            .MethodV2("normalize", 0, 1, NormalizeV2)
-            .MethodV2("localeCompare", 1, LocaleCompareV2)
+            .MethodV2("at", 0, int.MaxValue, specLength: 1, AtV2)
+            .MethodV2("normalize", 0, int.MaxValue, specLength: 0, NormalizeV2)
+            .MethodV2("localeCompare", 0, int.MaxValue, specLength: 1, LocaleCompareV2)
             // ECMA-262 §22.1.3.28/.31: String.prototype.toString and valueOf both
             // return thisStringValue. Needed so `(new String("x")).toString()` and
             // ToPrimitive(string-wrapper) unwrap to the primitive instead of
@@ -229,20 +230,20 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(result.ToString());
     }
 
-    private static RuntimeValue FromCharCodeV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue FromCharCodeV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.EmptyString;
 
         if (args.Length == 1)
         {
-            var code = (int)NumArg(args[0]);
+            var code = (int)NumArg(interpreter, args[0]);
             return RuntimeValue.FromString(((char)(code & 0xFFFF)).ToString());
         }
 
         var chars = new char[args.Length];
         for (int i = 0; i < args.Length; i++)
         {
-            var code = (int)NumArg(args[i]);
+            var code = (int)NumArg(interpreter, args[i]);
             chars[i] = (char)(code & 0xFFFF);
         }
         return RuntimeValue.FromString(new string(chars));
@@ -253,10 +254,12 @@ public static class StringBuiltIns
     /// boxed <c>new Number(x)</c> wrapper) through the interpreter's ToNumber so
     /// it unwraps to its primitive instead of throwing on <c>AsNumber()</c> (#708).
     /// </summary>
-    private static double NumArg(RuntimeValue rv)
-        => rv.Kind == ValueKind.Number ? rv.AsNumber() : Interpreter.ToNumber(rv.ToObject());
+    private static double NumArg(Interpreter interpreter, RuntimeValue rv)
+        => rv.Kind == ValueKind.Number
+            ? rv.AsNumber()
+            : interpreter.ToNumberWithPrimitive(rv.ToObject());
 
-    private static RuntimeValue FromCodePointV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue FromCodePointV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.EmptyString;
 
@@ -265,9 +268,10 @@ public static class StringBuiltIns
         {
             // ECMA-262 §22.1.2.2: each code point must be an integral Number in
             // [0, 0x10FFFF]; NaN / Infinity / fractional values throw RangeError.
-            var num = NumArg(arg);
+            var num = NumArg(interpreter, arg);
             if (!double.IsInteger(num) || num < 0 || num > 0x10FFFF)
-                throw new Exception($"RangeError: Invalid code point {num}");
+                throw new ThrowException(new SharpTSRangeError(
+                    $"Invalid code point {num}"));
             AppendCodePoint(sb, (int)num);
         }
         return RuntimeValue.FromString(sb.ToString());
@@ -296,34 +300,29 @@ public static class StringBuiltIns
 
     #region V2 Implementations (RuntimeValue — no boxing)
 
-    private static RuntimeValue CharAtV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CharAtV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var index = (int)args[0].AsNumber();
-        if (index < 0 || index >= str.Length) return RuntimeValue.EmptyString;
-        return RuntimeValue.FromString(str[index].ToString());
+        double position = IntegerArgument(interpreter, args, 0, 0);
+        if (position < 0 || position >= str.Length) return RuntimeValue.EmptyString;
+        return RuntimeValue.FromString(str[(int)position].ToString());
     }
 
-    private static RuntimeValue SubstringV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue SubstringV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var start = Math.Max(0, (int)args[0].AsNumber());
-        var end = args.Length > 1 ? (int)args[1].AsNumber() : str.Length;
-        if (start >= str.Length) return RuntimeValue.EmptyString;
-        if (end > str.Length) end = str.Length;
-        if (end <= start) return RuntimeValue.EmptyString;
+        int start = ClampPosition(IntegerArgument(interpreter, args, 0, 0), str.Length);
+        int end = args.Length < 2 || args[1].IsUndefined
+            ? str.Length
+            : ClampPosition(IntegerArgument(interpreter, args, 1, 0), str.Length);
+        if (start > end) (start, end) = (end, start);
         return RuntimeValue.FromString(str.Substring(start, end - start));
     }
 
-    private static RuntimeValue IndexOfV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue IndexOfV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var search = args[0].AsString();
-        // ECMA-262 §22.1.3.9: fromIndex is clamped to [0, length]
-        int fromIndex = 0;
-        if (args.Length >= 2 && !args[1].IsUndefined)
-        {
-            double n = args[1].AsNumber();
-            fromIndex = double.IsNaN(n) ? 0 : (int)Math.Max(0, Math.Min(n, str.Length));
-        }
-        return RuntimeValue.FromNumber(str.IndexOf(search, fromIndex));
+        string search = StringArgument(interpreter, args, 0);
+        int fromIndex = ClampPosition(IntegerArgument(interpreter, args, 1, 0), str.Length);
+        return RuntimeValue.FromNumber(
+            str.IndexOf(search, fromIndex, StringComparison.Ordinal));
     }
 
     private static RuntimeValue ToUpperCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
@@ -335,34 +334,54 @@ public static class StringBuiltIns
     private static RuntimeValue TrimV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(str.Trim());
 
-    private static RuntimeValue IncludesV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoolean(str.Contains(args[0].AsString()));
-
-    private static RuntimeValue StartsWithV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoolean(str.StartsWith(args[0].AsString()));
-
-    private static RuntimeValue EndsWithV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoolean(str.EndsWith(args[0].AsString()));
-
-    private static RuntimeValue SliceV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue IncludesV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var start = (int)args[0].AsNumber();
-        var end = args.Length > 1 ? (int)args[1].AsNumber() : str.Length;
-        if (start < 0) start = Math.Max(0, str.Length + start);
-        if (end < 0) end = Math.Max(0, str.Length + end);
-        start = Math.Min(start, str.Length);
-        end = Math.Min(end, str.Length);
+        string search = SearchStringArgument(interpreter, args, "includes");
+        int position = ClampPosition(IntegerArgument(interpreter, args, 1, 0), str.Length);
+        return RuntimeValue.FromBoolean(
+            str.IndexOf(search, position, StringComparison.Ordinal) >= 0);
+    }
+
+    private static RuntimeValue StartsWithV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        string search = SearchStringArgument(interpreter, args, "startsWith");
+        int position = ClampPosition(IntegerArgument(interpreter, args, 1, 0), str.Length);
+        return position + search.Length <= str.Length
+            ? RuntimeValue.FromBoolean(
+                str.AsSpan(position, search.Length).SequenceEqual(search))
+            : RuntimeValue.False;
+    }
+
+    private static RuntimeValue EndsWithV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        string search = SearchStringArgument(interpreter, args, "endsWith");
+        int end = args.Length < 2 || args[1].IsUndefined
+            ? str.Length
+            : ClampPosition(IntegerArgument(interpreter, args, 1, 0), str.Length);
+        int start = end - search.Length;
+        return start >= 0
+            ? RuntimeValue.FromBoolean(
+                str.AsSpan(start, search.Length).SequenceEqual(search))
+            : RuntimeValue.False;
+    }
+
+    private static RuntimeValue SliceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        int start = RelativePosition(
+            IntegerArgument(interpreter, args, 0, 0), str.Length);
+        int end = args.Length < 2 || args[1].IsUndefined
+            ? str.Length
+            : RelativePosition(
+                IntegerArgument(interpreter, args, 1, 0), str.Length);
         if (end <= start) return RuntimeValue.EmptyString;
         return RuntimeValue.FromString(str.Substring(start, end - start));
     }
 
     // Legacy String.prototype.substr(start[, length]) — Annex B §B.2.2.1
-    private static RuntimeValue SubstrV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue SubstrV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        double startArg = args[0].AsNumber();
-        int start = double.IsNaN(startArg) ? 0 : (int)startArg;
-        if (start < 0) start = Math.Max(0, str.Length + start);
-        if (start > str.Length) return RuntimeValue.EmptyString;
+        int start = RelativePosition(
+            IntegerArgument(interpreter, args, 0, 0), str.Length);
 
         int length;
         if (args.Length < 2 || args[1].IsUndefined)
@@ -371,18 +390,25 @@ public static class StringBuiltIns
         }
         else
         {
-            double lenArg = args[1].AsNumber();
-            length = double.IsNaN(lenArg) ? 0 : (int)lenArg;
+            double lengthArg = IntegerArgument(interpreter, args, 1, 0);
+            length = ClampPosition(lengthArg, str.Length - start);
         }
         if (length <= 0) return RuntimeValue.EmptyString;
         length = Math.Min(length, str.Length - start);
         return RuntimeValue.FromString(str.Substring(start, length));
     }
 
-    private static RuntimeValue RepeatV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue RepeatV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var count = (int)args[0].AsNumber();
-        if (count < 0) throw new Exception("Runtime Error: Invalid count value for repeat()");
+        double rawCount = IntegerArgument(interpreter, args, 0, 0);
+        if (rawCount < 0 || double.IsPositiveInfinity(rawCount))
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid count value for repeat"));
+        if (rawCount > int.MaxValue
+            || (str.Length > 0 && rawCount > int.MaxValue / str.Length))
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid string length"));
+        int count = (int)rawCount;
         if (count == 0 || str.Length == 0) return RuntimeValue.EmptyString;
         if (count == 1) return RuntimeValue.FromString(str);
         return RuntimeValue.FromString(string.Create(str.Length * count, (str, count), static (span, state) =>
@@ -394,15 +420,30 @@ public static class StringBuiltIns
         }));
     }
 
-    private static RuntimeValue CharCodeAtV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CharCodeAtV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var index = (int)args[0].AsNumber();
-        if (index < 0 || index >= str.Length) return RuntimeValue.NaN;
-        return RuntimeValue.FromNumber(str[index]);
+        double position = IntegerArgument(interpreter, args, 0, 0);
+        if (position < 0 || position >= str.Length) return RuntimeValue.NaN;
+        return RuntimeValue.FromNumber(str[(int)position]);
     }
 
-    private static RuntimeValue LastIndexOfV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromNumber(str.LastIndexOf(args[0].AsString()));
+    private static RuntimeValue LastIndexOfV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        string search = StringArgument(interpreter, args, 0);
+        double rawPosition = args.Length < 2 || args[1].IsUndefined
+            ? double.PositiveInfinity
+            : interpreter.ToNumberWithPrimitive(args[1].ToObject());
+        rawPosition = double.IsNaN(rawPosition)
+            ? double.PositiveInfinity
+            : ToIntegerOrInfinity(rawPosition);
+        int position = ClampPosition(rawPosition, str.Length);
+        int start = Math.Min(position, str.Length - search.Length);
+        if (start < 0) return RuntimeValue.FromNumber(-1);
+        if (search.Length == 0) return RuntimeValue.FromNumber(position);
+        int searchEnd = Math.Min(str.Length, start + search.Length);
+        return RuntimeValue.FromNumber(
+            str.AsSpan(0, searchEnd).LastIndexOf(search));
+    }
 
     private static RuntimeValue TrimStartV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(str.TrimStart());
@@ -410,19 +451,24 @@ public static class StringBuiltIns
     private static RuntimeValue TrimEndV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(str.TrimEnd());
 
-    private static RuntimeValue AtV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue AtV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var index = (int)args[0].AsNumber();
-        if (index < 0) index = str.Length + index;
-        if (index < 0 || index >= str.Length) return RuntimeValue.Undefined;
-        return RuntimeValue.FromString(str[index].ToString());
+        double relativeIndex = IntegerArgument(interpreter, args, 0, 0);
+        double position = relativeIndex >= 0
+            ? relativeIndex
+            : str.Length + relativeIndex;
+        if (position < 0 || position >= str.Length) return RuntimeValue.Undefined;
+        return RuntimeValue.FromString(str[(int)position].ToString());
     }
 
-    private static RuntimeValue PadStartV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PadStartV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var targetLength = (int)args[0].AsNumber();
-        var padString = args.Length > 1 ? args[1].AsString() : " ";
-        if (targetLength <= str.Length || padString.Length == 0) return RuntimeValue.FromString(str);
+        int targetLength = PadTargetLength(interpreter, args);
+        if (targetLength <= str.Length) return RuntimeValue.FromString(str);
+        string padString = args.Length < 2 || args[1].IsUndefined
+            ? " "
+            : StringArgument(interpreter, args, 1);
+        if (padString.Length == 0) return RuntimeValue.FromString(str);
         var padLength = targetLength - str.Length;
         return RuntimeValue.FromString(string.Create(targetLength, (str, padString, padLength), static (span, state) =>
         {
@@ -439,11 +485,14 @@ public static class StringBuiltIns
         }));
     }
 
-    private static RuntimeValue PadEndV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PadEndV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var targetLength = (int)args[0].AsNumber();
-        var padString = args.Length > 1 ? args[1].AsString() : " ";
-        if (targetLength <= str.Length || padString.Length == 0) return RuntimeValue.FromString(str);
+        int targetLength = PadTargetLength(interpreter, args);
+        if (targetLength <= str.Length) return RuntimeValue.FromString(str);
+        string padString = args.Length < 2 || args[1].IsUndefined
+            ? " "
+            : StringArgument(interpreter, args, 1);
+        if (padString.Length == 0) return RuntimeValue.FromString(str);
         var padLength = targetLength - str.Length;
         return RuntimeValue.FromString(string.Create(targetLength, (str, padString, padLength), static (span, state) =>
         {
@@ -460,10 +509,11 @@ public static class StringBuiltIns
         }));
     }
 
-    private static RuntimeValue CodePointAtV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CodePointAtV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var index = (int)args[0].AsNumber();
-        if (index < 0 || index >= str.Length) return RuntimeValue.Undefined;
+        double position = IntegerArgument(interpreter, args, 0, 0);
+        if (position < 0 || position >= str.Length) return RuntimeValue.Undefined;
+        int index = (int)position;
         if (char.IsHighSurrogate(str[index]) && index + 1 < str.Length && char.IsLowSurrogate(str[index + 1]))
             return RuntimeValue.FromNumber(char.ConvertToUtf32(str[index], str[index + 1]));
         return RuntimeValue.FromNumber(str[index]);
@@ -498,37 +548,115 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str.Replace(search, replacement));
     }
 
-    private static RuntimeValue NormalizeV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue NormalizeV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var form = args.Length > 0 && args[0].IsString ? args[0].AsString() : "NFC";
+        string form = args.Length == 0 || args[0].IsUndefined
+            ? "NFC"
+            : StringArgument(interpreter, args, 0);
         var normForm = form switch
         {
             "NFC" => System.Text.NormalizationForm.FormC,
             "NFD" => System.Text.NormalizationForm.FormD,
             "NFKC" => System.Text.NormalizationForm.FormKC,
             "NFKD" => System.Text.NormalizationForm.FormKD,
-            _ => throw new Exception($"RangeError: The normalization form should be one of NFC, NFD, NFKC, NFKD.")
+            _ => throw new ThrowException(new SharpTSRangeError(
+                "The normalization form should be one of NFC, NFD, NFKC, NFKD"))
         };
         return RuntimeValue.FromString(str.Normalize(normForm));
     }
 
-    private static RuntimeValue LocaleCompareV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue LocaleCompareV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var that = args[0].AsString();
+        string that = StringArgument(interpreter, args, 0);
         var result = string.Compare(str, that, StringComparison.CurrentCulture);
         return RuntimeValue.FromNumber(result < 0 ? -1 : result > 0 ? 1 : 0);
     }
 
-    private static RuntimeValue ConcatV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ConcatV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.FromString(str);
-        if (args.Length == 1) return RuntimeValue.FromString(string.Concat(str, args[0].AsString()));
+        if (args.Length == 1)
+            return RuntimeValue.FromString(string.Concat(
+                str, StringArgument(interpreter, args, 0)));
         var sb = new StringBuilder(str);
-        foreach (var arg in args)
+        for (int i = 0; i < args.Length; i++)
         {
-            sb.Append(arg.AsString());
+            sb.Append(StringArgument(interpreter, args, i));
         }
         return RuntimeValue.FromString(sb.ToString());
+    }
+
+    private static object? ArgumentOrUndefined(
+        ReadOnlySpan<RuntimeValue> args,
+        int index)
+        => index < args.Length
+            ? args[index].ToObject()
+            : SharpTSUndefined.Instance;
+
+    private static string StringArgument(
+        Interpreter interpreter,
+        ReadOnlySpan<RuntimeValue> args,
+        int index)
+        => interpreter.ToStringForBuiltInArgument(
+            ArgumentOrUndefined(args, index));
+
+    private static string SearchStringArgument(
+        Interpreter interpreter,
+        ReadOnlySpan<RuntimeValue> args,
+        string methodName)
+    {
+        object? value = ArgumentOrUndefined(args, 0);
+        if (value is SharpTSRegExp)
+            throw new ThrowException(new SharpTSTypeError(
+                $"String.prototype.{methodName} does not accept a RegExp"));
+        return interpreter.ToStringForBuiltInArgument(value);
+    }
+
+    private static double IntegerArgument(
+        Interpreter interpreter,
+        ReadOnlySpan<RuntimeValue> args,
+        int index,
+        double defaultValue)
+    {
+        if (index >= args.Length)
+            return defaultValue;
+
+        double number = interpreter.ToNumberWithPrimitive(args[index].ToObject());
+        return ToIntegerOrInfinity(number);
+    }
+
+    private static double ToIntegerOrInfinity(double number)
+    {
+        if (double.IsNaN(number) || number == 0) return 0;
+        if (double.IsInfinity(number)) return number;
+        return Math.Truncate(number);
+    }
+
+    private static int ClampPosition(double position, int length)
+    {
+        if (position <= 0) return 0;
+        if (position >= length) return length;
+        return (int)position;
+    }
+
+    private static int RelativePosition(double position, int length)
+    {
+        if (position == double.NegativeInfinity) return 0;
+        if (position < 0)
+            return (int)Math.Max(length + position, 0);
+        return ClampPosition(position, length);
+    }
+
+    private static int PadTargetLength(
+        Interpreter interpreter,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        double targetLength = IntegerArgument(interpreter, args, 0, 0);
+        if (targetLength <= 0) return 0;
+        if (targetLength > int.MaxValue)
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid string length"));
+        return (int)targetLength;
     }
 
     #endregion

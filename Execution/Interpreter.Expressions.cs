@@ -1277,6 +1277,12 @@ public partial class Interpreter
             regexSet.SetBySymbol(regexSetSym, value);
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSRegExp regexStringSet)
+        {
+            regexStringSet.SetProperty(
+                PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         // Built-in callables expose `name` / `length` as non-writable own
         // properties (ECMA-262 §17). Index assignment to those should silently

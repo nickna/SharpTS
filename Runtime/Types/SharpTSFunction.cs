@@ -223,7 +223,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         // Materialized only when the body can observe it (ArgumentsUsage scan).
         if (ArgumentsUsage.UsesArguments(_declaration))
         {
-            environment.Define("arguments", new SharpTSArray(arguments));
+            environment.Define("arguments", new SharpTSArguments(arguments));
         }
 
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
@@ -332,7 +332,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             var argsList = new List<object?>(arguments.Length);
             for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
-            environment.Define("arguments", new SharpTSArray(argsList));
+            environment.Define("arguments", new SharpTSArguments(argsList));
         }
 
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
@@ -555,7 +555,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         // Materialized only when the body can observe it (ArgumentsUsage scan).
         if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
         {
-            environment.Define("arguments", new SharpTSArray(new List<object?>(arguments)));
+            environment.Define("arguments", new SharpTSArguments(new List<object?>(arguments)));
         }
 
         if (_declaration.ExpressionBody != null)
@@ -587,7 +587,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
             }
         }
 
-        return null;
+        return SharpTSUndefined.Instance;
     }
 
     /// <summary>
@@ -628,7 +628,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         {
             var argsList = new List<object?>(arguments.Length);
             for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
-            environment.Define("arguments", new SharpTSArray(argsList));
+            environment.Define("arguments", new SharpTSArguments(argsList));
         }
 
         if (_declaration.ExpressionBody != null)

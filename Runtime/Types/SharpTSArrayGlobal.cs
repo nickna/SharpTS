@@ -228,136 +228,28 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable
     private static bool TryMaterializeArrayLike(object? receiver, Interp interpreter, out SharpTSArray tempArr)
     {
         tempArr = null!;
-        switch (receiver)
+        if (receiver is null or SharpTSUndefined)
+            return false;
+
+        // LengthOfArrayLike and indexed HasProperty/Get are deliberately
+        // routed through the interpreter's generic property operations. Array
+        // prototype methods are generic: Date, RegExp, JSON, Error, Function,
+        // boxed primitives, and ordinary records all participate once user
+        // code gives them a length and indexed properties.
+        object? rawLen = interpreter.GetProperty(receiver, "length");
+        long len = ToLength(rawLen, interpreter);
+        len = Math.Min(len, 1 << 20);
+        var list = new List<object?>((int)len);
+        for (int i = 0; i < len; i++)
         {
-            case SharpTSObject obj:
-            {
-                // Read `length` — invoking an accessor getter if one is defined
-                // (Object.defineProperty(obj, "length", { get: ... })). Per spec,
-                // a throwing length getter aborts the whole method; we propagate
-                // by letting the ThrowException escape to the caller.
-                object? rawLen = ReadArrayLikeProperty(obj, "length", interpreter);
-                // When the wrapper has no own `length` (absent = SharpTSUndefined),
-                // walk the prototype chain. A boxed Number/Boolean primitive
-                // (ToObject result) carries __primitiveType but no own indexed
-                // elements — consult *.prototype extras.
-                if (rawLen is null or SharpTSUndefined)
-                    rawLen = GetBoxedPrimitiveProtoExtra(obj, "length", interpreter);
-                long len = ToLength(rawLen);
-                len = Math.Min(len, 1 << 20);
-                var list = new List<object?>((int)len);
-                for (int i = 0; i < len; i++)
-                {
-                    var key = i.ToString();
-                    if (obj.HasGetter(key))
-                        list.Add(ReadArrayLikeProperty(obj, key, interpreter));
-                    else if (obj.HasProperty(key))
-                        list.Add(obj.GetProperty(key));
-                    else
-                        list.Add(GetBoxedPrimitiveProtoExtra(obj, key, interpreter) ?? ArrayHole.Instance);
-                }
-                tempArr = new SharpTSArray(list);
-                return true;
-            }
-            case SharpTSMath math:
-            {
-                // Math is an extensible namespace object — Test262 tests set
-                // `Math.length` and `Math[i]` before invoking Array.prototype.*
-                // on Math, expecting array-like semantics.
-                long len = ToLength(math.HasExtra("length") ? math.TryGetExtra("length") : null);
-                len = Math.Min(len, 1 << 20);
-                var list = new List<object?>((int)len);
-                for (int i = 0; i < len; i++)
-                {
-                    var key = i.ToString();
-                    list.Add(math.HasExtra(key) ? math.TryGetExtra(key) : ArrayHole.Instance);
-                }
-                tempArr = new SharpTSArray(list);
-                return true;
-            }
-            case SharpTSNumberPrototype numProto:
-            {
-                long len = ToLength(numProto.HasExtra("length") ? numProto.TryGetExtra("length") : null);
-                len = Math.Min(len, 1 << 20);
-                var list = new List<object?>((int)len);
-                for (int i = 0; i < len; i++)
-                {
-                    var key = i.ToString();
-                    list.Add(numProto.HasExtra(key) ? numProto.TryGetExtra(key) : ArrayHole.Instance);
-                }
-                tempArr = new SharpTSArray(list);
-                return true;
-            }
-            case SharpTSBooleanPrototype boolProto:
-            {
-                long len = ToLength(boolProto.HasExtra("length") ? boolProto.TryGetExtra("length") : null);
-                len = Math.Min(len, 1 << 20);
-                var list = new List<object?>((int)len);
-                for (int i = 0; i < len; i++)
-                {
-                    var key = i.ToString();
-                    list.Add(boolProto.HasExtra(key) ? boolProto.TryGetExtra(key) : ArrayHole.Instance);
-                }
-                tempArr = new SharpTSArray(list);
-                return true;
-            }
-            case SharpTSStringPrototype strProto:
-            {
-                long len = ToLength(strProto.HasExtra("length") ? strProto.TryGetExtra("length") : null);
-                len = Math.Min(len, 1 << 20);
-                var list = new List<object?>((int)len);
-                for (int i = 0; i < len; i++)
-                {
-                    var key = i.ToString();
-                    list.Add(strProto.HasExtra(key) ? strProto.TryGetExtra(key) : ArrayHole.Instance);
-                }
-                tempArr = new SharpTSArray(list);
-                return true;
-            }
-            // A primitive string receiver never reaches here: Call() runs it
-            // through ToObject first, so it arrives as a boxed String wrapper
-            // (SharpTSObject with `length` + indexed char slots) handled by the
-            // SharpTSObject case above.
-            default:
-                return false;
+            string key = i.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            list.Add(interpreter.HasProperty(receiver, key)
+                ? interpreter.GetProperty(receiver, key)
+                : ArrayHole.Instance);
         }
-    }
-
-    /// <summary>
-    /// Returns the extra property value from the matching primitive prototype when
-    /// <paramref name="obj"/> is a boxed primitive wrapper produced by ToObject,
-    /// or null if the property is absent or the object is not a boxed primitive.
-    /// Used to implement ECMA-262 LengthOfArrayLike/Get prototype-chain walk for
-    /// Number and Boolean wrappers whose own property bags carry no indexed state.
-    /// </summary>
-    private static object? GetBoxedPrimitiveProtoExtra(SharpTSObject obj, string name, Interp interpreter)
-    {
-        if (!obj.HasProperty("__primitiveType")) return null;
-        // Per-realm prototypes: read the boxed primitive's prototype extras off
-        // this realm's instance, not the shared singleton, so they match what
-        // guest `Number.prototype.x = …` wrote in the same realm.
-        return obj.GetProperty("__primitiveType") switch
-        {
-            "Number"  => interpreter.GetNumberPrototype().TryGetExtra(name),
-            "Boolean" => interpreter.GetBooleanPrototype().TryGetExtra(name),
-            "String"  => interpreter.GetStringPrototype().TryGetExtra(name),
-            _ => null
-        };
-    }
-
-    /// <summary>
-    /// Reads a property from a SharpTSObject, invoking an accessor getter if
-    /// present. Matches the `Get(O, P)` abstract operation used by
-    /// Array.prototype.* methods. If the getter throws, the exception
-    /// propagates — spec-compliant short-circuit for things like
-    /// <c>Object.defineProperty(obj, "length", { get: () => { throw ... } })</c>.
-    /// </summary>
-    private static object? ReadArrayLikeProperty(SharpTSObject obj, string name, Interp interpreter)
-    {
-        var getter = obj.GetGetter(name);
-        if (getter != null)
-            return getter.Call(interpreter, new List<object?>());
-        return obj.GetProperty(name);
+        tempArr = new SharpTSArray(list);
+        return true;
     }
 
     /// <summary>
@@ -386,18 +278,9 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable
     /// non-negative integer length, clamped to <c>2^53 − 1</c>. NaN/negative
     /// input becomes 0; non-numeric strings parse to NaN → 0.
     /// </summary>
-    private static long ToLength(object? value)
+    private static long ToLength(object? value, Interp interpreter)
     {
-        double n = value switch
-        {
-            double d => d,
-            bool b => b ? 1.0 : 0.0,
-            string s => double.TryParse(s, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN,
-            null => 0.0,
-            SharpTSUndefined => double.NaN,
-            _ => double.NaN,
-        };
+        double n = interpreter.ToNumberWithPrimitive(value);
         if (double.IsNaN(n) || n <= 0) return 0;
         if (double.IsPositiveInfinity(n)) return (1L << 53) - 1;
         return (long)Math.Min(Math.Truncate(n), (double)((1L << 53) - 1));

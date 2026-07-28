@@ -169,33 +169,8 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
                 $"String.prototype.{_name} called on null or undefined"));
         }
 
-        var coerced = CoerceToString(_receiver);
+        var coerced = interpreter.ToStringForBuiltInArgument(_receiver);
         return _inner.Bind(coerced).Call(interpreter, arguments);
-    }
-
-    /// <summary>
-    /// ECMA-262 ToString abstract operation — mapped to the receiver types
-    /// our interpreter actually hands to string methods. Symbols throw
-    /// TypeError per spec (ToString(Symbol) is an abrupt completion).
-    /// </summary>
-    private static string CoerceToString(object? receiver)
-    {
-        if (receiver is SharpTSSymbol)
-            throw new ThrowException(new SharpTSTypeError(
-                "Cannot convert a Symbol value to a string"));
-        // Unwrap boxed String wrapper: `new String("x")` stores the primitive
-        // in __primitiveValue so String.prototype methods work on the wrapper.
-        if (receiver is SharpTSObject obj
-            && obj.GetProperty("__primitiveType") is string pt && pt == "String"
-            && obj.GetProperty("__primitiveValue") is string sv)
-            return sv;
-        return receiver switch
-        {
-            string s => s,
-            double d => SharpTS.Compilation.RuntimeTypes.Stringify(d),
-            bool b => b ? "true" : "false",
-            _ => receiver?.ToString() ?? "",
-        };
     }
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
