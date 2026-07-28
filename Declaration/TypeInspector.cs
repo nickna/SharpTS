@@ -40,7 +40,8 @@ public record MethodMetadata(
     string TypeScriptName,
     Type ReturnType,
     List<ParameterMetadata> Parameters,
-    ObsoleteMetadata? Obsolete = null
+    ObsoleteMetadata? Obsolete = null,
+    List<Type>? GenericParameters = null
 );
 
 public record PropertyMetadata(
@@ -50,8 +51,12 @@ public record PropertyMetadata(
     bool CanRead,
     bool CanWrite,
     ObsoleteMetadata? Obsolete = null,
-    bool IsIndexer = false
-);
+    bool IsIndexer = false,
+    List<ParameterMetadata>? IndexParameters = null
+)
+{
+    public List<ParameterMetadata> IndexParameters { get; init; } = IndexParameters ?? [];
+}
 
 public record FieldMetadata(
     string Name,
@@ -235,10 +240,6 @@ public class TypeInspector
         if (!includeInherited && method.DeclaringType == typeof(object))
             return false;
 
-        // Exclude generic method definitions for MVP (no generic support)
-        if (method.IsGenericMethodDefinition)
-            return false;
-
         return true;
     }
 
@@ -269,7 +270,10 @@ public class TypeInspector
             DotNetTypeMapper.ToTypeScriptMethodName(method.Name),
             method.ReturnType,
             parameters,
-            ExtractObsoleteInfo(method)
+            ExtractObsoleteInfo(method),
+            method.IsGenericMethodDefinition
+                ? method.GetGenericArguments().ToList()
+                : null
         );
     }
 
@@ -282,7 +286,8 @@ public class TypeInspector
             property.CanRead,
             property.CanWrite,
             ExtractObsoleteInfo(property),
-            IsIndexer: property.GetIndexParameters().Length > 0
+            IsIndexer: property.GetIndexParameters().Length > 0,
+            IndexParameters: property.GetIndexParameters().Select(ToParameterMetadata).ToList()
         );
     }
 

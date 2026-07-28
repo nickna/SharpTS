@@ -134,6 +134,17 @@ public class ParsedModule
     public bool IsDotNetModule => DotNetExports != null;
 
     /// <summary>
+    /// For a <c>dotnet-extensions:</c> virtual module, the public static container whose
+    /// extension methods the importing source module activates.
+    /// </summary>
+    public Type? DotNetExtensionContainer { get; set; }
+
+    /// <summary>Extension containers activated only within this source module.</summary>
+    public List<Type> DotNetExtensionTypes { get; } = [];
+
+    public bool IsDotNetExtensionModule => DotNetExtensionContainer != null;
+
+    /// <summary>
     /// True if file has no import/export statements (is a "script" file).
     /// Scripts share global scope; modules have isolated scope.
     /// </summary>

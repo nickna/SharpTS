@@ -154,6 +154,20 @@ internal static class DotNetMarshaller
         if (value == null) return null;
         if (declaredReturnType == typeof(void)) return SharpTSUndefined.Instance;
 
+        // CLR arrays cross back as ordinary guest arrays, recursively preserving jagged
+        // array shape and wrapping external element values through the same return seam.
+        if (value is Array array)
+        {
+            Type elementType = declaredReturnType.IsArray
+                ? declaredReturnType.GetElementType()!
+                : value.GetType().GetElementType() ?? typeof(object);
+            var elements = new object?[array.Length];
+            int index = 0;
+            foreach (object? element in array)
+                elements[index++] = WrapReturn(element, elementType);
+            return new SharpTSArray(elements);
+        }
+
         // Primitives pass through unchanged — the interpreter treats double/string/bool natively.
         var actualType = value.GetType();
         if (actualType == typeof(double) || actualType == typeof(int) || actualType == typeof(long) ||

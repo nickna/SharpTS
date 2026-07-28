@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Reflection;
+using SharpTS.Declaration;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.DotNet;
@@ -39,9 +40,24 @@ internal static class DotNetMethodResolver
     public static RuntimeMethodCandidate ResolveMethod(
         MethodInfo[] candidates,
         IReadOnlyList<object?> arguments,
-        string? overloadHint = null)
+        string? overloadHint = null,
+        IReadOnlyList<Type>? genericTypeArguments = null,
+        IReadOnlyList<Type?>? argumentTypeHints = null,
+        Type? expectedReturnType = null)
     {
-        return Resolve(candidates.Cast<MethodBase>().ToArray(), arguments, overloadHint);
+        var argumentTypes = arguments.Select(GetRuntimeArgumentType).ToArray();
+        if (argumentTypeHints != null)
+        {
+            for (int i = 0; i < argumentTypes.Length &&
+                            i < argumentTypeHints.Count; i++)
+            {
+                argumentTypes[i] = argumentTypeHints[i] ?? argumentTypes[i];
+            }
+        }
+        candidates = DotNetGenericMethodInference.CloseCandidates(
+            candidates, argumentTypes,
+            genericTypeArguments, expectedReturnType);
+        return Resolve(candidates.Cast<MethodBase>().ToArray(), arguments, overloadHint, allowByRef: true);
     }
 
     public static RuntimeMethodCandidate ResolveConstructor(
@@ -49,13 +65,14 @@ internal static class DotNetMethodResolver
         IReadOnlyList<object?> arguments,
         string? overloadHint = null)
     {
-        return Resolve(candidates.Cast<MethodBase>().ToArray(), arguments, overloadHint);
+        return Resolve(candidates.Cast<MethodBase>().ToArray(), arguments, overloadHint, allowByRef: false);
     }
 
     private static RuntimeMethodCandidate Resolve(
         MethodBase[] candidates,
         IReadOnlyList<object?> arguments,
-        string? overloadHint)
+        string? overloadHint,
+        bool allowByRef)
     {
         if (candidates.Length == 0)
         {
@@ -72,26 +89,39 @@ internal static class DotNetMethodResolver
         var scored = new List<RuntimeMethodCandidate>();
         foreach (var method in pool)
         {
+            if (method is MethodInfo methodInfo &&
+                DotNetInteropClassifier.UnsupportedMethodReason(methodInfo) != null)
+            {
+                continue;
+            }
+            if (method is ConstructorInfo constructor &&
+                DotNetInteropClassifier.UnsupportedConstructorReason(constructor) != null)
+            {
+                continue;
+            }
             var parameters = method.GetParameters();
+            if (!allowByRef && parameters.Any(p => p.ParameterType.IsByRef))
+                continue;
+            var inputParameters = GetInputParameters(parameters);
             bool hasParams = parameters.Length > 0 &&
                              parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
 
             if (hasParams)
             {
-                var candidate = ScoreWithParams(method, parameters, arguments);
+                var candidate = ScoreWithParams(method, inputParameters, arguments);
                 if (candidate.TotalCost < (int)RuntimeConversionCost.Incompatible)
                     scored.Add(candidate);
             }
             else
             {
-                if (arguments.Count > parameters.Length) continue;
+                if (arguments.Count > inputParameters.Length) continue;
 
-                if (arguments.Count < parameters.Length)
+                if (arguments.Count < inputParameters.Length)
                 {
                     bool allOptional = true;
-                    for (int i = arguments.Count; i < parameters.Length; i++)
+                    for (int i = arguments.Count; i < inputParameters.Length; i++)
                     {
-                        if (!parameters[i].HasDefaultValue)
+                        if (!inputParameters[i].HasDefaultValue)
                         {
                             allOptional = false;
                             break;
@@ -100,7 +130,7 @@ internal static class DotNetMethodResolver
                     if (!allOptional) continue;
                 }
 
-                var candidate = ScoreRegular(method, parameters, arguments);
+                var candidate = ScoreRegular(method, inputParameters, arguments);
                 if (candidate.TotalCost < (int)RuntimeConversionCost.Incompatible)
                     scored.Add(candidate);
             }
@@ -133,7 +163,7 @@ internal static class DotNetMethodResolver
         int totalCost = 0;
         for (int i = 0; i < arguments.Count; i++)
         {
-            var cost = ScoreConversion(arguments[i], parameters[i].ParameterType);
+            var cost = ScoreConversion(arguments[i], GetInputType(parameters[i]));
             if (cost == RuntimeConversionCost.Incompatible)
                 return new RuntimeMethodCandidate(method, (int)RuntimeConversionCost.Incompatible, -1, false);
             totalCost += (int)cost;
@@ -153,7 +183,7 @@ internal static class DotNetMethodResolver
         int totalCost = 0;
         for (int i = 0; i < regularParamCount; i++)
         {
-            var cost = ScoreConversion(arguments[i], parameters[i].ParameterType);
+            var cost = ScoreConversion(arguments[i], GetInputType(parameters[i]));
             if (cost == RuntimeConversionCost.Incompatible)
                 return new RuntimeMethodCandidate(method, (int)RuntimeConversionCost.Incompatible, -1, false);
             totalCost += (int)cost;
@@ -168,6 +198,46 @@ internal static class DotNetMethodResolver
             totalCost += (int)cost;
         }
         return new RuntimeMethodCandidate(method, totalCost, regularParamCount, true);
+    }
+
+    /// <summary>
+    /// TypeScript-visible inputs for a CLR parameter list. Pure <c>out</c> slots are supplied
+    /// by the bridge; <c>ref</c> and <c>in</c> slots consume ordinary input arguments.
+    /// </summary>
+    internal static ParameterInfo[] GetInputParameters(ParameterInfo[] parameters) =>
+        parameters.Where(static p => !(p.ParameterType.IsByRef && p.IsOut)).ToArray();
+
+    internal static Type GetInputType(ParameterInfo parameter) =>
+        parameter.ParameterType.IsByRef
+            ? parameter.ParameterType.GetElementType()!
+            : parameter.ParameterType;
+
+    private static Type? GetRuntimeArgumentType(object? argument)
+    {
+        if (argument is null or SharpTSUndefined)
+            return null;
+        if (argument is SharpTSArray array)
+        {
+            Type? elementType = null;
+            foreach (var element in array)
+            {
+                Type? current = GetRuntimeArgumentType(element);
+                if (current == null)
+                    continue;
+                if (elementType == null)
+                {
+                    elementType = current;
+                }
+                else if (elementType != current)
+                {
+                    return typeof(object[]);
+                }
+            }
+            return (elementType ?? typeof(object)).MakeArrayType();
+        }
+        return argument is DotNetInstance instance
+            ? instance.Type
+            : argument.GetType();
     }
 
     private static RuntimeConversionCost ScoreConversion(object? arg, Type target)
@@ -229,6 +299,9 @@ internal static class DotNetMethodResolver
             if (target.IsInstanceOfType(dni.Underlying)) return RuntimeConversionCost.Exact;
             return RuntimeConversionCost.Incompatible;
         }
+
+        if (arg is SharpTSArray && target.IsArray)
+            return RuntimeConversionCost.Lossless;
 
         // TS callable → .NET delegate: lossless (shim built at invoke time).
         // Ranks above `object` so an `Action` overload wins over an `object` overload.

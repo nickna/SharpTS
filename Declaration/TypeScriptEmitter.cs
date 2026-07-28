@@ -237,21 +237,24 @@ public class TypeScriptEmitter
     {
         EmitDeprecatedJsDoc(method.Obsolete);
         string staticModifier = isStatic ? "static " : "";
-        var parameters = FormatParameters(method.Parameters);
-        string returnType = DotNetTypeMapper.MapToTypeScript(method.ReturnType);
+        string typeParameters = method.GenericParameters is { Count: > 0 }
+            ? $"<{string.Join(", ", method.GenericParameters.Select(p => p.Name))}>"
+            : "";
+        var parameters = FormatParameters(method.Parameters, lowerByRef: true);
+        string returnType = FormatInteropReturn(method);
 
         if (isInterface)
         {
             // Interface methods don't have static modifier
-            AppendLine($"{method.TypeScriptName}({parameters}): {returnType};");
+            AppendLine($"{method.TypeScriptName}{typeParameters}({parameters}): {returnType};");
         }
         else
         {
-            AppendLine($"{staticModifier}{method.TypeScriptName}({parameters}): {returnType};");
+            AppendLine($"{staticModifier}{method.TypeScriptName}{typeParameters}({parameters}): {returnType};");
         }
     }
 
-    private string FormatParameters(List<ParameterMetadata> parameters)
+    private string FormatParameters(List<ParameterMetadata> parameters, bool lowerByRef = false)
     {
         if (parameters.Count == 0)
             return "";
@@ -259,7 +262,12 @@ public class TypeScriptEmitter
         var parts = new List<string>();
         foreach (var param in parameters)
         {
-            string tsType = DotNetTypeMapper.MapToTypeScript(param.ParameterType);
+            if (lowerByRef && param.IsByRef && param.IsOut)
+                continue;
+            Type parameterType = lowerByRef && param.ParameterType.IsByRef
+                ? param.ParameterType.GetElementType()!
+                : param.ParameterType;
+            string tsType = DotNetTypeMapper.MapToTypeScript(parameterType);
             string optionalMark = param.IsOptional ? "?" : "";
 
             // Use camelCase for parameter names
@@ -269,6 +277,19 @@ public class TypeScriptEmitter
         }
 
         return string.Join(", ", parts);
+    }
+
+    private static string FormatInteropReturn(MethodMetadata method)
+    {
+        var outputs = method.Parameters
+            .Where(p => p.IsByRef && !p.IsIn)
+            .Select(p => DotNetTypeMapper.MapToTypeScript(p.ParameterType.GetElementType()!))
+            .ToList();
+        if (outputs.Count == 0)
+            return DotNetTypeMapper.MapToTypeScript(method.ReturnType);
+        if (method.ReturnType != typeof(void))
+            outputs.Insert(0, DotNetTypeMapper.MapToTypeScript(method.ReturnType));
+        return $"[{string.Join(", ", outputs)}]";
     }
 
     private void EmitDeprecatedJsDoc(ObsoleteMetadata? obsolete)

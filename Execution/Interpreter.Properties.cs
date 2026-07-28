@@ -658,7 +658,7 @@ public partial class Interpreter
         {
             // @DotNetType external types
             TypeCategory.External when obj is DotNetInstance dotNetInstance =>
-                RuntimeValue.FromBoxed(dotNetInstance.GetMember(memberName)),
+                EvaluateGetOnDotNetInstance(dotNetInstance, memberName),
             TypeCategory.External when obj is DotNetClass dotNetClass =>
                 RuntimeValue.FromBoxed(dotNetClass.GetStaticMember(memberName)),
 
@@ -686,6 +686,22 @@ public partial class Interpreter
             // Fallback for remaining types (IDictionary, ISharpTSPropertyAccessor, unknown types)
             _ => RuntimeValue.FromBoxed(EvaluateGetOnFallback(obj, memberName))
         };
+    }
+
+    private RuntimeValue EvaluateGetOnDotNetInstance(
+        DotNetInstance instance,
+        string memberName)
+    {
+        object? value = instance.GetMember(memberName);
+        if (value is SharpTSUndefined &&
+            _currentModule is { DotNetExtensionTypes.Count: > 0 } module &&
+            DotNetExtensionMethodResolver.GetReceiverClosedCandidates(
+                module.DotNetExtensionTypes, memberName, instance.Type).Length > 0)
+        {
+            value = new DotNetExtensionMethod(
+                instance, module.DotNetExtensionTypes, memberName);
+        }
+        return RuntimeValue.FromBoxed(value);
     }
 
     /// <summary>

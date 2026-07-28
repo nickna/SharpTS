@@ -4,6 +4,7 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
+using DotNet = SharpTS.Runtime.DotNet;
 
 namespace SharpTS.Execution;
 
@@ -122,6 +123,16 @@ public partial class Interpreter
             RuntimeValue newValue = ApplyCompoundOperatorRV(
                 compound.Operator.Type, RuntimeValue.FromBoxed(typedArray[ti]), addValue);
             typedArray[ti] = newValue.ToObject();
+            return newValue;
+        }
+
+        if (obj is DotNet.DotNetInstance external && external.HasReadableIndexer)
+        {
+            RuntimeValue current = RuntimeValue.FromBoxed(external.GetIndex(index, this));
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
+            RuntimeValue newValue = ApplyCompoundOperatorRV(
+                compound.Operator.Type, current, addValue);
+            external.SetIndex(index, newValue.ToObject(), this);
             return newValue;
         }
 
@@ -412,6 +423,25 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateUnaryOperationRV(Token op, RuntimeValue rv)
     {
+        if (rv.ToObject() is DotNet.DotNetInstance instance)
+        {
+            var methods = DotNet.DotNetOperatorResolver.GetUnaryCandidates(
+                op.Type, instance.Type);
+            if (methods.Length > 0)
+            {
+                var arguments = new List<object?> { instance };
+                var candidate = DotNet.DotNetMethodResolver.ResolveMethod(
+                    methods, arguments);
+                var method = (System.Reflection.MethodInfo)candidate.Method;
+                var invokeArgs = DotNet.DotNetMethod.BuildInvokeArgs(
+                    method.GetParameters(), arguments, candidate, this);
+                object? value = DotNet.DotNetInstance.InvokeWithMapping(
+                    () => method.Invoke(null, invokeArgs));
+                return RuntimeValue.FromBoxed(
+                    DotNet.DotNetMarshaller.WrapReturn(value, method.ReturnType));
+            }
+        }
+
         switch (op.Type)
         {
             case TokenType.BANG:

@@ -69,6 +69,12 @@ public partial class TypeChecker
                 _typeMap.Set(expr, sourceType);
                 return sourceType;
             }
+            case Expr.Call call:
+            {
+                TypeInfo result = CheckCall(call, contextualType);
+                _typeMap.Set(expr, result);
+                return result;
+            }
             default:
                 return CheckExpr(expr);
         }

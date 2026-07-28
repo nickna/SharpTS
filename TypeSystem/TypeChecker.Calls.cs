@@ -13,7 +13,9 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
-    private TypeInfo CheckCall(Expr.Call call)
+    private TypeInfo CheckCall(
+        Expr.Call call,
+        TypeInfo? contextualResultType = null)
     {
         // JSX-origin calls (parser-lowered elements) bypass ordinary call checking entirely:
         // the JSX pipeline owns their semantics and diagnostics (see TypeChecker.Jsx.cs), so
@@ -36,6 +38,20 @@ public partial class TypeChecker
         }
 
         TypeInfo calleeType = CheckExpr(call.Callee);
+        if (call.Callee is Expr.Get extensionGet &&
+            calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
+                TypeInfo.GenericFunction) &&
+            _typeMap.Get(extensionGet.Object) is { } extensionReceiver &&
+            _currentModule != null &&
+            DotNetTypeSynthesizer.TryBuildExtensionMember(
+                extensionReceiver,
+                extensionGet.Name.Lexeme,
+                _currentModule.DotNetExtensionTypes,
+                out var extensionMember))
+        {
+            calleeType = extensionMember;
+            _typeMap.Set(call.Callee, extensionMember);
+        }
 
         // Optional call: if callee could be nullish, strip null/undefined and check the rest.
         // The result type will be unioned with undefined at the end.
@@ -95,13 +111,34 @@ public partial class TypeChecker
             else
             {
                 // Infer type arguments from call arguments
-                typeArgs = InferTypeArguments(genericFunc, argTypes);
+                typeArgs = InferTypeArguments(
+                    genericFunc, argTypes, contextualResultType);
             }
 
             // Instantiate the function with the type arguments
             var instantiatedFunc = InstantiateGenericFunction(genericFunc, typeArgs);
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
+                // Re-contextualize callback arguments after inference. The first pass may
+                // infer T from an ordinary value (or from an explicitly annotated callback);
+                // this pass gives unannotated arrow parameters the now-concrete delegate
+                // signature and records that precise callable type for CLR generic inference.
+                for (int i = 0; i < call.Arguments.Count &&
+                                i < instFunc.ParamTypes.Count; i++)
+                {
+                    if (call.Arguments[i] is Expr.ArrowFunction arrow &&
+                        instFunc.ParamTypes[i] is TypeInfo.Function expectedCallback)
+                    {
+                        TypeInfo callbackType = CheckArrowFunction(
+                            arrow, expectedCallback);
+                        // The argument is converted to the declared CLR delegate shape. Keep
+                        // that contextual signature in the call-site map (not merely the
+                        // arrow's value-returning implementation type): a value-returning
+                        // expression arrow is valid for an Action/void sink, but must still
+                        // infer as Action<T>, not Func<T,T>.
+                        _typeMap.Set(arrow, expectedCallback);
+                    }
+                }
                 return instFunc.ReturnType;
             }
             return TypeInfo.Any.Shared;

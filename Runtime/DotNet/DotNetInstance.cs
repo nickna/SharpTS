@@ -90,6 +90,53 @@ public sealed class DotNetInstance : ITypeCategorized
         }
     }
 
+    internal bool HasReadableIndexer => DotNetTypeRegistry.GetIndexers(Type, writable: false).Length > 0;
+
+    internal bool HasWritableIndexer => DotNetTypeRegistry.GetIndexers(Type, writable: true).Length > 0;
+
+    /// <summary>Reads a public single-parameter CLR indexer.</summary>
+    public object? GetIndex(object? index, Interpreter interpreter)
+    {
+        var accessors = DotNetTypeRegistry.GetIndexers(Type, writable: false)
+            .Select(p => p.GetGetMethod())
+            .OfType<MethodInfo>()
+            .ToArray();
+        if (accessors.Length == 0)
+        {
+            throw new Runtime.Exceptions.ThrowException(DotNetExceptionMapper.Map(
+                new MissingMemberException($"No readable single-parameter indexer found on '{Type.FullName}'.")));
+        }
+
+        var arguments = new List<object?> { index };
+        var candidate = DotNetMethodResolver.ResolveMethod(accessors, arguments);
+        var accessor = (MethodInfo)candidate.Method;
+        var invokeArgs = DotNetMethod.BuildInvokeArgs(
+            accessor.GetParameters(), arguments, candidate, interpreter);
+        return InvokeWithMapping(() =>
+            DotNetMarshaller.WrapReturn(accessor.Invoke(Underlying, invokeArgs), accessor.ReturnType));
+    }
+
+    /// <summary>Writes a public single-parameter CLR indexer.</summary>
+    public void SetIndex(object? index, object? value, Interpreter interpreter)
+    {
+        var accessors = DotNetTypeRegistry.GetIndexers(Type, writable: true)
+            .Select(p => p.GetSetMethod())
+            .OfType<MethodInfo>()
+            .ToArray();
+        if (accessors.Length == 0)
+        {
+            throw new Runtime.Exceptions.ThrowException(DotNetExceptionMapper.Map(
+                new MissingMemberException($"No writable single-parameter indexer found on '{Type.FullName}'.")));
+        }
+
+        var arguments = new List<object?> { index, value };
+        var candidate = DotNetMethodResolver.ResolveMethod(accessors, arguments);
+        var accessor = (MethodInfo)candidate.Method;
+        var invokeArgs = DotNetMethod.BuildInvokeArgs(
+            accessor.GetParameters(), arguments, candidate, interpreter);
+        InvokeWithMapping(() => accessor.Invoke(Underlying, invokeArgs));
+    }
+
     private Dictionary<(string, ISharpTSCallable), Delegate> GetOrCreateSubscriptions()
     {
         return _eventSubscriptions ??= new Dictionary<(string, ISharpTSCallable), Delegate>();

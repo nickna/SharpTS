@@ -1,7 +1,10 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Declaration;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Runtime.DotNet;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -11,9 +14,130 @@ namespace SharpTS.Compilation;
 public partial class ILEmitter
 {
     /// <summary>
+    /// Resolves the CLR type behind a statically known <c>dotnet:</c> or
+    /// <c>@DotNetType</c> instance expression.
+    /// </summary>
+    private bool TryResolveExternalReceiverType(Expr receiver, out Type externalType)
+    {
+        return TryResolveExternalTypeInfo(
+            _ctx.TypeMap?.Get(receiver), out externalType);
+    }
+
+    private bool TryResolveExternalTypeInfo(
+        TypeSystem.TypeInfo? typeInfo,
+        out Type externalType)
+    {
+        externalType = null!;
+        if (typeInfo is not TypeSystem.TypeInfo.Instance instance)
+            return false;
+
+        string? simpleName = instance.ResolvedClassType switch
+        {
+            TypeSystem.TypeInfo.Class c => c.Name,
+            TypeSystem.TypeInfo.MutableClass mc => mc.Name,
+            _ => null
+        };
+        if (simpleName == null) return false;
+
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleName, out var bySimpleName))
+        {
+            externalType = bySimpleName;
+            return true;
+        }
+
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(
+                _ctx.ResolveClassName(simpleName), out var byQualifiedName))
+        {
+            externalType = byQualifiedName;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Emits a direct call to a public single-parameter CLR indexer getter.</summary>
+    private bool TryEmitExternalIndexerGet(Expr receiver, Type externalType, Expr index)
+    {
+        var getters = externalType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead &&
+                        p.GetIndexParameters().Length == 1 &&
+                        DotNetInteropClassifier.UnsupportedSlotReason(
+                            p.PropertyType) == null &&
+                        DotNetInteropClassifier.UnsupportedSlotReason(
+                            p.GetIndexParameters()[0].ParameterType) == null)
+            .Select(p => p.GetGetMethod())
+            .OfType<MethodInfo>()
+            .ToArray();
+        if (getters.Length == 0) return false;
+
+        var arguments = new List<Expr> { index };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(getters, arguments);
+        var getter = (MethodInfo)candidate.Method;
+
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        EmitExternalCallArguments(arguments, getter, candidate);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
+        BoxResultIfValueType(getter.ReturnType);
+        SetStackUnknown();
+        return true;
+    }
+
+    /// <summary>Emits a direct call to a public single-parameter CLR indexer setter.</summary>
+    private bool TryEmitExternalIndexerSet(Expr receiver, Type externalType, Expr index, Expr value)
+    {
+        var setters = externalType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite &&
+                        p.GetIndexParameters().Length == 1 &&
+                        DotNetInteropClassifier.UnsupportedSlotReason(
+                            p.PropertyType) == null &&
+                        DotNetInteropClassifier.UnsupportedSlotReason(
+                            p.GetIndexParameters()[0].ParameterType) == null)
+            .Select(p => p.GetSetMethod())
+            .OfType<MethodInfo>()
+            .ToArray();
+        if (setters.Length == 0) return false;
+
+        var arguments = new List<Expr> { index, value };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(setters, arguments);
+        var setter = (MethodInfo)candidate.Method;
+        var parameters = setter.GetParameters();
+
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+
+        EmitExpression(index);
+        EmitExternalTypeConversion(parameters[0].ParameterType);
+
+        // Preserve the original TypeScript RHS as the assignment-expression result. The CLR
+        // setter may narrow it (for example number -> int), but JS assignment returns the RHS.
+        EmitExpression(value);
+        EnsureBoxed();
+        var result = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, result);
+        IL.Emit(OpCodes.Ldloc, result);
+        EmitExternalTypeConversion(parameters[1].ParameterType);
+
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, setter);
+        IL.Emit(OpCodes.Ldloc, result);
+        SetStackUnknown();
+        return true;
+    }
+
+    /// <summary>
     /// Emits an instance method call on an external .NET type (via @DotNetType).
     /// </summary>
-    private void EmitExternalInstanceMethodCall(Expr receiver, Type externalType, string methodName, List<Expr> arguments)
+    private void EmitExternalInstanceMethodCall(
+        Expr receiver,
+        Type externalType,
+        string methodName,
+        List<Expr> arguments,
+        List<string>? genericTypeArguments,
+        TypeSystem.TypeInfo? contextualResultType)
     {
         // Special-case event subscription: these names are reserved on @DotNetType
         // instances and route to DotNetEventBinder.Compiled(Add|Remove)EventListener.
@@ -31,8 +155,17 @@ public partial class ILEmitter
 
         if (methods.Length == 0)
         {
+            if (TryEmitExternalExtensionMethodCall(
+                    receiver, externalType, methodName, arguments))
+            {
+                return;
+            }
             throw new CompileException($"Instance method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
+
+        methods = CloseExternalGenericMethods(
+            methods, arguments,
+            genericTypeArguments, contextualResultType);
 
         // Use type-aware overload resolution, honoring @DotNetOverload if declared.
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
@@ -59,22 +192,63 @@ public partial class ILEmitter
         }
 
         // Emit arguments with type conversion (handles params arrays)
-        EmitExternalCallArguments(arguments, method, candidate);
+        var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the call - use Call for value types (with address), Callvirt for reference types
         IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, method);
 
-        // Handle return value
-        if (method.ReturnType == typeof(void))
-        {
-            IL.Emit(OpCodes.Ldnull); // void returns undefined
-        }
-        else
-        {
-            BoxResultIfValueType(method.ReturnType);
-        }
+        EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
     }
+
+    private bool TryEmitExternalExtensionMethodCall(
+        Expr receiver,
+        Type receiverType,
+        string methodName,
+        List<Expr> arguments)
+    {
+        if (_ctx.ModuleResolver == null || _ctx.CurrentModulePath == null)
+            return false;
+        var module = _ctx.ModuleResolver.GetCachedModule(_ctx.CurrentModulePath);
+        if (module == null || module.DotNetExtensionTypes.Count == 0)
+            return false;
+
+        var allArguments = new List<Expr>(arguments.Count + 1) { receiver };
+        allArguments.AddRange(arguments);
+        var argumentTypes = new Type?[allArguments.Count];
+        argumentTypes[0] = receiverType;
+        for (int i = 0; i < arguments.Count; i++)
+            argumentTypes[i + 1] = TryGetExternalArgumentClrType(arguments[i]);
+
+        var methods = DotNetExtensionMethodResolver.GetClosedCandidates(
+            module.DotNetExtensionTypes, methodName, argumentTypes);
+        if (methods.Length == 0)
+            return false;
+
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, allArguments);
+        var method = (MethodInfo)candidate.Method;
+        var byRefOutputs = EmitExternalCallArguments(
+            allArguments, method, candidate);
+        IL.Emit(OpCodes.Call, method);
+        EmitExternalCallResult(method, byRefOutputs);
+        SetStackUnknown();
+        return true;
+    }
+
+    private Type? TryGetExternalArgumentClrType(Expr argument)
+    {
+        if (TryResolveExternalReceiverType(argument, out var external))
+            return external;
+
+        return TryGetExternalClrType(_ctx.TypeMap?.Get(argument));
+    }
+
+    private Type? TryGetExternalClrType(TypeSystem.TypeInfo? type) =>
+        type != null &&
+        DotNetTypeSynthesizer.TryGetClrArgumentType(type, out var clr)
+            ? clr
+            : null;
 
     /// <summary>
     /// Emits construction of an external .NET type (via @DotNetType).
@@ -107,7 +281,12 @@ public partial class ILEmitter
     /// <summary>
     /// Emits a static method call on an external .NET type (via @DotNetType).
     /// </summary>
-    private void EmitExternalStaticMethodCall(Type externalType, string methodName, List<Expr> arguments)
+    private void EmitExternalStaticMethodCall(
+        Type externalType,
+        string methodName,
+        List<Expr> arguments,
+        List<string>? genericTypeArguments,
+        TypeSystem.TypeInfo? contextualResultType)
     {
         // Special-case static event subscription.
         if (methodName == "addEventListener" || methodName == "removeEventListener")
@@ -127,6 +306,10 @@ public partial class ILEmitter
             throw new CompileException($"Static method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
 
+        methods = CloseExternalGenericMethods(
+            methods, arguments,
+            genericTypeArguments, contextualResultType);
+
         // Use type-aware overload resolution, honoring @DotNetOverload if declared.
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, methodName);
@@ -134,52 +317,125 @@ public partial class ILEmitter
         var method = (MethodInfo)candidate.Method;
 
         // Emit arguments with type conversion (handles params arrays)
-        EmitExternalCallArguments(arguments, method, candidate);
+        var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the static call
         IL.Emit(OpCodes.Call, method);
 
-        // Handle return value
-        if (method.ReturnType == typeof(void))
-        {
-            IL.Emit(OpCodes.Ldnull); // void returns undefined
-        }
-        else if (method.ReturnType.IsValueType)
-        {
-            IL.Emit(OpCodes.Box, method.ReturnType);
-        }
+        EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
+    }
+
+    private MethodInfo[] CloseExternalGenericMethods(
+        MethodInfo[] methods,
+        List<Expr> arguments,
+        List<string>? explicitTypeArguments,
+        TypeSystem.TypeInfo? contextualResultType)
+    {
+        var argumentTypes = arguments
+            .Select(TryGetExternalArgumentClrType)
+            .ToArray();
+        Type[]? explicitTypes = explicitTypeArguments is { Count: > 0 }
+            ? explicitTypeArguments.Select(ResolveTypeArg).ToArray()
+            : null;
+        Type? expectedReturnType = TryGetExternalClrType(contextualResultType);
+        var closed = DotNetGenericMethodInference.CloseCandidates(
+            methods, argumentTypes,
+            explicitTypes, expectedReturnType);
+        if (closed.Length == 0)
+        {
+            string methodName = methods.Length > 0 ? methods[0].Name : "<unknown>";
+            throw new CompileException(
+                $"No generic instantiation of '{methodName}' matches argument CLR types " +
+                $"({string.Join(", ", argumentTypes.Select(type => type?.FullName ?? "unknown"))}) " +
+                $"derived from TypeScript types ({string.Join(", ", arguments.Select(argument => _ctx.TypeMap?.Get(argument)?.ToString() ?? "unknown"))}) " +
+                "and the supplied explicit type arguments.");
+        }
+        return closed;
     }
 
     /// <summary>
     /// Emits arguments for an external method call, handling params arrays if present.
     /// </summary>
-    private void EmitExternalCallArguments(List<Expr> arguments, MethodBase method, MethodCandidate candidate)
+    private List<(ParameterInfo Parameter, LocalBuilder Local)> EmitExternalCallArguments(
+        List<Expr> arguments, MethodBase method, MethodCandidate candidate)
     {
         var parameters = method.GetParameters();
+        var byRefOutputs = new List<(ParameterInfo, LocalBuilder)>();
 
         if (candidate.ParamsStartIndex < 0)
         {
-            // No params array - emit arguments normally
-            for (int i = 0; i < arguments.Count; i++)
+            int argumentIndex = 0;
+            foreach (var parameter in parameters)
             {
-                EmitExpression(arguments[i]);
-                EmitExternalTypeConversion(parameters[i].ParameterType);
+                if (parameter.ParameterType.IsByRef)
+                {
+                    var elementType = parameter.ParameterType.GetElementType()!;
+                    var local = IL.DeclareLocal(elementType);
+                    if (parameter.IsOut)
+                    {
+                        IL.Emit(OpCodes.Ldloca, local);
+                        IL.Emit(OpCodes.Initobj, elementType);
+                    }
+                    else
+                    {
+                        EmitExpression(arguments[argumentIndex++]);
+                        EmitExternalTypeConversion(elementType);
+                        IL.Emit(OpCodes.Stloc, local);
+                    }
+                    IL.Emit(OpCodes.Ldloca, local);
+                    if (!parameter.IsIn)
+                        byRefOutputs.Add((parameter, local));
+                    continue;
+                }
+
+                if (argumentIndex < arguments.Count)
+                {
+                    EmitExpression(arguments[argumentIndex++]);
+                    EmitExternalTypeConversion(parameter.ParameterType);
+                }
+                else
+                {
+                    EmitExternalDefaultValue(parameter);
+                }
             }
         }
         else
         {
-            // Emit regular (non-params) arguments first
-            for (int i = 0; i < candidate.ParamsStartIndex; i++)
+            int argumentIndex = 0;
+            for (int i = 0; i < parameters.Length - 1; i++)
             {
-                EmitExpression(arguments[i]);
-                EmitExternalTypeConversion(parameters[i].ParameterType);
+                var parameter = parameters[i];
+                if (parameter.ParameterType.IsByRef)
+                {
+                    var byRefElementType = parameter.ParameterType.GetElementType()!;
+                    var local = IL.DeclareLocal(byRefElementType);
+                    if (parameter.IsOut)
+                    {
+                        IL.Emit(OpCodes.Ldloca, local);
+                        IL.Emit(OpCodes.Initobj, byRefElementType);
+                    }
+                    else
+                    {
+                        EmitExpression(arguments[argumentIndex++]);
+                        EmitExternalTypeConversion(byRefElementType);
+                        IL.Emit(OpCodes.Stloc, local);
+                    }
+                    IL.Emit(OpCodes.Ldloca, local);
+                    if (!parameter.IsIn)
+                        byRefOutputs.Add((parameter, local));
+                }
+                else
+                {
+                    EmitExpression(arguments[argumentIndex++]);
+                    EmitExternalTypeConversion(parameter.ParameterType);
+                }
             }
 
             // Create and fill the params array
             var paramsParam = parameters[candidate.ParamsStartIndex];
             var elementType = paramsParam.ParameterType.GetElementType()!;
-            int paramsCount = arguments.Count - candidate.ParamsStartIndex;
+            int paramsCount = arguments.Count - argumentIndex;
 
             // Emit array creation: new T[paramsCount]
             IL.Emit(OpCodes.Ldc_I4, paramsCount);
@@ -191,7 +447,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Dup);                    // Duplicate array reference
                 IL.Emit(OpCodes.Ldc_I4, i);              // Push index
-                EmitExpression(arguments[candidate.ParamsStartIndex + i]);
+                EmitExpression(arguments[argumentIndex + i]);
 
                 // For object[], box value types but leave reference types as-is
                 if (isObjectArray)
@@ -218,6 +474,107 @@ public partial class ILEmitter
             }
             SetStackUnknown();
         }
+
+        return byRefOutputs;
+    }
+
+    /// <summary>
+    /// Materializes the TypeScript-visible result. Calls with writable by-ref parameters
+    /// return <c>[result?, ...updatedValues]</c>; ordinary calls retain their prior result.
+    /// </summary>
+    private void EmitExternalCallResult(
+        MethodInfo method,
+        List<(ParameterInfo Parameter, LocalBuilder Local)> byRefOutputs)
+    {
+        if (byRefOutputs.Count == 0)
+        {
+            if (method.ReturnType == typeof(void))
+                IL.Emit(OpCodes.Ldnull);
+            else if (method.ReturnType.IsArray)
+                EmitExternalArrayReturn(method.ReturnType);
+            else
+                BoxResultIfValueType(method.ReturnType);
+            return;
+        }
+
+        LocalBuilder? returnLocal = null;
+        if (method.ReturnType != typeof(void))
+        {
+            returnLocal = IL.DeclareLocal(method.ReturnType);
+            IL.Emit(OpCodes.Stloc, returnLocal);
+        }
+
+        int count = byRefOutputs.Count + (returnLocal == null ? 0 : 1);
+        IL.Emit(OpCodes.Ldc_I4, count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        int tupleIndex = 0;
+
+        if (returnLocal != null)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, tupleIndex++);
+            IL.Emit(OpCodes.Ldloc, returnLocal);
+            if (method.ReturnType.IsArray)
+                EmitExternalArrayReturn(method.ReturnType);
+            else if (method.ReturnType.IsValueType)
+                IL.Emit(OpCodes.Box, method.ReturnType);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        foreach (var (parameter, local) in byRefOutputs)
+        {
+            Type elementType = parameter.ParameterType.GetElementType()!;
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, tupleIndex++);
+            IL.Emit(OpCodes.Ldloc, local);
+            if (elementType.IsArray)
+                EmitExternalArrayReturn(elementType);
+            else if (elementType.IsValueType)
+                IL.Emit(OpCodes.Box, elementType);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+    }
+
+    private void EmitExternalDefaultValue(ParameterInfo parameter)
+    {
+        object? value = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+        Type targetType = parameter.ParameterType;
+        if (value == null || value == DBNull.Value || value == Missing.Value)
+        {
+            EmitDefaultForType(targetType);
+            return;
+        }
+
+        if (targetType.IsEnum)
+        {
+            EmitExternalIntegralConstant(Convert.ToInt64(value));
+            return;
+        }
+
+        switch (value)
+        {
+            case string text: IL.Emit(OpCodes.Ldstr, text); break;
+            case bool boolean: IL.Emit(boolean ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0); break;
+            case char character: IL.Emit(OpCodes.Ldc_I4, (int)character); break;
+            case float single: IL.Emit(OpCodes.Ldc_R4, single); break;
+            case double number: IL.Emit(OpCodes.Ldc_R8, number); break;
+            case decimal:
+                EmitDefaultForType(targetType);
+                break;
+            default:
+                EmitExternalIntegralConstant(Convert.ToInt64(value));
+                break;
+        }
+    }
+
+    private void EmitExternalIntegralConstant(long value)
+    {
+        if (value is >= int.MinValue and <= int.MaxValue)
+            IL.Emit(OpCodes.Ldc_I4, (int)value);
+        else
+            IL.Emit(OpCodes.Ldc_I8, value);
     }
 
     /// <summary>
@@ -225,7 +582,45 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExternalTypeConversion(Type targetType)
     {
-        if (targetType == _ctx.Types.Double || targetType == typeof(double))
+        var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
+        if (nullableUnderlying != null)
+        {
+            // Native primitive values can be converted directly and wrapped. Boxed/unknown
+            // values need a null branch because CLR boxing represents an empty Nullable<T>
+            // as null, while a present value is boxed as T.
+            if (_stackType is StackType.Double or StackType.Boolean)
+            {
+                EmitExternalTypeConversion(nullableUnderlying);
+                IL.Emit(OpCodes.Newobj, targetType.GetConstructor([nullableUnderlying])!);
+                SetStackUnknown();
+                return;
+            }
+
+            var nullValue = IL.DefineLabel();
+            var converted = IL.DefineLabel();
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brfalse, nullValue);
+            EmitExternalTypeConversion(nullableUnderlying);
+            IL.Emit(OpCodes.Newobj, targetType.GetConstructor([nullableUnderlying])!);
+            IL.Emit(OpCodes.Br, converted);
+
+            IL.MarkLabel(nullValue);
+            IL.Emit(OpCodes.Pop);
+            var empty = IL.DeclareLocal(targetType);
+            IL.Emit(OpCodes.Ldloca, empty);
+            IL.Emit(OpCodes.Initobj, targetType);
+            IL.Emit(OpCodes.Ldloc, empty);
+
+            IL.MarkLabel(converted);
+            SetStackUnknown();
+            return;
+        }
+
+        if (targetType.IsArray)
+        {
+            EmitExternalArrayConversion(targetType);
+        }
+        else if (targetType == _ctx.Types.Double || targetType == typeof(double))
         {
             // If we already have a native double on the stack, no conversion needed
             if (_stackType == StackType.Double)
@@ -405,6 +800,144 @@ public partial class ILEmitter
             }
             // Reference types are already objects, no conversion needed
         }
+    }
+
+    /// <summary>
+    /// Converts a guest <c>$Array</c>/<see cref="System.Collections.IList"/> on the stack
+    /// to a concrete CLR array. The loop is emitted into the standalone output, so generic
+    /// array calls do not acquire a runtime dependency on SharpTS.dll.
+    /// </summary>
+    private void EmitExternalArrayConversion(Type targetType)
+    {
+        Type elementType = targetType.GetElementType()!;
+        var source = IL.DeclareLocal(_ctx.Types.Object);
+        var list = IL.DeclareLocal(typeof(System.Collections.IList));
+        var result = IL.DeclareLocal(targetType);
+        var index = IL.DeclareLocal(_ctx.Types.Int32);
+
+        EnsureBoxed();
+        IL.Emit(OpCodes.Stloc, source);
+
+        var nonNull = IL.DefineLabel();
+        var finished = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Brtrue, nonNull);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Br, finished);
+        IL.MarkLabel(nonNull);
+
+        var ordinaryList = IL.DefineLabel();
+        var listReady = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+        IL.Emit(OpCodes.Brfalse, ordinaryList);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.TSArrayType);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayElementsGetter);
+        IL.Emit(OpCodes.Castclass, typeof(System.Collections.IList));
+        IL.Emit(OpCodes.Stloc, list);
+        IL.Emit(OpCodes.Br, listReady);
+
+        IL.MarkLabel(ordinaryList);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Castclass, typeof(System.Collections.IList));
+        IL.Emit(OpCodes.Stloc, list);
+        IL.MarkLabel(listReady);
+
+        IL.Emit(OpCodes.Ldloc, list);
+        IL.Emit(OpCodes.Callvirt,
+            typeof(System.Collections.ICollection).GetProperty("Count")!.GetGetMethod()!);
+        IL.Emit(OpCodes.Newarr, elementType);
+        IL.Emit(OpCodes.Stloc, result);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+
+        var loop = IL.DefineLabel();
+        var done = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, list);
+        IL.Emit(OpCodes.Callvirt,
+            typeof(System.Collections.ICollection).GetProperty("Count")!.GetGetMethod()!);
+        IL.Emit(OpCodes.Bge, done);
+
+        IL.Emit(OpCodes.Ldloc, result);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, list);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Callvirt,
+            typeof(System.Collections.IList).GetMethod("get_Item", [typeof(int)])!);
+        SetStackUnknown();
+        EmitExternalTypeConversion(elementType);
+        IL.Emit(OpCodes.Stelem, elementType);
+
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, index);
+        IL.Emit(OpCodes.Br, loop);
+        IL.MarkLabel(done);
+        IL.Emit(OpCodes.Ldloc, result);
+        IL.MarkLabel(finished);
+        SetStackUnknown();
+    }
+
+    /// <summary>Materializes a CLR array on the stack as an emitted guest <c>$Array</c>.</summary>
+    private void EmitExternalArrayReturn(Type arrayType)
+    {
+        Type elementType = arrayType.GetElementType()!;
+        var source = IL.DeclareLocal(arrayType);
+        var elements = IL.DeclareLocal(_ctx.Types.ObjectArray);
+        var index = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, source);
+
+        var nonNull = IL.DefineLabel();
+        var finished = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Brtrue, nonNull);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Br, finished);
+        IL.MarkLabel(nonNull);
+
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldlen);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, elements);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, index);
+
+        var loop = IL.DefineLabel();
+        var done = IL.DefineLabel();
+        IL.MarkLabel(loop);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldlen);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Bge, done);
+
+        IL.Emit(OpCodes.Ldloc, elements);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldelem, elementType);
+        if (elementType.IsArray)
+            EmitExternalArrayReturn(elementType);
+        else
+            BoxResultIfValueType(elementType);
+        IL.Emit(OpCodes.Stelem_Ref);
+
+        IL.Emit(OpCodes.Ldloc, index);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, index);
+        IL.Emit(OpCodes.Br, loop);
+        IL.MarkLabel(done);
+
+        IL.Emit(OpCodes.Ldloc, elements);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+        IL.MarkLabel(finished);
+        SetStackUnknown();
     }
 
     /// <summary>

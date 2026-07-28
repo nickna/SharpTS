@@ -1,8 +1,15 @@
 using System.Reflection.Emit;
+using SharpTS.Declaration;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Runtime.DotNet;
 using SharpTS.TypeSystem;
 using static SharpTS.TypeSystem.OperatorDescriptor;
+using BindingFlags = System.Reflection.BindingFlags;
+using FieldInfo = System.Reflection.FieldInfo;
+using MemberInfo = System.Reflection.MemberInfo;
+using MethodInfo = System.Reflection.MethodInfo;
+using PropertyInfo = System.Reflection.PropertyInfo;
 
 namespace SharpTS.Compilation;
 
@@ -15,6 +22,9 @@ public partial class ILEmitter
     {
         // Try constant folding first
         if (TryEmitConstantFolded(b))
+            return;
+
+        if (TryEmitExternalBinaryOperator(b))
             return;
 
         // instanceof/in are valid with any operand type — bypass bigint-arithmetic path
@@ -195,6 +205,34 @@ public partial class ILEmitter
         }
     }
 
+    private bool TryEmitExternalBinaryOperator(Expr.Binary binary)
+    {
+        Type? leftType = TryResolveExternalReceiverType(binary.Left, out var resolvedLeft)
+            ? resolvedLeft
+            : null;
+        Type? rightType = TryResolveExternalReceiverType(binary.Right, out var resolvedRight)
+            ? resolvedRight
+            : null;
+        if (leftType == null && rightType == null)
+            return false;
+
+        var methods = DotNetOperatorResolver.GetBinaryCandidates(
+            binary.Operator.Type, leftType, rightType);
+        if (methods.Length == 0)
+            return false;
+
+        var arguments = new List<Expr> { binary.Left, binary.Right };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+        var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
+        IL.Emit(OpCodes.Call, method);
+        EmitExternalCallResult(method, byRefOutputs);
+
+        SetStackUnknown();
+        return true;
+    }
+
     /// <summary>
     /// Emits power operator (**) using Math.Pow.
     /// </summary>
@@ -366,6 +404,9 @@ public partial class ILEmitter
             return;
         }
 
+        if (TryEmitExternalUnaryOperator(u))
+            return;
+
         switch (u.Operator.Type)
         {
             case TokenType.MINUS:
@@ -484,8 +525,31 @@ public partial class ILEmitter
         }
     }
 
+    private bool TryEmitExternalUnaryOperator(Expr.Unary unary)
+    {
+        if (!TryResolveExternalReceiverType(unary.Right, out var operandType))
+            return false;
+        var methods = DotNetOperatorResolver.GetUnaryCandidates(
+            unary.Operator.Type, operandType);
+        if (methods.Length == 0)
+            return false;
+
+        var arguments = new List<Expr> { unary.Right };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+        var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
+        IL.Emit(OpCodes.Call, method);
+        EmitExternalCallResult(method, byRefOutputs);
+        SetStackUnknown();
+        return true;
+    }
+
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
+        if (TryEmitExternalCompoundAssign(ca))
+            return;
+
         // Promoted string-accumulator append (#857): `s += E` where `s` is a StringBuilder slot →
         // `sb.Append(E)`. Promotion guarantees statement position, so the Append-returned builder on the
         // stack is the value Stmt.Expression pops. See EmitAssign and StringAccumulatorPromotionAnalyzer.
@@ -661,6 +725,74 @@ public partial class ILEmitter
             }
             SetStackUnknown();
         }
+    }
+
+    private bool TryEmitExternalCompoundAssign(Expr.CompoundAssign compound)
+    {
+        if (!TryResolveExternalTypeInfo(
+                _ctx.TypeMap?.Get(compound), out var leftType) ||
+            DotNetOperatorResolver.GetBinaryTokenForCompound(
+                compound.Operator.Type) is not { } binaryToken)
+        {
+            return false;
+        }
+
+        Type? rightType = TryResolveExternalReceiverType(
+            compound.Value, out var resolvedRight)
+            ? resolvedRight
+            : null;
+        var methods = DotNetOperatorResolver.GetBinaryCandidates(
+            binaryToken, leftType, rightType);
+        if (methods.Length == 0)
+            return false;
+
+        var variable = new Expr.Variable(compound.Name);
+        var arguments = new List<Expr> { variable, compound.Value };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+        var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
+        IL.Emit(OpCodes.Call, method);
+        EmitExternalCallResult(method, byRefOutputs);
+
+        var result = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, result);
+        StoreExternalOperatorVariable(compound.Name.Lexeme, result);
+        IL.Emit(OpCodes.Ldloc, result);
+        SetStackUnknown();
+        return true;
+    }
+
+    private void StoreExternalOperatorVariable(string name, LocalBuilder boxedValue)
+    {
+        var local = _ctx.Locals.GetLocal(name);
+        FieldBuilder? topLevelField = null;
+        _ctx.TopLevelStaticVars?.TryGetValue(name, out topLevelField);
+
+        IL.Emit(OpCodes.Ldloc, boxedValue);
+        if (local != null)
+        {
+            ConvertExternalOperatorStorage(local.LocalType);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+        else if (topLevelField != null)
+        {
+            ConvertExternalOperatorStorage(topLevelField.FieldType);
+            IL.Emit(OpCodes.Stsfld, topLevelField);
+        }
+        else
+        {
+            _resolver.TryStoreVariable(name);
+        }
+    }
+
+    private void ConvertExternalOperatorStorage(Type storageType)
+    {
+        if (_ctx.Types.IsObject(storageType))
+            return;
+        IL.Emit(storageType.IsValueType
+            ? OpCodes.Unbox_Any
+            : OpCodes.Castclass, storageType);
     }
 
     protected override void EmitLogicalAssign(Expr.LogicalAssign la)
@@ -1218,6 +1350,10 @@ public partial class ILEmitter
 
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (TryEmitExternalIncrement(
+                pi.Operand, pi.Operator.Type, isPrefix: true))
+            return;
+
         if (pi.Operand is Expr.Variable v)
         {
             // Integer loop-counter prototype (#928): native int64 increment, no double/box round trip.
@@ -1410,6 +1546,10 @@ public partial class ILEmitter
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
     {
+        if (TryEmitExternalIncrement(
+                pi.Operand, pi.Operator.Type, isPrefix: false))
+            return;
+
         if (pi.Operand is Expr.Variable v)
         {
             // Integer loop-counter prototype (#928): native int64 increment, no double/box round trip.
@@ -1495,6 +1635,403 @@ public partial class ILEmitter
         }
     }
 
+    private bool TryEmitExternalIncrement(
+        Expr operand,
+        TokenType token,
+        bool isPrefix)
+    {
+        if (!TryResolveExternalReceiverType(operand, out var operandType))
+        {
+            return false;
+        }
+
+        var methods = DotNetOperatorResolver.GetIncrementCandidates(token, operandType);
+        if (methods.Length == 0)
+            return false;
+        var arguments = new List<Expr> { operand };
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+
+        if (operand is Expr.Get get)
+            return TryEmitExternalPropertyIncrement(
+                get, operandType, method, isPrefix);
+        if (operand is Expr.GetIndex getIndex)
+            return TryEmitExternalIndexerIncrement(
+                getIndex, operandType, method, isPrefix);
+        if (operand is not Expr.Variable variable)
+            return false;
+
+        // Preserve the original boxed value for postfix semantics, then invoke the CLR
+        // op_Increment/op_Decrement once and write the returned value back to the l-value.
+        EmitExpression(operand);
+        EnsureBoxed();
+        var oldValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, oldValue);
+
+        IL.Emit(OpCodes.Ldloc, oldValue);
+        EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
+        IL.Emit(OpCodes.Call, method);
+        BoxResultIfValueType(method.ReturnType);
+        var newValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, newValue);
+
+        StoreExternalOperatorVariable(variable.Name.Lexeme, newValue);
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitExternalPropertyCompound(Expr.CompoundSet compound)
+    {
+        if (!TryResolveExternalReceiverType(compound.Object, out var ownerType) ||
+            ownerType.IsValueType ||
+            !TryResolveExternalWritableMember(
+                ownerType, compound.Name.Lexeme, out var member, out var valueType) ||
+            DotNetOperatorResolver.GetBinaryTokenForCompound(
+                compound.Operator.Type) is not { } binaryToken ||
+            !TryResolveExternalBinaryOperator(
+                new Expr.Get(compound.Object, compound.Name),
+                valueType,
+                compound.Value,
+                binaryToken,
+                out var method))
+        {
+            return false;
+        }
+
+        var receiver = SpillExternalReceiver(compound.Object);
+        var oldValue = EmitExternalMemberRead(receiver, ownerType, member, valueType);
+        var newValue = EmitExternalOperatorCall(oldValue, compound.Value, method);
+        EmitExternalMemberWrite(receiver, ownerType, member, valueType, newValue);
+        IL.Emit(OpCodes.Ldloc, newValue);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitExternalIndexerCompound(Expr.CompoundSetIndex compound)
+    {
+        if (!TryResolveExternalReceiverType(compound.Object, out var ownerType) ||
+            ownerType.IsValueType ||
+            DotNetOperatorResolver.GetBinaryTokenForCompound(
+                compound.Operator.Type) is not { } binaryToken ||
+            !TryResolveExternalWritableIndexer(
+                ownerType, compound.Index, out var property, out var getter, out var getterCandidate) ||
+            !TryResolveExternalBinaryOperator(
+                new Expr.GetIndex(compound.Object, compound.Index),
+                property.PropertyType,
+                compound.Value,
+                binaryToken,
+                out var method))
+        {
+            return false;
+        }
+
+        var receiver = SpillExternalReceiver(compound.Object);
+        var index = SpillExternalValue(compound.Index);
+        var oldValue = EmitExternalIndexerRead(
+            receiver, index, ownerType, getter, getterCandidate);
+        var newValue = EmitExternalOperatorCall(oldValue, compound.Value, method);
+        EmitExternalIndexerWrite(receiver, index, ownerType, property, newValue);
+        IL.Emit(OpCodes.Ldloc, newValue);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitExternalPropertyIncrement(
+        Expr.Get get,
+        Type operandType,
+        MethodInfo method,
+        bool isPrefix)
+    {
+        if (!TryResolveExternalReceiverType(get.Object, out var ownerType) ||
+            ownerType.IsValueType ||
+            !TryResolveExternalWritableMember(
+                ownerType, get.Name.Lexeme, out var member, out var valueType) ||
+            valueType != operandType ||
+            !valueType.IsAssignableFrom(method.ReturnType))
+        {
+            return false;
+        }
+
+        var receiver = SpillExternalReceiver(get.Object);
+        var oldValue = EmitExternalMemberRead(receiver, ownerType, member, valueType);
+        var newValue = EmitExternalUnaryOperatorCall(oldValue, method);
+        EmitExternalMemberWrite(receiver, ownerType, member, valueType, newValue);
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitExternalIndexerIncrement(
+        Expr.GetIndex getIndex,
+        Type operandType,
+        MethodInfo method,
+        bool isPrefix)
+    {
+        if (!TryResolveExternalReceiverType(getIndex.Object, out var ownerType) ||
+            ownerType.IsValueType ||
+            !TryResolveExternalWritableIndexer(
+                ownerType, getIndex.Index, out var property, out var getter, out var getterCandidate) ||
+            property.PropertyType != operandType ||
+            !property.PropertyType.IsAssignableFrom(method.ReturnType))
+        {
+            return false;
+        }
+
+        var receiver = SpillExternalReceiver(getIndex.Object);
+        var index = SpillExternalValue(getIndex.Index);
+        var oldValue = EmitExternalIndexerRead(
+            receiver, index, ownerType, getter, getterCandidate);
+        var newValue = EmitExternalUnaryOperatorCall(oldValue, method);
+        EmitExternalIndexerWrite(receiver, index, ownerType, property, newValue);
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryResolveExternalBinaryOperator(
+        Expr leftExpression,
+        Type leftType,
+        Expr rightExpression,
+        TokenType token,
+        out MethodInfo method)
+    {
+        Type? rightType = TryResolveExternalReceiverType(
+            rightExpression, out var resolvedRight)
+            ? resolvedRight
+            : null;
+        var methods = DotNetOperatorResolver.GetBinaryCandidates(
+                token, leftType, rightType)
+            .Where(candidate =>
+            {
+                var parameters = candidate.GetParameters();
+                return parameters[0].ParameterType.IsAssignableFrom(leftType) &&
+                       leftType.IsAssignableFrom(candidate.ReturnType);
+            })
+            .ToArray();
+        var exactLeft = methods
+            .Where(candidate =>
+                candidate.GetParameters()[0].ParameterType == leftType)
+            .ToArray();
+        if (exactLeft.Length > 0)
+            methods = exactLeft;
+        if (methods.Length == 0)
+        {
+            method = null!;
+            return false;
+        }
+
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(
+            methods, [leftExpression, rightExpression]);
+        method = (MethodInfo)candidate.Method;
+        return true;
+    }
+
+    private bool TryResolveExternalWritableMember(
+        Type ownerType,
+        string jsName,
+        out MemberInfo member,
+        out Type valueType)
+    {
+        string pascalName = NamingConventions.ToPascalCase(jsName);
+        var property = ownerType.GetProperty(
+                           pascalName, BindingFlags.Public | BindingFlags.Instance)
+                       ?? ownerType.GetProperty(
+                           jsName, BindingFlags.Public | BindingFlags.Instance);
+        if (property is { CanRead: true, CanWrite: true } &&
+            property.GetIndexParameters().Length == 0 &&
+            property.GetGetMethod() != null &&
+            property.GetSetMethod() != null &&
+            DotNetInteropClassifier.UnsupportedSlotReason(property.PropertyType) == null)
+        {
+            member = property;
+            valueType = property.PropertyType;
+            return true;
+        }
+
+        var field = ownerType.GetField(
+                        pascalName, BindingFlags.Public | BindingFlags.Instance)
+                    ?? ownerType.GetField(
+                        jsName, BindingFlags.Public | BindingFlags.Instance);
+        if (field is { IsInitOnly: false, IsLiteral: false } &&
+            DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) == null)
+        {
+            member = field;
+            valueType = field.FieldType;
+            return true;
+        }
+
+        member = null!;
+        valueType = null!;
+        return false;
+    }
+
+    private bool TryResolveExternalWritableIndexer(
+        Type ownerType,
+        Expr indexExpression,
+        out PropertyInfo property,
+        out MethodInfo getter,
+        out MethodCandidate getterCandidate)
+    {
+        var properties = ownerType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(candidate =>
+                candidate.CanRead &&
+                candidate.CanWrite &&
+                candidate.GetGetMethod() != null &&
+                candidate.GetSetMethod() != null &&
+                candidate.GetIndexParameters().Length == 1 &&
+                DotNetInteropClassifier.UnsupportedSlotReason(candidate.PropertyType) == null &&
+                DotNetInteropClassifier.UnsupportedSlotReason(
+                    candidate.GetIndexParameters()[0].ParameterType) == null)
+            .ToArray();
+        if (properties.Length == 0)
+        {
+            property = null!;
+            getter = null!;
+            getterCandidate = default;
+            return false;
+        }
+
+        var getters = properties.Select(candidate => candidate.GetGetMethod()!).ToArray();
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        getterCandidate = resolver.ResolveMethod(getters, [indexExpression]);
+        var resolvedGetter = (MethodInfo)getterCandidate.Method;
+        getter = resolvedGetter;
+        property = properties.First(candidate => candidate.GetGetMethod() == resolvedGetter);
+        return true;
+    }
+
+    private LocalBuilder SpillExternalReceiver(Expr receiver)
+    {
+        EmitExpression(receiver);
+        EnsureBoxed();
+        var local = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, local);
+        return local;
+    }
+
+    private LocalBuilder SpillExternalValue(Expr value)
+    {
+        EmitExpression(value);
+        EnsureBoxed();
+        var local = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, local);
+        return local;
+    }
+
+    private LocalBuilder EmitExternalMemberRead(
+        LocalBuilder receiver,
+        Type ownerType,
+        MemberInfo member,
+        Type valueType)
+    {
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Castclass, ownerType);
+        switch (member)
+        {
+            case PropertyInfo property:
+                IL.Emit(OpCodes.Callvirt, property.GetGetMethod()!);
+                break;
+            case FieldInfo field:
+                IL.Emit(OpCodes.Ldfld, field);
+                break;
+        }
+        BoxResultIfValueType(valueType);
+        var oldValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, oldValue);
+        return oldValue;
+    }
+
+    private void EmitExternalMemberWrite(
+        LocalBuilder receiver,
+        Type ownerType,
+        MemberInfo member,
+        Type valueType,
+        LocalBuilder value)
+    {
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Castclass, ownerType);
+        IL.Emit(OpCodes.Ldloc, value);
+        EmitExternalTypeConversion(valueType);
+        switch (member)
+        {
+            case PropertyInfo property:
+                IL.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+                break;
+            case FieldInfo field:
+                IL.Emit(OpCodes.Stfld, field);
+                break;
+        }
+    }
+
+    private LocalBuilder EmitExternalIndexerRead(
+        LocalBuilder receiver,
+        LocalBuilder index,
+        Type ownerType,
+        MethodInfo getter,
+        MethodCandidate getterCandidate)
+    {
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Castclass, ownerType);
+        IL.Emit(OpCodes.Ldloc, index);
+        EmitExternalTypeConversion(getter.GetParameters()[0].ParameterType);
+        IL.Emit(OpCodes.Callvirt, getter);
+        BoxResultIfValueType(getter.ReturnType);
+        var oldValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, oldValue);
+        return oldValue;
+    }
+
+    private void EmitExternalIndexerWrite(
+        LocalBuilder receiver,
+        LocalBuilder index,
+        Type ownerType,
+        PropertyInfo property,
+        LocalBuilder value)
+    {
+        var setter = property.GetSetMethod()!;
+        var parameters = setter.GetParameters();
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Castclass, ownerType);
+        IL.Emit(OpCodes.Ldloc, index);
+        EmitExternalTypeConversion(parameters[0].ParameterType);
+        IL.Emit(OpCodes.Ldloc, value);
+        EmitExternalTypeConversion(parameters[1].ParameterType);
+        IL.Emit(OpCodes.Callvirt, setter);
+    }
+
+    private LocalBuilder EmitExternalOperatorCall(
+        LocalBuilder oldValue,
+        Expr rightExpression,
+        MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        IL.Emit(OpCodes.Ldloc, oldValue);
+        EmitExternalTypeConversion(parameters[0].ParameterType);
+        EmitExpression(rightExpression);
+        EmitExternalTypeConversion(parameters[1].ParameterType);
+        IL.Emit(OpCodes.Call, method);
+        BoxResultIfValueType(method.ReturnType);
+        var newValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, newValue);
+        return newValue;
+    }
+
+    private LocalBuilder EmitExternalUnaryOperatorCall(
+        LocalBuilder oldValue,
+        MethodInfo method)
+    {
+        IL.Emit(OpCodes.Ldloc, oldValue);
+        EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
+        IL.Emit(OpCodes.Call, method);
+        BoxResultIfValueType(method.ReturnType);
+        var newValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, newValue);
+        return newValue;
+    }
+
     /// <summary>
     /// Emits <c>++</c>/<c>--</c> on a class's static data field accessed as <c>Class.field</c>
     /// (member access). Returns false (emitting nothing) when <paramref name="get"/> is not a known
@@ -1570,6 +2107,9 @@ public partial class ILEmitter
 
     protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
+        if (TryEmitExternalPropertyCompound(cs))
+            return;
+
         // Static field fast path: this.staticField op= value inside a static method/block
         if (cs.Object is Expr.This &&
             TryResolveStaticThisField(new Expr.Get(cs.Object, cs.Name), out _, out var staticFieldCS))
@@ -1661,6 +2201,9 @@ public partial class ILEmitter
 
     protected override void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
     {
+        if (TryEmitExternalIndexerCompound(csi))
+            return;
+
         // Compound assignment on array element: arr[i] += x
         // 1. Get current value
         // 2. Apply operation

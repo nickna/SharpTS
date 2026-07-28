@@ -6,6 +6,7 @@ using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.DotNet;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
@@ -975,6 +976,13 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
+        // CLR indexers are real properties with parameters. Route them before the string-key
+        // synthetic dot-property fallback, which would otherwise look for a member named "0".
+        if (obj is DotNetInstance { HasReadableIndexer: true } dotNetInstance)
+        {
+            return RuntimeValue.FromBoxed(dotNetInstance.GetIndex(index, this));
+        }
+
         // Built-in namespace singletons and prototype objects resolve dot-notation access via
         // BuiltInRegistry.GetInstanceMember or hand-written fallbacks in EvaluateGetOnFallback
         // (SharpTSArrayGlobal, SharpTSArrayPrototype, SharpTSBuiltInConstructor, etc.).
@@ -1172,6 +1180,12 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(value);
             }
             afn.SetProperty(index?.ToString() ?? "", value);
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is DotNetInstance { HasWritableIndexer: true } dotNetInstance)
+        {
+            dotNetInstance.SetIndex(index, value, this);
             return RuntimeValue.FromBoxed(value);
         }
 

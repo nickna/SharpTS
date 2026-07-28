@@ -772,6 +772,15 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        // A statically known external CLR instance can expose a real indexer. Emit its getter
+        // directly so compiled output remains standalone and matches interpreter reflection.
+        if (!gi.Optional &&
+            TryResolveExternalReceiverType(gi.Object, out var externalIndexerType) &&
+            TryEmitExternalIndexerGet(gi.Object, externalIndexerType, gi.Index))
+        {
+            return;
+        }
+
         // Optional bracket access: emit nullish check around the entire index operation
         if (gi.Optional)
         {
@@ -1083,6 +1092,12 @@ public partial class ILEmitter
 
     protected override void EmitSetIndex(Expr.SetIndex si)
     {
+        if (TryResolveExternalReceiverType(si.Object, out var externalIndexerType) &&
+            TryEmitExternalIndexerSet(si.Object, externalIndexerType, si.Index, si.Value))
+        {
+            return;
+        }
+
         // globalThis[key] = value → GlobalThisSetProperty(key, value)
         if (si.Object is Expr.Variable gtSetIdx && gtSetIdx.Name.Lexeme == "globalThis")
         {

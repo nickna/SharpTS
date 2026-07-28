@@ -10,7 +10,11 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitMethodCall(Expr.Get methodGet, List<Expr> arguments)
+    private void EmitMethodCall(
+        Expr.Get methodGet,
+        List<Expr> arguments,
+        List<string>? genericTypeArguments = null,
+        TypeSystem.TypeInfo? contextualResultType = null)
     {
         string methodName = methodGet.Name.Lexeme;
 
@@ -102,7 +106,9 @@ public partial class ILEmitter
 
         // Try direct dispatch for known class instance methods
         TypeSystem.TypeInfo? objType = _ctx.TypeMap?.Get(methodGet.Object);
-        if (TryEmitDirectMethodCall(methodGet.Object, objType, methodName, arguments))
+        if (TryEmitDirectMethodCall(
+                methodGet.Object, objType, methodName, arguments,
+                genericTypeArguments, contextualResultType))
             return;
 
         // Timeout instance methods: ref(), unref()
@@ -339,7 +345,8 @@ public partial class ILEmitter
     /// Returns true if direct dispatch was emitted, false to fall back to runtime dispatch.
     /// </summary>
     private bool TryEmitDirectMethodCall(Expr receiver, TypeSystem.TypeInfo? receiverType,
-        string methodName, List<Expr> arguments)
+        string methodName, List<Expr> arguments, List<string>? genericTypeArguments,
+        TypeSystem.TypeInfo? contextualResultType)
     {
         // Only handle Instance types (e.g., let p: Person = ...)
         if (receiverType is not TypeSystem.TypeInfo.Instance instance)
@@ -361,7 +368,9 @@ public partial class ILEmitter
         // Check if this is an external .NET type (@DotNetType)
         if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleClassName, out var externalType))
         {
-            EmitExternalInstanceMethodCall(receiver, externalType, methodName, arguments);
+            EmitExternalInstanceMethodCall(
+                receiver, externalType, methodName, arguments,
+                genericTypeArguments, contextualResultType);
             return true;
         }
 
@@ -371,7 +380,9 @@ public partial class ILEmitter
         // Also check if the qualified name is an external type
         if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out externalType))
         {
-            EmitExternalInstanceMethodCall(receiver, externalType, methodName, arguments);
+            EmitExternalInstanceMethodCall(
+                receiver, externalType, methodName, arguments,
+                genericTypeArguments, contextualResultType);
             return true;
         }
 

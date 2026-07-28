@@ -505,6 +505,14 @@ public partial class TypeChecker
                     throw new TypeCheckException($" Cannot assign '{valueType}' to index signature type '{rec.StringIndexType}'.", tsCode: "TS2322");
                 return valueType;
             }
+            if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } classStringIndex)
+            {
+                if (!IsCompatible(classStringIndex, valueType))
+                    throw new TypeCheckException(
+                        $" Cannot assign '{valueType}' to index signature type '{classStringIndex}'.",
+                        tsCode: "TS2322");
+                return valueType;
+            }
 
             // Allow bracket assignment on any object/interface
             if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
@@ -626,6 +634,16 @@ public partial class TypeChecker
             {
                 if (!IsCompatible(rec2.NumberIndexType, valueType))
                     throw new TypeCheckException($" Cannot assign '{valueType}' to number index signature type '{rec2.NumberIndexType}'.", tsCode: "TS2322");
+                return valueType;
+            }
+            var classNumberIndex = GetClassIndexType(objType, TokenType.TYPE_NUMBER)
+                                   ?? GetClassIndexType(objType, TokenType.TYPE_STRING);
+            if (classNumberIndex != null)
+            {
+                if (!IsCompatible(classNumberIndex, valueType))
+                    throw new TypeCheckException(
+                        $" Cannot assign '{valueType}' to number index signature type '{classNumberIndex}'.",
+                        tsCode: "TS2322");
                 return valueType;
             }
 

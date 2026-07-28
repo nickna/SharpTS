@@ -66,7 +66,9 @@ public sealed class DecoratorService
             // @DotNetType("X") → show the resolved CLR type + its XML doc.
             if (name == "DotNetType" && arg is not null)
             {
-                var type = _resolve(DotNetTypeRegistry.ToClrTypeName(arg));
+                Type? type;
+                try { type = DotNetTypeRegistry.ResolveFriendly(arg, _resolve); }
+                catch (ArgumentException) { type = null; }
                 if (type is not null)
                     return Markdown(TypeMarkdown(type));
             }

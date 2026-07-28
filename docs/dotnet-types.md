@@ -59,8 +59,8 @@ dotnet example.dll
 
 A `dotnet:` import specifier binds .NET types as first-class module imports. The static type
 surface is synthesized directly from reflection metadata, so it always matches the real CLR
-type, and members the interop layer cannot marshal (the same four categories `--gen-decl`
-marks `[unsupported]`) are simply absent from the surface.
+type, and members the interop layer cannot marshal (as reported by `--gen-decl`) are simply
+absent from the surface.
 
 ### Two specifier forms
 
@@ -76,6 +76,10 @@ import { Math as SysMath } from "dotnet:System";
 
 // Nested types resolve through their declaring type's specifier
 import { SpecialFolder } from "dotnet:System.Environment";
+
+// Closed generic types use a friendly constructed name
+import { List } from "dotnet:System.Collections.Generic.List<number>";
+import { Dictionary } from "dotnet:System.Collections.Generic.Dictionary<string, number>";
 ```
 
 ### What you get
@@ -92,14 +96,62 @@ import { SpecialFolder } from "dotnet:System.Environment";
 - **Overload resolution** — cost-based, same as `@DotNetType`. If you need to force a
   specific overload with `@DotNetOverload`, use a `@DotNetType` declaration for that type
   instead; the two binding styles compose freely in one program.
+- **CLR indexers** — public single-parameter indexers use ordinary bracket syntax:
+  `list[0]`, `list[0] = value`, and `dictionary["key"]`.
+- **Nullable value types** — `Nullable<T>` is typed as `T | null` and values/null round-trip
+  consistently in both execution modes.
+- **Generic methods** — ordinary instance/static methods infer CLR method type arguments from
+  direct and nested inputs, guest arrays, and typed callback/delegate signatures. A concrete
+  assignment or return context can infer parameters that occur only in the result. Explicit
+  TypeScript arguments remain available when the call has no inference evidence:
+
+  ```typescript
+  const same = fixture.echo(42);              // Echo<double>(double)
+  const copy = fixture.copy([1, 2, 3]);        // Copy<double>(double[])
+  const made = fixture.fromFactory(() => 42);  // FromFactory<double>(Func<double>)
+  const zero: number = fixture.defaultValue(); // DefaultValue<double>()
+  const name = fixture.typeName<number>();    // TypeName<double>()
+  ```
+
+  CLR constraints are enforced when the reflected method is closed. A result-only call
+  without a concrete context still needs explicit `<T>`.
+- **`ref` / `out` / `in` methods** — `out` parameters are omitted from the call; `ref` and
+  `in` parameters are ordinary inputs. Writable `ref`/`out` values are returned in a tuple:
+  a non-void method returns `[result, ...updated]`, while a void method returns
+  `[...updated]`.
+- **CLR operators** — unary and binary operator methods dispatch when an operand is a
+  statically known imported CLR instance. Compound assignment and `++`/`--` also dispatch
+  for imported CLR variables and writable property/indexer l-values, write the operator
+  result back, and evaluate each receiver/index exactly once. Ordinary TypeScript values
+  retain JavaScript coercion semantics.
+- **Extension methods** — activate a public static extension container for one source module
+  with a side-effect import:
+
+  ```typescript
+  import { List } from "dotnet:System.Collections.Generic.List<number>";
+  import "dotnet-extensions:System.Linq.Enumerable";
+
+  const values = new List();
+  values.add(1);
+  console.log(values.count());
+  ```
+
+  Generic arguments infer from the constructed receiver (for example,
+  `List<number>` → `IEnumerable<double>` → `TSource = double`).
 
 ### Scope and restrictions
 
 - **Named imports only.** Default imports, `import * as ns`, `export … from "dotnet:…"`,
   `import x = require("dotnet:…")`, and dynamic `import("dotnet:…")` are rejected with a
   clear error — a .NET namespace is not an enumerable module object.
-- **No generic types.** `dotnet:System.Collections.Generic.List<number>` is rejected; use an
-  `@DotNetType` declaration with a closed-generic CLR name for those.
+- **Closed generics only.** Constructed names such as
+  `dotnet:System.Collections.Generic.List<number>` are supported, including nested generics.
+  Open definitions (`List\`1`, `List<>`) cannot be runtime values. In friendly names,
+  `number` means CLR `double`; C# aliases (`int`, `string`, `bool`, etc.) and fully-qualified
+  CLR names are also accepted.
+- **Extension imports are side-effect-only and module-scoped.** Default, named, namespace,
+  type-only, re-export, and CommonJS forms are rejected. Instance members take precedence
+  over extension methods.
 - **No paths in specifiers.** `dotnet:./libs/MyLib.dll#MyLib.Widget` is rejected — specifiers
   name types or namespaces. Point SharpTS at the assembly via `sharpts.json` or `-r`
   (below), then import the type by name.
@@ -176,7 +228,9 @@ declare class TypeScriptName {
 }
 ```
 
-- **First argument**: The fully-qualified .NET type name (e.g., `System.Text.StringBuilder`)
+- **First argument**: The fully-qualified .NET type name (e.g., `System.Text.StringBuilder`),
+  optionally constructed with friendly generic arguments (e.g.,
+  `System.Collections.Generic.List<number>`)
 - **`declare class`**: Indicates this is an external type with no implementation in TypeScript
 
 ### Declaring External Types
@@ -561,10 +615,11 @@ System.Text.StringBuilder — class
 ```
 
 Each member is marked `[usable]` or `[unsupported]` using the **same rules the runtime interop
-marshaller enforces**, so the tool and your program can never disagree about what's callable. The
-four unsupported categories are by-ref (`ref`/`out`/`in`) parameters, pointer types, ref structs
-(`Span<T>`/`ReadOnlySpan<T>`), and open generics. Signatures are shown with faithful .NET types
-(`int`, `char[]`, `ReadOnlySpan<char>`, `out Guid`), not coerced into TypeScript.
+marshaller enforces**, so the tool and your program can never disagree about what's callable.
+By-ref method parameters are shown using the tuple-lowered TypeScript call shape. Generic
+method definitions are shown with their `<T>` parameters. By-ref constructors/returns,
+pointer types, ref structs (`Span<T>`/`ReadOnlySpan<T>`), and open generic type definitions
+remain unsupported.
 
 > The `import { … } from "dotnet:…";` line is ready to copy into your program — see
 > [Importing .NET Types](#importing-net-types-dotnet-imports). It resolves with the exact same
@@ -615,18 +670,19 @@ The following .NET features are not currently supported:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Generic types | Not supported | Cannot declare `List<T>` directly |
-| `ref` / `out` parameters | Not supported | Methods with ref/out params cannot be called |
+| Generic types | Closed types supported | Use a constructed name such as `List<number>`; open `List<T>` definitions are not runtime values |
+| Generic methods | Supported (both modes) | Ordinary methods infer through nested inputs, guest arrays, delegate signatures, and concrete result contexts, or accept explicit `<T>`; extension methods infer from their receiver |
+| `ref` / `out` / `in` parameters | Supported on methods (both modes) | Tuple lowering preserves results and updated values. By-ref constructors are intentionally rejected because `new` must return the instance; managed-reference returns are rejected rather than exposed as misleading snapshots |
 | Events | Supported (both modes) | Use `addEventListener`/`removeEventListener` — see [Events](#events) |
 | Delegates | Supported (both modes) | TS functions auto-convert to delegate params — see [Delegates](#delegates-and-callbacks) |
-| Indexers | Not supported | Cannot use `obj[index]` syntax |
-| Operators | Not supported | Operator overloads not accessible |
-| Extension methods | Not supported | Must call as static methods |
-| Nullable value types | Partial | Generated as `T \| null` but runtime behavior varies |
+| Indexers | Supported (both modes) | Public single-parameter indexers use `obj[index]` syntax |
+| Operators | Supported (both modes) | Unary/binary operators plus compound and `++`/`--` write-back on variables and writable property/indexer l-values; compiled write-back receivers must be reference types |
+| Extension methods | Supported (both modes) | Side-effect-only `dotnet-extensions:` imports are module-scoped; instance members win |
+| Nullable value types | Supported (both modes) | Generated as `T \| null`; values and null marshal consistently |
 
 ### Workarounds
 
-For unsupported features, consider:
+For remaining unsupported signatures, consider:
 1. Creating a C# wrapper class that exposes a simpler API
 2. Using reflection-based interop via compiled TypeScript (see [.NET Integration Guide](dotnet-integration.md))
 
@@ -640,12 +696,12 @@ The interpreter builds a shim on demand so the delegate's Invoke signature
 round-trips through the TS callable:
 
 ```typescript
-@DotNetType("System.Collections.Generic.List`1")
+@DotNetType("System.Collections.Generic.List<number>")
 declare class IntList {
     constructor();
     add(item: number): void;
-    forEach(action: (item: number) => void): void;  // Action<int>
-    findAll(predicate: (item: number) => boolean): IntList;  // Predicate<int>
+    forEach(action: (item: number) => void): void;  // Action<double>
+    findAll(predicate: (item: number) => boolean): IntList;  // Predicate<double>
 }
 
 let items = new IntList();

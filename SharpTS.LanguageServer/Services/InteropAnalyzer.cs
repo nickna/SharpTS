@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
@@ -30,7 +31,7 @@ namespace SharpTS.LanguageServer.Services;
 /// When a <see cref="PositionMap"/> is supplied to <see cref="Analyze"/>, diagnostics carry
 /// token-precise ranges (Phase 4a); otherwise they fall back to line-only locations.
 ///
-/// RESOLUTION SEAM: <see cref="DotNetTypeRegistry.Resolve"/> by default (in-process,
+/// RESOLUTION SEAM: <see cref="DotNetTypeRegistry.ResolveFriendly"/> by default (in-process,
 /// mirrors the interpreter); the production server injects
 /// <c>AssemblyReferenceLoader.TryResolve</c> to validate against the project's referenced
 /// assemblies. Member/overload/event lookups reuse the runtime's own resolvers
@@ -70,6 +71,9 @@ public sealed class InteropAnalyzer
                 AnalyzeClass(cls, diags, bindings, positions);
             else if (stmt is Stmt.Import import && DotNetImports.IsDotNetSpecifier(import.ModulePath))
                 AnalyzeDotNetImport(import, diags, bindings, positions);
+            else if (stmt is Stmt.Import extensionImport &&
+                     DotNetExtensionImports.IsSpecifier(extensionImport.ModulePath))
+                AnalyzeDotNetExtensionImport(extensionImport, diags, positions);
         }
 
         // Pass 2 — Tier 3d: validate event-subscription call sites against the bindings.
@@ -78,6 +82,52 @@ public sealed class InteropAnalyzer
             visitor.Visit(stmt);
 
         return diags;
+    }
+
+    private void AnalyzeDotNetExtensionImport(
+        Stmt.Import import,
+        List<Diagnostic> diags,
+        PositionMap? pos)
+    {
+        if (import.DefaultImport != null ||
+            import.NamespaceImport != null ||
+            import.NamedImports != null ||
+            import.IsTypeOnly)
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"'{import.ModulePath}' must be imported for side effects.",
+                Loc(import.Keyword, pos)));
+            return;
+        }
+
+        string typeName = import.ModulePath[DotNetExtensionImports.Prefix.Length..];
+        Type? container;
+        try
+        {
+            container = DotNetTypeRegistry.ResolveFriendly(typeName, _resolve);
+        }
+        catch (ArgumentException ex)
+        {
+            diags.Add(Diagnostic.TypeError(ex.Message, Loc(import.Keyword, pos)));
+            return;
+        }
+
+        if (container == null || !(container.IsPublic || container.IsNestedPublic))
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"Cannot resolve public extension container '{typeName}'.",
+                Loc(import.Keyword, pos)));
+            return;
+        }
+        if (!(container.IsAbstract && container.IsSealed) ||
+            !container.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Any(method => method.IsDefined(
+                    typeof(ExtensionAttribute), inherit: false)))
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"'{typeName}' is not a public static extension-method container.",
+                Loc(import.Keyword, pos)));
+        }
     }
 
     /// <summary>
@@ -128,13 +178,23 @@ public sealed class InteropAnalyzer
         var (mapping, at, nameTok) = FindDotNetType(cls);
         if (mapping is null) return;
 
-        string clrName = DotNetTypeRegistry.ToClrTypeName(mapping);
-        Type? type = _resolve(clrName);
+        Type? type;
+        try
+        {
+            type = DotNetTypeRegistry.ResolveFriendly(mapping, _resolve);
+        }
+        catch (ArgumentException ex)
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"@DotNetType: invalid .NET type '{mapping}': {ex.Message}",
+                Loc(at!, nameTok!, pos)));
+            return;
+        }
         if (type == null)
         {
             // Tier 1 — mirrors Interpreter.DotNet.cs:31, surfaced statically at edit time.
             diags.Add(Diagnostic.TypeError(
-                $"@DotNetType: .NET type '{clrName}' not found in any loaded assembly.",
+                $"@DotNetType: .NET type '{mapping}' not found in any loaded assembly.",
                 Loc(at!, nameTok!, pos)));
             return;
         }

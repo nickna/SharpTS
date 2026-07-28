@@ -1534,6 +1534,14 @@ public partial class Interpreter : IDisposable
             return;
         }
 
+        // Extension imports only modify member lookup in the importing module. Their virtual
+        // modules have no runtime exports or initialization side effects of their own.
+        if (module.IsDotNetExtensionModule)
+        {
+            moduleInstance.IsExecuted = true;
+            return;
+        }
+
         // Handle built-in modules specially - populate exports from interpreter implementations
         if (module.IsBuiltIn)
         {

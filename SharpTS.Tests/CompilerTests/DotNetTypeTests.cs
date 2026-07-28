@@ -1245,4 +1245,24 @@ public class DotNetTypeTests
     }
 
     #endregion
+
+    [Fact]
+    public void ConstructedGenericDecorator_Works()
+    {
+        var source = """
+            @DotNetType("System.Collections.Generic.List<number>")
+            declare class NumberList {
+                constructor();
+                add(value: number): void;
+                readonly count: number;
+            }
+            const values = new NumberList();
+            values.add(1.25);
+            values.add(2.5);
+            console.log(values.count);
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Legacy);
+        Assert.Equal("2\n", output);
+    }
 }

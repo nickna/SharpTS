@@ -1,4 +1,5 @@
 using System.Reflection;
+using SharpTS.Declaration;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Runtime.DotNet;
@@ -63,7 +64,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
     /// <exception cref="Exception">When no compatible overload is found.</exception>
     public MethodCandidate ResolveMethod(MethodInfo[] methods, List<Expr> arguments, string? overloadHint = null)
     {
-        return Resolve(methods.Cast<MethodBase>().ToArray(), arguments, overloadHint);
+        return Resolve(methods.Cast<MethodBase>().ToArray(), arguments, overloadHint, allowByRef: true);
     }
 
     /// <summary>
@@ -77,10 +78,11 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
     /// <exception cref="Exception">When no compatible overload is found.</exception>
     public MethodCandidate ResolveConstructor(ConstructorInfo[] constructors, List<Expr> arguments, string? overloadHint = null)
     {
-        return Resolve(constructors.Cast<MethodBase>().ToArray(), arguments, overloadHint);
+        return Resolve(constructors.Cast<MethodBase>().ToArray(), arguments, overloadHint, allowByRef: false);
     }
 
-    private MethodCandidate Resolve(MethodBase[] candidates, List<Expr> arguments, string? overloadHint = null)
+    private MethodCandidate Resolve(
+        MethodBase[] candidates, List<Expr> arguments, string? overloadHint, bool allowByRef)
     {
         // Apply @DotNetOverload hint filter — narrow to matching signatures before scoring.
         if (!string.IsNullOrWhiteSpace(overloadHint))
@@ -99,29 +101,42 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
 
         foreach (var method in candidates)
         {
+            if (method is MethodInfo methodInfo &&
+                DotNetInteropClassifier.UnsupportedMethodReason(methodInfo) != null)
+            {
+                continue;
+            }
+            if (method is ConstructorInfo constructor &&
+                DotNetInteropClassifier.UnsupportedConstructorReason(constructor) != null)
+            {
+                continue;
+            }
             var parameters = method.GetParameters();
+            if (!allowByRef && parameters.Any(p => p.ParameterType.IsByRef))
+                continue;
+            var inputParameters = DotNetMethodResolver.GetInputParameters(parameters);
             bool hasParams = parameters.Length > 0 &&
                              parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
 
             if (hasParams)
             {
-                var candidate = ScoreWithParams(method, parameters, arguments);
+                var candidate = ScoreWithParams(method, inputParameters, arguments);
                 if (candidate.TotalCost < (int)ConversionCost.Incompatible)
                     scored.Add(candidate);
             }
             else
             {
                 // Non-params: argument count must match exactly (or handle optional params)
-                if (arguments.Count > parameters.Length)
+                if (arguments.Count > inputParameters.Length)
                     continue;
 
                 // Check if missing arguments have default values
-                if (arguments.Count < parameters.Length)
+                if (arguments.Count < inputParameters.Length)
                 {
                     bool allOptional = true;
-                    for (int i = arguments.Count; i < parameters.Length; i++)
+                    for (int i = arguments.Count; i < inputParameters.Length; i++)
                     {
-                        if (!parameters[i].HasDefaultValue)
+                        if (!inputParameters[i].HasDefaultValue)
                         {
                             allOptional = false;
                             break;
@@ -131,7 +146,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
                         continue;
                 }
 
-                var candidate = ScoreRegular(method, parameters, arguments);
+                var candidate = ScoreRegular(method, inputParameters, arguments);
                 if (candidate.TotalCost < (int)ConversionCost.Incompatible)
                     scored.Add(candidate);
             }
@@ -166,7 +181,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         for (int i = 0; i < arguments.Count; i++)
         {
             var tsType = _typeMap?.TryGet(arguments[i], out var t) == true ? t : null;
-            var cost = ScoreTypeConversion(tsType, parameters[i].ParameterType);
+            var cost = ScoreTypeConversion(tsType, DotNetMethodResolver.GetInputType(parameters[i]));
 
             if (cost == ConversionCost.Incompatible)
                 return new MethodCandidate(method, (int)ConversionCost.Incompatible, -1, false);
@@ -192,7 +207,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         for (int i = 0; i < regularParamCount; i++)
         {
             var tsType = _typeMap?.TryGet(arguments[i], out var t) == true ? t : null;
-            var cost = ScoreTypeConversion(tsType, parameters[i].ParameterType);
+            var cost = ScoreTypeConversion(tsType, DotNetMethodResolver.GetInputType(parameters[i]));
 
             if (cost == ConversionCost.Incompatible)
                 return new MethodCandidate(method, (int)ConversionCost.Incompatible, -1, false);
@@ -235,33 +250,37 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         if (targetType == _types.Object || targetType == typeof(object))
             return ConversionCost.ObjectFallback;
 
+        // Non-null values convert against Nullable<T>'s underlying type. Keep the original
+        // target around for the dedicated null branch below.
+        Type effectiveTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
         // TypeScript number -> .NET numeric types
         if (IsNumberType(tsType))
         {
-            if (targetType == _types.Double || targetType == typeof(double))
+            if (effectiveTarget == _types.Double || effectiveTarget == typeof(double))
                 return ConversionCost.Exact;
 
-            if (targetType == typeof(float) || targetType.FullName == "System.Single")
+            if (effectiveTarget == typeof(float) || effectiveTarget.FullName == "System.Single")
                 return ConversionCost.Lossless;
 
             // Integer types are narrowing conversions
-            if (targetType == _types.Int32 || targetType == typeof(int) ||
-                targetType == _types.Int64 || targetType == typeof(long) ||
-                targetType == _types.Byte || targetType == typeof(byte) ||
-                targetType == _types.Char || targetType == typeof(char) ||
-                targetType.FullName == "System.Int16" ||
-                targetType.FullName == "System.SByte" ||
-                targetType.FullName == "System.UInt16" ||
-                targetType.FullName == "System.UInt32" ||
-                targetType.FullName == "System.UInt64" ||
-                targetType.FullName == "System.Decimal")
+            if (effectiveTarget == _types.Int32 || effectiveTarget == typeof(int) ||
+                effectiveTarget == _types.Int64 || effectiveTarget == typeof(long) ||
+                effectiveTarget == _types.Byte || effectiveTarget == typeof(byte) ||
+                effectiveTarget == _types.Char || effectiveTarget == typeof(char) ||
+                effectiveTarget.FullName == "System.Int16" ||
+                effectiveTarget.FullName == "System.SByte" ||
+                effectiveTarget.FullName == "System.UInt16" ||
+                effectiveTarget.FullName == "System.UInt32" ||
+                effectiveTarget.FullName == "System.UInt64" ||
+                effectiveTarget.FullName == "System.Decimal")
             {
                 return ConversionCost.Narrowing;
             }
 
             // Number to boolean/string is incompatible
-            if (targetType == _types.Boolean || targetType == typeof(bool) ||
-                targetType == _types.String || targetType == typeof(string))
+            if (effectiveTarget == _types.Boolean || effectiveTarget == typeof(bool) ||
+                effectiveTarget == _types.String || effectiveTarget == typeof(string))
             {
                 return ConversionCost.Incompatible;
             }
@@ -270,12 +289,12 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         // TypeScript boolean -> .NET bool
         if (IsBooleanType(tsType))
         {
-            if (targetType == _types.Boolean || targetType == typeof(bool))
+            if (effectiveTarget == _types.Boolean || effectiveTarget == typeof(bool))
                 return ConversionCost.Exact;
 
             // Boolean to number/string is incompatible
-            if (IsNumericTarget(targetType) ||
-                targetType == _types.String || targetType == typeof(string))
+            if (IsNumericTarget(effectiveTarget) ||
+                effectiveTarget == _types.String || effectiveTarget == typeof(string))
             {
                 return ConversionCost.Incompatible;
             }
@@ -284,18 +303,18 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         // TypeScript string -> .NET string
         if (IsStringType(tsType))
         {
-            if (targetType == _types.String || targetType == typeof(string))
+            if (effectiveTarget == _types.String || effectiveTarget == typeof(string))
                 return ConversionCost.Exact;
 
             // String to number/bool is incompatible
-            if (IsNumericTarget(targetType) ||
-                targetType == _types.Boolean || targetType == typeof(bool))
+            if (IsNumericTarget(effectiveTarget) ||
+                effectiveTarget == _types.Boolean || effectiveTarget == typeof(bool))
             {
                 return ConversionCost.Incompatible;
             }
 
             // String to char - allowed as narrowing (first char)
-            if (targetType == _types.Char || targetType == typeof(char))
+            if (effectiveTarget == _types.Char || effectiveTarget == typeof(char))
                 return ConversionCost.Narrowing;
         }
 
@@ -303,6 +322,11 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         // DotNetDelegateShim.CreateForTSFunction. Lossless so delegate-typed overloads
         // beat `object` overloads for the same call.
         if (tsType is TSTypeInfo.Function && typeof(Delegate).IsAssignableFrom(targetType))
+            return ConversionCost.Lossless;
+
+        // Guest arrays are materialized element-by-element when crossing into a CLR
+        // array parameter. Rank that path above object fallback.
+        if (tsType is TSTypeInfo.Array or TSTypeInfo.Tuple && targetType.IsArray)
             return ConversionCost.Lossless;
 
         // TypeScript any/unknown -> object fallback
