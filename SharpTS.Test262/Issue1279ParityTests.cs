@@ -3,6 +3,12 @@ using Xunit.Abstractions;
 
 namespace SharpTS.Test262;
 
+[CollectionDefinition("Issue 1279 parity", DisableParallelization = true)]
+public sealed class Issue1279ParityCollection
+{
+}
+
+[Collection("Issue 1279 parity")]
 public sealed class Issue1279ParityTests
 {
     private readonly ITestOutputHelper _output;
