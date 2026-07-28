@@ -23,7 +23,10 @@ public sealed class DiagnosticsService
     /// <param name="resolve">CLR type resolver. Null = in-process registry (BCL only);
     /// the server injects an AssemblyReferenceLoader when a project/references are configured
     /// so the user's own @DotNetType targets resolve too.</param>
-    public DiagnosticsService(Func<string, Type?>? resolve = null) => _interop = new InteropAnalyzer(resolve);
+    public DiagnosticsService(
+        Func<string, Type?>? resolve = null,
+        Func<IEnumerable<string>>? typeNames = null) =>
+        _interop = new InteropAnalyzer(resolve, typeNames);
 
     public List<LspDiagnostic> Analyze(
         string text,

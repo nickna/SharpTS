@@ -1,4 +1,5 @@
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Newtonsoft.Json.Linq;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using SharpDiagnostic = SharpTS.Diagnostics.Diagnostic;
 using SharpSeverity = SharpTS.Diagnostics.DiagnosticSeverity;
@@ -34,7 +35,10 @@ public static class LspConversions
                 Range = ToRange(d, lines),
                 Severity = ToSeverity(d.Severity),
                 Message = d.Message,
-                Source = "sharpts"
+                Source = "sharpts",
+                Data = d.Properties is null
+                    ? null
+                    : JObject.FromObject(d.Properties),
             });
         }
         return result;

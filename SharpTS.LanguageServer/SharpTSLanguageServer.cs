@@ -45,11 +45,12 @@ public static class SharpTSLanguageServer
                     .AddSingleton(workspaceContext)
                     .AddSingleton(diagnosticsSettings)
                     .AddSingleton<DocumentStore>()
-                    .AddSingleton(new DiagnosticsService(resolve))
+                    .AddSingleton(new DiagnosticsService(resolve, typeNames))
                     .AddSingleton<DocumentDependencyGraph>()
                     .AddSingleton<DiagnosticsCoordinator>()
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
+                    .AddSingleton<InteropCodeActionService>()
                     .AddSingleton<DocumentSymbolService>()
                     .AddSingleton<DefinitionService>()
                     .AddSingleton<ReferenceService>()
@@ -59,7 +60,8 @@ public static class SharpTSLanguageServer
                 .WithHandler<ConfigurationHandler>()
                 .WithHandler<HoverHandler>()
                 .WithHandler<CompletionHandler>()
-                .WithHandler<SignatureHelpHandler>();
+                .WithHandler<SignatureHelpHandler>()
+                .WithHandler<CodeActionHandler>();
 
             // Registering a handler is what advertises its capability, so the mode has to be
             // decided here rather than consulted later.
