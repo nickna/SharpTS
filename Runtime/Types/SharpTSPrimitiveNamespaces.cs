@@ -79,17 +79,18 @@ public sealed class SharpTSStringPrototype
     // instance; only the _extras overlay differs between instances.
     internal SharpTSStringPrototype() { }
 
-    private Dictionary<string, object?>? _extras;
+    private readonly SharpTSObject _extras = new([]);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, StringPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
@@ -254,17 +255,18 @@ public sealed class SharpTSNumberPrototype
     // instance; only the _extras overlay differs between instances.
     internal SharpTSNumberPrototype() { }
 
-    private Dictionary<string, object?>? _extras;
+    private readonly SharpTSObject _extras = new([]);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);

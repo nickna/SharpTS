@@ -1289,6 +1289,12 @@ public partial class Interpreter
                     if (strictMode)
                         throw new InterpreterException($"Cannot set property '{t.Key}' which has only a getter.");
                 }
+                else if (TrySetBoxedPrimitiveInheritedProperty(
+                    t.Target, t.Key, value, strictMode))
+                {
+                    // The inherited setter handled the write, or an inherited
+                    // non-writable/getter-only descriptor blocked it.
+                }
                 else if (strictMode)
                 {
                     t.Target.SetPropertyStrict(t.Key, value, strictMode);

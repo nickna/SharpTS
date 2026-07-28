@@ -1212,10 +1212,22 @@ public partial class Interpreter
             && simpleObj.GetProperty("__primitiveType") is string primitiveType
             && simpleObj.HasProperty("__primitiveValue"))
         {
-            if (primitiveType == "String" && GetStringPrototype().HasExtra(memberName))
-                return RuntimeValue.FromBoxed(GetStringPrototype().TryGetExtra(memberName));
-            if (primitiveType == "Number" && GetNumberPrototype().HasExtra(memberName))
-                return RuntimeValue.FromBoxed(GetNumberPrototype().TryGetExtra(memberName));
+            if (primitiveType == "String")
+            {
+                if (GetStringPrototype().GetExtraGetter(memberName) is { } stringGetter)
+                    return BindAccessorToObject(stringGetter, simpleObj).CallV2(
+                        this, ReadOnlySpan<RuntimeValue>.Empty);
+                if (GetStringPrototype().HasExtra(memberName))
+                    return RuntimeValue.FromBoxed(GetStringPrototype().TryGetExtra(memberName));
+            }
+            if (primitiveType == "Number")
+            {
+                if (GetNumberPrototype().GetExtraGetter(memberName) is { } numberGetter)
+                    return BindAccessorToObject(numberGetter, simpleObj).CallV2(
+                        this, ReadOnlySpan<RuntimeValue>.Empty);
+                if (GetNumberPrototype().HasExtra(memberName))
+                    return RuntimeValue.FromBoxed(GetNumberPrototype().TryGetExtra(memberName));
+            }
             if (primitiveType == "Boolean" && GetBooleanPrototype().HasExtra(memberName))
                 return RuntimeValue.FromBoxed(GetBooleanPrototype().TryGetExtra(memberName));
 
@@ -1774,6 +1786,15 @@ public partial class Interpreter
                 return value;
             }
 
+            // Boxed primitives inherit user-defined descriptors from their
+            // realm-local prototype. An inherited setter handles the write;
+            // non-writable data and getter-only accessors block own shadowing.
+            if (!simpleObj.HasProperty(memberName)
+                && !simpleObj.HasSetter(memberName)
+                && TrySetBoxedPrimitiveInheritedProperty(
+                    simpleObj, memberName, value, strictMode))
+                return value;
+
             if (strictMode)
                 simpleObj.SetPropertyStrict(memberName, value, strictMode);
             else
@@ -1812,6 +1833,44 @@ public partial class Interpreter
         }
 
         throw new InterpreterException($"Only instances and objects have fields. Cannot set '{memberName}' on {obj?.GetType().Name ?? "null"}.");
+    }
+
+    private SharpTSPropertyDescriptor? GetBoxedPrimitivePrototypeDescriptor(
+        SharpTSObject obj, string memberName)
+    {
+        if (!obj.HasProperty("__primitiveType")) return null;
+        return obj.GetProperty("__primitiveType") switch
+        {
+            "String" => GetStringPrototype().GetOwnPropertyDescriptor(memberName),
+            "Number" => GetNumberPrototype().GetOwnPropertyDescriptor(memberName),
+            _ => null,
+        };
+    }
+
+    private bool TrySetBoxedPrimitiveInheritedProperty(
+        SharpTSObject obj, string memberName, object? value, bool strictMode)
+    {
+        if (GetBoxedPrimitivePrototypeDescriptor(obj, memberName) is not { } inherited)
+            return false;
+
+        var inheritedSetter = obj.GetProperty("__primitiveType") switch
+        {
+            "String" => GetStringPrototype().GetExtraSetter(memberName),
+            "Number" => GetNumberPrototype().GetExtraSetter(memberName),
+            _ => null,
+        };
+        if (inheritedSetter != null)
+        {
+            BindAccessorToObject(inheritedSetter, obj).CallBoxed(this, [value]);
+            return true;
+        }
+        if (inherited.Get != null || inherited.Set != null || !inherited.Writable)
+        {
+            if (strictMode)
+                throw new InterpreterException($"Cannot assign to read only property '{memberName}'.");
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -138,6 +138,15 @@ public sealed class Issue1279ParityTests
     public void Function_objects_enforce_descriptors_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-402.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-405.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-406.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-578.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-582.js")]
+    public void Intrinsic_prototypes_support_descriptors_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

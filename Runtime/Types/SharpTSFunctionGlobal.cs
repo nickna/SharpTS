@@ -39,16 +39,17 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSFunctionPrototype
 {
-    private Dictionary<string, object?>? _extras;
+    private readonly SharpTSObject _extras = new([]);
 
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
 
     public object? GetMember(string name)
     {

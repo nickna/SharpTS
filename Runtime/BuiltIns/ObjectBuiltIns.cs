@@ -504,6 +504,15 @@ public static partial class ObjectBuiltIns
             case SharpTSDate date:
                 success = date.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSStringPrototype stringPrototype:
+                success = stringPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSNumberPrototype numberPrototype:
+                success = numberPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSFunctionPrototype functionPrototype:
+                success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
                 var compiledDesc = CompiledPropertyDescriptor.FromAny(descriptorArg);
@@ -603,6 +612,12 @@ public static partial class ObjectBuiltIns
             SharpTSJSON json => json.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSStringPrototype stringPrototype => stringPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`
