@@ -32,9 +32,9 @@ public static class StringBuiltIns
             .MethodV2("endsWith", 0, int.MaxValue, specLength: 1, EndsWithV2)
             .MethodV2("slice", 0, int.MaxValue, specLength: 2, SliceV2)
             .MethodV2("substr", 0, int.MaxValue, specLength: 2, SubstrV2)
-            .MethodV2("repeat", 1, RepeatV2)
-            .MethodV2("padStart", 1, 2, PadStartV2)
-            .MethodV2("padEnd", 1, 2, PadEndV2)
+            .MethodV2("repeat", 0, int.MaxValue, specLength: 1, RepeatV2)
+            .MethodV2("padStart", 0, int.MaxValue, specLength: 1, PadStartV2)
+            .MethodV2("padEnd", 0, int.MaxValue, specLength: 1, PadEndV2)
             .MethodV2("charCodeAt", 0, int.MaxValue, specLength: 1, CharCodeAtV2)
             .MethodV2("codePointAt", 0, int.MaxValue, specLength: 1, CodePointAtV2)
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
@@ -43,8 +43,8 @@ public static class StringBuiltIns
             .MethodV2("trimEnd", 0, TrimEndV2)
             .MethodV2("replaceAll", 2, ReplaceAllV2)
             .MethodV2("at", 0, int.MaxValue, specLength: 1, AtV2)
-            .MethodV2("normalize", 0, 1, NormalizeV2)
-            .MethodV2("localeCompare", 1, LocaleCompareV2)
+            .MethodV2("normalize", 0, int.MaxValue, specLength: 0, NormalizeV2)
+            .MethodV2("localeCompare", 0, int.MaxValue, specLength: 1, LocaleCompareV2)
             // ECMA-262 §22.1.3.28/.31: String.prototype.toString and valueOf both
             // return thisStringValue. Needed so `(new String("x")).toString()` and
             // ToPrimitive(string-wrapper) unwrap to the primitive instead of
@@ -230,20 +230,20 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(result.ToString());
     }
 
-    private static RuntimeValue FromCharCodeV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue FromCharCodeV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.EmptyString;
 
         if (args.Length == 1)
         {
-            var code = (int)NumArg(args[0]);
+            var code = (int)NumArg(interpreter, args[0]);
             return RuntimeValue.FromString(((char)(code & 0xFFFF)).ToString());
         }
 
         var chars = new char[args.Length];
         for (int i = 0; i < args.Length; i++)
         {
-            var code = (int)NumArg(args[i]);
+            var code = (int)NumArg(interpreter, args[i]);
             chars[i] = (char)(code & 0xFFFF);
         }
         return RuntimeValue.FromString(new string(chars));
@@ -254,10 +254,12 @@ public static class StringBuiltIns
     /// boxed <c>new Number(x)</c> wrapper) through the interpreter's ToNumber so
     /// it unwraps to its primitive instead of throwing on <c>AsNumber()</c> (#708).
     /// </summary>
-    private static double NumArg(RuntimeValue rv)
-        => rv.Kind == ValueKind.Number ? rv.AsNumber() : Interpreter.ToNumber(rv.ToObject());
+    private static double NumArg(Interpreter interpreter, RuntimeValue rv)
+        => rv.Kind == ValueKind.Number
+            ? rv.AsNumber()
+            : interpreter.ToNumberWithPrimitive(rv.ToObject());
 
-    private static RuntimeValue FromCodePointV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue FromCodePointV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.EmptyString;
 
@@ -266,9 +268,10 @@ public static class StringBuiltIns
         {
             // ECMA-262 §22.1.2.2: each code point must be an integral Number in
             // [0, 0x10FFFF]; NaN / Infinity / fractional values throw RangeError.
-            var num = NumArg(arg);
+            var num = NumArg(interpreter, arg);
             if (!double.IsInteger(num) || num < 0 || num > 0x10FFFF)
-                throw new Exception($"RangeError: Invalid code point {num}");
+                throw new ThrowException(new SharpTSRangeError(
+                    $"Invalid code point {num}"));
             AppendCodePoint(sb, (int)num);
         }
         return RuntimeValue.FromString(sb.ToString());
@@ -395,10 +398,17 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str.Substring(start, length));
     }
 
-    private static RuntimeValue RepeatV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue RepeatV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var count = (int)args[0].AsNumber();
-        if (count < 0) throw new Exception("Runtime Error: Invalid count value for repeat()");
+        double rawCount = IntegerArgument(interpreter, args, 0, 0);
+        if (rawCount < 0 || double.IsPositiveInfinity(rawCount))
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid count value for repeat"));
+        if (rawCount > int.MaxValue
+            || (str.Length > 0 && rawCount > int.MaxValue / str.Length))
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid string length"));
+        int count = (int)rawCount;
         if (count == 0 || str.Length == 0) return RuntimeValue.EmptyString;
         if (count == 1) return RuntimeValue.FromString(str);
         return RuntimeValue.FromString(string.Create(str.Length * count, (str, count), static (span, state) =>
@@ -451,11 +461,14 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str[(int)position].ToString());
     }
 
-    private static RuntimeValue PadStartV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PadStartV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var targetLength = (int)args[0].AsNumber();
-        var padString = args.Length > 1 ? args[1].AsString() : " ";
-        if (targetLength <= str.Length || padString.Length == 0) return RuntimeValue.FromString(str);
+        int targetLength = PadTargetLength(interpreter, args);
+        if (targetLength <= str.Length) return RuntimeValue.FromString(str);
+        string padString = args.Length < 2 || args[1].IsUndefined
+            ? " "
+            : StringArgument(interpreter, args, 1);
+        if (padString.Length == 0) return RuntimeValue.FromString(str);
         var padLength = targetLength - str.Length;
         return RuntimeValue.FromString(string.Create(targetLength, (str, padString, padLength), static (span, state) =>
         {
@@ -472,11 +485,14 @@ public static class StringBuiltIns
         }));
     }
 
-    private static RuntimeValue PadEndV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PadEndV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var targetLength = (int)args[0].AsNumber();
-        var padString = args.Length > 1 ? args[1].AsString() : " ";
-        if (targetLength <= str.Length || padString.Length == 0) return RuntimeValue.FromString(str);
+        int targetLength = PadTargetLength(interpreter, args);
+        if (targetLength <= str.Length) return RuntimeValue.FromString(str);
+        string padString = args.Length < 2 || args[1].IsUndefined
+            ? " "
+            : StringArgument(interpreter, args, 1);
+        if (padString.Length == 0) return RuntimeValue.FromString(str);
         var padLength = targetLength - str.Length;
         return RuntimeValue.FromString(string.Create(targetLength, (str, padString, padLength), static (span, state) =>
         {
@@ -532,35 +548,40 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str.Replace(search, replacement));
     }
 
-    private static RuntimeValue NormalizeV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue NormalizeV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var form = args.Length > 0 && args[0].IsString ? args[0].AsString() : "NFC";
+        string form = args.Length == 0 || args[0].IsUndefined
+            ? "NFC"
+            : StringArgument(interpreter, args, 0);
         var normForm = form switch
         {
             "NFC" => System.Text.NormalizationForm.FormC,
             "NFD" => System.Text.NormalizationForm.FormD,
             "NFKC" => System.Text.NormalizationForm.FormKC,
             "NFKD" => System.Text.NormalizationForm.FormKD,
-            _ => throw new Exception($"RangeError: The normalization form should be one of NFC, NFD, NFKC, NFKD.")
+            _ => throw new ThrowException(new SharpTSRangeError(
+                "The normalization form should be one of NFC, NFD, NFKC, NFKD"))
         };
         return RuntimeValue.FromString(str.Normalize(normForm));
     }
 
-    private static RuntimeValue LocaleCompareV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue LocaleCompareV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var that = args[0].AsString();
+        string that = StringArgument(interpreter, args, 0);
         var result = string.Compare(str, that, StringComparison.CurrentCulture);
         return RuntimeValue.FromNumber(result < 0 ? -1 : result > 0 ? 1 : 0);
     }
 
-    private static RuntimeValue ConcatV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ConcatV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.FromString(str);
-        if (args.Length == 1) return RuntimeValue.FromString(string.Concat(str, args[0].AsString()));
+        if (args.Length == 1)
+            return RuntimeValue.FromString(string.Concat(
+                str, StringArgument(interpreter, args, 0)));
         var sb = new StringBuilder(str);
-        foreach (var arg in args)
+        for (int i = 0; i < args.Length; i++)
         {
-            sb.Append(arg.AsString());
+            sb.Append(StringArgument(interpreter, args, i));
         }
         return RuntimeValue.FromString(sb.ToString());
     }
@@ -624,6 +645,18 @@ public static class StringBuiltIns
         if (position < 0)
             return (int)Math.Max(length + position, 0);
         return ClampPosition(position, length);
+    }
+
+    private static int PadTargetLength(
+        Interpreter interpreter,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        double targetLength = IntegerArgument(interpreter, args, 0, 0);
+        if (targetLength <= 0) return 0;
+        if (targetLength > int.MaxValue)
+            throw new ThrowException(new SharpTSRangeError(
+                "Invalid string length"));
+        return (int)targetLength;
     }
 
     #endregion

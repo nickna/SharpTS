@@ -343,6 +343,22 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/fromCharCode/touint16-tonumber-throws-valueof.js")]
+    [InlineData("built-ins/String/fromCodePoint/to-number-conversions.js")]
+    [InlineData("built-ins/String/fromCodePoint/number-is-out-of-range.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T1.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T2.js")]
+    [InlineData("built-ins/String/prototype/localeCompare/15.5.4.9_3.js")]
+    [InlineData("built-ins/String/prototype/repeat/count-coerced-to-zero-returns-empty-string.js")]
+    [InlineData("built-ins/String/prototype/repeat/count-less-than-zero-throws.js")]
+    [InlineData("built-ins/String/prototype/padStart/fill-string-non-strings.js")]
+    [InlineData("built-ins/String/prototype/padEnd/normal-operation.js")]
+    [InlineData("built-ins/String/prototype/normalize/form-is-not-valid-throws.js")]
+    public void Remaining_string_methods_coerce_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
