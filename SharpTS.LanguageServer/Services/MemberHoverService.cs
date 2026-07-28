@@ -126,7 +126,10 @@ public sealed class MemberHoverService
         if (cls.Decorators is null) return null;
         foreach (var d in cls.Decorators)
             if (d.Expression is Expr.Call { Callee: Expr.Variable { Name.Lexeme: "DotNetType" }, Arguments: [Expr.Literal { Value: string clr }] })
-                return _resolve(DotNetTypeRegistry.ToClrTypeName(clr));
+            {
+                try { return DotNetTypeRegistry.ResolveFriendly(clr, _resolve); }
+                catch (ArgumentException) { return null; }
+            }
         return null;
     }
 
@@ -135,7 +138,10 @@ public sealed class MemberHoverService
     private Type? ResolveExternal(TypeInfo? ti, IReadOnlyDictionary<string, Type> bindings)
     {
         if (ti is TypeInfo.ExternalDotNetType ext)
-            return _resolve(ext.ClrTypeName) ?? ext.ResolvedType;
+        {
+            try { return DotNetTypeRegistry.ResolveFriendly(ext.ClrTypeName, _resolve) ?? ext.ResolvedType; }
+            catch (ArgumentException) { return ext.ResolvedType; }
+        }
         var name = ClassName(ti);
         return name is not null && bindings.TryGetValue(name, out var t) ? t : null;
     }

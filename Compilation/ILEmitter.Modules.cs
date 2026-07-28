@@ -24,7 +24,8 @@ public partial class ILEmitter
 
         // dotnet: interop imports emit no binding code — use sites compile to direct
         // external-interop IL via the ExternalTypes registry (see RegisterDotNetImports).
-        if (SharpTS.Modules.DotNetImports.IsDotNetSpecifier(import.ModulePath))
+        if (SharpTS.Modules.DotNetImports.IsDotNetSpecifier(import.ModulePath) ||
+            SharpTS.Modules.DotNetExtensionImports.IsSpecifier(import.ModulePath))
             return;
 
         // Check for built-in module imports (fs, path, etc.) and stdlib-internal

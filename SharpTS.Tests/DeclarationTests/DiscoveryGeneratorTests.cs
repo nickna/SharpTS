@@ -1,5 +1,7 @@
 using System.Text.Json;
 using SharpTS.Declaration;
+using SharpTS.Runtime.DotNet;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.DeclarationTests;
@@ -48,11 +50,13 @@ public class DiscoveryGeneratorTests
     }
 
     [Fact]
-    public void Classifier_MarksByRefUnsupported()
+    public void Classifier_AllowsByRefParametersButNotByRefReturns()
     {
+        Type byRef = typeof(int).MakeByRefType();
         Assert.Equal(
             DotNetInteropClassifier.ReasonByRef,
-            DotNetInteropClassifier.UnsupportedSlotReason(typeof(int).MakeByRefType()));
+            DotNetInteropClassifier.UnsupportedSlotReason(byRef));
+        Assert.Null(DotNetInteropClassifier.UnsupportedParameterReason(byRef));
     }
 
     [Fact]
@@ -70,6 +74,13 @@ public class DiscoveryGeneratorTests
         Assert.Equal(
             DotNetInteropClassifier.ReasonOpenGeneric,
             DotNetInteropClassifier.UnsupportedSlotReason(openArg));
+    }
+
+    [Fact]
+    public void RuntimeRegistry_DoesNotExposeByRefReturnMethods()
+    {
+        Assert.Empty(DotNetTypeRegistry.GetMethods(
+            typeof(ByRefBoundaryFixture), "valueRef", isStatic: false));
     }
 
     // ── Type-detail report ───────────────────────────────────────────
@@ -112,16 +123,16 @@ public class DiscoveryGeneratorTests
     }
 
     [Fact]
-    public void GenerateForType_Guid_RendersOutParamFaithfullyAndFlagsIt()
+    public void GenerateForType_Guid_RendersTupleLoweredOutParam()
     {
         var report = _generator.Generate("System.Guid");
 
-        // tryParse(input: string, result: out Guid): bool — faithful `out`, by-ref unsupported.
+        // `out Guid` is omitted from inputs and returned after the ordinary boolean result.
         var tryParse = report.Type!.Members.FirstOrDefault(m =>
-            m.Signature == "static tryParse(input: string, result: out Guid): bool");
+            m.Signature == "static tryParse(input: string): [bool, Guid]");
         Assert.NotNull(tryParse);
-        Assert.False(tryParse!.Usable);
-        Assert.Equal(DotNetInteropClassifier.ReasonByRef, tryParse.UnsupportedReason);
+        Assert.True(tryParse!.Usable);
+        Assert.Null(tryParse.UnsupportedReason);
     }
 
     [Fact]
@@ -129,6 +140,44 @@ public class DiscoveryGeneratorTests
     {
         var report = _generator.Generate("System.Guid");
         Assert.Equal("struct", report.Type!.Kind);
+    }
+
+    [Fact]
+    public void Generate_ConstructedGeneric_HasRoundTrippableImportAndIndexer()
+    {
+        var report = _generator.Generate("System.Collections.Generic.List<number>");
+
+        Assert.Equal(
+            "import { List } from \"dotnet:System.Collections.Generic.List<number>\";",
+            report.Type!.ImportLine);
+        Assert.Contains(report.Type.Members, m =>
+            m.Signature == "[index: int]: double   { get; set; }" && m.Usable);
+    }
+
+    [Fact]
+    public void Generate_GenericMethod_IsUsableAndRendersTypeParameters()
+    {
+        var report = _generator.Generate(
+            "SharpTS.Tests.Infrastructure.GenericMethodFixture");
+
+        Assert.Contains(report.Type!.Members, m =>
+            m.Signature == "echo<T>(value: T): T" &&
+            m.Usable &&
+            m.UnsupportedReason == null);
+    }
+
+    [Fact]
+    public void Generate_ByRefConstructorAndReturn_AreExplicitlyUnsupported()
+    {
+        var report = _generator.Generate(
+            "SharpTS.Tests.Infrastructure.ByRefBoundaryFixture");
+
+        Assert.Contains(report.Type!.Members, m =>
+            m.Category == "Constructors" &&
+            m.UnsupportedReason == DotNetInteropClassifier.ReasonByRefConstructor);
+        Assert.Contains(report.Type.Members, m =>
+            m.Signature == "valueRef(): int" &&
+            m.UnsupportedReason == DotNetInteropClassifier.ReasonByRef);
     }
 
     // ── Namespace table of contents ──────────────────────────────────

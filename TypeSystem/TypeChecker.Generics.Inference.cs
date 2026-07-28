@@ -14,7 +14,10 @@ public partial class TypeChecker
     /// <summary>
     /// Infers type arguments from call arguments for a generic function.
     /// </summary>
-    private List<TypeInfo> InferTypeArguments(TypeInfo.GenericFunction gf, List<TypeInfo> argTypes)
+    private List<TypeInfo> InferTypeArguments(
+        TypeInfo.GenericFunction gf,
+        List<TypeInfo> argTypes,
+        TypeInfo? contextualResultType = null)
     {
         Dictionary<string, TypeInfo> inferred = [];
 
@@ -43,6 +46,12 @@ public partial class TypeChecker
                 InferFromType(restDeclared, TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count), inferred);
             }
         }
+
+        // A concrete assignment/return context is valid evidence for type parameters
+        // that appear only in the result (`const n: number = host.create<T>()`).
+        // Calls checked without a context retain the existing constraint/any fallback.
+        if (contextualResultType is not null and not TypeInfo.Any)
+            InferFromType(gf.ReturnType, contextualResultType, inferred);
 
         // Build result list in order of type parameters
         List<TypeInfo> result = [];
@@ -153,6 +162,16 @@ public partial class TypeChecker
         {
             // Recurse into array element types
             InferFromType(paramArr.ElementType, argArr.ElementType, inferred);
+        }
+        else if (paramType is TypeInfo.Array tupleParamArr && argType is TypeInfo.Tuple argTuple)
+        {
+            // Array literals commonly retain tuple precision. A CLR `T[]` parameter still
+            // infers T from every fixed/rest tuple element rather than losing inference at
+            // the tuple-vs-array representation boundary.
+            foreach (var element in argTuple.ElementTypes)
+                InferFromType(tupleParamArr.ElementType, element, inferred);
+            if (argTuple.RestElementType != null)
+                InferFromType(tupleParamArr.ElementType, argTuple.RestElementType, inferred);
         }
         else if (paramType is TypeInfo.Function paramFunc && argType is TypeInfo.Function argFunc)
         {

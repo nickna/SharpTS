@@ -24,12 +24,11 @@ public partial class Interpreter
         string? mapping = ExtractDotNetTypeMapping(classStmt);
         if (mapping == null) return false;
 
-        string clrName = DotNetTypeRegistry.ToClrTypeName(mapping);
-        Type? type = DotNetTypeRegistry.Resolve(clrName);
+        Type? type = DotNetTypeRegistry.ResolveFriendly(mapping);
         if (type == null)
         {
             throw new InterpreterException(
-                $"@DotNetType: .NET type '{clrName}' not found in any loaded assembly.");
+                $"@DotNetType: .NET type '{mapping}' not found in any loaded assembly.");
         }
 
         var overloadHints = ExtractOverloadHints(classStmt);

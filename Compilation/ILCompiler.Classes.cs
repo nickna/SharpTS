@@ -37,11 +37,10 @@ public partial class ILCompiler
         string? dotNetTypeName = GetDotNetTypeMapping(classStmt);
         if (dotNetTypeName != null)
         {
-            // Convert friendly syntax to CLR name (e.g., "List<>" -> "List`1")
-            string clrTypeName = ToClrTypeName(dotNetTypeName);
-
-            // Try to resolve the external type
-            Type? externalType = TryResolveExternalType(clrTypeName);
+            // Resolve ordinary and constructed-generic friendly names through the same parser
+            // interpreter mode and dotnet: imports use.
+            Type? externalType = Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(
+                dotNetTypeName, TryResolveExternalType);
 
             if (externalType != null)
             {
@@ -63,7 +62,7 @@ public partial class ILCompiler
             else
             {
                 // Warning: type not found but continue compilation
-                AddWarning($"External .NET type '{clrTypeName}' not found in loaded assemblies.");
+                AddWarning($"External .NET type '{dotNetTypeName}' not found in loaded assemblies.");
             }
 
             // Skip DefineType - don't emit TypeBuilder for external types
@@ -553,25 +552,6 @@ public partial class ILCompiler
             }
         }
         return result;
-    }
-
-    /// <summary>
-    /// Converts friendly generic syntax to CLR syntax.
-    /// Examples: "List&lt;&gt;" -> "System.Collections.Generic.List`1"
-    ///           "Dictionary&lt;,&gt;" -> "System.Collections.Generic.Dictionary`2"
-    /// </summary>
-    private static string ToClrTypeName(string friendlyName)
-    {
-        int genericStart = friendlyName.IndexOf('<');
-        if (genericStart < 0) return friendlyName;
-
-        string baseName = friendlyName[..genericStart];
-        string genericPart = friendlyName[genericStart..];
-
-        // Count commas + 1 = number of type parameters
-        int paramCount = genericPart.Count(c => c == ',') + 1;
-
-        return $"{baseName}`{paramCount}";
     }
 
     /// <summary>

@@ -200,7 +200,8 @@ public class ModuleResolver
 
         // dotnet: scheme — .NET interop imports resolve via reflection, not the file system.
         // The specifier itself is the virtual module path (and cache key).
-        if (DotNetImports.IsDotNetSpecifier(specifier))
+        if (DotNetImports.IsDotNetSpecifier(specifier) ||
+            DotNetExtensionImports.IsSpecifier(specifier))
         {
             if (kind == ResolutionKind.Cjs)
             {
@@ -765,6 +766,16 @@ public class ModuleResolver
             return dotnetModule;
         }
 
+        if (DotNetExtensionImports.IsSpecifier(absolutePath))
+        {
+            if (!_moduleCache.TryGetValue(absolutePath, out var extensionModule))
+            {
+                extensionModule = DotNetExtensionImports.CreateModule(absolutePath);
+                _moduleCache[absolutePath] = extensionModule;
+            }
+            return extensionModule;
+        }
+
         // Primitive C# module — materialize a placeholder ParsedModule with types.
         // Origin-gating in ResolveModulePath has already ensured only stdlib-origin
         // modules resolve here, so no per-caller check is needed.
@@ -986,6 +997,11 @@ public class ModuleResolver
                     if (importedModule.IsDotNetModule)
                     {
                         DotNetImports.EnsureImports(importedModule, import);
+                    }
+                    else if (importedModule.IsDotNetExtensionModule)
+                    {
+                        DotNetExtensionImports.EnsureSideEffectImport(
+                            module, importedModule, import);
                     }
                     // Files loaded via import are always modules, even if they have no exports
                     // (e.g., side-effect imports like `import './polyfill'`)
@@ -1450,6 +1466,7 @@ public class ModuleResolver
             && !absolutePath.StartsWith(AmbientModulePrefix, StringComparison.Ordinal)
             && !DotNetImports.IsDotNetSpecifier(absolutePath)
             && !absolutePath.StartsWith(TypeScriptLibProvider.VirtualPathPrefix, StringComparison.Ordinal)
+            && !DotNetExtensionImports.IsSpecifier(absolutePath)
             && !absolutePath.StartsWith(PrimitiveRegistry.Prefix, StringComparison.Ordinal))
         {
             absolutePath = Path.GetFullPath(absolutePath);

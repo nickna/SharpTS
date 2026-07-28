@@ -136,6 +136,21 @@ public class InteropAnalyzerTests
             "const sb = new StringBuilder();"));
 
     [Fact]
+    public void ConstructedGenericBindings_AreValidWithBothResolvers()
+    {
+        const string imports =
+            "import { List } from \"dotnet:System.Collections.Generic.List<number>\";\n";
+        const string declaration =
+            "@DotNetType(\"System.Collections.Generic.List<number>\")\n" +
+            "declare class NumberList { constructor(); add(value: number): void; }\n";
+
+        Assert.Empty(Analyze(imports + declaration));
+
+        using var loader = new AssemblyReferenceLoader(Array.Empty<string>());
+        Assert.Empty(Analyze(imports + declaration, loader.TryResolve));
+    }
+
+    [Fact]
     public void DotNetImport_UnresolvableName_Diagnostic()
     {
         var d = Analyze("import { Nope } from \"dotnet:System.NoSuchNs\";");
@@ -164,5 +179,19 @@ public class InteropAnalyzerTests
             "AppDomain.currentDomain.addEventListener(\"Typo\", (s: any, a: any) => {});");
         Assert.Single(d);
         Assert.Contains("Event 'Typo' not found", d[0].Message);
+    }
+
+    [Fact]
+    public void DotNetExtensionImport_ValidSideEffectForm_NoDiagnostics()
+        => Assert.Empty(Analyze(
+            "import \"dotnet-extensions:System.Linq.Enumerable\";"));
+
+    [Fact]
+    public void DotNetExtensionImport_NamedForm_Diagnostic()
+    {
+        var d = Analyze(
+            "import { Enumerable } from \"dotnet-extensions:System.Linq.Enumerable\";");
+        Assert.Single(d);
+        Assert.Contains("side effects", d[0].Message);
     }
 }

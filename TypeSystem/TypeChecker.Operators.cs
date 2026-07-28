@@ -18,6 +18,11 @@ public partial class TypeChecker
     {
         TypeInfo left = CheckExpr(binary.Left);
         TypeInfo right = CheckExpr(binary.Right);
+        if (DotNetTypeSynthesizer.TryResolveBinaryOperator(
+                left, right, binary.Operator.Type, out var clrResult))
+        {
+            return clrResult;
+        }
         var desc = SemanticOperatorResolver.Resolve(binary.Operator.Type);
         int line = binary.Operator.Line;
 
@@ -442,6 +447,19 @@ public partial class TypeChecker
 
         int line = compound.Operator.Line;
 
+        if (DotNetTypeSynthesizer.TryResolveCompoundOperator(
+                varType, valueType, compound.Operator.Type, out var clrResult))
+        {
+            if (!IsCompatible(varType, clrResult))
+            {
+                throw new TypeCheckException(
+                    $"Operator result type '{clrResult}' is not assignable to '{varType}'.",
+                    line: line > 0 ? line : null,
+                    tsCode: "TS2322");
+            }
+            return clrResult;
+        }
+
         // For += with strings, allow string concatenation
         if (compound.Operator.Type == TokenType.PLUS_EQUAL)
         {
@@ -478,8 +496,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckCompoundSet(Expr.CompoundSet compound)
     {
-        CheckExpr(compound.Object);
-        CheckExpr(compound.Value);
+        TypeInfo objType = CheckExpr(compound.Object);
+        TypeInfo valueType = CheckExpr(compound.Value);
 
         // Invalidate any narrowings affected by this property assignment
         var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
@@ -487,6 +505,23 @@ public partial class TypeChecker
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, compound.Name.Lexeme);
             InvalidateNarrowingsFor(assignedPath);
+        }
+
+        if (DotNetTypeSynthesizer.TryGetClrType(objType, out _))
+        {
+            TypeInfo memberType = CheckGetOnType(objType, compound.Name);
+            if (DotNetTypeSynthesizer.TryResolveCompoundOperator(
+                    memberType, valueType, compound.Operator.Type, out var clrResult))
+            {
+                if (!IsCompatible(memberType, clrResult))
+                {
+                    throw new TypeCheckException(
+                        $"Operator result type '{clrResult}' is not assignable to '{memberType}'.",
+                        line: compound.Operator.Line > 0 ? compound.Operator.Line : null,
+                        tsCode: "TS2322");
+                }
+                return clrResult;
+            }
         }
 
         return TypeInfo.Any.Shared;
@@ -516,6 +551,31 @@ public partial class TypeChecker
             }
 
             InvalidateNarrowingsFor(assignedPath);
+        }
+
+        if (DotNetTypeSynthesizer.TryGetClrType(objType, out _))
+        {
+            TokenType keyType = indexType switch
+            {
+                TypeInfo.String or TypeInfo.StringLiteral => TokenType.TYPE_STRING,
+                TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral =>
+                    TokenType.TYPE_NUMBER,
+                _ => TokenType.EOF
+            };
+            TypeInfo? elementType = GetClassIndexType(objType, keyType);
+            if (elementType != null &&
+                DotNetTypeSynthesizer.TryResolveCompoundOperator(
+                    elementType, valueType, compound.Operator.Type, out var clrResult))
+            {
+                if (!IsCompatible(elementType, clrResult))
+                {
+                    throw new TypeCheckException(
+                        $"Operator result type '{clrResult}' is not assignable to '{elementType}'.",
+                        line: compound.Operator.Line > 0 ? compound.Operator.Line : null,
+                        tsCode: "TS2322");
+                }
+                return clrResult;
+            }
         }
 
         if (!IsNumber(indexType))
@@ -699,6 +759,9 @@ public partial class TypeChecker
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
         TypeInfo operandType = CheckExpr(prefix.Operand);
+        if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
+                operandType, prefix.Operator.Type, out var clrResult))
+            return clrResult;
         if (!IsNumber(operandType) && !IsBigInt(operandType))
         {
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: prefix.Operator.Line, tsCode: "TS2356");
@@ -709,6 +772,9 @@ public partial class TypeChecker
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
         TypeInfo operandType = CheckExpr(postfix.Operand);
+        if (DotNetTypeSynthesizer.TryResolveIncrementOperator(
+                operandType, postfix.Operator.Type, out _))
+            return operandType;
         if (!IsNumber(operandType) && !IsBigInt(operandType))
         {
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", line: postfix.Operator.Line, tsCode: "TS2356");
@@ -776,6 +842,11 @@ public partial class TypeChecker
             return TypeInfo.String.Shared;
         }
         TypeInfo right = CheckExpr(unary.Right);
+        if (DotNetTypeSynthesizer.TryResolveUnaryOperator(
+                right, unary.Operator.Type, out var clrResult))
+        {
+            return clrResult;
+        }
         if (unary.Operator.Type == TokenType.VOID)
             return TypeInfo.Undefined.Shared;
         if (unary.Operator.Type == TokenType.MINUS)

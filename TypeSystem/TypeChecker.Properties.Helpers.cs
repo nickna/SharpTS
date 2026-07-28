@@ -284,7 +284,21 @@ public partial class TypeChecker
         // the class was frozen (e.g., method return types on @DotNetType shims).
         if (instance.ResolvedClassType is TypeInfo.Class instanceClassType)
         {
-            return CheckGetOnRegularInstance(instanceClassType, memberName);
+            var regularMember = CheckGetOnRegularInstance(instanceClassType, memberName);
+            if (regularMember is TypeInfo.Any &&
+                _currentModule != null &&
+                DotNetTypeSynthesizer.TryGetClrType(instance, out var receiverClr) &&
+                Runtime.DotNet.DotNetTypeRegistry.GetMethods(
+                    receiverClr, memberNameStr, isStatic: false).Length == 0 &&
+                DotNetTypeSynthesizer.TryBuildExtensionMember(
+                    instance,
+                    memberNameStr,
+                    _currentModule.DotNetExtensionTypes,
+                    out var extensionMember))
+            {
+                return extensionMember;
+            }
+            return regularMember;
         }
 
         return TypeInfo.Any.Shared;

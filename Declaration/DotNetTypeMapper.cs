@@ -35,6 +35,9 @@ public static class DotNetTypeMapper
         if (type == typeof(void))
             return "void";
 
+        if (type.IsGenericParameter)
+            return type.Name;
+
         // Primitives
         if (type == typeof(string))
             return "string";
@@ -158,6 +161,12 @@ public static class DotNetTypeMapper
             return "any";
 
         // Regular types - use the type name
+        if (type.IsGenericType)
+        {
+            string baseName = StripArity(type.Name);
+            return $"{baseName}<{string.Join(", ", type.GetGenericArguments().Select(MapToTypeScript))}>";
+        }
+
         if (type.IsClass || type.IsInterface || type.IsValueType)
         {
             // For known .NET types that map to TypeScript primitives, we've already handled them

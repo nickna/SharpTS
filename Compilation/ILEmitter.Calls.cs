@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Runtime.DotNet;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -142,7 +143,9 @@ public partial class ILEmitter
             externalStaticGet.Object is Expr.Variable externalClassVar &&
             _ctx.TypeMapper?.ExternalTypes.TryGetValue(externalClassVar.Name.Lexeme, out var externalType) == true)
         {
-            EmitExternalStaticMethodCall(externalType, externalStaticGet.Name.Lexeme, c.Arguments);
+            EmitExternalStaticMethodCall(
+                externalType, externalStaticGet.Name.Lexeme,
+                c.Arguments, c.TypeArgs, _ctx.TypeMap?.Get(c));
             return;
         }
 
@@ -175,7 +178,9 @@ public partial class ILEmitter
                 return;
 
             // Instance method dispatch (Array/String/Map/Promise/etc.)
-            EmitMethodCall(methodGet, c.Arguments);
+            EmitMethodCall(
+                methodGet, c.Arguments, c.TypeArgs,
+                _ctx.TypeMap?.Get(c));
             return;
         }
 
@@ -193,6 +198,10 @@ public partial class ILEmitter
             "number" => _ctx.Types.Double,
             "string" => _ctx.Types.String,
             "boolean" => _ctx.Types.Boolean,
+            _ when _ctx.TypeMapper.ExternalTypes.TryGetValue(typeArg, out var external) => external,
+            _ when _ctx.TypeMapper.ExternalTypes.TryGetValue(
+                _ctx.ResolveClassName(typeArg), out var qualifiedExternal) => qualifiedExternal,
+            _ when DotNetTypeRegistry.ResolveFriendly(typeArg) is { } resolved => resolved,
             _ when _ctx.GenericTypeParameters.TryGetValue(typeArg, out var gp) => gp,
             _ when _ctx.Classes.TryGetValue(_ctx.ResolveClassName(typeArg), out var tb) => tb,
             _ => _ctx.Types.Object

@@ -29,7 +29,7 @@ public partial class ILCompiler
         // direct external-interop IL (RegisterDotNetImports), never to export-field reads.
         // (Also avoids duplicate $Module_ names: distinct specifiers in one namespace share
         // a filename-derived ModuleName.)
-        if (module.IsDotNetModule)
+        if (module.IsDotNetModule || module.IsDotNetExtensionModule)
         {
             return;
         }
@@ -340,7 +340,8 @@ public partial class ILCompiler
 
                 // dotnet: imports need no import fields — every use site compiles to direct
                 // external-interop IL keyed off the ExternalTypes registry (RegisterDotNetImports).
-                if (DotNetImports.IsDotNetSpecifier(import.ModulePath))
+                if (DotNetImports.IsDotNetSpecifier(import.ModulePath) ||
+                    DotNetExtensionImports.IsSpecifier(import.ModulePath))
                     continue;
 
                 // Default import: import x from './module'
@@ -510,7 +511,7 @@ public partial class ILCompiler
         }
 
         // dotnet: interop modules have no module type and nothing to initialize.
-        if (module.IsDotNetModule)
+        if (module.IsDotNetModule || module.IsDotNetExtensionModule)
         {
             return;
         }

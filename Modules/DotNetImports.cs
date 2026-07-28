@@ -122,14 +122,22 @@ public static class DotNetImports
                 "type by name: import { Widget } from \"dotnet:MyLib.Widget\".");
         }
 
-        if (specifier.Contains('<') || specifier.Contains('`'))
+        if (specifier.Contains('`'))
         {
             throw new Exception(
                 $"Module Error: cannot import 'dotnet:{specifier}': {DotNetInteropClassifier.ReasonOpenGeneric}. " +
-                "Generic .NET types are not importable via dotnet: specifiers; use an @DotNetType declaration for a closed generic.");
+                "Use a constructed friendly name such as List<number>, not CLR backtick syntax.");
         }
 
-        var type = ResolveExportCandidate(specifier, name, resolve);
+        Type type;
+        try
+        {
+            type = ResolveExportCandidate(specifier, name, resolve);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new Exception($"Module Error: cannot import 'dotnet:{specifier}': {ex.Message}", ex);
+        }
 
         string? unsupported = DotNetInteropClassifier.UnsupportedTypeReason(type);
         if (unsupported != null)
@@ -147,7 +155,7 @@ public static class DotNetImports
         var specType = ResolvePublic(specifier, resolve);
         if (specType != null)
         {
-            if (name == specType.Name) return specType;
+            if (name == DotNetTypeRegistry.GetFriendlySimpleName(specType)) return specType;
 
             // A different name against a type specifier can only mean a nested type.
             var nested = ResolvePublic($"{specifier}+{name}", resolve);
@@ -174,7 +182,7 @@ public static class DotNetImports
     /// </summary>
     private static Type? ResolvePublic(string clrName, Func<string, Type?> resolve)
     {
-        var type = resolve(clrName);
+        var type = DotNetTypeRegistry.ResolveFriendly(clrName, resolve);
         return type != null && (type.IsPublic || type.IsNestedPublic) ? type : null;
     }
 

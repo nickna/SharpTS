@@ -1,6 +1,7 @@
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
+using SharpTS.Runtime.DotNet;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Execution;
@@ -34,6 +35,9 @@ public partial class Interpreter
             case SharpTSObject simpleObj:
                 value = simpleObj.GetProperty(name.Lexeme);
                 return true;
+            case DotNetInstance external:
+                value = external.GetMember(name.Lexeme);
+                return true;
             default:
                 value = null;
                 return false;
@@ -59,6 +63,9 @@ public partial class Interpreter
                 return true;
             case SharpTSObject simpleObj:
                 value = simpleObj.GetPropertyRV(name.Lexeme);
+                return true;
+            case DotNetInstance external:
+                value = RuntimeValue.FromBoxed(external.GetMember(name.Lexeme));
                 return true;
             default:
                 value = RuntimeValue.Undefined;
@@ -91,6 +98,9 @@ public partial class Interpreter
             case SharpTSObject simpleObj:
                 simpleObj.SetProperty(name.Lexeme, value);
                 return true;
+            case DotNetInstance external:
+                external.SetMember(name.Lexeme, value, this);
+                return true;
             default:
                 return false;
         }
@@ -103,11 +113,16 @@ public partial class Interpreter
     /// <param name="index">The index value (expected to be a double).</param>
     /// <param name="value">The retrieved value if successful.</param>
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
-    private static bool TryGetIndex(object? obj, object? index, out object? value)
+    private bool TryGetIndex(object? obj, object? index, out object? value)
     {
         if (obj is SharpTSArray array && index is double idx)
         {
             value = array.Get((int)idx);
+            return true;
+        }
+        if (obj is DotNetInstance external && external.HasReadableIndexer)
+        {
+            value = external.GetIndex(index, this);
             return true;
         }
         value = null;
@@ -121,11 +136,16 @@ public partial class Interpreter
     /// <param name="index">The index value (expected to be a double).</param>
     /// <param name="value">The value to set.</param>
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
-    private static bool TrySetIndex(object? obj, object? index, object? value)
+    private bool TrySetIndex(object? obj, object? index, object? value)
     {
         if (obj is SharpTSArray array && index is double idx)
         {
             array.Set((int)idx, value);
+            return true;
+        }
+        if (obj is DotNetInstance external && external.HasWritableIndexer)
+        {
+            external.SetIndex(index, value, this);
             return true;
         }
         return false;
@@ -197,13 +217,55 @@ public partial class Interpreter
     /// <summary>Increments a variable l-value, returning the old or new value.</summary>
     private RuntimeValue IncrementVariable(Expr.Variable variable, double delta, bool returnOld)
     {
+        RuntimeValue oldValue = _environment.Get(variable.Name);
+        if (TryEvaluateDotNetIncrement(
+                oldValue,
+                delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
+                out var clrValue))
+        {
+            _environment.Assign(variable.Name, clrValue);
+            return returnOld ? oldValue : clrValue;
+        }
+
         // ECMA-262 13.4 (postfix)/13.5.7 (prefix): apply ToNumber to the operand's current
         // value before adding ±1. A widened (`any`) variable can hold a non-number — a numeric
         // string ("5"→5), undefined (→NaN), etc. — so coerce rather than asserting a boxed double.
-        double current = CoerceToNumber(_environment.Get(variable.Name));
+        double current = CoerceToNumber(oldValue);
         double newValue = current + delta;
         _environment.Assign(variable.Name, RuntimeValue.FromNumber(newValue));
         return RuntimeValue.FromNumber(returnOld ? current : newValue);
+    }
+
+    private bool TryEvaluateDotNetIncrement(
+        RuntimeValue current,
+        TokenType token,
+        out RuntimeValue result)
+    {
+        if (current.ToObject() is not SharpTS.Runtime.DotNet.DotNetInstance instance)
+        {
+            result = default;
+            return false;
+        }
+
+        var methods = SharpTS.Runtime.DotNet.DotNetOperatorResolver.GetIncrementCandidates(
+            token, instance.Type);
+        if (methods.Length == 0)
+        {
+            result = default;
+            return false;
+        }
+
+        var arguments = new List<object?> { instance };
+        var candidate = SharpTS.Runtime.DotNet.DotNetMethodResolver.ResolveMethod(
+            methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+        var invokeArgs = SharpTS.Runtime.DotNet.DotNetMethod.BuildInvokeArgs(
+            method.GetParameters(), arguments, candidate, this);
+        object? value = SharpTS.Runtime.DotNet.DotNetInstance.InvokeWithMapping(
+            () => method.Invoke(null, invokeArgs));
+        result = RuntimeValue.FromBoxed(
+            SharpTS.Runtime.DotNet.DotNetMarshaller.WrapReturn(value, method.ReturnType));
+        return true;
     }
 
     /// <summary>
@@ -214,6 +276,16 @@ public partial class Interpreter
     {
         if (TryGetProperty(obj, name, out object? currentObj))
         {
+            RuntimeValue oldValue = RuntimeValue.FromBoxed(currentObj);
+            if (TryEvaluateDotNetIncrement(
+                    oldValue,
+                    delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
+                    out RuntimeValue externalValue) &&
+                TrySetProperty(obj, name, externalValue.ToObject()))
+            {
+                return returnOld ? oldValue : externalValue;
+            }
+
             // ECMA-262 ToNumber on the member's current value (matches the variable path and
             // compiled mode's ConvertToNumber): a non-numeric `any` member ("5"→5, undefined→NaN)
             // follows JS semantics instead of throwing on a failed hard cast (#471).
@@ -236,6 +308,16 @@ public partial class Interpreter
     {
         if (TryGetIndex(obj, index, out object? currentObj))
         {
+            RuntimeValue oldValue = RuntimeValue.FromBoxed(currentObj);
+            if (TryEvaluateDotNetIncrement(
+                    oldValue,
+                    delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
+                    out RuntimeValue externalValue) &&
+                TrySetIndex(obj, index, externalValue.ToObject()))
+            {
+                return returnOld ? oldValue : externalValue;
+            }
+
             // ECMA-262 ToNumber on the element's current value (see IncrementProperty): a
             // non-numeric element in an `any[]` ("7"→7, undefined→NaN) follows JS semantics
             // instead of throwing on a failed hard cast (#471).

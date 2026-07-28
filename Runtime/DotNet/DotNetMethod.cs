@@ -28,7 +28,7 @@ internal sealed class DotNetMethod : ISharpTSCallable
         int min = int.MaxValue;
         foreach (var m in _overloads)
         {
-            var ps = m.GetParameters();
+            var ps = DotNetMethodResolver.GetInputParameters(m.GetParameters());
             int required = ps.Count(p => !p.HasDefaultValue &&
                 !p.IsDefined(typeof(ParamArrayAttribute), false));
             if (required < min) min = required;
@@ -37,8 +37,45 @@ internal sealed class DotNetMethod : ISharpTSCallable
     }
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
+        => CallCore(
+            interpreter, arguments,
+            genericTypeArguments: null,
+            argumentTypeHints: null,
+            expectedReturnType: null);
+
+    internal object? CallWithGenericTypeArguments(
+        Interpreter interpreter,
+        List<object?> arguments,
+        IReadOnlyList<Type> genericTypeArguments)
+        => CallCore(
+            interpreter, arguments,
+            genericTypeArguments,
+            argumentTypeHints: null,
+            expectedReturnType: null);
+
+    internal object? CallWithTypeHints(
+        Interpreter interpreter,
+        List<object?> arguments,
+        IReadOnlyList<Type?>? argumentTypeHints,
+        IReadOnlyList<Type>? genericTypeArguments,
+        Type? expectedReturnType)
+        => CallCore(
+            interpreter, arguments,
+            genericTypeArguments,
+            argumentTypeHints,
+            expectedReturnType);
+
+    private object? CallCore(
+        Interpreter interpreter,
+        List<object?> arguments,
+        IReadOnlyList<Type>? genericTypeArguments,
+        IReadOnlyList<Type?>? argumentTypeHints,
+        Type? expectedReturnType)
     {
-        var candidate = DotNetMethodResolver.ResolveMethod(_overloads, arguments, _overloadHint);
+        var candidate = DotNetMethodResolver.ResolveMethod(
+            _overloads, arguments, _overloadHint,
+            genericTypeArguments, argumentTypeHints,
+            expectedReturnType);
         var method = (MethodInfo)candidate.Method;
         var parameters = method.GetParameters();
 
@@ -47,7 +84,7 @@ internal sealed class DotNetMethod : ISharpTSCallable
         return DotNetInstance.InvokeWithMapping(() =>
         {
             var result = method.Invoke(_receiver, invokeArgs);
-            return DotNetMarshaller.WrapReturn(result, method.ReturnType);
+            return WrapInvocationResult(method, invokeArgs, result);
         });
     }
 
@@ -65,13 +102,20 @@ internal sealed class DotNetMethod : ISharpTSCallable
         if (candidate.ParamsStartIndex < 0)
         {
             var result = new object?[parameters.Length];
-            for (int i = 0; i < arguments.Count; i++)
+            int argumentIndex = 0;
+            for (int i = 0; i < parameters.Length; i++)
             {
-                result[i] = DotNetMarshaller.Convert(arguments[i], parameters[i].ParameterType, interpreter);
-            }
-            for (int i = arguments.Count; i < parameters.Length; i++)
-            {
-                result[i] = parameters[i].HasDefaultValue ? parameters[i].DefaultValue : null;
+                var parameter = parameters[i];
+                if (parameter.ParameterType.IsByRef && parameter.IsOut)
+                {
+                    result[i] = null;
+                    continue;
+                }
+
+                Type target = DotNetMethodResolver.GetInputType(parameter);
+                result[i] = argumentIndex < arguments.Count
+                    ? DotNetMarshaller.Convert(arguments[argumentIndex++], target, interpreter)
+                    : parameter.HasDefaultValue ? parameter.DefaultValue : null;
             }
             return result;
         }
@@ -83,9 +127,19 @@ internal sealed class DotNetMethod : ISharpTSCallable
         int variadicCount = arguments.Count - fixedCount;
 
         var result2 = new object?[parameters.Length];
-        for (int i = 0; i < fixedCount; i++)
+        int fixedArgumentIndex = 0;
+        for (int i = 0; i < parameters.Length - 1; i++)
         {
-            result2[i] = DotNetMarshaller.Convert(arguments[i], parameters[i].ParameterType, interpreter);
+            var parameter = parameters[i];
+            if (parameter.ParameterType.IsByRef && parameter.IsOut)
+            {
+                result2[i] = null;
+                continue;
+            }
+            result2[i] = DotNetMarshaller.Convert(
+                arguments[fixedArgumentIndex++],
+                DotNetMethodResolver.GetInputType(parameter),
+                interpreter);
         }
 
         var variadic = Array.CreateInstance(elementType, Math.Max(0, variadicCount));
@@ -95,5 +149,32 @@ internal sealed class DotNetMethod : ISharpTSCallable
         }
         result2[^1] = variadic;
         return result2;
+    }
+
+    private static bool IsTupleOutput(ParameterInfo parameter) =>
+        parameter.ParameterType.IsByRef && !parameter.IsIn;
+
+    internal static object? WrapInvocationResult(
+        MethodInfo method,
+        object?[] invokeArgs,
+        object? result)
+    {
+        var parameters = method.GetParameters();
+        if (parameters.Any(IsTupleOutput))
+        {
+            var values = new List<object?>();
+            if (method.ReturnType != typeof(void))
+                values.Add(DotNetMarshaller.WrapReturn(result, method.ReturnType));
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (IsTupleOutput(parameters[i]))
+                {
+                    values.Add(DotNetMarshaller.WrapReturn(
+                        invokeArgs[i], parameters[i].ParameterType.GetElementType()!));
+                }
+            }
+            return new SharpTSArray(values);
+        }
+        return DotNetMarshaller.WrapReturn(result, method.ReturnType);
     }
 }

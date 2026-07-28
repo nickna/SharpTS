@@ -89,6 +89,426 @@ public class DotNetImportTests
         Assert.Contains(errors, d => d.Message.Contains("not assignable"));
     }
 
+    [Theory, ModeData]
+    public void ConstructedGenericList_ConstructionMethodsAndIndexer(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                const values = new List();
+                values.add(1.5);
+                values.add(2.5);
+                values[1] = 9.25;
+                console.log(values[0]);
+                console.log(values[1]);
+                console.log(values.count);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("1.5\n9.25\n2\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ConstructedGenericDictionary_StringIndexer(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { Dictionary } from "dotnet:System.Collections.Generic.Dictionary<string, number>";
+                const values = new Dictionary();
+                values["answer"] = 42;
+                console.log(values["answer"]);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void ConstructedGenericIndexer_IsStaticallyTyped()
+    {
+        var errors = CheckErrors(new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                const values = new List();
+                values[0] = "not a number";
+                """
+        }, "./main.ts");
+
+        Assert.Contains(errors, d => d.Message.Contains("index signature", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ConstructedGenericResolver_HandlesNestedArguments()
+    {
+        var type = Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(
+            "System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<number>>");
+
+        Assert.Equal(typeof(Dictionary<string, List<double>>), type);
+    }
+
+    [Theory, ModeData]
+    public void NullableValueTypes_RoundTripValuesAndNull(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { NullableFixture } from "dotnet:SharpTS.Tests.Infrastructure.NullableFixture";
+                const fixture = new NullableFixture();
+                const present: number | null = fixture.echo(7);
+                const missing: number | null = fixture.echo(null);
+                console.log(present);
+                console.log(missing);
+                console.log(fixture.orDefault(missing, 11));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("7\nnull\n11\n", output);
+    }
+
+    [Fact]
+    public void NullableValueReturn_IsStaticallyNullable()
+    {
+        var errors = CheckErrors(new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { NullableFixture } from "dotnet:SharpTS.Tests.Infrastructure.NullableFixture";
+                const fixture = new NullableFixture();
+                const value: number = fixture.echo(null);
+                """
+        }, "./main.ts");
+
+        Assert.Contains(errors, d => d.Message.Contains("not assignable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory, ModeData]
+    public void ByRefParameters_AreTupleLowered(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { ByRefFixture } from "dotnet:SharpTS.Tests.Infrastructure.ByRefFixture";
+                const fixture = new ByRefFixture();
+                const [ok, parsed] = fixture.tryDouble("41");
+                const [incremented] = fixture.increment(parsed);
+                const [message, mixed, changed] = fixture.mix(1, incremented);
+                console.log(ok);
+                console.log(parsed);
+                console.log(incremented);
+                console.log(message);
+                console.log(mixed);
+                console.log(changed);
+                console.log(fixture.readOnlyAdd(mixed, 2));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("true\n41\n42\nvalue=43\n43\ntrue\n45\n", output);
+    }
+
+    [Fact]
+    public void ByRefTuple_IsStaticallyTypedAndOutIsNotAnInput()
+    {
+        var errors = CheckErrors(new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { ByRefFixture } from "dotnet:SharpTS.Tests.Infrastructure.ByRefFixture";
+                const fixture = new ByRefFixture();
+                const result: [boolean, number] = fixture.tryDouble("12");
+                const wrong: string = result[1];
+                fixture.tryDouble("12", 0);
+                """
+        }, "./main.ts");
+
+        Assert.Contains(errors, d => d.Message.Contains("not assignable", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errors, d => d.Message.Contains("Expected 1 arguments", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory, ModeData]
+    public void BclTryParse_UsesTupleLowering(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { Guid } from "dotnet:System.Guid";
+                const [ok, value] = Guid.tryParse("d85b1407-351d-4694-9392-03acc5870eb1");
+                const typed: Guid = value;
+                console.log(ok);
+                console.log(typed.toString());
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("true\nd85b1407-351d-4694-9392-03acc5870eb1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void UserDefinedClrOperators_DispatchForImportedOperands(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { OperatorFixture } from "dotnet:SharpTS.Tests.Infrastructure.OperatorFixture";
+                const a = new OperatorFixture(4);
+                const b = new OperatorFixture(6);
+                const sum: OperatorFixture = a + b;
+                const scaled: OperatorFixture = sum * 3;
+                console.log(sum.value);
+                console.log(scaled.value);
+                console.log(b > a);
+                console.log(a < b);
+                console.log(a === new OperatorFixture(4));
+                console.log(a !== b);
+                console.log((-a).value);
+                console.log(!new OperatorFixture(0));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("10\n30\ntrue\ntrue\ntrue\ntrue\n-4\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void UserDefinedClrOperators_SupportCompoundAndIncrementVariables(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { OperatorFixture } from "dotnet:SharpTS.Tests.Infrastructure.OperatorFixture";
+                let value = new OperatorFixture(2);
+                const added: OperatorFixture = value += new OperatorFixture(3);
+                console.log(added.value);
+                console.log(value.value);
+                const scaled: OperatorFixture = value *= 2;
+                console.log(scaled.value);
+                const old: OperatorFixture = value++;
+                console.log(old.value);
+                console.log(value.value);
+                const decremented: OperatorFixture = --value;
+                console.log(decremented.value);
+                console.log(value.value);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("5\n5\n10\n10\n11\n10\n10\n", output);
+    }
+
+    [Theory, ModeData]
+    public void UserDefinedClrOperators_WriteBackPropertiesAndIndexersOnce(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { OperatorFixture } from "dotnet:SharpTS.Tests.Infrastructure.OperatorFixture";
+                const holder = new OperatorFixture(4);
+                let receiverCalls = 0;
+                let indexCalls = 0;
+                function receiver(): OperatorFixture {
+                    receiverCalls++;
+                    return holder;
+                }
+                function index(): number {
+                    indexCalls++;
+                    return 0;
+                }
+
+                const propertyResult: OperatorFixture =
+                    receiver().current += new OperatorFixture(2);
+                console.log(propertyResult.value);
+
+                const oldIndex: OperatorFixture = receiver()[index()]++;
+                console.log(oldIndex.value);
+                console.log(holder[0].value);
+
+                const prefixIndex: OperatorFixture = ++receiver()[index()];
+                console.log(prefixIndex.value);
+                console.log(holder[0].value);
+                console.log(receiverCalls);
+                console.log(indexCalls);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("6\n6\n7\n8\n8\n3\n2\n", output);
+    }
+
+    [Theory, ModeData]
+    public void GenericClrMethods_InferAndAcceptExplicitTypeArguments(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { GenericMethodFixture } from "dotnet:SharpTS.Tests.Infrastructure.GenericMethodFixture";
+                const fixture = new GenericMethodFixture();
+                const inferredNumber: number = fixture.echo(42);
+                const inferredString: string = GenericMethodFixture.staticEcho("hello");
+                const explicitString: string = fixture.echo<string>("world");
+                const explicitImported: GenericMethodFixture =
+                    fixture.echo<GenericMethodFixture>(fixture);
+                const constrained: number = fixture.constrained(7);
+                console.log(inferredNumber);
+                console.log(inferredString);
+                console.log(explicitString);
+                console.log(explicitImported.echo("imported"));
+                console.log(constrained);
+                console.log(fixture.typeName<number>());
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("42\nhello\nworld\nimported\n7\nDouble\n", output);
+    }
+
+    [Theory, ModeData]
+    public void GenericClrMethods_InferAndMarshalGuestArrays(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { GenericMethodFixture } from "dotnet:SharpTS.Tests.Infrastructure.GenericMethodFixture";
+                const fixture = new GenericMethodFixture();
+                const numbers: number[] = [1, 2, 3];
+                const copied: number[] = fixture.copy(numbers);
+                copied[0] = 9;
+                console.log(copied.join(","));
+                console.log(numbers.join(","));
+
+                const words: string[] = fixture.copy(["alpha", "beta"]);
+                console.log(words.map(word => word.toUpperCase()).join("|"));
+
+                const nested: number[][] = fixture.copy([[1, 2], [3]]);
+                console.log(nested.map(values => values.join("-")).join("|"));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("9,2,3\n1,2,3\nALPHA|BETA\n1-2|3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void GenericClrMethods_InferThroughCallbackSignatures(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { GenericMethodFixture } from "dotnet:SharpTS.Tests.Infrastructure.GenericMethodFixture";
+                const fixture = new GenericMethodFixture();
+
+                const transformed: number =
+                    fixture.transform(5, value => value * 3);
+                const generated: string =
+                    fixture.fromFactory(() => "made");
+                let observed = 0;
+                fixture.tap(7, value => observed = value);
+
+                console.log(transformed);
+                console.log(generated);
+                console.log(observed);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("15\nmade\n7\n", output);
+    }
+
+    [Theory, ModeData]
+    public void GenericClrMethods_InferResultOnlyParametersFromContext(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { GenericMethodFixture } from "dotnet:SharpTS.Tests.Infrastructure.GenericMethodFixture";
+                const fixture = new GenericMethodFixture();
+
+                const value: number = fixture.defaultValue();
+                const values: number[] = fixture.emptyArray();
+                function obtain(): number {
+                    return fixture.defaultValue();
+                }
+
+                console.log(value);
+                console.log(values.length);
+                console.log(obtain());
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("0\n0\n0\n", output);
+    }
+
+    [Theory, ModeData]
+    public void GenericExtensionMethods_AreInferredAndModuleScoped(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                import "dotnet-extensions:System.Linq.Enumerable";
+                const values = new List();
+                values.add(2.5);
+                values.add(7.5);
+                const first: number = values.first();
+                console.log(values.count());
+                console.log(first);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("2\n2.5\n", output);
+    }
+
+    [Fact]
+    public void ExtensionMethods_DoNotLeakIntoOtherModules()
+    {
+        var errors = CheckErrors(new Dictionary<string, string>
+        {
+            ["./enabled.ts"] = """
+                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                import "dotnet-extensions:SharpTS.Tests.Infrastructure.EnumerableExtensionFixture";
+                export function enabled(values: List): string {
+                    const result: string = values.countItems();
+                    return result;
+                }
+                """,
+            ["./disabled.ts"] = """
+                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                export function disabled(values: List): string {
+                    const result: string = values.countItems();
+                    return result;
+                }
+                """,
+            ["./main.ts"] = """
+                import "./enabled";
+                import "./disabled";
+                """
+        }, "./main.ts");
+
+        Assert.Single(errors, d =>
+            d.Message.Contains("not assignable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExtensionContainer_RequiresSideEffectImport()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { Enumerable } from "dotnet-extensions:System.Linq.Enumerable";
+                console.log(Enumerable);
+                """
+        };
+
+        var ex = Assert.ThrowsAny<Exception>(() =>
+            TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
+        Assert.Contains("side effects", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     #endregion
 
     #region Namespace form, aliases, nested types
@@ -352,19 +772,19 @@ public class DotNetImportTests
     }
 
     [Fact]
-    public void GenericSpecifier_ThrowsModuleError()
+    public void OpenGenericSpecifier_ThrowsModuleError()
     {
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = """
-                import { List } from "dotnet:System.Collections.Generic.List<number>";
+                import { List } from "dotnet:System.Collections.Generic.List`1";
                 console.log(1);
                 """
         };
 
         var ex = Assert.ThrowsAny<Exception>(() =>
             TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
-        Assert.Contains("Generic .NET types", ex.Message);
+        Assert.Contains(DotNetInteropClassifier.ReasonOpenGeneric, ex.Message);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
+using SharpTS.Runtime.DotNet;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
 using System.Buffers;
@@ -184,7 +185,19 @@ public partial class Interpreter
             }
         }
 
-        object? callee = (await ctx.EvaluateExprAsync(call.Callee)).ToObject();
+        object? callee;
+        if (call.Callee is Expr.Get extensionGet &&
+            _currentModule is { DotNetExtensionTypes.Count: > 0 })
+        {
+            object? receiver = (await ctx.EvaluateExprAsync(extensionGet.Object)).ToObject();
+            callee = TryBindDotNetExtension(receiver, extensionGet.Name.Lexeme, out var extension)
+                ? extension
+                : EvaluateGetOnObject(extensionGet, receiver).ToObject();
+        }
+        else
+        {
+            callee = (await ctx.EvaluateExprAsync(call.Callee)).ToObject();
+        }
 
         // Optional call: return undefined if callee is nullish.
         // Per ECMA-262 §13.3.9, the short-circuit extends to the entire chain.
@@ -227,6 +240,18 @@ public partial class Interpreter
             // Per ECMA-262 §10.2.1: missing arguments become undefined; do not
             // reject calls for user-defined functions. Built-in methods enforce
             // their own min-arity in BuiltInMethod.Call.
+            if (function is DotNetMethod dotNetMethod)
+            {
+                IReadOnlyList<Type>? explicitTypes = call.TypeArgs is { Count: > 0 }
+                    ? ResolveDotNetGenericTypeArguments(call.TypeArgs)
+                    : null;
+                return dotNetMethod.CallWithTypeHints(
+                    this,
+                    argumentsList,
+                    ResolveDotNetArgumentTypeHints(call.Arguments),
+                    explicitTypes,
+                    ResolveDotNetResultTypeHint(call));
+            }
             return function.Call(this, argumentsList);
         }
         finally
@@ -428,7 +453,19 @@ public partial class Interpreter
             }
         }
 
-        object? callee = Evaluate(call.Callee);
+        object? callee;
+        if (call.Callee is Expr.Get extensionGet &&
+            _currentModule is { DotNetExtensionTypes.Count: > 0 })
+        {
+            object? receiver = Evaluate(extensionGet.Object);
+            callee = TryBindDotNetExtension(receiver, extensionGet.Name.Lexeme, out var extension)
+                ? extension
+                : EvaluateGetOnObject(extensionGet, receiver).ToObject();
+        }
+        else
+        {
+            callee = Evaluate(call.Callee);
+        }
 
         // Optional call: return undefined if callee is nullish.
         // Per ECMA-262 §13.3.9, the short-circuit extends to the entire chain:
@@ -442,7 +479,9 @@ public partial class Interpreter
 
         // V2 fast path: no spread args — zero boxing (CallV2 is on the interface;
         // unmigrated implementors run through the boxing DIM bridge)
-        if (callee is ISharpTSCallable v2Callee && !HasSpreadArgs(call.Arguments))
+        if (callee is ISharpTSCallable v2Callee &&
+            callee is not DotNetMethod &&
+            !HasSpreadArgs(call.Arguments))
         {
             int argCount = call.Arguments.Count;
             var rented = ArrayPool<RuntimeValue>.Shared.Rent(Math.Max(argCount, 1));
@@ -493,13 +532,91 @@ public partial class Interpreter
 
             // Per ECMA-262 §10.2.1: missing arguments become undefined; do not
             // reject calls for user-defined functions.
-            return RuntimeValue.FromBoxed(function.Call(this, argumentsList));
+            object? result;
+            if (function is DotNetMethod dotNetMethod)
+            {
+                IReadOnlyList<Type>? explicitTypes = call.TypeArgs is { Count: > 0 }
+                    ? ResolveDotNetGenericTypeArguments(call.TypeArgs)
+                    : null;
+                result = dotNetMethod.CallWithTypeHints(
+                    this,
+                    argumentsList,
+                    ResolveDotNetArgumentTypeHints(call.Arguments),
+                    explicitTypes,
+                    ResolveDotNetResultTypeHint(call));
+            }
+            else
+            {
+                result = function.Call(this, argumentsList);
+            }
+            return RuntimeValue.FromBoxed(result);
         }
         finally
         {
             ArgumentListPool.Return(argumentsList);
         }
     }
+
+    private bool TryBindDotNetExtension(
+        object? receiver,
+        string memberName,
+        out DotNetExtensionMethod extension)
+    {
+        if (receiver is DotNetInstance instance &&
+            _currentModule is { DotNetExtensionTypes.Count: > 0 } module &&
+            DotNetTypeRegistry.GetMethods(
+                instance.Type, memberName, isStatic: false).Length == 0 &&
+            DotNetExtensionMethodResolver.GetReceiverClosedCandidates(
+                module.DotNetExtensionTypes, memberName, instance.Type).Length > 0)
+        {
+            extension = new DotNetExtensionMethod(
+                instance, module.DotNetExtensionTypes, memberName);
+            return true;
+        }
+
+        extension = null!;
+        return false;
+    }
+
+    private Type[] ResolveDotNetGenericTypeArguments(IReadOnlyList<string> typeArguments)
+    {
+        var resolved = new Type[typeArguments.Count];
+        for (int i = 0; i < typeArguments.Count; i++)
+        {
+            string typeArgument = typeArguments[i];
+            Type? importedType = _environment.TryGet(typeArgument, out var value) &&
+                                 value.ToObject() is DotNetClass dotNetClass
+                ? dotNetClass.Type
+                : null;
+            resolved[i] = importedType ?? DotNetTypeRegistry.ResolveFriendly(typeArgument)
+                ?? throw new InvalidOperationException(
+                    $"Could not resolve CLR generic type argument '{typeArgument}'.");
+        }
+        return resolved;
+    }
+
+    private Type?[]? ResolveDotNetArgumentTypeHints(IReadOnlyList<Expr> arguments)
+    {
+        if (_typeMap == null || HasSpreadArgs(arguments))
+            return null;
+
+        var result = new Type?[arguments.Count];
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            if (_typeMap.Get(arguments[i]) is { } type &&
+                DotNetTypeSynthesizer.TryGetClrArgumentType(type, out var clr))
+            {
+                result[i] = clr;
+            }
+        }
+        return result;
+    }
+
+    private Type? ResolveDotNetResultTypeHint(Expr.Call call) =>
+        _typeMap?.Get(call) is { } type &&
+        DotNetTypeSynthesizer.TryGetClrArgumentType(type, out var clr)
+            ? clr
+            : null;
 
     /// <summary>
     /// Checks if any arguments are spread expressions.
@@ -584,6 +701,9 @@ public partial class Interpreter
         object? left = leftRV.ToObject();
         object? right = rightRV.ToObject();
 
+        if (TryEvaluateDotNetBinary(op.Type, left, right, out var clrResult))
+            return clrResult;
+
         var desc = SemanticOperatorResolver.Resolve(op.Type);
 
         return desc switch
@@ -608,6 +728,31 @@ public partial class Interpreter
             OperatorDescriptor.InstanceOf => RuntimeValue.FromBoxed(EvaluateInstanceof(left, right)),
             _ => RuntimeValue.Undefined
         };
+    }
+
+    private bool TryEvaluateDotNetBinary(
+        TokenType token,
+        object? left,
+        object? right,
+        out RuntimeValue result)
+    {
+        Type? leftType = left is DotNetInstance leftInstance ? leftInstance.Type : null;
+        Type? rightType = right is DotNetInstance rightInstance ? rightInstance.Type : null;
+        var methods = DotNetOperatorResolver.GetBinaryCandidates(token, leftType, rightType);
+        if (methods.Length == 0)
+        {
+            result = default;
+            return false;
+        }
+
+        var arguments = new List<object?> { left, right };
+        var candidate = DotNetMethodResolver.ResolveMethod(methods, arguments);
+        var method = (System.Reflection.MethodInfo)candidate.Method;
+        var invokeArgs = DotNetMethod.BuildInvokeArgs(
+            method.GetParameters(), arguments, candidate, this);
+        object? value = DotNetInstance.InvokeWithMapping(() => method.Invoke(null, invokeArgs));
+        result = RuntimeValue.FromBoxed(DotNetMarshaller.WrapReturn(value, method.ReturnType));
+        return true;
     }
 
     /// <summary>
@@ -1089,6 +1234,13 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue ApplyCompoundOperatorRV(TokenType op, RuntimeValue left, RuntimeValue right)
     {
+        if (DotNetOperatorResolver.GetBinaryTokenForCompound(op) is { } binaryToken &&
+            TryEvaluateDotNetBinary(
+                binaryToken, left.ToObject(), right.ToObject(), out var clrResult))
+        {
+            return clrResult;
+        }
+
         // Fast path: both numeric (most common for compound assignment)
         if (left.IsNumber && right.IsNumber)
         {

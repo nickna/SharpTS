@@ -139,7 +139,8 @@ public class DiscoveryGenerator
 
         string? typeReason = DotNetInteropClassifier.UnsupportedTypeReason(type);
         string? importLine = typeReason == null
-            ? $"import {{ {metadata.SimpleName} }} from \"dotnet:{metadata.FullName}\";"
+            ? $"import {{ {Runtime.DotNet.DotNetTypeRegistry.GetFriendlySimpleName(type)} }} from " +
+              $"\"dotnet:{Runtime.DotNet.DotNetTypeRegistry.GetFriendlyFullName(type)}\";"
             : null;
 
         var members = new List<MemberReport>();
@@ -152,7 +153,9 @@ public class DiscoveryGenerator
         else
         {
             foreach (var ctor in metadata.Constructors)
-                members.Add(BuildCallableReport("Constructors", "constructor", ctor.Parameters, returnType: null));
+                members.Add(BuildCallableReport(
+                    "Constructors", "constructor", ctor.Parameters,
+                    returnType: null, isConstructor: true));
 
             foreach (var prop in metadata.StaticProperties)
                 members.Add(BuildPropertyReport("Static properties", prop, isStatic: true));
@@ -161,10 +164,16 @@ public class DiscoveryGenerator
                 members.Add(BuildPropertyReport("Instance properties", prop, isStatic: false));
 
             foreach (var method in metadata.StaticMethods)
-                members.Add(BuildCallableReport("Static methods", method.TypeScriptName, method.Parameters, method.ReturnType, isStatic: true));
+                members.Add(BuildCallableReport(
+                    "Static methods", method.TypeScriptName, method.Parameters,
+                    method.ReturnType, isStatic: true,
+                    genericParameters: method.GenericParameters));
 
             foreach (var method in metadata.Methods)
-                members.Add(BuildCallableReport("Instance methods", method.TypeScriptName, method.Parameters, method.ReturnType));
+                members.Add(BuildCallableReport(
+                    "Instance methods", method.TypeScriptName, method.Parameters,
+                    method.ReturnType,
+                    genericParameters: method.GenericParameters));
         }
 
         return new TypeReport(metadata.FullName, metadata.SimpleName, kind, importLine, typeReason, members);
@@ -172,22 +181,53 @@ public class DiscoveryGenerator
 
     /// <summary>Builds a report line for a constructor or method (a callable with parameters).</summary>
     private static MemberReport BuildCallableReport(
-        string category, string name, List<ParameterMetadata> parameters, Type? returnType, bool isStatic = false)
+        string category,
+        string name,
+        List<ParameterMetadata> parameters,
+        Type? returnType,
+        bool isStatic = false,
+        bool isConstructor = false,
+        List<Type>? genericParameters = null)
     {
         string prefix = isStatic ? "static " : "";
-        string paramText = string.Join(", ", parameters.Select(DotNetTypeMapper.DescribeParameter));
-        string returnText = returnType == null ? "" : $": {DotNetTypeMapper.Describe(returnType)}";
-        string signature = $"{prefix}{name}({paramText}){returnText}";
+        string typeParameters = genericParameters is { Count: > 0 }
+            ? $"<{string.Join(", ", genericParameters.Select(p => p.Name))}>"
+            : "";
+        bool lowerByRef = returnType != null;
+        string paramText = string.Join(", ", parameters
+            .Where(p => !lowerByRef || !(p.IsByRef && p.IsOut))
+            .Select(DescribeInteropInput));
+        string returnText = returnType == null ? "" : $": {DescribeInteropReturn(returnType, parameters)}";
+        string signature = $"{prefix}{name}{typeParameters}({paramText}){returnText}";
 
         // A member is usable only if every parameter slot and the return slot are marshalable.
         string? reason = null;
         foreach (var p in parameters)
         {
-            reason = DotNetInteropClassifier.UnsupportedSlotReason(p.ParameterType);
+            if (isConstructor && p.ParameterType.IsByRef)
+            {
+                reason = DotNetInteropClassifier.ReasonByRefConstructor;
+            }
+            else if (genericParameters is { Count: > 0 })
+            {
+                reason = DotNetInteropClassifier.UnsupportedGenericMethodSlotReason(
+                    p.ParameterType, genericParameters, isParameter: true);
+            }
+            else
+            {
+                reason = lowerByRef
+                    ? DotNetInteropClassifier.UnsupportedParameterReason(p.ParameterType)
+                    : DotNetInteropClassifier.UnsupportedSlotReason(p.ParameterType);
+            }
             if (reason != null) break;
         }
         if (reason == null && returnType != null)
-            reason = DotNetInteropClassifier.UnsupportedSlotReason(returnType);
+        {
+            reason = genericParameters is { Count: > 0 }
+                ? DotNetInteropClassifier.UnsupportedGenericMethodSlotReason(
+                    returnType, genericParameters, isParameter: false)
+                : DotNetInteropClassifier.UnsupportedSlotReason(returnType);
+        }
 
         return new MemberReport(category, signature, reason == null, reason);
     }
@@ -196,9 +236,45 @@ public class DiscoveryGenerator
     {
         string prefix = isStatic ? "static " : "";
         string accessors = prop.CanWrite ? "{ get; set; }" : "{ get; }";
-        string signature = $"{prefix}{prop.TypeScriptName}: {DotNetTypeMapper.Describe(prop.PropertyType)}   {accessors}";
-        string? reason = DotNetInteropClassifier.UnsupportedSlotReason(prop.PropertyType);
+        string member = prop.IsIndexer
+            ? $"[{string.Join(", ", prop.IndexParameters.Select(DotNetTypeMapper.DescribeParameter))}]"
+            : prop.TypeScriptName;
+        string signature = $"{prefix}{member}: {DotNetTypeMapper.Describe(prop.PropertyType)}   {accessors}";
+        string? reason = prop.IsIndexer && prop.IndexParameters.Count != 1
+            ? DotNetInteropClassifier.ReasonMultiParameterIndexer
+            : DotNetInteropClassifier.UnsupportedSlotReason(prop.PropertyType);
+        if (reason == null)
+        {
+            foreach (var parameter in prop.IndexParameters)
+            {
+                reason = DotNetInteropClassifier.UnsupportedSlotReason(parameter.ParameterType);
+                if (reason != null) break;
+            }
+        }
         return new MemberReport(category, signature, reason == null, reason);
+    }
+
+    private static string DescribeInteropInput(ParameterMetadata parameter)
+    {
+        Type type = parameter.ParameterType.IsByRef
+            ? parameter.ParameterType.GetElementType()!
+            : parameter.ParameterType;
+        string name = DotNetTypeMapper.ToTypeScriptPropertyName(parameter.Name);
+        string optional = parameter.IsOptional ? "?" : "";
+        return $"{name}{optional}: {DotNetTypeMapper.Describe(type)}";
+    }
+
+    private static string DescribeInteropReturn(Type returnType, List<ParameterMetadata> parameters)
+    {
+        var outputs = parameters
+            .Where(p => p.IsByRef && !p.IsIn)
+            .Select(p => DotNetTypeMapper.Describe(p.ParameterType.GetElementType()!))
+            .ToList();
+        if (outputs.Count == 0)
+            return DotNetTypeMapper.Describe(returnType);
+        if (returnType != typeof(void))
+            outputs.Insert(0, DotNetTypeMapper.Describe(returnType));
+        return $"[{string.Join(", ", outputs)}]";
     }
 
     private static string KindOf(Type type)
@@ -219,7 +295,7 @@ public class DiscoveryGenerator
     /// </summary>
     private static Type? ResolveType(string typeName)
     {
-        Type? type = Runtime.DotNet.DotNetTypeRegistry.Resolve(typeName);
+        Type? type = Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeName);
         if (type != null)
             return type;
 
