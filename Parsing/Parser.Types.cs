@@ -472,12 +472,12 @@ public partial class Parser
                     // Node requires the constraint node; a constraint without node support drops
                     // the whole infer to the string path rather than losing the constraint.
                     _lastTypeNode = constraintNode is not null
-                        ? new InferTypeNode(paramName.Lexeme, paramName.Line, constraintNode)
+                        ? new InferTypeNode(paramName.Lexeme, paramName.Line, constraintNode, paramName)
                         : null;
                     return $"infer {paramName.Lexeme} extends {constraint}";
                 }
             }
-            _lastTypeNode = new InferTypeNode(paramName.Lexeme, paramName.Line);
+            _lastTypeNode = new InferTypeNode(paramName.Lexeme, paramName.Line, NameToken: paramName);
             return $"infer {paramName.Lexeme}";
         }
 
@@ -787,7 +787,8 @@ public partial class Parser
         {
             Token nameToken = Advance();
             typeName = nameToken.Lexeme;
-            typeNode = new NamedTypeNode(typeName, null, nameToken.Line, nameToken);
+            List<Token> nameTokens = [nameToken];
+            typeNode = new NamedTypeNode(typeName, null, nameToken.Line, nameToken, nameTokens);
 
             // Qualified type name (namespace member): `Intl.CollatorOptions`, `NodeJS.Timer`.
             // The dotted name carries on the NamedTypeNode; resolution hands the whole "Foo.Bar"
@@ -797,10 +798,12 @@ public partial class Parser
                    (PeekNext().Type == TokenType.IDENTIFIER || IsContextualKeyword(PeekNext().Type)))
             {
                 Advance(); // consume '.'
-                typeName += "." + Advance().Lexeme;
+                Token memberName = Advance();
+                nameTokens.Add(memberName);
+                typeName += "." + memberName.Lexeme;
                 typeNode = typeNode is NamedTypeNode named
-                    ? named with { Name = typeName }
-                    : new NamedTypeNode(typeName, null, nameToken.Line, nameToken);
+                    ? named with { Name = typeName, NameTokens = nameTokens }
+                    : new NamedTypeNode(typeName, null, nameToken.Line, nameToken, nameTokens);
             }
         }
         else
@@ -1352,7 +1355,7 @@ public partial class Parser
         // have node forms. Any missing component drops the whole mapped type to the string path.
         _lastTypeNode = constraintNode is not null && valueNode is not null && (!hasAs || asNode is not null)
             ? new MappedTypeNode(paramName.Lexeme, constraintNode, valueNode, asNode,
-                addReadonly, removeReadonly, addOptional, removeOptional, startLine)
+                addReadonly, removeReadonly, addOptional, removeOptional, startLine, paramName)
             : null;
         return $"{{ {readonlyMod}[{paramName.Lexeme} in {constraint}{asClause}]{optionalMod}: {valueType} }}";
     }

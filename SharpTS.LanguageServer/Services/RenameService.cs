@@ -91,7 +91,8 @@ public sealed class RenameService
             position,
             includeDeclaration: true,
             openDocuments,
-            workspaceRoots);
+            workspaceRoots,
+            includeDeclarationFacets: true);
 
     private static bool Contains(LspRange range, Position position)
     {

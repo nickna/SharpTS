@@ -207,6 +207,65 @@ public class RenameServiceTests
             Assert.Single(edit.Changes).Value.Count());
     }
 
+    [Fact]
+    public void RenameFromAClassValueUseIncludesTheTypeFacet()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("tsconfig.json", """{ "include": ["*.ts"] }""");
+        string path = directory.CreateFile(
+            "box.ts",
+            """
+            class Box {}
+            const constructor = Box;
+            const item: Box = new Box();
+            """);
+        string source = File.ReadAllText(path);
+
+        WorkspaceEdit? edit = Service().Rename(
+            path,
+            source,
+            PositionOf(source, "Box", occurrence: 1),
+            "Container",
+            new Dictionary<string, string> { [path] = source },
+            [directory.Path]);
+
+        Assert.NotNull(edit);
+        Assert.NotNull(edit.Changes);
+        Assert.Equal(
+            4,
+            Assert.Single(edit.Changes).Value.Count());
+    }
+
+    [Fact]
+    public void LabelRenameIncludesBreakAndContinueTargets()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("tsconfig.json", """{ "include": ["*.ts"] }""");
+        string path = directory.CreateFile(
+            "labels.ts",
+            """
+            outer: for (let i = 0; i < 2; i++) {
+              if (i === 0) continue outer;
+              break outer;
+            }
+            """);
+        string source = File.ReadAllText(path);
+
+        WorkspaceEdit? edit = Service().Rename(
+            path,
+            source,
+            PositionOf(source, "outer", occurrence: 1),
+            "loop",
+            new Dictionary<string, string> { [path] = source },
+            [directory.Path]);
+
+        Assert.NotNull(edit);
+        Assert.NotNull(edit.Changes);
+        Assert.Equal(
+            3,
+            Assert.Single(edit.Changes).Value.Count());
+    }
+
     private static RenameService Service() =>
         new(new ReferenceService());
 

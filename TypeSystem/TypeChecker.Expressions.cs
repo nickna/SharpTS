@@ -1368,27 +1368,10 @@ public partial class TypeChecker
         if (arrow.TypeParams != null && arrow.TypeParams.Count > 0)
         {
             typeParamEnv = new TypeEnvironment(_environment);
-
-            // First pass: define all type parameters without constraints
-            foreach (var tp in arrow.TypeParams)
-            {
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance);
-                typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-            }
-
-            // Second pass: parse constraints/defaults (can reference other type parameters)
             using (new EnvironmentScope(this, typeParamEnv))
-            {
-                typeParams = [];
-                foreach (var tp in arrow.TypeParams)
-                {
-                    TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                    TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
-                    typeParams.Add(typeParam);
-                    typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-                }
-            }
+                typeParams = BuildGenericTypeParameters(
+                    arrow.TypeParams,
+                    typeParamEnv);
         }
 
         // Parse 'this' type, parameter types, and return type in the type-parameter scope
@@ -1535,7 +1518,7 @@ public partial class TypeChecker
         var previousInferredYieldTypes = _inferredYieldTypes;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
-        var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
+        var previousActiveLabels = new Dictionary<string, ActiveLabel>(_activeLabels);
 
         bool inferringArrowReturn = returnType is TypeInfo.Inferred;
         _environment = arrowEnv;
@@ -2209,8 +2192,17 @@ public partial class TypeChecker
         TypeEnvironment classEnv = new(_environment);
         if (classTypeParams != null)
         {
-            foreach (var tp in classTypeParams)
-                classEnv.DefineTypeParameter(tp.Name, tp);
+            for (int i = 0; i < classTypeParams.Count; i++)
+            {
+                if (classExpr.TypeParams is { } declarations &&
+                    i < declarations.Count)
+                {
+                    DefineSourceTypeParameter(
+                        classEnv,
+                        declarations[i],
+                        classTypeParams[i]);
+                }
+            }
         }
         classEnv.Define("this", new TypeInfo.Instance(classTypeForBody));
         if (superclass != null)
@@ -2287,7 +2279,7 @@ public partial class TypeChecker
                 bool previousInGeneratorFunc = _inGeneratorFunction;
                 int previousLoopDepthFunc = _loopDepth;
                 int previousSwitchDepthFunc = _switchDepth;
-                var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
+                var previousActiveLabelsFunc = new Dictionary<string, ActiveLabel>(_activeLabels);
 
                 bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
                 _environment = methodEnv;
@@ -2417,7 +2409,7 @@ public partial class TypeChecker
                     TypeInfo? previousReturnAcc = _currentFunctionReturnType;
                     int previousLoopDepthAcc = _loopDepth;
                     int previousSwitchDepthAcc = _switchDepth;
-                    var previousActiveLabelsAcc = new Dictionary<string, bool>(_activeLabels);
+                    var previousActiveLabelsAcc = new Dictionary<string, ActiveLabel>(_activeLabels);
                     bool previousInStaticAcc = _inStaticMethod;
 
                     _environment = accessorEnv;

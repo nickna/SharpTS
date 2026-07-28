@@ -663,7 +663,9 @@ public abstract record TypeInfo
     public record Namespace(
         string Name,
         FrozenDictionary<string, TypeInfo> Types,   // Classes, interfaces, enums, nested namespaces
-        FrozenDictionary<string, TypeInfo> Values   // Functions, variables
+        FrozenDictionary<string, TypeInfo> Values,  // Functions, variables
+        FrozenDictionary<string, BindingSymbol>? TypeBindings = null,
+        FrozenDictionary<string, BindingSymbol>? ValueBindings = null
     ) : TypeInfo
     {
         /// <summary>
@@ -675,6 +677,12 @@ public abstract record TypeInfo
             if (Values.TryGetValue(name, out var value)) return value;
             return null;
         }
+
+        public BindingSymbol? GetTypeBinding(string name) =>
+            TypeBindings?.GetValueOrDefault(name);
+
+        public BindingSymbol? GetValueBinding(string name) =>
+            ValueBindings?.GetValueOrDefault(name);
 
         public override string ToString() => $"namespace {Name}";
     }

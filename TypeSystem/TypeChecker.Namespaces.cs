@@ -22,22 +22,38 @@ public partial class TypeChecker
         TypeInfo.Namespace? existingNs = _environment.GetNamespace(name);
         Dictionary<string, TypeInfo> types;
         Dictionary<string, TypeInfo> values;
+        Dictionary<string, BindingSymbol> typeBindings;
+        Dictionary<string, BindingSymbol> valueBindings;
 
         if (existingNs != null)
         {
             // Declaration merging - start with existing members
             types = new Dictionary<string, TypeInfo>(existingNs.Types);
             values = new Dictionary<string, TypeInfo>(existingNs.Values);
+            typeBindings = existingNs.TypeBindings is null
+                ? []
+                : new Dictionary<string, BindingSymbol>(
+                    existingNs.TypeBindings);
+            valueBindings = existingNs.ValueBindings is null
+                ? []
+                : new Dictionary<string, BindingSymbol>(
+                    existingNs.ValueBindings);
         }
         else
         {
             // New namespace
             types = new Dictionary<string, TypeInfo>();
             values = new Dictionary<string, TypeInfo>();
+            typeBindings = [];
+            valueBindings = [];
         }
 
         // Create new scope for namespace body
         var namespaceEnv = new TypeEnvironment(_environment);
+        foreach (var (memberName, binding) in typeBindings)
+            namespaceEnv.DefineTypeBinding(memberName, binding);
+        foreach (var (memberName, binding) in valueBindings)
+            namespaceEnv.DefineValueBinding(memberName, binding);
 
         // For merged namespaces, propagate existing nested namespaces into the new scope
         // This allows GetNamespace() to find previously-defined nested namespaces
@@ -89,6 +105,12 @@ public partial class TypeChecker
                 {
                     CollectNamespaceMemberType(member, types);
                 }
+                CaptureNamespaceBindings(
+                    namespaceEnv,
+                    types,
+                    values,
+                    typeBindings,
+                    valueBindings);
                 // Self-bind THIS namespace's own name into its own body scope from the members
                 // collected so far, so a later nested-namespace member body checked in this same
                 // pass can reference the enclosing namespace by its own dotted name (`O.A.g()`
@@ -101,7 +123,15 @@ public partial class TypeChecker
                 // functions/vars enter `values` only in the second pass, so `O.outerFunc()` by the
                 // enclosing namespace's own name is not covered (the bare form works via #665). (#745)
                 _environment.DefineNamespace(name, new TypeInfo.Namespace(
-                    name, types.ToFrozenDictionary(), values.ToFrozenDictionary()));
+                    name,
+                    types.ToFrozenDictionary(),
+                    values.ToFrozenDictionary(),
+                    typeBindings.Count == 0
+                        ? null
+                        : typeBindings.ToFrozenDictionary(),
+                    valueBindings.Count == 0
+                        ? null
+                        : valueBindings.ToFrozenDictionary()));
             }
 
             // Second pass: fully type-check all members. In recovery mode, check each member
@@ -122,12 +152,51 @@ public partial class TypeChecker
                 {
                     CheckNamespaceMember(member, values);
                 }
+                CaptureNamespaceBindings(
+                    namespaceEnv,
+                    types,
+                    values,
+                    typeBindings,
+                    valueBindings);
             }
         }
 
         // Create namespace with frozen collections
-        var nsType = new TypeInfo.Namespace(name, types.ToFrozenDictionary(), values.ToFrozenDictionary());
+        var nsType = new TypeInfo.Namespace(
+            name,
+            types.ToFrozenDictionary(),
+            values.ToFrozenDictionary(),
+            typeBindings.Count == 0
+                ? null
+                : typeBindings.ToFrozenDictionary(),
+            valueBindings.Count == 0
+                ? null
+                : valueBindings.ToFrozenDictionary());
         _environment.DefineNamespace(name, nsType);
+    }
+
+    private static void CaptureNamespaceBindings(
+        TypeEnvironment environment,
+        IReadOnlyDictionary<string, TypeInfo> types,
+        IReadOnlyDictionary<string, TypeInfo> values,
+        Dictionary<string, BindingSymbol> typeBindings,
+        Dictionary<string, BindingSymbol> valueBindings)
+    {
+        foreach (string memberName in types.Keys)
+        {
+            if (environment.GetLocalTypeSymbol(memberName) is { } typeBinding)
+                typeBindings[memberName] = typeBinding;
+            if (environment.GetLocalValueBinding(memberName) is { } valueBinding)
+                valueBindings[memberName] = valueBinding;
+        }
+
+        foreach (string memberName in values.Keys)
+        {
+            if (environment.GetLocalValueBinding(memberName) is { } valueBinding)
+                valueBindings[memberName] = valueBinding;
+            if (environment.GetLocalTypeSymbol(memberName) is { } typeBinding)
+                typeBindings[memberName] = typeBinding;
+        }
     }
 
     /// <summary>
@@ -308,10 +377,15 @@ public partial class TypeChecker
             throw new TypeCheckException(
                 $"Type Error at line {path[0].Line}: Namespace '{path[0].Lexeme}' is not defined.", tsCode: "TS2503");
         }
+        if (_environment.GetValueBinding(path[0].Lexeme) is { } rootValue)
+            Bindings.Bind(path[0], CurrentSourceDocument, rootValue);
+        if (_environment.GetTypeSymbol(path[0].Lexeme) is { } rootType)
+            Bindings.Bind(path[0], CurrentSourceDocument, rootType);
 
         // Walk the path until the last element
         for (int i = 1; i < path.Count - 1; i++)
         {
+            BindNamespaceMemberFacets(currentNs, path[i]);
             var memberType = currentNs.GetMember(path[i].Lexeme);
             if (memberType is TypeInfo.Namespace nestedNs)
             {
@@ -331,6 +405,7 @@ public partial class TypeChecker
 
         // Get the final member
         Token finalMember = path[^1];
+        BindNamespaceMemberFacets(currentNs, finalMember);
         TypeInfo? resolvedType = currentNs.Values.GetValueOrDefault(finalMember.Lexeme)
             ?? currentNs.Types.GetValueOrDefault(finalMember.Lexeme);
 
@@ -357,5 +432,15 @@ public partial class TypeChecker
         if (isValue)
             RegisterValueDeclaration(importAlias.AliasName);
         _environment.DefineImportAlias(aliasName, resolvedType, isValue);
+    }
+
+    private void BindNamespaceMemberFacets(
+        TypeInfo.Namespace namespaceType,
+        Token member)
+    {
+        if (namespaceType.GetValueBinding(member.Lexeme) is { } valueBinding)
+            Bindings.Bind(member, CurrentSourceDocument, valueBinding);
+        if (namespaceType.GetTypeBinding(member.Lexeme) is { } typeBinding)
+            Bindings.Bind(member, CurrentSourceDocument, typeBinding);
     }
 }

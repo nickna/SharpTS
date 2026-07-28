@@ -223,8 +223,27 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
             foreach (var (k, v) in ns.Values)
                 mergedValues[k] = v;
 
+            var mergedTypeBindings = existing.TypeBindings is null
+                ? new Dictionary<string, BindingSymbol>()
+                : new Dictionary<string, BindingSymbol>(existing.TypeBindings);
+            if (ns.TypeBindings is not null)
+                foreach (var (k, v) in ns.TypeBindings)
+                    mergedTypeBindings[k] = v;
+
+            var mergedValueBindings = existing.ValueBindings is null
+                ? new Dictionary<string, BindingSymbol>()
+                : new Dictionary<string, BindingSymbol>(existing.ValueBindings);
+            if (ns.ValueBindings is not null)
+                foreach (var (k, v) in ns.ValueBindings)
+                    mergedValueBindings[k] = v;
+
             // Create new namespace with merged collections
-            var mergedNs = new TypeInfo.Namespace(name, mergedTypes.ToFrozenDictionary(), mergedValues.ToFrozenDictionary());
+            var mergedNs = new TypeInfo.Namespace(
+                name,
+                mergedTypes.ToFrozenDictionary(),
+                mergedValues.ToFrozenDictionary(),
+                mergedTypeBindings.Count == 0 ? null : mergedTypeBindings.ToFrozenDictionary(),
+                mergedValueBindings.Count == 0 ? null : mergedValueBindings.ToFrozenDictionary());
             _namespaces[name] = mergedNs;
             _values[name] = mergedNs;
             _types[name] = mergedNs;

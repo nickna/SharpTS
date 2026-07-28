@@ -160,7 +160,7 @@ public partial class TypeChecker
             foreach (var tp in interfaceStmt.TypeParams)
             {
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance);
-                interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                DefineSourceTypeParameter(interfaceTypeEnv, tp, typeParam);
             }
 
             // Second pass: parse constraints (which may reference other type parameters)
@@ -184,7 +184,7 @@ public partial class TypeChecker
                     var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                     interfaceTypeParams.Add(typeParam);
                     // Redefine with the actual constraint
-                    interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                    DefineSourceTypeParameter(interfaceTypeEnv, tp, typeParam);
                 }
             }
         }
@@ -329,28 +329,10 @@ public partial class TypeChecker
         TypeEnvironment interfaceTypeEnv = new(_environment);
         if (interfaceStmt.TypeParams != null && interfaceStmt.TypeParams.Count > 0)
         {
-            interfaceTypeParams = [];
-
-            // First pass: define all type parameters without constraints so they can reference each other
-            foreach (var tp in interfaceStmt.TypeParams)
-            {
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance);
-                interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-            }
-
-            // Second pass: parse constraints (which may reference other type parameters, including themselves)
             using (new EnvironmentScope(this, interfaceTypeEnv))
-            {
-                foreach (var tp in interfaceStmt.TypeParams)
-                {
-                    TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                    TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
-                    interfaceTypeParams.Add(typeParam);
-                    // Redefine with the actual constraint
-                    interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-                }
-            }
+                interfaceTypeParams = BuildGenericTypeParameters(
+                    interfaceStmt.TypeParams,
+                    interfaceTypeEnv);
         }
 
         // Use interfaceTypeEnv for member type resolution so T resolves correctly
@@ -772,24 +754,6 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Parses type parameters from a signature into TypeInfo.TypeParameter list.
-    /// </summary>
-    private List<TypeInfo.TypeParameter>? ParseSignatureTypeParams(List<TypeParam>? typeParams)
-    {
-        if (typeParams == null || typeParams.Count == 0)
-            return null;
-
-        List<TypeInfo.TypeParameter> result = [];
-        foreach (var tp in typeParams)
-        {
-            TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-            TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
-            result.Add(new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance));
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Views a class's instance shape (fields, methods, getters — own and inherited) as an
     /// interface, for `interface I extends SomeClass`.
     /// </summary>
@@ -878,12 +842,8 @@ public partial class TypeChecker
         var env = new TypeEnvironment(parent);
         if (typeParams is { Count: > 0 })
         {
-            foreach (var tp in typeParams)
-                env.DefineTypeParameter(tp.Name.Lexeme, new TypeInfo.TypeParameter(tp.Name.Lexeme));
             using (new EnvironmentScope(this, env))
-                sigTypeParams = ParseSignatureTypeParams(typeParams);
-            foreach (var tp in sigTypeParams!)
-                env.DefineTypeParameter(tp.Name, tp);
+                sigTypeParams = BuildGenericTypeParameters(typeParams, env);
         }
         else
         {

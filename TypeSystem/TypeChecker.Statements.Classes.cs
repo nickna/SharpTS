@@ -763,8 +763,17 @@ public partial class TypeChecker
         // For generic classes, add type parameters to class scope
         if (classTypeParams != null)
         {
-            foreach (var tp in classTypeParams)
-                classEnv.DefineTypeParameter(tp.Name, tp);
+            for (int i = 0; i < classTypeParams.Count; i++)
+            {
+                if (classStmt.TypeParams is { } declarations &&
+                    i < declarations.Count)
+                {
+                    DefineSourceTypeParameter(
+                        classEnv,
+                        declarations[i],
+                        classTypeParams[i]);
+                }
+            }
         }
         classEnv.Define("this", new TypeInfo.Instance(classTypeForBody));
         if (superclass != null)
@@ -899,7 +908,7 @@ public partial class TypeChecker
                 bool previousInGeneratorFunc = _inGeneratorFunction;
                 int previousLoopDepthFunc = _loopDepth;
                 int previousSwitchDepthFunc = _switchDepth;
-                var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
+                var previousActiveLabelsFunc = new Dictionary<string, ActiveLabel>(_activeLabels);
 
                 bool inferringMethodReturn = methodType.ReturnType is TypeInfo.Inferred;
                 _environment = methodEnv;
@@ -1046,7 +1055,7 @@ public partial class TypeChecker
                     TypeInfo? previousReturnAcc = _currentFunctionReturnType;
                     int previousLoopDepthAcc = _loopDepth;
                     int previousSwitchDepthAcc = _switchDepth;
-                    var previousActiveLabelsAcc = new Dictionary<string, bool>(_activeLabels);
+                    var previousActiveLabelsAcc = new Dictionary<string, ActiveLabel>(_activeLabels);
                     bool previousInStaticAcc = _inStaticMethod;
 
                     _environment = accessorEnv;
@@ -1272,13 +1281,10 @@ public partial class TypeChecker
         TypeEnvironment classTypeEnv = new(_environment);
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
-            foreach (var tp in classStmt.TypeParams)
-            {
-                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
-                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
-                classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-            }
+            using (new EnvironmentScope(this, classTypeEnv))
+                BuildGenericTypeParameters(
+                    classStmt.TypeParams,
+                    classTypeEnv);
         }
 
         // Create mutable class early so self-references in method return types work.

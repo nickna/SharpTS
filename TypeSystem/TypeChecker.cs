@@ -138,14 +138,68 @@ public partial class TypeChecker
         bool mergeWithLocal = false) =>
         RegisterTypeDeclaration(_environment, declaration, mergeWithLocal);
 
-    private void BindTypeUse(Token? use, string name)
+    private void DefineSourceTypeParameter(
+        TypeEnvironment environment,
+        TypeParam declaration,
+        TypeInfo typeParameter)
     {
-        if (use is null)
+        BindingSymbol symbol = Bindings.Declare(
+            declaration.Name,
+            CurrentSourceDocument,
+            BindingNamespace.Type,
+            environment.GetLocalTypeSymbol(declaration.Name.Lexeme));
+        environment.DefineTypeBinding(declaration.Name.Lexeme, symbol);
+        environment.DefineTypeParameter(declaration.Name.Lexeme, typeParameter);
+    }
+
+    private void DefineSourceTypeParameter(
+        TypeEnvironment environment,
+        Token declaration,
+        TypeInfo typeParameter)
+    {
+        BindingSymbol symbol = Bindings.Declare(
+            declaration,
+            CurrentSourceDocument,
+            BindingNamespace.Type,
+            environment.GetLocalTypeSymbol(declaration.Lexeme));
+        environment.DefineTypeBinding(declaration.Lexeme, symbol);
+        environment.DefineTypeParameter(declaration.Lexeme, typeParameter);
+    }
+
+    private void BindTypeUse(NamedTypeNode named)
+    {
+        if (named.NameToken is null)
             return;
 
-        string rootName = name.Split('.', 2)[0];
+        string rootName = named.Name.Split('.', 2)[0];
         if (_environment.GetTypeSymbol(rootName) is { } symbol)
-            Bindings.Bind(use, CurrentSourceDocument, symbol);
+            Bindings.Bind(named.NameToken, CurrentSourceDocument, symbol);
+
+        if (named.NameTokens is not { Count: > 1 } tokens ||
+            _environment.GetNamespace(rootName) is not { } currentNamespace)
+        {
+            return;
+        }
+
+        for (int i = 1; i < tokens.Count; i++)
+        {
+            Token member = tokens[i];
+            BindingSymbol? memberSymbol =
+                currentNamespace.GetTypeBinding(member.Lexeme)
+                ?? currentNamespace.GetValueBinding(member.Lexeme);
+            if (memberSymbol is not null)
+                Bindings.Bind(member, CurrentSourceDocument, memberSymbol);
+
+            if (currentNamespace.Types.GetValueOrDefault(member.Lexeme)
+                is TypeInfo.Namespace nested)
+            {
+                currentNamespace = nested;
+            }
+            else
+            {
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -969,7 +1023,9 @@ public partial class TypeChecker
     private bool _inGeneratorFunction = false;
 
     // Track active labels for labeled statements (label name -> isOnLoop)
-    private readonly Dictionary<string, bool> _activeLabels = [];
+    private sealed record ActiveLabel(bool IsOnLoop, BindingSymbol Symbol);
+
+    private readonly Dictionary<string, ActiveLabel> _activeLabels = [];
 
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
@@ -1979,7 +2035,16 @@ public partial class TypeChecker
         string name, ParsedModule module)
     {
         var members = module.ExportedTypes.ToFrozenDictionary();
-        return new TypeInfo.Namespace(name, members, members);
+        return new TypeInfo.Namespace(
+            name,
+            members,
+            members,
+            module.ExportedTypeBindings.Count == 0
+                ? null
+                : module.ExportedTypeBindings.ToFrozenDictionary(),
+            module.ExportedValueBindings.Count == 0
+                ? null
+                : module.ExportedValueBindings.ToFrozenDictionary());
     }
 
     /// <summary>

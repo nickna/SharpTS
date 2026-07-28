@@ -70,6 +70,7 @@ public partial class TypeChecker
                     infer.Line, tsCode: "TS1338");
 
             case NamedTypeNode { TypeArguments: null } bare:
+                BindTypeUse(bare);
                 // A name that is only bound as an infer of an enclosing conditional, referenced
                 // from a position where infers are not in scope (check type, false branch).
                 // Restricted to KNOWN infer names — general unknown-name TS2304 is parked (the
@@ -85,6 +86,7 @@ public partial class TypeChecker
                 return;
 
             case NamedTypeNode { TypeArguments: { } argNodes } genericRef:
+                BindTypeUse(genericRef);
                 ValidateGenericReferenceArguments(genericRef, argNodes);
                 foreach (var arg in argNodes)
                     ValidateAliasBodyNode(arg, inferLegal, infersOutOfScope);
@@ -108,6 +110,7 @@ public partial class TypeChecker
                         $" Type '{TryToTypeInfo(mapped.Constraint)}' is not assignable to type 'string | number | symbol'.",
                         mapped.Line, tsCode: "TS2322");
                 }
+                _ = TryResolveMappedType(mapped);
                 foreach (var child in TypeNodeChildren(node))
                     ValidateAliasBodyNode(child, inferLegal, infersOutOfScope);
                 return;
@@ -150,7 +153,17 @@ public partial class TypeChecker
                         TypeInfo? constraint = infer.Constraint is { } cNode ? TryToTypeInfo(cNode) : null;
                         if (constraint is null && positional is not null)
                             positional.TryGetValue(infer.Name, out constraint);
-                        trueEnv.DefineTypeParameter(infer.Name, new TypeInfo.TypeParameter(infer.Name, constraint));
+                        TypeInfo inferred =
+                            new TypeInfo.TypeParameter(infer.Name, constraint);
+                        if (infer.NameToken is { } nameToken)
+                            DefineSourceTypeParameter(
+                                trueEnv,
+                                nameToken,
+                                inferred);
+                        else
+                            trueEnv.DefineTypeParameter(
+                                infer.Name,
+                                inferred);
                     }
                 }
                 if (conditional.CheckType is NamedTypeNode { TypeArguments: null } checkRef &&

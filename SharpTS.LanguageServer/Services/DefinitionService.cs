@@ -28,20 +28,13 @@ public sealed class DefinitionService
         int offset = model.Document.Lines.ToOffset(
             (int)position.Line + 1,
             (int)position.Character + 1);
-        IReadOnlyList<BindingDeclaration> declarations =
-            model.Checker.Bindings.FindDefinitions(
+        return model.Checker.Bindings.FindSymbols(
                 model.Document,
-                offset,
-                BindingNamespace.Value);
-        if (declarations.Count == 0)
-        {
-            declarations =
-                model.Checker.Bindings.FindDefinitions(
-                    model.Document,
-                    offset,
-                    BindingNamespace.Type);
-        }
-        return declarations
+                offset)
+            .SelectMany(symbol => symbol.Declarations)
+            .DistinctBy(declaration => (
+                declaration.Document.Path,
+                declaration.Name.Start))
             .Select(declaration =>
                 NavigationLocations.From(declaration.Document, declaration.Name))
             .ToArray();
