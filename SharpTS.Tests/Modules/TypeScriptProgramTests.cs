@@ -198,6 +198,54 @@ public class TypeScriptProgramTests
     }
 
     [Fact]
+    public void AutomaticTypes_DeclarationPackageNodeImportsDoNotResolveAsFiles()
+    {
+        string entryPath = VirtualPath("node-facade-imports", "src", "main.ts");
+        string packageRoot = VirtualPath(
+            "node-facade-imports", "node_modules", "@types", "node");
+        var files = new Dictionary<string, string>
+        {
+            [entryPath] = "export const answer: number = 42;",
+            [Path.Combine(packageRoot, "index.d.ts")] = """
+                /// <reference path="./console.d.ts" />
+                /// <reference path="./web-globals/console.d.ts" />
+                """,
+            [Path.Combine(packageRoot, "console.d.ts")] = """
+                declare module "node:console" {
+                    interface ConsoleShape {
+                        log(message: string): void;
+                    }
+                    const console: ConsoleShape;
+                    export = console;
+                }
+                """,
+            // Mirrors @types/node's web-globals/console.d.ts: an ESM namespace import of
+            // the package's own ambient "node:console" declaration — a module SharpTS's
+            // stdlib does not provide, so it must not fall through to bare-specifier
+            // file resolution.
+            [Path.Combine(packageRoot, "web-globals", "console.d.ts")] = """
+                export {};
+
+                import * as console from "node:console";
+
+                declare global {
+                    var webConsole: typeof console;
+                }
+                """,
+        };
+        // The legacy/embedding options path (Disabled) resolves imports eagerly rather
+        // than deferring failures to the checker, so it is the path that crashes when
+        // the facade guard misses.
+        var resolver = new ModuleResolver(entryPath, files);
+
+        var entry = resolver.LoadProgram(entryPath);
+        var modules = resolver.GetModulesInOrder(entry);
+
+        Assert.Contains(modules, module =>
+            module.Path.EndsWith("console.d.ts", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void AutomaticTypes_AppliesPackageTypesVersions()
     {
         string entryPath = VirtualPath("types-versions", "src", "main.ts");

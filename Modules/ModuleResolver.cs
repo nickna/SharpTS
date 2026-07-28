@@ -1120,10 +1120,13 @@ public class ModuleResolver
 
     private bool IsRuntimeFacadeSpecifier(string specifier)
     {
-        string bareSpecifier = specifier.StartsWith("node:", StringComparison.Ordinal)
-            ? specifier[5..]
-            : specifier;
-        return _stdlibChain.TryResolve(bareSpecifier, out var resolved)
+        // A node:* specifier in a declaration file always refers to an ambient module
+        // declaration or the stdlib facade — never to a loadable source file. @types/node
+        // imports modules SharpTS's stdlib doesn't provide (e.g. node:console); those must
+        // bind ambiently rather than fall through to bare-specifier file resolution.
+        if (specifier.StartsWith("node:", StringComparison.Ordinal))
+            return true;
+        return _stdlibChain.TryResolve(specifier, out var resolved)
             && resolved is not null;
     }
 
