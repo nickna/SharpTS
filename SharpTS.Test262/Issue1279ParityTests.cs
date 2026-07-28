@@ -246,6 +246,29 @@ public sealed class Issue1279ParityTests
     public void DefineProperties_handles_primitive_boundaries_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-11.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-12.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-13.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-14.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-7.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-8.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-12.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-13.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-14.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-15.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-17.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-239.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-240.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-244.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-245.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-246.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-247.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-249.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-20.js")]
+    public void DefineProperties_supports_object_carriers_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

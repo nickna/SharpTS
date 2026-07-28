@@ -841,32 +841,14 @@ public static partial class ObjectBuiltIns
             return target;
         }
 
-        // ECMA-262 §19.1.2.3 ObjectDefineProperties: for each own ENUMERABLE
-        // property key of props, read its descriptor object via Get — firing any
-        // accessor getter with `this` bound to props — then DefineProperty on the
-        // target. Reading via Get (not the raw field) matters when props is a
-        // boxed primitive wrapper carrying an accessor descriptor, e.g.
-        // `Object.defineProperties(o, new Number(n))` where the descriptor lives
-        // behind a getter whose body inspects `this instanceof Number`. (#454)
-        if (props is SharpTSObject obj)
-        {
-            foreach (var key in OwnEnumerablePropertyKeys(obj))
-            {
-                var descriptor = interpreter.GetProperty(obj, key);
-                DefineProperty(interpreter, [target, key, descriptor]);
-            }
-            return target;
-        }
-
-        // SharpTSInstance / plain Dictionary carriers store data only (no
-        // separate accessor storage), so a raw field read already matches Get.
-        IEnumerable<KeyValuePair<string, object?>> entries = props switch
-        {
-            SharpTSInstance inst => inst.GetFieldNames()
-                .Select(k => new KeyValuePair<string, object?>(k, inst.GetRawField(k))),
-            Dictionary<string, object?> dict => dict,
-            _ => throw new Exception("TypeError: Property descriptions must be an object")
-        };
+        // ECMA-262 §19.1.2.3 ObjectDefineProperties: snapshot own enumerable
+        // keys and read every descriptor through Get before applying it. The
+        // carrier may be any object kind (function, array/arguments, Math,
+        // Date, RegExp, JSON, …), and accessor reads bind `this` to that carrier.
+        var entries = OwnEnumerableKeysForDefineProperties(props)
+            .Select(key => new KeyValuePair<string, object?>(
+                key, ReadDefinePropertiesValue(interpreter, props, key)))
+            .ToList();
 
         foreach (var entry in entries)
         {
@@ -874,6 +856,52 @@ public static partial class ObjectBuiltIns
         }
 
         return target;
+    }
+
+    private static IEnumerable<string> OwnEnumerableKeysForDefineProperties(object props)
+        => props switch
+        {
+            SharpTSObject obj => OwnEnumerablePropertyKeys(obj),
+            SharpTSArray array => array.OwnEnumerableKeys(),
+            SharpTSInstance instance => instance.GetFieldNames(),
+            IDictionary<string, object?> dict => dict.Keys,
+            SharpTSMath math => math.OwnEnumerableKeys(),
+            SharpTSJSON json => json.OwnEnumerableKeys(),
+            SharpTSDate date => date.OwnEnumerableKeys(),
+            SharpTSRegExp regex => regex.OwnEnumerableKeys(),
+            SharpTSFunction function => function.PropertyKeys,
+            SharpTSArrowFunction arrow => arrow.PropertyKeys,
+            ISharpTSCallable => [],
+            _ => throw new ThrowException(new SharpTSTypeError(
+                "Property descriptions must be an object")),
+        };
+
+    private static object? ReadDefinePropertiesValue(
+        Interpreter interpreter,
+        object carrier,
+        string key)
+    {
+        SharpTSPropertyDescriptor? descriptor = carrier switch
+        {
+            SharpTSObject obj => obj.GetOwnPropertyDescriptor(key),
+            SharpTSArray array => array.GetOwnPropertyDescriptor(key),
+            SharpTSMath math => math.GetOwnPropertyDescriptor(key),
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(key),
+            SharpTSDate date => date.GetOwnPropertyDescriptor(key),
+            SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(key),
+            SharpTSFunction function => function.GetOwnPropertyDescriptor(key),
+            SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(key),
+            _ => null,
+        };
+
+        if (descriptor is { HasGet: true })
+        {
+            return descriptor.Get is { } getter
+                ? FunctionBuiltIns.CallWithThis(interpreter, getter, carrier, [])
+                : SharpTSUndefined.Instance;
+        }
+
+        return interpreter.GetProperty(carrier, key);
     }
 
     /// <summary>

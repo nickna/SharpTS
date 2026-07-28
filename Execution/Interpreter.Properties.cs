@@ -935,8 +935,11 @@ public partial class Interpreter
         }
 
         // Every non-nullish built-in object ultimately inherits Object.prototype.
-        if (GetObjectPrototype().HasExtra(memberName))
-            return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+        var objectPrototypeMember = GetObjectPrototype().GetMember(memberName);
+        if (objectPrototypeMember is SharpTSObjectUnboundMethod objectMethod)
+            return RuntimeValue.FromObject(objectMethod.BindTo(obj));
+        if (objectPrototypeMember != null)
+            return RuntimeValue.FromBoxed(objectPrototypeMember);
 
         return RuntimeValue.Undefined;
     }
@@ -1500,8 +1503,11 @@ public partial class Interpreter
             // (JavaScript semantics: accessing a non-existent property returns undefined)
             if (isBuiltInType)
             {
-                if (GetObjectPrototype().HasExtra(memberName))
-                    return GetObjectPrototype().TryGetExtra(memberName);
+                var objectPrototypeMember = GetObjectPrototype().GetMember(memberName);
+                if (objectPrototypeMember is SharpTSObjectUnboundMethod objectMethod)
+                    return objectMethod.BindTo(obj);
+                if (objectPrototypeMember != null)
+                    return objectPrototypeMember;
                 return SharpTSUndefined.Instance;
             }
         }
