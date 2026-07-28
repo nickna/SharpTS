@@ -979,6 +979,16 @@ public partial class Interpreter
         if (GetArrayPrototype().HasExtra(memberName))
             return RuntimeValue.FromBoxed(GetArrayPrototype().TryGetExtra(memberName));
 
+        // Ordinary arrays inherit Array.prototype.constructor. Keep this
+        // lookup after the prototype expando/accessor checks so a guest
+        // override wins, and route through GetMember so deleting the built-in
+        // constructor from Array.prototype is still observable.
+        if (memberName == "constructor"
+            && GetArrayPrototype().GetMember(memberName) is { } arrayConstructor)
+        {
+            return RuntimeValue.FromBoxed(arrayConstructor);
+        }
+
         // Numeric-string index on $Array — `arr["0"]` is equivalent to
         // `arr[0]` per JS semantics. ECMA-262 §10.4.2 (Array exotic objects)
         // makes string-coerced canonical numeric indices behave like ordinary
@@ -1453,6 +1463,19 @@ public partial class Interpreter
             var classMethod = subclassArray.Klass.FindMethod(memberName);
             if (classMethod != null)
                 return SharpTSClass.BindMethodToReceiver(classMethod, subclassArray);
+        }
+
+        if (obj is SharpTSArray)
+        {
+            if (GetArrayPrototype().GetExtraGetter(memberName) is { } getter)
+                return BindAccessorToObject(getter, obj).CallBoxed(this, []);
+            if (GetArrayPrototype().HasExtra(memberName))
+                return GetArrayPrototype().TryGetExtra(memberName);
+            if (memberName == "constructor"
+                && GetArrayPrototype().GetMember(memberName) is { } arrayConstructor)
+            {
+                return arrayConstructor;
+            }
         }
 
         // Promise instances: mirror the RV-path arm — own accessor/data

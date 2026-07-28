@@ -407,6 +407,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/split/call-split-l-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/argument-is-undefined-and-instance-is-string.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-null-instance-is-thisnullisnullanullstringnullobject.js")]
+    [InlineData("built-ins/String/prototype/split/separator-override-tostring-limit-override-valueof.js")]
+    public void String_split_coerces_ordinary_separator_and_limit_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

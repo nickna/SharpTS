@@ -23,7 +23,7 @@ public static class StringBuiltIns
             .MethodV2("toLocaleLowerCase", 0, ToLowerCaseV2)
             .MethodV2("trim", 0, TrimV2)
             .MethodV2("replace", 2, ReplaceV2)
-            .MethodV2("split", 1, 2, specLength: 2, SplitV2)
+            .MethodV2("split", 0, int.MaxValue, specLength: 2, SplitV2)
             .MethodV2("match", 1, MatchV2)
             .MethodV2("matchAll", 1, MatchAllV2)
             .MethodV2("search", 1, SearchV2)
@@ -100,20 +100,31 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str.Substring(0, index) + replacement + str.Substring(index + search.Length));
     }
 
-    private static RuntimeValue SplitV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        int? limit = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumber() : null;
+        uint limit = args.Length < 2 || args[1].IsUndefined
+            ? uint.MaxValue
+            : ToUint32(interpreter.ToNumberWithPrimitive(args[1].ToObject()));
 
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        if (limit == 0)
+            return RuntimeValue.FromObject(new SharpTSArray());
+
+        object? separatorValue = ArgumentOrUndefined(args, 0);
+        if (separatorValue is SharpTSUndefined)
+        {
+            return RuntimeValue.FromObject(new SharpTSArray([(object?)str]));
+        }
+
+        if (separatorValue is SharpTSRegExp regex)
         {
             string[] parts = regex.Split(str);
-            IEnumerable<string> resultParts = limit.HasValue && limit.Value >= 0
-                ? parts.Take(limit.Value)
+            IEnumerable<string> resultParts = limit < parts.Length
+                ? parts.Take((int)limit)
                 : parts;
             return RuntimeValue.FromObject(new SharpTSArray(resultParts.Select(p => (object?)p).ToList()));
         }
 
-        var separator = args[0].ToObject()?.ToString() ?? "";
+        var separator = interpreter.ToStringForBuiltInArgument(separatorValue);
         string[] stringParts;
         if (separator == "")
         {
@@ -124,13 +135,26 @@ public static class StringBuiltIns
             stringParts = str.Split(separator);
         }
 
-        if (limit.HasValue && limit.Value >= 0)
+        if (limit < stringParts.Length)
         {
-            stringParts = stringParts.Take(limit.Value).ToArray();
+            stringParts = stringParts.Take((int)limit).ToArray();
         }
 
         var elements = stringParts.Select(p => (object?)p).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(elements));
+    }
+
+    private static uint ToUint32(double number)
+    {
+        if (!double.IsFinite(number) || number == 0)
+            return 0;
+
+        const double modulus = 4294967296d;
+        double integer = Math.Truncate(number);
+        double modulo = integer % modulus;
+        if (modulo < 0)
+            modulo += modulus;
+        return (uint)modulo;
     }
 
     private static RuntimeValue MatchV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
