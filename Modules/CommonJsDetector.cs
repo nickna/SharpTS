@@ -1,3 +1,5 @@
+using SharpTS.Configuration;
+
 namespace SharpTS.Modules;
 
 /// <summary>
@@ -7,7 +9,8 @@ namespace SharpTS.Modules;
 /// Resolution rules (in order):
 /// <list type="number">
 /// <item>Extension: <c>.cjs</c>/<c>.cts</c> → CJS; <c>.mjs</c>/<c>.mts</c>/<c>.ts</c>/<c>.tsx</c> → ESM.</item>
-/// <item><c>.js</c>/<c>.jsx</c>: walk up to nearest <c>package.json</c>.
+/// <item><c>.js</c>/<c>.jsx</c>: walk up to nearest <c>package.json</c> (stopping at
+/// <see cref="Configuration.FileDiscovery"/>'s ambient ceilings — temp root, user profile).
 /// <c>"type":"module"</c> → ESM; <c>"type":"commonjs"</c> or no field → CJS (Node default).</item>
 /// <item>Fallback heuristic for <c>.js</c> with no reachable <c>package.json</c>:
 /// content scan for <c>require(</c>/<c>module.exports</c>/<c>exports.</c>
@@ -88,7 +91,7 @@ public static class CommonJsDetector
                     return pkg.Type ?? "";
                 }
             }
-            dir = Path.GetDirectoryName(dir);
+            dir = FileDiscovery.AmbientParent(dir);
         }
         return null;
     }

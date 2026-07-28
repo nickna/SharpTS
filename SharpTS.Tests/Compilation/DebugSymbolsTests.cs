@@ -389,11 +389,11 @@ public class DebugSymbolsTests
             // ---- sequence points, attributed to the file each method came from
             var byMethod = SequencePointsByMethod(artifacts);
 
-            var helperMethod = Assert.Single(byMethod.Where(m => m.Key.Contains("twice", StringComparison.Ordinal)));
+            var helperMethod = Assert.Single(byMethod, m => m.Key.Contains("twice", StringComparison.Ordinal));
             Assert.Equal("helper.ts", helperMethod.Value.Document);
             Assert.Equal([2, 3], helperMethod.Value.Lines);
 
-            var entryMethod = Assert.Single(byMethod.Where(m => m.Key.Contains("total", StringComparison.Ordinal)));
+            var entryMethod = Assert.Single(byMethod, m => m.Key.Contains("total", StringComparison.Ordinal));
             Assert.Equal("main.ts", entryMethod.Value.Document);
             Assert.Equal([3, 4, 5, 7], entryMethod.Value.Lines);
 

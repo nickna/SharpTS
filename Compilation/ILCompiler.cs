@@ -288,9 +288,9 @@ public partial class ILCompiler
         {
             if (CreateDebugScope(module.Document) is not { } scope) continue;
 
-            // Phases are not consistent about whether CurrentPath is normalized, so index both
-            // spellings rather than depending on which one a given phase happens to use.
-            _debugScopesByModule[NormalizeToEmissionPath(module.Path)] = scope;
+            // Keyed by raw path only. NormalizeToEmissionPath never respells a path — it folds
+            // script-module paths to null — and null-path emission (scripts, the entry point) is
+            // served by the _entryPointDebugScope fallback, not a dictionary entry.
             _debugScopesByModule[module.Path] = scope;
             entryScope = scope;
         }

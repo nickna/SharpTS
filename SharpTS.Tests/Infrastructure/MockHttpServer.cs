@@ -410,6 +410,17 @@ public class MockHttpServer : IDisposable
             // Ignore stop errors
         }
 
+        // Let the accept loop observe the cancellation/stop and exit before the listener and
+        // token source are torn down under it. Bounded so a wedged request can't hang teardown.
+        try
+        {
+            _listenerTask?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+            // Cancellation surfaces here as AggregateException; the loop is done either way
+        }
+
         try
         {
             _listener.Close();

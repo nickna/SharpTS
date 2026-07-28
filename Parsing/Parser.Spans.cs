@@ -80,37 +80,4 @@ public partial class Parser
             if (part is Stmt.Sequence nested) RecordLoweredParts(nested, span);
         }
     }
-
-    /// <summary>Records a node's extent as covering exactly one token.</summary>
-    private void RecordSpan(object? node, Token token)
-    {
-        if (node is null || token.Start < 0) return;
-        _spans.Record(node, token.Span);
-    }
-
-    /// <summary>Records a node's extent as running from one token through another.</summary>
-    private void RecordSpan(object? node, Token first, Token last)
-    {
-        if (node is null || first.Start < 0) return;
-        int end = last.End >= 0 ? last.End : first.End;
-        _spans.Record(node, new SourceSpan(first.Start, Math.Max(first.Start, end)));
-    }
-
-    /// <summary>
-    /// Gives a node the parser synthesized the position of the source construct it stands for, so
-    /// that lowered code still points back at what the user wrote.
-    /// </summary>
-    private void CopySpan(object original, object replacement) => _spans.CopySpan(original, replacement);
-
-    /// <summary>
-    /// Gives every node in <paramref name="replacements"/> the position of the construct it was
-    /// lowered from. Destructuring and similar rewrites expand one statement into several.
-    /// </summary>
-    private void CopySpan(object original, IEnumerable<object> replacements) => _spans.CopySpan(original, replacements);
-
-    /// <summary>
-    /// Marks a node as pure scaffolding with no source of its own, so stepping passes through it
-    /// instead of attributing it to whatever statement happens to be nearby.
-    /// </summary>
-    private void MarkHidden(object node) => _spans.MarkHidden(node);
 }
