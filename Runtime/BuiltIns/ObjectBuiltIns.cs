@@ -340,6 +340,22 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 arr.Freeze();
                 return RuntimeValue.FromObject(arr);
+            case SharpTSFunction fn:
+                fn.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(fn);
+                return RuntimeValue.FromObject(fn);
+            case SharpTSArrowFunction arrow:
+                arrow.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(arrow);
+                return RuntimeValue.FromObject(arrow);
+            case SharpTSDate date:
+                date.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(date);
+                return RuntimeValue.FromObject(date);
+            case SharpTSRegExp regex:
+                regex.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(regex);
+                return RuntimeValue.FromObject(regex);
             case Dictionary<string, object?> dict:
                 PropertyDescriptorStore.Freeze(dict);
                 return RuntimeValue.FromObject(dict);
@@ -367,6 +383,22 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 arr.Seal();
                 return RuntimeValue.FromObject(arr);
+            case SharpTSFunction fn:
+                fn.SealOwnProperties();
+                PropertyDescriptorStore.Seal(fn);
+                return RuntimeValue.FromObject(fn);
+            case SharpTSArrowFunction arrow:
+                arrow.SealOwnProperties();
+                PropertyDescriptorStore.Seal(arrow);
+                return RuntimeValue.FromObject(arrow);
+            case SharpTSDate date:
+                date.SealOwnProperties();
+                PropertyDescriptorStore.Seal(date);
+                return RuntimeValue.FromObject(date);
+            case SharpTSRegExp regex:
+                regex.SealOwnProperties();
+                PropertyDescriptorStore.Seal(regex);
+                return RuntimeValue.FromObject(regex);
             case Dictionary<string, object?> dict:
                 PropertyDescriptorStore.Seal(dict);
                 return RuntimeValue.FromObject(dict);

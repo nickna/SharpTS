@@ -6242,7 +6242,7 @@ test/built-ins/Object/freeze/15.2.3.9-2-a-5.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-6.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-7.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-8.js Pass
-test/built-ins/Object/freeze/15.2.3.9-2-a-9.js Fail
+test/built-ins/Object/freeze/15.2.3.9-2-a-9.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-b-i-1.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-b-i-2.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-c-1.js Pass
@@ -7335,10 +7335,10 @@ test/built-ins/Object/seal/object-seal-p-is-own-data-property-that-overrides-an-
 test/built-ins/Object/seal/object-seal-p-is-own-data-property-that-overrides-an-inherited-data-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-data-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-boolean-object-that-uses-object-s-get-own-property.js Pass
-test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-date-object-that-uses-object-s-get-own-property.js Fail
-test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-function-object-that-uses-object-s-get-own-property.js Fail
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-date-object-that-uses-object-s-get-own-property.js Pass
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-function-object-that-uses-object-s-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-number-object-that-uses-object-s-get-own-property.js Pass
-test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-reg-exp-object-that-uses-object-s-get-own-property.js Fail
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-reg-exp-object-that-uses-object-s-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-string-object-which-implements-its-own-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js Pass
