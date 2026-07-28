@@ -438,6 +438,11 @@ public sealed class Issue1279ParityTests
         AssertPass(relativePath, Test262ExecutionMode.Interpreted);
     }
 
+    [Fact]
+    public void String_split_coerces_separator_before_returning_for_zero_limit()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/split/separator-tostring-error.js");
+
     [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]

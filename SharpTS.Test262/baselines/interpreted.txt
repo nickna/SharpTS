@@ -1607,7 +1607,7 @@ test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-5.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-6.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-7.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-8.js Pass
-test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-9.js Fail
+test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-9.js Timeout
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-1.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-10.js Fail
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-11.js Fail
@@ -10796,7 +10796,7 @@ test/built-ins/String/prototype/split/separator-regexp-comma-instance-is-string-
 test/built-ins/String/prototype/split/separator-regexp-limit-string-via-eval.js RuntimeError
 test/built-ins/String/prototype/split/separator-regexp.js Fail
 test/built-ins/String/prototype/split/separator-string-instance-is-empty-string-object.js Pass
-test/built-ins/String/prototype/split/separator-tostring-error.js Fail
+test/built-ins/String/prototype/split/separator-tostring-error.js Pass
 test/built-ins/String/prototype/split/separator-undef-limit-custom.js Pass
 test/built-ins/String/prototype/split/separator-undef-limit-zero.js Pass
 test/built-ins/String/prototype/split/separator-undef.js Pass

@@ -106,17 +106,19 @@ public static class StringBuiltIns
             ? uint.MaxValue
             : ToUint32(interpreter.ToNumberWithPrimitive(args[1].ToObject()));
 
-        if (limit == 0)
-            return RuntimeValue.FromObject(new SharpTSArray());
-
         object? separatorValue = ArgumentOrUndefined(args, 0);
         if (separatorValue is SharpTSUndefined)
         {
-            return RuntimeValue.FromObject(new SharpTSArray([(object?)str]));
+            return RuntimeValue.FromObject(limit == 0
+                ? new SharpTSArray()
+                : new SharpTSArray([(object?)str]));
         }
 
         if (separatorValue is SharpTSRegExp regex)
         {
+            if (limit == 0)
+                return RuntimeValue.FromObject(new SharpTSArray());
+
             string[] parts = regex.Split(str);
             IEnumerable<string> resultParts = limit < parts.Length
                 ? parts.Take((int)limit)
@@ -125,6 +127,9 @@ public static class StringBuiltIns
         }
 
         var separator = interpreter.ToStringForBuiltInArgument(separatorValue);
+        if (limit == 0)
+            return RuntimeValue.FromObject(new SharpTSArray());
+
         string[] stringParts;
         if (separator == "")
         {
