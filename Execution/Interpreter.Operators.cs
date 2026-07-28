@@ -532,7 +532,48 @@ public partial class Interpreter
     /// descriptors use this before validating the uint32 result.
     /// </summary>
     internal double ToNumberWithPrimitive(object? value)
-        => CoerceToNumber(RuntimeValue.FromBoxed(ToPrimitive(value, PrimitiveHint.Number)));
+    {
+        object? primitive = value is SharpTSObject obj
+            ? OrdinaryToPrimitiveNumber(obj)
+            : ToPrimitive(value, PrimitiveHint.Number);
+        return CoerceToNumber(RuntimeValue.FromBoxed(primitive));
+    }
+
+    /// <summary>
+    /// OrdinaryToPrimitive with a number hint for plain objects. Unlike the
+    /// compatibility-oriented general ToPrimitive path below, this performs
+    /// full prototype-chain Get for valueOf/toString and throws when neither
+    /// callable returns a primitive, as ArraySetLength requires.
+    /// </summary>
+    private object? OrdinaryToPrimitiveNumber(SharpTSObject obj)
+    {
+        // Boxed primitives retain the dedicated internal-slot behavior used by
+        // the wider coercion paths.
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+            return ToPrimitive(obj, PrimitiveHint.Number);
+
+        if (TryCallConversion(obj, "valueOf", out var valueOfResult))
+            return valueOfResult;
+        if (TryCallConversion(obj, "toString", out var toStringResult))
+            return toStringResult;
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    private bool TryCallConversion(SharpTSObject receiver, string name, out object? result)
+    {
+        result = null;
+        if (GetProperty(receiver, name) is not ISharpTSCallable callable)
+            return false;
+
+        var converted = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
+        if (IsObjectLike(converted))
+            return false;
+
+        result = converted;
+        return true;
+    }
 
     private enum PrimitiveHint { Default, Number, String }
 

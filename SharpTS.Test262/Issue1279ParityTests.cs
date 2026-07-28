@@ -230,6 +230,12 @@ public sealed class Issue1279ParityTests
     public void RegExp_expando_descriptors_match_in_both_modes()
         => AssertPassInBothModes("built-ins/Object/defineProperty/15.2.3.6-4-40.js");
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-150.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-151.js")]
+    public void Array_length_descriptor_values_use_ToNumber_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();
