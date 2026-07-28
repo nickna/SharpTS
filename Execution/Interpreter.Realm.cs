@@ -295,6 +295,11 @@ public partial class Interpreter
     /// </summary>
     internal bool TryGetRealmIntrinsic(string name, out object? value)
     {
+        if (name == "Object")
+        {
+            value = GetObjectNamespace();
+            return true;
+        }
         if (name == "Math")
         {
             value = GetMath();
@@ -316,7 +321,7 @@ public partial class Interpreter
     /// member access, <c>globalThis</c>) pointing at the one realm instance so
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
-    internal static bool IsRealmIntrinsicName(string name) => name is "Math" or "JSON";
+    internal static bool IsRealmIntrinsicName(string name) => name is "Object" or "Math" or "JSON";
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
     // object carrying a guest-writable _extras bag, so — like Math and
@@ -332,12 +337,14 @@ public partial class Interpreter
     private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
+    private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
     internal Runtime.Types.SharpTSStringPrototype GetStringPrototype() => _stringPrototype ??= new();
     internal Runtime.Types.SharpTSNumberPrototype GetNumberPrototype() => _numberPrototype ??= new();
     internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype() => _booleanPrototype ??= new();
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype() => _arrayPrototype ??= new();
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
+    internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
 
     // Per-realm globalThis. The global object holds guest-assigned properties
     // (`globalThis.x = …`), which must stay realm-local and not race across

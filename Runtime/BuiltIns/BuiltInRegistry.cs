@@ -441,10 +441,10 @@ public sealed class BuiltInRegistry
         // Object members accessed via property access (Object.keys, Object.values).
         // `prototype` resolves to SharpTSObjectPrototype so that CJS packages
         // (lodash) can dereference `Object.prototype.hasOwnProperty` etc.
-        registry.RegisterInstanceType(typeof(Types.SharpTSObjectNamespace), (_, name) =>
+        registry.RegisterInstanceType(typeof(Types.SharpTSObjectNamespace), (instance, name) =>
         {
             if (name == "prototype") return Types.SharpTSObjectPrototype.Instance;
-            return ObjectBuiltIns.GetStaticMethod(name);
+            return ((Types.SharpTSObjectNamespace)instance).GetMember(name);
         });
         registry.RegisterInstanceType(typeof(Types.SharpTSObjectPrototype), (instance, name) =>
             ((Types.SharpTSObjectPrototype)instance).GetMember(name));

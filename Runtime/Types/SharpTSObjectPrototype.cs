@@ -127,6 +127,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.HasExtra(key),
             SharpTSJSON json => json.HasExtra(key),
             SharpTSDate date => date.HasExtra(key),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.HasOwnProperty(key),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
+            SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetMember(key) != null,
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
             IDictionary<string, object?> dict => dict.ContainsKey(key),
@@ -204,6 +209,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSObjectNamespace objectNamespace
+                => objectNamespace.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSFunctionPrototype functionPrototype
+                => functionPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSArrayPrototype arrayPrototype
+                => arrayPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSStringPrototype stringPrototype
+                => stringPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSFunction function => function.IsPropertyEnumerable(key),
             SharpTSArrowFunction arrow => arrow.IsPropertyEnumerable(key),
             SharpTSArray array => array.IsPropertyEnumerable(key),

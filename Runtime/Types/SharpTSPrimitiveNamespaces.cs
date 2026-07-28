@@ -80,20 +80,46 @@ public sealed class SharpTSStringPrototype
     internal SharpTSStringPrototype() { }
 
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, StringPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    private bool IsBuiltIn(string name)
+        => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
         if (name == "constructor") return SharpTSStringNamespace.Instance;
         var method = StringBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;

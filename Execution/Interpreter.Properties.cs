@@ -679,6 +679,18 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(nsPrototype);
         }
 
+        // Object is a per-realm mutable constructor object. Its static methods
+        // are already callables with no receiver semantics, so return the exact
+        // stored value instead of routing through instance-member dispatch,
+        // which binds BuiltInMethod and breaks identity with descriptor.value.
+        if (obj is SharpTSObjectNamespace objectNamespace)
+        {
+            return RuntimeValue.FromBoxed(
+                objectNamespace.HasOwnProperty(get.Name.Lexeme)
+                    ? objectNamespace.GetMember(get.Name.Lexeme)
+                    : SharpTSUndefined.Instance);
+        }
+
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = get.Name.Lexeme;
 
@@ -1883,6 +1895,18 @@ public partial class Interpreter
         if (obj is SharpTSGlobalThis globalThis)
         {
             globalThis.SetProperty(memberName, value);
+            return value;
+        }
+
+        if (obj is SharpTSObjectNamespace objectNamespace)
+        {
+            objectNamespace.SetProperty(memberName, value);
+            return value;
+        }
+
+        if (obj is SharpTSFunctionPrototype functionPrototype)
+        {
+            functionPrototype.SetExtra(memberName, value);
             return value;
         }
 

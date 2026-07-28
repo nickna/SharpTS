@@ -1234,6 +1234,11 @@ public partial class Interpreter
             date.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSObjectNamespace objectNamespace)
+        {
+            objectNamespace.SetProperty(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         // Number/Boolean/String.prototype are mutable ordinary objects — allow
         // bracket assignment (`Number.prototype[0] = 1`, `Number.prototype.length = 1`).
@@ -1255,6 +1260,11 @@ public partial class Interpreter
         if (obj is SharpTSArrayPrototype arrayProto)
         {
             arrayProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSFunctionPrototype functionProto)
+        {
+            functionProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
 

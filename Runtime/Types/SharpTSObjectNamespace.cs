@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.Runtime.Types;
 
@@ -12,9 +13,52 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObjectNamespace : ISharpTSCallable
 {
     public static readonly SharpTSObjectNamespace Instance = new();
-    private SharpTSObjectNamespace() { }
+    private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+    // Each Interpreter owns a realm instance so guest mutations of Object's
+    // configurable methods do not leak into other scripts or race in Test262.
+    // The process-wide instance remains as a registry/template fallback.
+    internal SharpTSObjectNamespace() { }
 
     public int Arity() => 0;
+
+    private static bool IsBuiltIn(string name) => ObjectBuiltIns.GetStaticMethod(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => _extras.HasProperty(name)
+            || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    public object? GetMember(string name)
+    {
+        if (_extras.HasProperty(name)) return _extras.GetProperty(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
+        return ObjectBuiltIns.GetStaticMethod(name);
+    }
+
+    public void SetProperty(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
+
+    public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
+
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = _extras.HasProperty(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     /// <summary>
     /// ECMA-262 §19.1.1 Object(value): if value is null/undefined, return a new empty object;

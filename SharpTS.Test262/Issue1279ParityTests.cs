@@ -186,6 +186,34 @@ public sealed class Issue1279ParityTests
     public void Array_named_properties_follow_ordinary_descriptor_rules_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-598.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-599.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-600.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-601.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-602.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-603.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-604.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-605.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-606.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-607.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-608.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-609.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-610.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-611.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-612.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-613.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-614.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-615.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-616.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-617.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-618.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-619.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-620.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-621.js")]
+    public void Built_in_method_descriptors_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

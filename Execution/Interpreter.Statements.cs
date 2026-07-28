@@ -760,6 +760,10 @@ public partial class Interpreter
             SharpTSMath math => math.OwnEnumerableKeys(),
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnEnumerableKeys(),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.OwnEnumerableKeys(),
+            SharpTSStringPrototype stringPrototype => stringPrototype.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,

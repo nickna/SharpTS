@@ -488,6 +488,9 @@ public static partial class ObjectBuiltIns
             case SharpTSObject obj:
                 success = obj.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSObjectNamespace objectNamespace:
+                success = objectNamespace.DefineProperty(propertyKey, descriptor);
+                break;
             case SharpTSInstance inst:
                 success = inst.DefineProperty(propertyKey, descriptor);
                 break;
@@ -608,6 +611,9 @@ public static partial class ObjectBuiltIns
         SharpTSPropertyDescriptor? descriptor = target switch
         {
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSObjectNamespace objectNamespace
+                => objectNamespace.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
@@ -675,9 +681,9 @@ public static partial class ObjectBuiltIns
 
         var value = target switch
         {
-            SharpTSObjectNamespace => propertyKey == "prototype"
+            SharpTSObjectNamespace objectNamespace => propertyKey == "prototype"
                 ? interpreter.GetObjectPrototype()
-                : GetStaticMethod(propertyKey),
+                : objectNamespace.GetMember(propertyKey),
             SharpTSJSON json => json.HasExtra(propertyKey)
                 ? json.TryGetExtra(propertyKey)
                 : JSONBuiltIns.GetStaticMethod(propertyKey),
