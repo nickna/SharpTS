@@ -127,6 +127,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.HasExtra(key),
             SharpTSJSON json => json.HasExtra(key),
             SharpTSDate date => date.HasExtra(key),
+            SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
+            SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls
@@ -202,6 +204,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSFunction function => function.IsPropertyEnumerable(key),
+            SharpTSArrowFunction arrow => arrow.IsPropertyEnumerable(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             _ => false,
         };

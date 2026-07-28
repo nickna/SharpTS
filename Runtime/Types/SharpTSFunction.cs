@@ -57,12 +57,10 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     // match the runtime chain and outer-variable captures would be off-by-one.
     private readonly object? _boundThis;
     private readonly bool _hasBoundThis;
-    // JS-spec: functions are objects and support arbitrary property
-    // assignment (e.g. `fn.DNS = "..."`). Lazily allocated.
-    private Dictionary<string, object?>? _properties;
-    // Accessor properties defined via Object.defineProperty(fn, name, {get, set}).
-    // When present, dispatch through the getter/setter instead of _properties.
-    private Dictionary<string, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _accessors;
+    // Functions are ordinary objects for their user-defined string properties.
+    // Reuse the descriptor-aware object store for assignment, accessors, and
+    // Object.defineProperty invariants.
+    private SharpTSObject _properties = new([]);
 
     public SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closure)
         : this(declaration, closure, boundThis: null, hasBoundThis: false)
@@ -81,7 +79,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     /// <summary>JS function-as-object property access.</summary>
     public bool TryGetProperty(string name, out object? value)
     {
-        if (_properties != null && _properties.TryGetValue(name, out value))
+        if (_properties.Fields.TryGetValue(name, out value))
             return true;
         value = null;
         return false;
@@ -90,15 +88,18 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     /// <summary>Returns the names of JS user-assigned properties on this function
     /// (not built-in members like name/length/bind). Used by for...in and Object.keys —
     /// lodash enumerates its own utility map by iterating `for (var key in lodash)`.</summary>
-    public IEnumerable<string> PropertyKeys =>
-        _properties?.Keys ?? System.Linq.Enumerable.Empty<string>();
+    public IEnumerable<string> PropertyKeys => _properties.OwnEnumerableKeys();
 
     /// <summary>Sets a JS-object property on this function.</summary>
-    public void SetProperty(string name, object? value)
-    {
-        _properties ??= [];
-        _properties[name] = value;
-    }
+    public void SetProperty(string name, object? value) => _properties.SetProperty(name, value);
+    public bool HasProperty(string name)
+        => _properties.HasProperty(name) || _properties.HasSetter(name);
+    public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _properties.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _properties.GetOwnPropertyDescriptor(name);
+    public bool IsPropertyEnumerable(string name)
+        => _properties.GetOwnPropertyDescriptor(name) is { Enumerable: true };
 
     // JS functions are objects — they accept symbol-keyed property
     // assignment too (`fn[Symbol.species] = ...`). Without per-instance
@@ -153,11 +154,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
 
     /// <summary>Removes a JS-object property from this function.</summary>
     public bool DeleteProperty(string name)
-    {
-        bool removed = _properties?.Remove(name) ?? false;
-        removed |= _accessors?.Remove(name) ?? false;
-        return removed;
-    }
+        => _properties.DeleteProperty(name);
 
     /// <summary>
     /// Defines a property with a getter and/or setter on this function.
@@ -165,17 +162,23 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     /// </summary>
     public void DefineAccessor(string name, ISharpTSCallable? getter, ISharpTSCallable? setter)
     {
-        _accessors ??= [];
-        _accessors[name] = (getter, setter);
+        _properties.DefineProperty(name, new SharpTSPropertyDescriptor
+        {
+            Get = getter,
+            Set = setter,
+            HasGet = true,
+            HasSet = true,
+            Configurable = true,
+        });
     }
 
     /// <summary>Returns the accessor pair for <paramref name="name"/> if defined.</summary>
     public bool TryGetAccessor(string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
-        if (_accessors != null && _accessors.TryGetValue(name, out var pair))
+        if (_properties.HasGetter(name) || _properties.HasSetter(name))
         {
-            getter = pair.Get;
-            setter = pair.Set;
+            getter = _properties.GetGetter(name);
+            setter = _properties.GetSetter(name);
             return true;
         }
         getter = null;
@@ -257,7 +260,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
             environment.Define("super", superclass);
         }
 
-        return new SharpTSFunction(_declaration, environment);
+        return ShareObjectState(new SharpTSFunction(_declaration, environment));
     }
 
     /// <summary>
@@ -272,7 +275,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             environment.Define("super", klass.Superclass);
         }
-        return new SharpTSFunction(_declaration, environment);
+        return ShareObjectState(new SharpTSFunction(_declaration, environment));
     }
 
     /// <summary>
@@ -281,7 +284,18 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     /// </summary>
     public SharpTSFunction BindThis(object? thisValue)
     {
-        return new SharpTSFunction(_declaration, _closure, boundThis: thisValue, hasBoundThis: true);
+        return ShareObjectState(new SharpTSFunction(
+            _declaration, _closure, boundThis: thisValue, hasBoundThis: true));
+    }
+
+    private SharpTSFunction ShareObjectState(SharpTSFunction bound)
+    {
+        _symbolProperties ??= [];
+        _symbolAccessors ??= [];
+        bound._properties = _properties;
+        bound._symbolProperties = _symbolProperties;
+        bound._symbolAccessors = _symbolAccessors;
+        return bound;
     }
 
     /// <summary>
@@ -365,10 +379,9 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     // wouldn't match the resolver's static distances and outer captures break.
     private readonly object? _boundThis;
     private readonly bool _hasBoundThis;
-    // JS: arrow/function expressions are objects; support property assignment
-    // (e.g. minimatch's `exports.minimatch.sep = "/"`).
-    private Dictionary<string, object?>? _properties;
-    private Dictionary<string, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _accessors;
+    // Arrow/function expressions are ordinary objects for user-defined string
+    // properties, including descriptor attributes and accessors.
+    private SharpTSObject _properties = new([]);
 
     /// <summary>
     /// Indicates whether this function has its own 'this' binding (function expressions)
@@ -394,22 +407,25 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     /// <summary>JS function-as-object property access.</summary>
     public bool TryGetProperty(string name, out object? value)
     {
-        if (_properties != null && _properties.TryGetValue(name, out value))
+        if (_properties.Fields.TryGetValue(name, out value))
             return true;
         value = null;
         return false;
     }
 
     /// <summary>User-assigned property names on this arrow/function-expression.</summary>
-    public IEnumerable<string> PropertyKeys =>
-        _properties?.Keys ?? System.Linq.Enumerable.Empty<string>();
+    public IEnumerable<string> PropertyKeys => _properties.OwnEnumerableKeys();
 
     /// <summary>Sets a JS-object property on this arrow function.</summary>
-    public void SetProperty(string name, object? value)
-    {
-        _properties ??= [];
-        _properties[name] = value;
-    }
+    public void SetProperty(string name, object? value) => _properties.SetProperty(name, value);
+    public bool HasProperty(string name)
+        => _properties.HasProperty(name) || _properties.HasSetter(name);
+    public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _properties.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _properties.GetOwnPropertyDescriptor(name);
+    public bool IsPropertyEnumerable(string name)
+        => _properties.GetOwnPropertyDescriptor(name) is { Enumerable: true };
 
     // Symbol-keyed property storage — same rationale as SharpTSFunction
     // above (test262 species-* patterns install Symbol.species on a
@@ -459,26 +475,28 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
 
     /// <summary>Removes a JS-object property from this arrow function.</summary>
     public bool DeleteProperty(string name)
-    {
-        bool removed = _properties?.Remove(name) ?? false;
-        removed |= _accessors?.Remove(name) ?? false;
-        return removed;
-    }
+        => _properties.DeleteProperty(name);
 
     /// <summary>Defines a getter/setter pair via Object.defineProperty.</summary>
     public void DefineAccessor(string name, ISharpTSCallable? getter, ISharpTSCallable? setter)
     {
-        _accessors ??= [];
-        _accessors[name] = (getter, setter);
+        _properties.DefineProperty(name, new SharpTSPropertyDescriptor
+        {
+            Get = getter,
+            Set = setter,
+            HasGet = true,
+            HasSet = true,
+            Configurable = true,
+        });
     }
 
     /// <summary>Returns the accessor pair for <paramref name="name"/> if defined.</summary>
     public bool TryGetAccessor(string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
-        if (_accessors != null && _accessors.TryGetValue(name, out var pair))
+        if (_properties.HasGetter(name) || _properties.HasSetter(name))
         {
-            getter = pair.Get;
-            setter = pair.Set;
+            getter = _properties.GetGetter(name);
+            setter = _properties.GetSetter(name);
             return true;
         }
         getter = null;
@@ -664,12 +682,11 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         // get). Eagerly materialize so a later mutation on either copy lands
         // in the same dict instead of branching into a private one via the
         // lazy `??=` init.
-        _properties ??= [];
         _symbolProperties ??= [];
-        _accessors ??= [];
         bound._properties = _properties;
         bound._symbolProperties = _symbolProperties;
-        bound._accessors = _accessors;
+        _symbolAccessors ??= [];
+        bound._symbolAccessors = _symbolAccessors;
         return bound;
     }
 

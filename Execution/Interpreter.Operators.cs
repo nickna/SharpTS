@@ -791,6 +791,8 @@ public partial class Interpreter
             SharpTSMath math => math.DeleteExtra(name),
             SharpTSJSON json => json.DeleteExtra(name),
             SharpTSDate date => date.DeleteExtra(name),
+            SharpTSFunction function => function.DeleteProperty(name),
+            SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -832,6 +834,8 @@ public partial class Interpreter
             SharpTSMath math => math.DeleteExtra(keyStr),
             SharpTSJSON json => json.DeleteExtra(keyStr),
             SharpTSDate date => date.DeleteExtra(keyStr),
+            SharpTSFunction function => function.DeleteProperty(keyStr),
+            SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };

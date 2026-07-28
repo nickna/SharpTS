@@ -510,19 +510,10 @@ public static partial class ObjectBuiltIns
                 success = PropertyDescriptorStore.DefineProperty(dict, propertyKey, compiledDesc);
                 break;
             case SharpTSFunction fn:
-                // JS functions are objects — store accessor (get/set) or value
-                // descriptors directly on the function. Attribute-only
-                // descriptors (no value/get/set) preserve the existing value
-                // per ECMA-262 §10.1.6.3.
-                if (descriptor.Get != null || descriptor.Set != null)
-                {
-                    fn.DefineAccessor(propertyKey, descriptor.Get, descriptor.Set);
-                }
-                else if (descriptor.HasValue)
-                {
-                    fn.SetProperty(propertyKey, descriptor.Value);
-                }
-                success = true;
+                success = fn.DefineProperty(propertyKey, descriptor);
+                break;
+            case SharpTSArrowFunction arrow:
+                success = arrow.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSRegExp rx:
                 // RegExp instances are objects; ECMA-262 §22.2 declares
@@ -638,42 +629,12 @@ public static partial class ObjectBuiltIns
     private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
         SharpTSFunction function,
         string propertyKey)
-    {
-        if (function.TryGetAccessor(propertyKey, out var getter, out var setter))
-        {
-            return new SharpTSPropertyDescriptor
-            {
-                Get = getter,
-                Set = setter,
-                Enumerable = false,
-                Configurable = true,
-            };
-        }
-
-        return function.TryGetProperty(propertyKey, out var value)
-            ? DataDescriptor(value, writable: true, enumerable: true, configurable: true)
-            : null;
-    }
+        => function.GetOwnPropertyDescriptor(propertyKey);
 
     private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
         SharpTSArrowFunction function,
         string propertyKey)
-    {
-        if (function.TryGetAccessor(propertyKey, out var getter, out var setter))
-        {
-            return new SharpTSPropertyDescriptor
-            {
-                Get = getter,
-                Set = setter,
-                Enumerable = false,
-                Configurable = true,
-            };
-        }
-
-        return function.TryGetProperty(propertyKey, out var value)
-            ? DataDescriptor(value, writable: true, enumerable: true, configurable: true)
-            : null;
-    }
+        => function.GetOwnPropertyDescriptor(propertyKey);
 
     /// <summary>
     /// Synthesizes the standard descriptor shape for members exposed by the
