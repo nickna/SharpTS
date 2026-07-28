@@ -334,21 +334,27 @@ public static class RegExpBuiltIns
     /// </summary>
     public static SharpTSObject BuildPrototype()
     {
+        // BuiltInMethod carries mutable function-object metadata (`name` and
+        // `length` can be deleted). Keep those mutations realm-local along
+        // with the prototype object itself instead of sharing the static
+        // registration instances across persistent Test262 worker realms.
+        static BuiltInMethod RealmLocal(BuiltInMethod method) => method.Bind(null);
+
         var proto = new SharpTSObject(new Dictionary<string, object?>());
-        proto.SetBySymbol(SharpTSSymbol.Match, _symbolMatch);
-        proto.SetBySymbol(SharpTSSymbol.MatchAll, _symbolMatchAll);
-        proto.SetBySymbol(SharpTSSymbol.Replace, _symbolReplace);
-        proto.SetBySymbol(SharpTSSymbol.Search, _symbolSearch);
-        proto.SetBySymbol(SharpTSSymbol.Split, _symbolSplit);
+        proto.SetBySymbol(SharpTSSymbol.Match, RealmLocal(_symbolMatch));
+        proto.SetBySymbol(SharpTSSymbol.MatchAll, RealmLocal(_symbolMatchAll));
+        proto.SetBySymbol(SharpTSSymbol.Replace, RealmLocal(_symbolReplace));
+        proto.SetBySymbol(SharpTSSymbol.Search, RealmLocal(_symbolSearch));
+        proto.SetBySymbol(SharpTSSymbol.Split, RealmLocal(_symbolSplit));
         // ECMA-262 §22.2.5: instance-method slots that are introspectable on
         // the prototype itself (`RegExp.prototype.exec`, `.test`, `.toString`)
         // — propertyHelper.js's verifyNotWritable runs against them, and
         // `Function.prototype.call.bind(RegExp.prototype.exec)` is a real
         // pattern. These are the unbound prototype methods; user code rebinds
         // via `.call(re, str)` which routes through `BuiltInMethod.Bind`.
-        proto.SetProperty("exec", _protoExec);
-        proto.SetProperty("test", _protoTest);
-        proto.SetProperty("toString", _protoToString);
+        proto.SetProperty("exec", RealmLocal(_protoExec));
+        proto.SetProperty("test", RealmLocal(_protoTest));
+        proto.SetProperty("toString", RealmLocal(_protoToString));
         // ECMA-262 §22.2.6.1: RegExp.prototype.constructor is the RegExp
         // constructor. Wiring it here makes `RegExp.prototype.constructor ===
         // RegExp` hold and gives property-descriptor introspection
@@ -371,16 +377,16 @@ public static class RegExpBuiltIns
                 Enumerable = false,
                 Configurable = true,
             });
-        DefineAccessor("flags", _protoFlagsGetter);
-        DefineAccessor("source", _protoSourceGetter);
-        DefineAccessor("global", _protoGlobalGetter);
-        DefineAccessor("ignoreCase", _protoIgnoreCaseGetter);
-        DefineAccessor("multiline", _protoMultilineGetter);
-        DefineAccessor("dotAll", _protoDotAllGetter);
-        DefineAccessor("sticky", _protoStickyGetter);
-        DefineAccessor("unicode", _protoUnicodeGetter);
-        DefineAccessor("unicodeSets", _protoUnicodeSetsGetter);
-        DefineAccessor("hasIndices", _protoHasIndicesGetter);
+        DefineAccessor("flags", RealmLocal(_protoFlagsGetter));
+        DefineAccessor("source", RealmLocal(_protoSourceGetter));
+        DefineAccessor("global", RealmLocal(_protoGlobalGetter));
+        DefineAccessor("ignoreCase", RealmLocal(_protoIgnoreCaseGetter));
+        DefineAccessor("multiline", RealmLocal(_protoMultilineGetter));
+        DefineAccessor("dotAll", RealmLocal(_protoDotAllGetter));
+        DefineAccessor("sticky", RealmLocal(_protoStickyGetter));
+        DefineAccessor("unicode", RealmLocal(_protoUnicodeGetter));
+        DefineAccessor("unicodeSets", RealmLocal(_protoUnicodeSetsGetter));
+        DefineAccessor("hasIndices", RealmLocal(_protoHasIndicesGetter));
         return proto;
     }
 

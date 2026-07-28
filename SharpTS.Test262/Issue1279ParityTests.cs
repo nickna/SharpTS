@@ -226,6 +226,15 @@ public sealed class Issue1279ParityTests
     public void Built_in_function_metadata_matches_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void RegExp_prototype_function_metadata_is_isolated_between_realms()
+    {
+        const string relativePath =
+            "built-ins/RegExp/prototype/test/S15.10.6.3_A9.js";
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+    }
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-390.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-417.js")]
