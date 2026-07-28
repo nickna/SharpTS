@@ -359,6 +359,16 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/isExtensible/15.2.3.13-2-21.js")]
+    [InlineData("built-ins/Object/isFrozen/15.2.3.12-2-a-13.js")]
+    [InlineData("built-ins/Object/isFrozen/15.2.3.12-3-10.js")]
+    [InlineData("built-ins/Object/isSealed/15.2.3.11-4-19.js")]
+    [InlineData("built-ins/Object/seal/object-seal-o-is-a-function-object.js")]
+    public void Built_in_objects_report_integrity_state_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

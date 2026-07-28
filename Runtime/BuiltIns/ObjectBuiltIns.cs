@@ -347,6 +347,8 @@ public static partial class ObjectBuiltIns
                 PropertyDescriptorStore.Freeze(idict);
                 return RuntimeValue.FromObject(idict);
             default:
+                if (args[0].Kind == ValueKind.Object && arg is not null)
+                    PropertyDescriptorStore.Freeze(arg);
                 return args[0];
         }
     }
@@ -372,6 +374,8 @@ public static partial class ObjectBuiltIns
                 PropertyDescriptorStore.Seal(idict);
                 return RuntimeValue.FromObject(idict);
             default:
+                if (args[0].Kind == ValueKind.Object && arg is not null)
+                    PropertyDescriptorStore.Seal(arg);
                 return args[0];
         }
     }
@@ -386,6 +390,8 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.IsFrozen,
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsFrozen(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsFrozen(idict),
+            _ when args[0].Kind == ValueKind.Object && arg is not null
+                => PropertyDescriptorStore.IsFrozen(arg),
             _ => true
         });
     }
@@ -400,6 +406,8 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.IsSealed,
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsSealed(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsSealed(idict),
+            _ when args[0].Kind == ValueKind.Object && arg is not null
+                => PropertyDescriptorStore.IsSealed(arg),
             _ => true
         });
     }
@@ -1465,10 +1473,31 @@ public static partial class ObjectBuiltIns
         => RuntimeValue.FromBoxed(Create(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue PreventExtensionsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(PreventExtensions(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var arg = args[0].ToObject();
+        var result = PreventExtensions(interp, CallableInterop.ToBoxedList(args));
+        if (args[0].Kind == ValueKind.Object
+            && arg is not null
+            && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray
+                or Dictionary<string, object?> or System.Collections.IDictionary))
+        {
+            PropertyDescriptorStore.PreventExtensions(arg);
+        }
+        return RuntimeValue.FromBoxed(result);
+    }
 
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(IsExtensibleMethod(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var arg = args[0].ToObject();
+        if (args[0].Kind == ValueKind.Object
+            && arg is not null
+            && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray
+                or Dictionary<string, object?> or System.Collections.IDictionary))
+        {
+            return RuntimeValue.FromBoolean(PropertyDescriptorStore.IsExtensible(arg));
+        }
+        return RuntimeValue.FromBoxed(IsExtensibleMethod(interp, CallableInterop.ToBoxedList(args)));
+    }
 
     private static RuntimeValue GetOwnPropertySymbolsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(GetOwnPropertySymbols(interp, CallableInterop.ToBoxedList(args)));
