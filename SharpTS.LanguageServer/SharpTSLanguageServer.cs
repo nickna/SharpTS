@@ -37,7 +37,8 @@ public static class SharpTSLanguageServer
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
                     .AddSingleton<DocumentSymbolService>()
-                    .AddSingleton<DefinitionService>())
+                    .AddSingleton<DefinitionService>()
+                    .AddSingleton<ReferenceService>())
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
                 .WithHandler<HoverHandler>()
@@ -50,7 +51,8 @@ public static class SharpTSLanguageServer
             {
                 options
                     .WithHandler<DocumentSymbolHandler>()
-                    .WithHandler<DefinitionHandler>();
+                    .WithHandler<DefinitionHandler>()
+                    .WithHandler<ReferencesHandler>();
             }
         });
 

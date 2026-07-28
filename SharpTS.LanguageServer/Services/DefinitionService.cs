@@ -1,10 +1,5 @@
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using SharpTS.Configuration;
-using SharpTS.Modules;
-using SharpTS.Parsing;
 using SharpTS.TypeSystem;
-using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace SharpTS.LanguageServer.Services;
 
@@ -27,73 +22,28 @@ public sealed class DefinitionService
         Position position,
         IReadOnlyDictionary<string, string>? openDocuments = null)
     {
-        string absolutePath = Path.GetFullPath(path);
-        var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (openDocuments is not null)
-        {
-            foreach (var (documentPath, documentText) in openDocuments)
-                overlay[Path.GetFullPath(documentPath)] = documentText;
-        }
-        overlay[absolutePath] = text;
-
-        ParsedModule entry;
-        ModuleResolver resolver;
-        try
-        {
-            resolver = new ModuleResolver(
-                absolutePath,
-                ModuleResolutionOptions.Default,
-                overlay,
-                new TypeScriptProgramOptions { PreferDeclarationFiles = true },
-                virtualFilesFallBackToDisk: true);
-            entry = resolver.LoadModule(absolutePath, DecoratorMode.Stage3);
-        }
-        catch
-        {
-            return [];
-        }
-
-        if (entry.Document is not { } document)
+        if (NavigationModelBuilder.TryBuild(path, text, openDocuments) is not { } model)
             return [];
 
-        var checker = new TypeChecker().WithFilePath(absolutePath);
-        try
-        {
-            checker.CheckModules(resolver.GetModulesInOrder(entry), resolver);
-        }
-        catch
-        {
-            return [];
-        }
-
-        int offset = document.Lines.ToOffset(
+        int offset = model.Document.Lines.ToOffset(
             (int)position.Line + 1,
             (int)position.Character + 1);
         IReadOnlyList<BindingDeclaration> declarations =
-            checker.Bindings.FindDefinitions(document, offset, BindingNamespace.Value);
+            model.Checker.Bindings.FindDefinitions(
+                model.Document,
+                offset,
+                BindingNamespace.Value);
         if (declarations.Count == 0)
         {
             declarations =
-                checker.Bindings.FindDefinitions(document, offset, BindingNamespace.Type);
+                model.Checker.Bindings.FindDefinitions(
+                    model.Document,
+                    offset,
+                    BindingNamespace.Type);
         }
         return declarations
-            .Select(ToLocation)
+            .Select(declaration =>
+                NavigationLocations.From(declaration.Document, declaration.Name))
             .ToArray();
-    }
-
-    private static Location ToLocation(BindingDeclaration declaration)
-    {
-        var document = declaration.Document;
-        var (startLine, startColumn) = document.Lines.ToPosition(declaration.Name.Start);
-        var (endLine, endColumn) = document.Lines.ToPosition(declaration.Name.End);
-        return new Location
-        {
-            Uri = DocumentUri.FromFileSystemPath(document.Path),
-            Range = new Range(
-                startLine - 1,
-                startColumn - 1,
-                endLine - 1,
-                endColumn - 1),
-        };
     }
 }
