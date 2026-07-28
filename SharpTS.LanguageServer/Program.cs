@@ -8,6 +8,10 @@ using SharpTS.LanguageServer.Project;
 string? projectFile = null, sdkPath = null;
 var references = new List<string>();
 
+// Standalone clients have no other TypeScript server, so navigation is on by default here. The
+// VS Code extension passes interop-only, where tsserver already provides it.
+var mode = LanguageFeatureMode.Full;
+
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -15,6 +19,19 @@ for (int i = 0; i < args.Length; i++)
         case "--project" when i + 1 < args.Length: projectFile = args[++i]; break;
         case "--sdk-path" when i + 1 < args.Length: sdkPath = args[++i]; break;
         case "-r" or "--reference" when i + 1 < args.Length: references.Add(args[++i]); break;
+        case "--language-features" when i + 1 < args.Length:
+            string requested = args[++i];
+            switch (requested)
+            {
+                case "interop-only": mode = LanguageFeatureMode.InteropOnly; break;
+                case "full": mode = LanguageFeatureMode.Full; break;
+                default:
+                    await Console.Error.WriteLineAsync(
+                        $"[LSP Fatal] Unknown --language-features value '{requested}'. Expected 'interop-only' or 'full'.");
+                    Environment.Exit(64);
+                    break;
+            }
+            break;
     }
 }
 
@@ -47,7 +64,7 @@ try
         .Where(n => !string.IsNullOrEmpty(n))
         .Cast<string>();
 
-    await SharpTSLanguageServer.RunAsync(loader.TryResolve, typeNames);
+    await SharpTSLanguageServer.RunAsync(loader.TryResolve, typeNames, mode);
 }
 catch (Exception ex)
 {

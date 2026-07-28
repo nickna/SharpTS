@@ -52,6 +52,11 @@ public partial class Parser
         // attributable to that one construct, so they inherit its position unless they already
         // carry a tighter one of their own.
         if (node is Stmt.Sequence sequence) RecordLoweredParts(sequence, span);
+
+        // `export class C {}` parses the declaration directly rather than back through this
+        // dispatcher, so the wrapped declaration would otherwise have no position of its own —
+        // and it, not the wrapper, is what consumers ask about.
+        if (node is Stmt.Export { Declaration: { } exported }) _spans.Record(exported, span);
     }
 
     /// <summary>

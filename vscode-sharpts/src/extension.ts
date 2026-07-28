@@ -30,7 +30,13 @@ export async function activate(context: vscode.ExtensionContext) {
     const dotnetPath = config.get<string>('dotnetPath') || 'dotnet';
 
     // The language server executable *is* the server — no subcommand.
-    const args = [serverDll];
+    //
+    // Interop-only: in VS Code these files are already served by tsserver, which does ordinary
+    // navigation better than SharpTS could and would collide with it. What SharpTS contributes
+    // here is the .NET interop surface — diagnostics, hover, completion, signature help — and
+    // nothing tsserver already provides. The standalone `sharpts-lsp` tool defaults to full
+    // navigation instead, for editors with no TypeScript server of their own.
+    const args = [serverDll, '--language-features', 'interop-only'];
     const projectFile = config.get<string>('projectFile');
     if (projectFile) {
         args.push('--project', projectFile);
