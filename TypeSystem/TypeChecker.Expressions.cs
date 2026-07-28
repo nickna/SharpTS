@@ -1445,7 +1445,7 @@ public partial class TypeChecker
                 // Rest parameters are not counted toward required params
                 if (param.IsRest)
                 {
-                    paramScope.Define(param.Name.Lexeme, paramType);
+                    DeclareValue(paramScope, param.Name, paramType);
                     continue;
                 }
 
@@ -1475,7 +1475,7 @@ public partial class TypeChecker
                     requiredParams++;
                 }
 
-                paramScope.Define(param.Name.Lexeme, paramType);
+                DeclareValue(paramScope, param.Name, paramType);
             }
 
             // Determine return type (use expected type if available and no explicit annotation)
@@ -1508,7 +1508,7 @@ public partial class TypeChecker
         // Note: Parameters can shadow the function name, so define name first
         if (arrow.Name != null)
         {
-            arrowEnv.Define(arrow.Name.Lexeme, funcType);
+            DeclareValue(arrowEnv, arrow.Name, funcType);
             arrowEnv.MarkAsConst(arrow.Name.Lexeme);  // Function name is read-only in strict mode
         }
 
@@ -1519,7 +1519,10 @@ public partial class TypeChecker
         var bodyParamTypes = WidenOptionalParamsForBody(paramTypes, arrow.Parameters);
         for (int i = 0; i < arrow.Parameters.Count; i++)
         {
-            arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
+            DeclareValue(
+                arrowEnv,
+                arrow.Parameters[i].Name,
+                bodyParamTypes[i]);
         }
 
         // Save and set context - function bodies are isolated from outer loop/switch/label context
@@ -1666,6 +1669,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckAssign(Expr.Assign assign)
     {
+        BindValueUse(assign.Name);
+
         // For assignment, check against the DECLARED type, not the narrowed type
         // This allows reassigning within narrowed scopes (e.g., x = "found" when x was narrowed to null)
         // Use GetDeclaredType to get the original declared type, not the potentially narrowed type
@@ -1792,6 +1797,7 @@ public partial class TypeChecker
         // structural signatures.
         if (_environment.Get(name.Lexeme) is { } declared)
         {
+            BindValueUse(name);
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }
@@ -1989,7 +1995,7 @@ public partial class TypeChecker
         // If named, define the name in class body scope for self-reference
         if (classExpr.Name != null)
         {
-            classTypeEnv.Define(classExpr.Name.Lexeme, mutableClass);
+            DeclareValue(classTypeEnv, classExpr.Name, mutableClass);
         }
 
         using (new EnvironmentScope(this, classTypeEnv))
@@ -2267,7 +2273,10 @@ public partial class TypeChecker
 
                 var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
-                    methodEnv.Define(method.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
+                    DeclareValue(
+                        methodEnv,
+                        method.Parameters[i].Name,
+                        bodyParamTypes[i]);
 
                 TypeEnvironment previousEnvFunc = _environment;
                 TypeInfo? previousReturnFunc = _currentFunctionReturnType;
@@ -2397,7 +2406,10 @@ public partial class TypeChecker
                         if (accessor.SetterParam != null)
                         {
                             TypeInfo setterParamType = classTypeForBody.Setters[accessor.Name.Lexeme];
-                            accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
+                            DeclareValue(
+                                accessorEnv,
+                                accessor.SetterParam.Name,
+                                setterParamType);
                         }
                     }
 

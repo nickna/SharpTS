@@ -36,7 +36,8 @@ public static class SharpTSLanguageServer
                     .AddSingleton(new DiagnosticsService(resolve))
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
-                    .AddSingleton<DocumentSymbolService>())
+                    .AddSingleton<DocumentSymbolService>()
+                    .AddSingleton<DefinitionService>())
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
                 .WithHandler<HoverHandler>()
@@ -46,7 +47,11 @@ public static class SharpTSLanguageServer
             // Registering a handler is what advertises its capability, so the mode has to be
             // decided here rather than consulted later.
             if (mode == LanguageFeatureMode.Full)
-                options.WithHandler<DocumentSymbolHandler>();
+            {
+                options
+                    .WithHandler<DocumentSymbolHandler>()
+                    .WithHandler<DefinitionHandler>();
+            }
         });
 
         await server.WaitForExit;

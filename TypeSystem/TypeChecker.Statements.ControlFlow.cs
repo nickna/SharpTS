@@ -76,7 +76,9 @@ public partial class TypeChecker
         if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
         {
             TypeEnvironment catchEnv = new(_environment);
-            catchEnv.Define(tryCatch.CatchParam.Lexeme,
+            DeclareValue(
+                catchEnv,
+                tryCatch.CatchParam,
                 tryCatch.CatchParamType == "unknown"
                     ? TypeInfo.Unknown.Shared
                     : TypeInfo.Any.Shared);

@@ -134,6 +134,8 @@ public partial class TypeChecker
 
     internal VoidResult VisitVar(Stmt.Var stmt)
     {
+        RegisterValueDeclaration(stmt.Name, mergeWithLocal: stmt.IsVar);
+
         // Captured before any provisional Define overwrites it — used for the TS2403
         // redeclaration check once this declaration's type settles. Locally only: a same-named
         // var in an OUTER scope is shadowing, not redeclaration.
@@ -371,6 +373,8 @@ public partial class TypeChecker
 
     internal VoidResult VisitConst(Stmt.Const stmt)
     {
+        RegisterValueDeclaration(stmt.Name);
+
         TypeInfo constDeclaredType;
 
         // Track variable-to-variable aliases for narrowing invalidation
@@ -956,7 +960,7 @@ public partial class TypeChecker
         };
 
         TypeEnvironment forOfEnv = new(_environment);
-        forOfEnv.Define(stmt.Variable.Lexeme, elementType);
+        DeclareValue(forOfEnv, stmt.Variable, elementType);
 
         CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
         return VoidResult.Instance;
@@ -990,7 +994,13 @@ public partial class TypeChecker
         }
 
         TypeEnvironment forInEnv = new(_environment);
-        forInEnv.Define(stmt.Variable.Lexeme, TypeInfo.String.Shared);
+        if (stmt.IsDeclaration)
+            DeclareValue(forInEnv, stmt.Variable, TypeInfo.String.Shared);
+        else
+        {
+            BindValueUse(stmt.Variable);
+            forInEnv.Define(stmt.Variable.Lexeme, TypeInfo.String.Shared);
+        }
 
         CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
         return VoidResult.Instance;
@@ -1316,7 +1326,7 @@ public partial class TypeChecker
             // Define variable (const-like - cannot reassign)
             if (binding.Name != null)
             {
-                _environment.Define(binding.Name.Lexeme, resourceType);
+                DeclareValue(binding.Name, resourceType);
             }
         }
     }

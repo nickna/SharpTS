@@ -39,6 +39,8 @@ public partial class TypeChecker
 
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
+        RegisterValueDeclaration(classStmt.Name);
+
         // Check class decorators
         CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
 
@@ -881,7 +883,10 @@ public partial class TypeChecker
                 var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
                 {
-                    methodEnv.Define(method.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
+                    DeclareValue(
+                        methodEnv,
+                        method.Parameters[i].Name,
+                        bodyParamTypes[i]);
                 }
 
                 // Save and set context - method bodies are isolated from outer loop/switch/label context
@@ -1029,7 +1034,10 @@ public partial class TypeChecker
                             TypeInfo setterParamType = accessor.ComputedKey != null
                                 ? (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared)
                                 : classTypeForBody.Setters[accessor.Name.Lexeme];
-                            accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
+                            DeclareValue(
+                                accessorEnv,
+                                accessor.SetterParam.Name,
+                                setterParamType);
                         }
                     }
 

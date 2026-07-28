@@ -18,6 +18,9 @@ namespace SharpTS.TypeSystem;
 /// <seealso cref="TypeInfo"/>
 public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 {
+    private readonly Dictionary<string, BindingSymbol> _valueBindings =
+        new(StringComparer.Ordinal);
+
     // TypeScript symbols have independent type and value facets.  Keeping these
     // bindings separate is essential for declarations such as
     // `interface Error { ... }` + `declare var Error: ErrorConstructor`.
@@ -31,6 +34,34 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
     public TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)
     {
+    }
+
+    /// <summary>
+    /// Defines a value while preserving the semantic identity of an enclosing binding when this is
+    /// a checker-created narrowing scope. Source declarations replace that inherited identity via
+    /// <see cref="DefineValueBinding"/>.
+    /// </summary>
+    public new void Define(string name, TypeInfo value)
+    {
+        base.Define(name, value);
+        if (!_valueBindings.ContainsKey(name) &&
+            Enclosing?.GetValueBinding(name) is { } enclosingBinding)
+        {
+            _valueBindings[name] = enclosingBinding;
+        }
+    }
+
+    internal void DefineValueBinding(string name, BindingSymbol symbol) =>
+        _valueBindings[name] = symbol;
+
+    internal BindingSymbol? GetLocalValueBinding(string name) =>
+        _valueBindings.GetValueOrDefault(name);
+
+    internal BindingSymbol? GetValueBinding(string name)
+    {
+        if (_valueBindings.TryGetValue(name, out var symbol))
+            return symbol;
+        return Enclosing?.GetValueBinding(name);
     }
 
     /// <summary>
