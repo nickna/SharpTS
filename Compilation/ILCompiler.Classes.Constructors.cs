@@ -45,7 +45,7 @@ public partial class ILCompiler
         }
 
         var il = ctorBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, ctorBuilder);
         ctx.CurrentSuperclassName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr);
         // Typed interop support
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;

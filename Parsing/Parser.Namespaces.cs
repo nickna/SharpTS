@@ -61,7 +61,23 @@ public partial class Parser
     /// Parses a member inside a namespace body.
     /// Supports: export modifier, classes, interfaces, functions, variables, enums, type aliases, nested namespaces.
     /// </summary>
+    /// <summary>
+    /// Parses one namespace member, recording its source extent.
+    /// </summary>
+    /// <remarks>
+    /// Namespace bodies call the declaration parsers directly rather than going back through
+    /// <see cref="Declaration"/>, so this is their equivalent central dispatch point and the right
+    /// place to capture spans — the same reasoning as <see cref="Declaration"/> itself.
+    /// </remarks>
     private Stmt NamespaceMember()
+    {
+        int first = _current;
+        Stmt member = NamespaceMemberCore();
+        RecordSpanFrom(member, first);
+        return member;
+    }
+
+    private Stmt NamespaceMemberCore()
     {
         bool isExported = Match(TokenType.EXPORT);
         Token? exportKeyword = isExported ? Previous() : null;

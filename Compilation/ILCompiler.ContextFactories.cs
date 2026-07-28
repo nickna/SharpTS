@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -35,7 +36,7 @@ public partial class ILCompiler
     /// values (current module/namespace/class, strict-mode overrides, captured-variable maps,
     /// state-machine wiring) are applied by the specialized factories and call-site overlays.
     /// </summary>
-    private CompilationContext CreateBaseCompilationContext(ILGenerator il)
+    private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
         return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
@@ -71,7 +72,49 @@ public partial class ILCompiler
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             // Ambient strict mode; bodies with their own "use strict" prologue override this.
             IsStrictMode = _isStrictMode,
+            // Symbol emission: null unless this build asked for debug symbols, which is what keeps
+            // ordinary builds from paying for any of it.
+            CurrentMethod = method,
+            DebugScope = CurrentDebugScope,
         };
+    }
+
+    /// <summary>
+    /// Points the context's <see cref="LocalsManager"/> at the record collecting this method's
+    /// named locals and scopes. A no-op unless the build is emitting symbols.
+    /// </summary>
+    private void AttachLocalSymbols(CompilationContext ctx)
+    {
+        if (ctx.DebugScope is null || ctx.CurrentMethod is null || ctx.IL is null) return;
+
+        ctx.Locals.SymbolSink = _debugInfo.BeginMethodLocals(ctx.CurrentMethod, ctx.IL);
+        MarkNonUserCodeIfLibrary(ctx);
+    }
+
+    /// <summary>
+    /// Marks a body compiled from the bundled stdlib as non-user code, so Just My Code steps over
+    /// it and lands on the next line the user actually wrote.
+    /// </summary>
+    /// <remarks>
+    /// Emitted runtime helpers need no such marking: they carry no debug information at all, which
+    /// already makes them non-user code. Stdlib modules are different — they are real TypeScript
+    /// compiled alongside the program, so without this they would be as steppable as the user's own
+    /// files. The line information is still emitted, so a stack trace through the stdlib remains
+    /// readable and stepping in is still possible with Just My Code turned off.
+    /// </remarks>
+    private void MarkNonUserCodeIfLibrary(CompilationContext ctx)
+    {
+        if (ctx.DebugScope is not { IsLibrary: true }) return;
+        if (!_nonUserCodeMethods.Add(ctx.CurrentMethod!)) return;
+
+        var attribute = new CustomAttributeBuilder(
+            typeof(System.Diagnostics.DebuggerNonUserCodeAttribute).GetConstructor(Type.EmptyTypes)!, []);
+
+        switch (ctx.CurrentMethod)
+        {
+            case MethodBuilder method: method.SetCustomAttribute(attribute); break;
+            case ConstructorBuilder constructor: constructor.SetCustomAttribute(attribute); break;
+        }
     }
 
     /// <summary>
@@ -80,21 +123,22 @@ public partial class ILCompiler
     /// module/namespace scope. Does NOT set IsModuleTopLevel — declarations in these bodies are
     /// locals, never module-level bindings.
     /// </summary>
-    private CompilationContext CreateModuleMemberContext(ILGenerator il)
+    private CompilationContext CreateModuleMemberContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyModuleMaps(ctx);
         ctx.CurrentModulePath = _modules.CurrentPath;
         ctx.CurrentNamespacePath = _currentNamespacePath;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 
     /// <summary>
     /// Creates the context that emits a module's (ESM or CommonJS) top-level statements.
     /// </summary>
-    private CompilationContext CreateModuleTopLevelContext(ILGenerator il)
+    private CompilationContext CreateModuleTopLevelContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyModuleMaps(ctx);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
@@ -108,6 +152,7 @@ public partial class ILCompiler
         // This context emits the module/script top-level statements, so var/let/const
         // declarations here are genuine module-level bindings (#562).
         ctx.IsModuleTopLevel = true;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 
@@ -117,9 +162,9 @@ public partial class ILCompiler
     /// IsModuleTopLevel (#562), but carries entry-point display-class construction state and
     /// class-expression lowering maps instead of per-module export tables.
     /// </summary>
-    private CompilationContext CreateEntryPointTopLevelContext(ILGenerator il)
+    private CompilationContext CreateEntryPointTopLevelContext(ILGenerator il, MethodBase? method = null)
     {
-        var ctx = CreateBaseCompilationContext(il);
+        var ctx = CreateBaseCompilationContext(il, method);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -138,6 +183,7 @@ public partial class ILCompiler
         ctx.EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor;
         // Top-level statements run here: var/let/const are module-level bindings (#562).
         ctx.IsModuleTopLevel = true;
+        AttachLocalSymbols(ctx);
         return ctx;
     }
 
@@ -146,7 +192,7 @@ public partial class ILCompiler
     /// state machine's context rather than from compiler state (the parent may itself be a
     /// state-machine context whose maps were already scoped).
     /// </summary>
-    private CompilationContext CreateNestedAsyncArrowContext(ILGenerator il, CompilationContext parentCtx)
+    private CompilationContext CreateNestedAsyncArrowContext(ILGenerator il, CompilationContext parentCtx, MethodBase? method = null)
     {
         return new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.NamespaceFields, parentCtx.NamespaceVarFields, parentCtx.Types)
         {
@@ -197,6 +243,8 @@ public partial class ILCompiler
             // Follow-up to #838: lets this nested async arrow's MoveNext populate a nested sync arrow's
             // $functionDC from this arrow's OWN DC (EmitCapturingArrowInAsyncArrow).
             ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
+            CurrentMethod = method,
+            DebugScope = parentCtx.DebugScope,
         };
     }
 

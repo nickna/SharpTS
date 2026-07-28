@@ -144,12 +144,12 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
         // Apply var hoisting to the top-level (module/script) statement list. Function bodies
         // and arrow function bodies are hoisted at their respective parse sites.
-        statements = VarHoister.Hoist(statements);
+        statements = VarHoister.Hoist(statements, _spans);
 
         // Lift generator function expressions to top-level function declarations so the
         // existing generator-declaration IL pipeline handles them. No-op when the module
         // contains no `function*() {...}` expressions.
-        statements = GeneratorArrowLifter.Lift(statements);
+        statements = GeneratorArrowLifter.Lift(statements, _spans);
 
         return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }
@@ -630,14 +630,16 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                 Advance();
                 return true;
 
+            // Splitting consumes the leading '>', so the remainder starts one character later.
+            // Carrying that offset forward keeps the rest of the token locatable in the source.
             case TokenType.GREATER_GREATER:
                 // Split >> into > (consumed) and > (remaining)
-                _tokens[_current] = new Token(TokenType.GREATER, ">", null, current.Line);
+                _tokens[_current] = new Token(TokenType.GREATER, ">", null, current.Line, Shift(current, 1));
                 return true;
 
             case TokenType.GREATER_GREATER_GREATER:
                 // Split >>> into > (consumed) and >> (remaining)
-                _tokens[_current] = new Token(TokenType.GREATER_GREATER, ">>", null, current.Line);
+                _tokens[_current] = new Token(TokenType.GREATER_GREATER, ">>", null, current.Line, Shift(current, 1));
                 return true;
 
             default:
@@ -654,4 +656,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         if (!MatchGreaterInTypeContext())
             throw new Exception(message);
     }
+
+    /// <summary>Offset <paramref name="characters"/> past a token's start, preserving "unset".</summary>
+    private static int Shift(Token token, int characters) =>
+        token.Start < 0 ? -1 : token.Start + characters;
 }

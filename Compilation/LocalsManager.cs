@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Compilation.Symbols;
 
 namespace SharpTS.Compilation;
 
@@ -33,6 +34,13 @@ public class LocalsManager(ILGenerator il)
     // Track which variables were declared in each scope for cleanup
     private readonly Stack<List<string>> _scopes = new([[]]);
 
+    /// <summary>
+    /// Receives declarations and scope boundaries for debug symbols. Null unless the build asked
+    /// for them. Every binding the user wrote is declared here; scratch slots go straight to the
+    /// <see cref="ILGenerator"/>, so listening here names user variables and nothing else.
+    /// </summary>
+    internal ILocalSymbolSink? SymbolSink { get; set; }
+
     public LocalBuilder DeclareLocal(string name, Type type) => DeclareLocal(name, type, tag: null);
 
     public LocalBuilder DeclareLocal(string name, Type type, object? tag)
@@ -51,6 +59,8 @@ public class LocalsManager(ILGenerator il)
 
         // Track that this name was declared in the current scope
         _scopes.Peek().Add(name);
+
+        SymbolSink?.LocalDeclared(name, local);
 
         return local;
     }
@@ -90,6 +100,8 @@ public class LocalsManager(ILGenerator il)
 
         if (_scopes.Count > 0)
             _scopes.Peek().Add(name);
+
+        SymbolSink?.LocalDeclared(name, local);
     }
 
     /// <summary>
@@ -157,10 +169,13 @@ public class LocalsManager(ILGenerator il)
     public void EnterScope()
     {
         _scopes.Push([]);
+        SymbolSink?.ScopeEntered();
     }
 
     public void ExitScope()
     {
+        SymbolSink?.ScopeExited();
+
         var scope = _scopes.Pop();
         foreach (var name in scope)
         {

@@ -205,13 +205,49 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Dispatches statement emission to the appropriate handler method.
+    /// Emits one statement, marking where it starts so a debugger can bind a breakpoint to it.
     /// </summary>
-    public virtual void EmitStatement(Stmt stmt)
+    /// <remarks>
+    /// This is the single dispatch point every backend shares. <see cref="ILEmitter"/> and the
+    /// state-machine emitters differ in how they lower a statement — they override
+    /// <see cref="EmitStatementCore"/> — but they all enter through here, which is what makes one
+    /// sequence-point hook cover ordinary IL, async, and generator bodies alike. Marking happens
+    /// after the dead-code check and before any IL is emitted, so the recorded offset is the first
+    /// instruction the statement actually produces.
+    /// </remarks>
+    public void EmitStatement(Stmt stmt)
     {
         if (IsDead(stmt))
             return;
 
+        MarkStatementStart(stmt);
+
+        EmitStatementCore(stmt);
+    }
+
+    /// <summary>
+    /// Records that <paramref name="stmt"/>'s code begins at the current IL offset, so a debugger
+    /// can bind a breakpoint on that line to this instruction.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EmitStatement"/> calls this for everything it dispatches. It is public because a
+    /// few top-level paths wrap a statement in extra IL — awaiting a top-level async call — and
+    /// drive expression emission themselves instead of going through the dispatcher; they mark the
+    /// statement here so those lines stay steppable.
+    /// </remarks>
+    public void MarkStatementStart(Stmt stmt)
+    {
+        // Both are set together, and only for bodies emitted with symbols; a context that emits no
+        // user-steppable code (definition phase, overload forwarding) simply has neither.
+        if (Ctx.DebugScope is { } debugScope && Ctx.CurrentMethod is { } currentMethod)
+            debugScope.MarkStatement(currentMethod, stmt, IL.ILOffset);
+    }
+
+    /// <summary>
+    /// Dispatches statement emission to the appropriate handler method.
+    /// </summary>
+    protected virtual void EmitStatementCore(Stmt stmt)
+    {
         // Spill temps never cross a statement boundary, so drop the live set here to keep
         // the per-suspension persist/rehydrate cost proportional to one statement (#400).
         _helpers.ClearLiveSpills();

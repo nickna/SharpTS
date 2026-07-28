@@ -138,6 +138,7 @@ public record GlobalOptions(
 /// <param name="QuietMode">Suppress success messages</param>
 /// <param name="References">Assembly references to add</param>
 /// <param name="Bundler">Bundler selection mode for EXE targets</param>
+/// <param name="EmitDebugSymbols">Emit a portable PDB beside the assembly (<c>--debug</c>/<c>-g</c>)</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -148,7 +149,8 @@ public record CompileOptions(
     bool QuietMode = false,
     IReadOnlyList<string>? References = null,
     BundlerMode Bundler = BundlerMode.Auto,
-    bool Standalone = false
+    bool Standalone = false,
+    bool EmitDebugSymbols = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -656,6 +658,7 @@ public class CommandLineParser
         bool preserveConstEnums = false;
         bool useReferenceAssemblies = false;
         bool verifyIL = false;
+        bool emitDebugSymbols = false;
         bool msbuildErrors = false;
         bool quietMode = false;
         bool standalone = false;
@@ -747,6 +750,10 @@ public class CommandLineParser
             {
                 verifyIL = true;
             }
+            else if (args[i] is "--debug" or "-g")
+            {
+                emitDebugSymbols = true;
+            }
             else if (args[i] == "--msbuild-errors")
             {
                 msbuildErrors = true;
@@ -821,7 +828,8 @@ public class CommandLineParser
             QuietMode: quietMode,
             References: globalOptions.References,
             Bundler: bundlerMode,
-            Standalone: standalone
+            Standalone: standalone,
+            EmitDebugSymbols: emitDebugSymbols
         );
 
         var packOptions = new PackOptions(

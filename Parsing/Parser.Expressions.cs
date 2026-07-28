@@ -44,7 +44,7 @@ public partial class Parser
             if (Match(TokenType.LEFT_BRACE))
             {
                 body = Block();
-                body = VarHoister.Hoist(body);
+                body = VarHoister.Hoist(body, _spans);
             }
             else
             {
@@ -930,7 +930,7 @@ public partial class Parser
                             ? "Expect '{' before getter body."
                             : "Expect '{' before setter body.");
                         List<Stmt> accessorBody = Block();
-                        accessorBody = VarHoister.Hoist(accessorBody);
+                        accessorBody = VarHoister.Hoist(accessorBody, _spans);
 
                         var accessorExpr = new Expr.ArrowFunction(
                             Name: null,
@@ -1204,7 +1204,7 @@ public partial class Parser
         List<Stmt> body = Block();
 
         body = PrependDestructuringPrologue(destructuredParams, body);
-        body = VarHoister.Hoist(body);
+        body = VarHoister.Hoist(body, _spans);
 
         return new Expr.ArrowFunction(
             Name: null,
@@ -1437,7 +1437,7 @@ public partial class Parser
         }
 
         if (body != null)
-            body = VarHoister.Hoist(body);
+            body = VarHoister.Hoist(body, _spans);
 
         return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync, ReturnTypeNode: returnTypeNode);
     }
@@ -1568,7 +1568,7 @@ public partial class Parser
         // Prepend destructuring statements for patterned parameters
         body = PrependDestructuringPrologue(destructuredParams, body);
 
-        body = VarHoister.Hoist(body);
+        body = VarHoister.Hoist(body, _spans);
 
         // Return as ArrowFunction with block body (HasOwnThis=true for function expressions)
         return new Expr.ArrowFunction(

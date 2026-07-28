@@ -4,6 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using PEPacker;
+using SharpTS.Compilation.Symbols;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Compilation.Registries;
@@ -206,6 +207,132 @@ public partial class ILCompiler
     // Output target type (DLL or EXE)
     private readonly OutputTarget _outputTarget;
 
+    // Simple name of the emitted assembly, used to derive a default PDB file name.
+    private readonly string _assemblyName;
+
+    /// <summary>
+    /// When set, <see cref="SaveArtifacts"/> and <see cref="Save(string)"/> also produce a portable
+    /// PDB describing the emitted IL, and stamp a matching debug directory into the assembly.
+    /// Off by default: non-debug builds pay none of the PDB cost.
+    /// </summary>
+    public bool EmitDebugSymbols { get; set; }
+
+    // Source documents and sequence points gathered while emitting, when EmitDebugSymbols is set.
+    private readonly DebugInfoCollector _debugInfo = new();
+
+    // Symbol scopes, by the same normalized module path emission already tracks, plus the scope for
+    // a single-file compile (which has no module path). Null unless EmitDebugSymbols is set, which
+    // is what makes symbol emission free otherwise.
+    private Dictionary<string, DebugEmitScope>? _debugScopesByModule;
+    private DebugEmitScope? _entryPointDebugScope;
+
+    // Methods already marked non-user code; a body can be handed several emission contexts and the
+    // attribute must not be applied twice.
+    private readonly HashSet<MethodBase> _nonUserCodeMethods = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The document whose statements are being emitted right now.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from <c>_modules.CurrentPath</c>, which every emission phase already sets and clears
+    /// around each module, rather than from a parallel "current document" that each phase would have
+    /// to remember to maintain. Falls back to the entry-point scope, which is what a single-file
+    /// compile uses.
+    /// </remarks>
+    private DebugEmitScope? CurrentDebugScope
+    {
+        get
+        {
+            if (_modules.CurrentPath is { } path
+                && _debugScopesByModule?.TryGetValue(path, out var scope) == true)
+            {
+                return scope;
+            }
+            return _entryPointDebugScope;
+        }
+    }
+
+    /// <summary>
+    /// Sink for source documents and sequence points. Emitters record into it only while
+    /// <see cref="EmitDebugSymbols"/> is set; otherwise it stays empty and costs nothing.
+    /// </summary>
+    internal DebugInfoCollector DebugInfo => _debugInfo;
+
+    /// <summary>
+    /// Declares which source file the statements emitted from now on came from.
+    /// </summary>
+    /// <remarks>
+    /// Compilation proceeds one module at a time, so the document is ambient rather than carried on
+    /// every statement — a per-node map would cost every build to serve only debug ones. Callers
+    /// that compile several modules set this before emitting each. Passing null (or building
+    /// without <see cref="EmitDebugSymbols"/>) means the code that follows gets no sequence points,
+    /// which is the right outcome for generated code with no source of its own.
+    /// </remarks>
+    public void SetSourceDocument(SourceDocument? document)
+    {
+        _entryPointDebugScope = CreateDebugScope(document);
+    }
+
+    /// <summary>
+    /// Indexes each module's source document by the path emission uses, so every body compiled for
+    /// that module resolves to the right file without each phase tracking it.
+    /// </summary>
+    private void RegisterModuleDocuments(List<ParsedModule> modules)
+    {
+        if (!EmitDebugSymbols) return;
+
+        _debugScopesByModule = [];
+        DebugEmitScope? entryScope = null;
+
+        foreach (var module in modules)
+        {
+            if (CreateDebugScope(module.Document) is not { } scope) continue;
+
+            // Phases are not consistent about whether CurrentPath is normalized, so index both
+            // spellings rather than depending on which one a given phase happens to use.
+            _debugScopesByModule[NormalizeToEmissionPath(module.Path)] = scope;
+            _debugScopesByModule[module.Path] = scope;
+            entryScope = scope;
+        }
+
+        // Modules arrive in dependency order, so the last is the entry module. Its statements are
+        // what the entry point emits, and that emission runs with no module path set.
+        _entryPointDebugScope = entryScope;
+    }
+
+    /// <summary>
+    /// Marks the assembly as debuggable with optimizations disabled, so the JIT keeps the emitted
+    /// IL's shape and a debugger sees the locals and stepping order the PDB describes.
+    /// </summary>
+    /// <remarks>
+    /// Applied only when symbols are requested. Without it the JIT is free to reorder and elide,
+    /// and breakpoints bind to instructions that no longer correspond to the recorded offsets.
+    /// </remarks>
+    private void ApplyDebuggableAttribute()
+    {
+        var constructor = typeof(System.Diagnostics.DebuggableAttribute)
+            .GetConstructor([typeof(System.Diagnostics.DebuggableAttribute.DebuggingModes)])!;
+
+        _assemblyBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+            constructor,
+            [System.Diagnostics.DebuggableAttribute.DebuggingModes.Default
+                | System.Diagnostics.DebuggableAttribute.DebuggingModes.DisableOptimizations]));
+    }
+
+    private DebugEmitScope? CreateDebugScope(SourceDocument? document)
+    {
+        if (!EmitDebugSymbols || document is null) return null;
+
+        return new DebugEmitScope(
+            _debugInfo,
+            // Embedded stdlib and other virtual documents have no file a debugger could open, so
+            // their text travels inside the PDB instead of being referenced by path.
+            _debugInfo.AddDocument(document.Path, document.Text, embedSource: document.IsVirtual),
+            document.Spans,
+            document.Lines,
+            isLibrary: document.IsVirtual);
+    }
+
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
     /// </summary>
@@ -288,6 +415,7 @@ public partial class ILCompiler
         _sdkPath = sdkPath;
         _outputTarget = target;
         _inMemoryOnly = inMemoryOnly;
+        _assemblyName = assemblyName;
 
         // Initialize reference loader if external assemblies are provided
         if (references != null && references.Count > 0)
@@ -412,7 +540,7 @@ public partial class ILCompiler
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to the module top level so the mature top-level state-machine pipeline can lower them
         // (#470, #501). Compile-path only — the interpreter handles nested declarations natively.
-        statements = NestedFunctionLifter.Lift(statements);
+        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
 
         // Walk the AST to determine which runtime feature categories the program
         // actually needs, so Phase 1 can skip emitting unused helper types.
@@ -938,13 +1066,15 @@ public partial class ILCompiler
         // Entry module is last in dependency order (mirrors Interpreter.EntryModulePath).
         _entryModulePath = modules.Count > 0 ? Path.GetFullPath(modules[^1].Path) : null;
 
+        RegisterModuleDocuments(modules);
+
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to each module's top level (#470, #501). Compile-path only. The Statements property is
         // read-only but the underlying list is shared by reference across all phases, so mutate it
         // in place.
         foreach (var m in modules)
         {
-            var lifted = NestedFunctionLifter.Lift(m.Statements);
+            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans);
             if (!ReferenceEquals(lifted, m.Statements))
             {
                 m.Statements.Clear();
@@ -1309,14 +1439,34 @@ public partial class ILCompiler
         return _assemblyBuilder;
     }
 
-    public byte[] SaveToBytes()
+    /// <summary>
+    /// Serializes the assembly, returning it together with debug symbols when
+    /// <see cref="EmitDebugSymbols"/> is set.
+    /// </summary>
+    /// <param name="pdbPath">
+    /// Path to record in the assembly's CodeView entry so debuggers can locate the PDB. Defaults to
+    /// <c>&lt;assembly name&gt;.pdb</c>, which resolves next to the assembly.
+    /// </param>
+    /// <remarks>
+    /// Symbols are attached after assembly-reference rewriting, not before: the rewriter rebuilds
+    /// the PE without a debug directory. The PDB is therefore serialized against the row counts of
+    /// the finished image, and the rewriter's row-for-row preservation of <c>MethodDef</c> is
+    /// verified rather than assumed. See <see cref="Symbols.DebugDirectoryInjector"/>.
+    /// </remarks>
+    public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
     {
         if (_inMemoryOnly)
             throw new InvalidOperationException(
-                "SaveToBytes() is unavailable in inMemoryOnly mode. Use GetEmittedAssembly() to access " +
+                "SaveToBytes()/SaveArtifacts() are unavailable in inMemoryOnly mode. Use GetEmittedAssembly() to access " +
                 "the live dynamic assembly directly, or construct ILCompiler without inMemoryOnly=true.");
 
-        MetadataBuilder metadataBuilder = ((PersistedAssemblyBuilder)_assemblyBuilder).GenerateMetadata(
+        if (EmitDebugSymbols)
+            ApplyDebuggableAttribute();
+
+        // The PDB tables are built from _debugInfo rather than from GenerateMetadata's own pdb
+        // builder — see DebugInfoCollector for why that overload cannot be used here.
+        var persisted = (PersistedAssemblyBuilder)_assemblyBuilder;
+        MetadataBuilder metadataBuilder = persisted.GenerateMetadata(
             out BlobBuilder ilStream,
             out BlobBuilder fieldData);
 
@@ -1345,27 +1495,81 @@ public partial class ILCompiler
         var hasSharpTsReference = HasAssemblyReference(tempStream, "SharpTS");
         tempStream.Position = 0;
 
-        if (_useReferenceAssemblies || hasSharpTsReference)
+        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference;
+
+        // Kept only to verify the rewriter preserved MethodDef identity, so it is not materialized
+        // for builds that will not emit symbols.
+        byte[]? beforeRewrite = EmitDebugSymbols && rewritingReferences ? tempStream.ToArray() : null;
+
+        byte[] image;
+        if (rewritingReferences)
         {
             var refAssemblyPath = _sdkPath ?? SdkResolver.FindReferenceAssembliesPath()
                 ?? throw new CompileException(
                     "Could not find SDK reference assemblies for post-processing. " +
                     "Ensure the .NET SDK is installed.");
 
+            tempStream.Position = 0;
             using var rewriter = new AssemblyReferenceRewriter(tempStream, refAssemblyPath);
             rewriter.Rewrite();
 
             using var outMem = new MemoryStream();
             rewriter.Save(outMem);
-            return outMem.ToArray();
+            image = outMem.ToArray();
         }
-        return tempStream.ToArray();
+        else
+        {
+            image = tempStream.ToArray();
+        }
+
+        if (!EmitDebugSymbols)
+            return new CompilationArtifacts(image, null, null);
+
+        // The rewriter rebuilds the PE from scratch; prove it kept MethodDef identities before
+        // describing the result with symbols derived from the pre-rewrite emit.
+        if (beforeRewrite is not null)
+            PdbEmitter.VerifyMethodMappingPreserved(beforeRewrite, image);
+
+        pdbPath ??= _assemblyName + ".pdb";
+        var pdbMetadata = _debugInfo.BuildPdbMetadata(
+            metadataBuilder.GetRowCounts()[(int)TableIndex.MethodDef],
+            PdbEmitter.ReadLocalSignatureRids(image),
+            PdbEmitter.ReadMethodIlSizes(image));
+        var pdb = PdbEmitter.Serialize(
+            pdbMetadata,
+            PdbEmitter.ReadTypeSystemRowCounts(image),
+            entryPointHandle);
+
+        image = DebugDirectoryInjector.Inject(
+            image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
+
+        return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
 
-    public void Save(string outputPath)
+    public byte[] SaveToBytes() => SaveArtifacts().Assembly;
+
+    public void Save(string outputPath) => Save(outputPath, pdbPath: null);
+
+    /// <summary>
+    /// Writes the assembly to <paramref name="outputPath"/>, plus a portable PDB when
+    /// <see cref="EmitDebugSymbols"/> is set.
+    /// </summary>
+    /// <param name="pdbPath">
+    /// Where to write the PDB, and the path recorded in the assembly's CodeView entry. Defaults to
+    /// <paramref name="outputPath"/> with a <c>.pdb</c> extension. EXE builds pass the final
+    /// executable's location explicitly, because the assembly itself is emitted to a temporary
+    /// file before being bundled.
+    /// </param>
+    public void Save(string outputPath, string? pdbPath)
     {
-        var bytes = SaveToBytes();
-        File.WriteAllBytes(outputPath, bytes);
+        if (EmitDebugSymbols)
+            pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
+
+        var artifacts = SaveArtifacts(pdbPath);
+
+        File.WriteAllBytes(outputPath, artifacts.Assembly);
+        if (artifacts.Pdb is not null)
+            File.WriteAllBytes(pdbPath!, artifacts.Pdb);
     }
 
     private static bool HasAssemblyReference(Stream assemblyStream, string assemblyName)

@@ -345,7 +345,7 @@ public partial class ILCompiler
         // (state machines, class methods) gets it uniformly, not just this plain-function path.
         Dictionary<string, FieldBuilder>? topLevelVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
 
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FunctionOverloads = _functions.Overloads;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         // CJS/ESM resolution — needed so require('./literal') and module.exports/exports
@@ -950,7 +950,7 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
-        var ctx = CreateEntryPointTopLevelContext(il);
+        var ctx = CreateEntryPointTopLevelContext(il, mainMethod);
         ctx.PropertyTypes = _typedInterop.PropertyTypes;
         // Program type for GetMethodFromHandle resolution
         ctx.ProgramType = _programType;
@@ -1079,7 +1079,7 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
-        var ctx = CreateEntryPointTopLevelContext(il);
+        var ctx = CreateEntryPointTopLevelContext(il, mainMethod);
 
         // Create entry-point display class instance if there are captured top-level variables
         if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)

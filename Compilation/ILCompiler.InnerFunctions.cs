@@ -443,7 +443,7 @@ public partial class ILCompiler
             // Get resolved parameter types for this inner function
             _innerFunctionParamTypes.TryGetValue(func, out var innerParamTypes);
 
-            var ctx = CreateModuleMemberContext(il);
+            var ctx = CreateModuleMemberContext(il, ((MethodBuilder)method));
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
             ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;

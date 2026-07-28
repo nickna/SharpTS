@@ -1304,7 +1304,7 @@ public partial class ILCompiler
         _closures.ArrowReturnTypes.TryGetValue(arrow, out var arrowReturnType);
         arrowReturnType ??= _types.Object;
 
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, method);
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         // A function expression / arrow with its own "use strict" prologue is
         // strict even when the enclosing code is sloppy. Detect it here (not

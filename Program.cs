@@ -20,6 +20,7 @@
 //   --sdk-path <path>                    - Explicit path to .NET SDK reference assemblies
 //   --preserveConstEnums                 - Preserve const enum declarations
 //   --verify                             - Verify emitted IL using Microsoft.ILVerification
+//   -g, --debug                          - Emit a portable PDB alongside the assembly
 //
 // Decorator flags:
 //   --experimentalDecorators             - Enable Legacy (Stage 2) decorators
@@ -158,7 +159,7 @@ switch (command)
             PrintResolvedConfig(compileOptions, compile.GlobalOptions.Strictness, compileConfig);
             return;
         }
-        var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode, compile.CompileOptions.Standalone);
+        var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode, compile.CompileOptions.Standalone, compile.CompileOptions.EmitDebugSymbols);
         CompileFile(
             compile.InputFile,
             compile.OutputFile,
@@ -718,9 +719,12 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             // Compile to DLL format (will be bundled into EXE)
             ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
             compiler.SetDecoratorMode(decoratorMode);
+            compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
             compileBody(compiler);
             PrintCompilerWarnings(compiler);
-            compiler.Save(tempDllPath);
+            // Symbols belong beside the final executable, not beside the temporary DLL that gets
+            // bundled into it.
+            compiler.Save(tempDllPath, outputOptions.EmitDebugSymbols ? Path.ChangeExtension(outputPath, ".pdb") : null);
 
             // Run IL verification on the DLL if requested
             if (verifyIL)
@@ -763,6 +767,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         // Standard DLL output
         ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
         compiler.SetDecoratorMode(decoratorMode);
+        compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
         compiler.Save(outputPath);
@@ -1276,6 +1281,7 @@ static void PrintHelp()
     Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
     Console.WriteLine("  --sdk-path <path>             Path to .NET SDK reference assemblies");
     Console.WriteLine("  --verify                      Verify emitted IL");
+    Console.WriteLine("  -g, --debug                   Emit a portable PDB for TypeScript-source debugging");
     Console.WriteLine("  --msbuild-errors              Output errors in MSBuild format");
     Console.WriteLine("  --quiet                       Suppress success messages");
     Console.WriteLine();
@@ -1319,6 +1325,7 @@ static void PrintCompileUsage()
     Console.WriteLine("  --ref-asm              Emit reference-assembly-compatible output");
     Console.WriteLine("  --sdk-path <path>      Path to .NET SDK reference assemblies");
     Console.WriteLine("  --verify               Verify emitted IL");
+    Console.WriteLine("  -g, --debug            Emit a portable PDB for TypeScript-source debugging");
     Console.WriteLine("  --msbuild-errors       Output errors in MSBuild format");
     Console.WriteLine("  --quiet                Suppress success messages");
     Console.WriteLine("  --pack                 Generate NuGet package");
@@ -1328,4 +1335,4 @@ static void PrintCompileUsage()
     Console.WriteLine("  --version <ver>        Override package version");
 }
 
-record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false);
+record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false);

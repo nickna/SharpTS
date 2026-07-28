@@ -73,6 +73,9 @@ internal sealed class NestedFunctionLifter
     private readonly List<Stmt.Function> _lifted = new();
     private int _counter;
 
+    // Source positions of the AST being rewritten, when the caller is tracking them.
+    private SharpTS.Parsing.SpanTable? _spans;
+
     private NestedFunctionLifter(
         ClosureAnalyzer analyzer,
         HashSet<Stmt.Function> safeCandidates,
@@ -90,7 +93,12 @@ internal sealed class NestedFunctionLifter
     /// the top level. Returns the input list unchanged (by reference) when nothing needs lifting,
     /// so untouched programs pay only a cheap structural pre-scan.
     /// </summary>
-    public static List<Stmt> Lift(List<Stmt> module)
+    /// <param name="spans">
+    /// When supplied, statements rebuilt around a relocated declaration inherit the position of the
+    /// statements they replace, and the <c>var</c> aliases left behind are marked
+    /// compiler-generated.
+    /// </param>
+    public static List<Stmt> Lift(List<Stmt> module, SharpTS.Parsing.SpanTable? spans = null)
     {
         // Cheap structural pre-scan: collect declarations whose SHAPE qualifies (case A/B, or a
         // declaration inside a module-level block/loop), without running closure analysis. The
@@ -173,7 +181,7 @@ internal sealed class NestedFunctionLifter
         }
         if (safe.Count == 0 && lambdaForwards.Count == 0) return module;
 
-        var lifter = new NestedFunctionLifter(analyzer, safe, lambdaForwards, hoistedForwards);
+        var lifter = new NestedFunctionLifter(analyzer, safe, lambdaForwards, hoistedForwards) { _spans = spans };
         var rewritten = lifter.ProcessTopLevel(module);
         if (lifter._lifted.Count == 0) return module;
 
@@ -609,8 +617,12 @@ internal sealed class NestedFunctionLifter
     }
 
     /// <summary>Builds <c>var &lt;original&gt; = &lt;fresh&gt;;</c>.</summary>
-    private static Stmt MakeAlias(Token original, Token fresh)
-        => new Stmt.Var(original, TypeAnnotation: null, Initializer: new Expr.Variable(fresh), IsVar: true);
+    private Stmt MakeAlias(Token original, Token fresh)
+    {
+        var alias = new Stmt.Var(original, TypeAnnotation: null, Initializer: new Expr.Variable(fresh), IsVar: true);
+        _spans?.MarkHidden(alias);
+        return alias;
+    }
 
     /// <summary>
     /// Lambda-lifts a capturing declaration: relocates it to a top-level declaration whose leading
@@ -686,7 +698,22 @@ internal sealed class NestedFunctionLifter
         return new Stmt.Var(f.Name, TypeAnnotation: null, Initializer: arrow, IsVar: hoisted);
     }
 
+    /// <summary>
+    /// Rewrites a statement, carrying its source position onto whatever replaces it.
+    /// </summary>
+    /// <remarks>
+    /// Relocating a nested function rebuilds every statement enclosing it. Those rebuilt statements
+    /// are still the user's code, so provenance is copied at this single point rather than at each
+    /// production below.
+    /// </remarks>
     private Stmt ProcessStmt(Stmt stmt, bool enclosingIsStateMachine, bool enclosingIsAsyncFunction, bool enclosingIsGeneratorClassMethod)
+    {
+        Stmt rewritten = ProcessStmtCore(stmt, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
+        _spans?.CopySpan(stmt, rewritten);
+        return rewritten;
+    }
+
+    private Stmt ProcessStmtCore(Stmt stmt, bool enclosingIsStateMachine, bool enclosingIsAsyncFunction, bool enclosingIsGeneratorClassMethod)
     {
         switch (stmt)
         {

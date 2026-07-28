@@ -381,7 +381,7 @@ public partial class ILCompiler
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         // Check for function-level "use strict" directive
         ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body);
         // Captured outer variables are read live (by reference) rather than snapshotted (#541).
@@ -448,7 +448,7 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);

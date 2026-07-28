@@ -2,7 +2,25 @@ namespace SharpTS.Parsing;
 
 public partial class Parser
 {
+    /// <summary>
+    /// Parses one declaration or statement, recording its source extent.
+    /// </summary>
+    /// <remarks>
+    /// Span capture lives here and in <see cref="Statement"/> rather than at each of the hundred-odd
+    /// productions below: every declaration in the language funnels through this method, so wrapping
+    /// it covers them all and cannot drift as productions are added. <see cref="SpanTable.Record"/>
+    /// keeps the first span written for a node, so a statement that reaches here by falling through
+    /// to <see cref="Statement"/> keeps the tighter extent that method recorded.
+    /// </remarks>
     private Stmt Declaration()
+    {
+        int first = _current;
+        Stmt declaration = DeclarationCore();
+        RecordSpanFrom(declaration, first);
+        return declaration;
+    }
+
+    private Stmt DeclarationCore()
     {
         // Module declarations - must be at top level
         // Note: import followed by ( is dynamic import, and import followed by . is import.meta —

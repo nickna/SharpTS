@@ -16,8 +16,13 @@ export class CompileCommands {
 
     /**
      * Compile current file to .dll
+     *
+     * @param extraArgs Additional compiler flags, e.g. `-g` to emit debug symbols beside the
+     *                  assembly. The output stays next to the source either way, which is where
+     *                  the runtimeconfig, co-located dependencies, and imported modules resolve
+     *                  from — and avoids accumulating build output in a temporary directory.
      */
-    async compile(): Promise<string | undefined> {
+    async compile(extraArgs: string[] = []): Promise<string | undefined> {
         const file = this.getActiveTypeScriptFile();
         if (!file) return undefined;
 
@@ -28,7 +33,7 @@ export class CompileCommands {
         const outputPath = file.replace(/\.ts$/, '.dll');
 
         try {
-            await this.runSharpTS(['--compile', file, '-o', outputPath]);
+            await this.runSharpTS(['--compile', file, '-o', outputPath, ...extraArgs]);
             this.outputChannel.appendLine(`[Compile] Success: ${outputPath}`);
             return outputPath;
         } catch (err) {

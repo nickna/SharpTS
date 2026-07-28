@@ -63,7 +63,7 @@ public partial class ILCompiler
         );
 
         var il = cctor.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, cctor);
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
         ctx.CurrentClassName = qualifiedClassName; // Required for static member access via 'this'
@@ -331,7 +331,7 @@ public partial class ILCompiler
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
         ApplyLockDecoratorFields(ctx);
@@ -531,7 +531,7 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         // Static method: IsInstanceMethod stays false (the default).
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;

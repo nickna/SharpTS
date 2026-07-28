@@ -709,7 +709,7 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
-            var ctx = CreateModuleMemberContext(il);
+            var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
@@ -798,7 +798,7 @@ public partial class ILCompiler
         );
 
         // Create a new context for arrow MoveNext emission
-        var ctx = CreateNestedAsyncArrowContext(il, parentCtx);
+        var ctx = CreateNestedAsyncArrowContext(il, parentCtx, arrowBuilder.MoveNextMethod);
 
         // Create arrow-specific emitter
         var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
@@ -1039,7 +1039,7 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il);
+        var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders;
@@ -1228,7 +1228,7 @@ public partial class ILCompiler
             }
 
             // Create context for MoveNext emission
-            var ctx = CreateModuleMemberContext(il);
+            var ctx = CreateModuleMemberContext(il, arrowBuilder.MoveNextMethod);
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
