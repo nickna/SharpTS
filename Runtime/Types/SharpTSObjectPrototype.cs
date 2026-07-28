@@ -206,6 +206,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSFunction function => function.IsPropertyEnumerable(key),
             SharpTSArrowFunction arrow => arrow.IsPropertyEnumerable(key),
+            SharpTSArray array => array.IsPropertyEnumerable(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             _ => false,
         };

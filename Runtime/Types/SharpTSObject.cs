@@ -20,6 +20,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
+    private HashSet<string>? _accessorProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
 
     /// <inheritdoc />
@@ -53,6 +54,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// (hasOwnProperty, …), a null-prototype object does not.
     /// </summary>
     public bool IsNullPrototype { get; set; }
+
+    /// <summary>
+    /// Internal descriptor records returned by Object.getOwnPropertyDescriptor
+    /// contain callable data values in their get/set fields. Reading those fields
+    /// must preserve the original callable identity rather than treating them as
+    /// object-literal methods and eagerly binding a receiver.
+    /// </summary>
+    internal bool PreserveCallableValueIdentity { get; init; }
 
     /// <summary>
     /// Freezes this object, preventing any property changes.
@@ -98,14 +107,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public IEnumerable<string> PropertyNames => _fields.Keys;
 
     /// <summary>
-    /// Names of accessor (getter-defined) properties on this object. Disjoint from
+    /// Names of accessor properties on this object. Disjoint from
     /// <see cref="Fields"/>.Keys because <see cref="DefineProperty"/> removes any
-    /// data-property entry when installing an accessor. Callers that need the full
-    /// own-property name set (re-exports from CJS modules whose named bindings are
-    /// Babel-style getters) must union this with <see cref="Fields"/>.Keys.
+    /// data-property entry when installing an accessor. The explicit name set
+    /// preserves setter-only and get/set-undefined accessors, which otherwise have
+    /// no concrete callable to act as their existence marker.
     /// </summary>
     public IEnumerable<string> AccessorPropertyNames =>
-        _getters?.Keys ?? Enumerable.Empty<string>();
+        _accessorProperties ?? Enumerable.Empty<string>();
 
     /// <inheritdoc />
     public object? GetProperty(string name)
@@ -153,14 +162,15 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        // Check for getter-only properties (has getter but no setter)
-        if (HasGetter(name) && !HasSetter(name))
+        // An accessor without a setter rejects assignment, including a
+        // get/set-undefined accessor whose existence is tracked separately.
+        if (IsAccessorProperty(name) && !HasSetter(name))
         {
             SloppyModeWarnings.Warn("write to getter-only", $"Assignment to getter-only property '{name}' ignored");
             return;
         }
 
-        bool exists = _fields.ContainsKey(name) || HasGetter(name);
+        bool exists = _fields.ContainsKey(name) || IsAccessorProperty(name);
         if (!IsExtensible && !exists)
         {
             // Non-extensible objects silently ignore new property additions
@@ -198,8 +208,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        // Check for getter-only properties (has getter but no setter)
-        if (HasGetter(name) && !HasSetter(name))
+        // An accessor without a setter rejects assignment, including a
+        // get/set-undefined accessor whose existence is tracked separately.
+        if (IsAccessorProperty(name) && !HasSetter(name))
         {
             if (strictMode)
             {
@@ -209,7 +220,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        bool exists = _fields.ContainsKey(name) || HasGetter(name);
+        bool exists = _fields.ContainsKey(name) || IsAccessorProperty(name);
         if (!IsExtensible && !exists)
         {
             if (strictMode)
@@ -287,6 +298,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         bool removed = _fields.Remove(name);
         if (_getters?.Remove(name) == true) removed = true;
         if (_setters?.Remove(name) == true) removed = true;
+        if (_accessorProperties?.Remove(name) == true) removed = true;
         if (removed) _descriptors?.Remove(name);
         return removed;
     }
@@ -294,7 +306,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public bool HasProperty(string name)
     {
         if (_fields.ContainsKey(name)) return true;
-        if (_getters?.ContainsKey(name) ?? false) return true;
+        if (IsAccessorProperty(name)) return true;
         // Treat __proto__ as a virtual own slot mirroring the Prototype
         // property — see GetProperty for the matching read.
         if (name == "__proto__" && Prototype != null) return true;
@@ -306,6 +318,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineGetter(string name, ISharpTSCallable getter)
     {
+        _accessorProperties ??= [];
+        _accessorProperties.Add(name);
         _getters ??= new Dictionary<string, ISharpTSCallable>();
         _getters[name] = getter;
     }
@@ -315,9 +329,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineSetter(string name, ISharpTSCallable setter)
     {
+        _accessorProperties ??= [];
+        _accessorProperties.Add(name);
         _setters ??= new Dictionary<string, ISharpTSCallable>();
         _setters[name] = setter;
     }
+
+    private bool IsAccessorProperty(string name)
+        => _accessorProperties?.Contains(name) ?? false;
 
     /// <summary>
     /// Checks if a property has a getter.
@@ -450,8 +469,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
         // Get existing descriptor flags if any
-        bool hasExisting = _fields.ContainsKey(name) || HasGetter(name) || HasSetter(name);
-        bool existingIsAccessor = HasGetter(name) || HasSetter(name);
+        bool hasExisting = _fields.ContainsKey(name) || IsAccessorProperty(name);
+        bool existingIsAccessor = IsAccessorProperty(name);
         bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
         bool descriptorIsData = descriptor.HasValue || descriptor.HasWritable;
         PropertyDescriptorFlags existingFlags = default;
@@ -533,6 +552,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             // Accessor property - remove any data property value
             _fields.Remove(name);
+            _accessorProperties ??= [];
+            _accessorProperties.Add(name);
 
             // Install a concrete getter/setter; clear it only when the descriptor
             // EXPLICITLY specifies the half as undefined (HasGet/HasSet with a null
@@ -549,6 +570,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         else
         {
             // Data property - remove any accessor
+            _accessorProperties?.Remove(name);
             _getters?.Remove(name);
             _setters?.Remove(name);
 
@@ -598,10 +620,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
     {
         bool hasDataProperty = _fields.TryGetValue(name, out var fieldValue);
-        bool hasGetter = HasGetter(name);
-        bool hasSetter = HasSetter(name);
+        bool isAccessor = IsAccessorProperty(name);
 
-        if (!hasDataProperty && !hasGetter && !hasSetter)
+        if (!hasDataProperty && !isAccessor)
         {
             return null;
         }
@@ -613,13 +634,15 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             flags = PropertyDescriptorFlags.Default;
         }
 
-        if (hasGetter || hasSetter)
+        if (isAccessor)
         {
             // Accessor property
             return new SharpTSPropertyDescriptor
             {
                 Get = GetGetter(name),
                 Set = GetSetter(name),
+                HasGet = true,
+                HasSet = true,
                 Enumerable = flags.Enumerable,
                 Configurable = flags.Configurable
             };
@@ -671,17 +694,17 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal static bool IsInternalSlot(string key) => key is "__primitiveType" or "__primitiveValue";
 
     /// <summary>
-    /// Own enumerable string-keyed data property names, in insertion order: the
-    /// data fields minus the boxed-primitive internal slots, honoring per-property
-    /// enumerability (a <c>defineProperty</c> <c>enumerable:false</c> field, and a
-    /// String exotic's non-enumerable <c>length</c>). Shared by Object.keys/values/
-    /// entries and for-in so internal slots no longer leak and enumerability is
-    /// respected (#475), matching compiled <c>$Runtime.GetKeys</c>.
+    /// Own enumerable string-keyed property names: data fields first, followed by
+    /// accessor properties, honoring per-property enumerability.
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
         foreach (var key in _fields.Keys)
             if (!IsInternalSlot(key) && GetPropertyFlags(key).Enumerable)
+                yield return key;
+        if (_accessorProperties == null) yield break;
+        foreach (var key in _accessorProperties)
+            if (GetPropertyFlags(key).Enumerable)
                 yield return key;
     }
 

@@ -1160,7 +1160,8 @@ public partial class Interpreter
         if (simpleObj.HasProperty(memberName))
         {
             var value = simpleObj.GetProperty(memberName);
-            if (TryBindReceiverForMethodAccess(value, simpleObj) is { } boundMethod)
+            if (!simpleObj.PreserveCallableValueIdentity
+                && TryBindReceiverForMethodAccess(value, simpleObj) is { } boundMethod)
                 return RuntimeValue.FromObject(boundMethod);
             return RuntimeValue.FromBoxed(value);
         }

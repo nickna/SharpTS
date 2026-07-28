@@ -63,18 +63,23 @@ public static partial class ObjectBuiltIns
     ///   callables have none.
     /// Throws for non-object receivers; <paramref name="apiName"/> qualifies the message.
     /// </summary>
-    private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(object? arg, string apiName)
+    private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(
+        Interpreter interpreter, object? arg, string apiName)
     {
         switch (arg)
         {
             case SharpTSObject obj:
                 foreach (var k in obj.OwnEnumerableKeys())
-                    yield return new(k, obj.Fields[k]);
+                    yield return new(k, interpreter.GetProperty(obj, k));
                 yield break;
             case SharpTSArray arr:
-                for (int i = 0; i < arr.Length; i++)
-                    if (arr.HasIndex(i))
-                        yield return new(i.ToString(), arr[i]);
+                foreach (var key in arr.OwnEnumerableKeys())
+                {
+                    object? value = uint.TryParse(key, out uint index)
+                        ? interpreter.GetProperty(arr, key)
+                        : arr.GetNamedProperty(key);
+                    yield return new(key, value);
+                }
                 yield break;
             case SharpTSInstance inst:
                 foreach (var n in inst.GetFieldNames())
@@ -111,23 +116,23 @@ public static partial class ObjectBuiltIns
         }
     }
 
-    private static RuntimeValue KeysV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue KeysV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var keys = EnumerateOwnEnumerable(args[0].ToObject(), "Object.keys()")
+        var keys = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.keys()")
             .Select(kv => (object?)kv.Key).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(keys));
     }
 
-    private static RuntimeValue ValuesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ValuesV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var values = EnumerateOwnEnumerable(args[0].ToObject(), "Object.values()")
+        var values = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.values()")
             .Select(kv => kv.Value).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(values));
     }
 
-    private static RuntimeValue EntriesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue EntriesV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var entries = EnumerateOwnEnumerable(args[0].ToObject(), "Object.entries()")
+        var entries = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.entries()")
             .Select(kv => (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(entries));
     }

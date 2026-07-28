@@ -895,6 +895,33 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     }
 
     /// <summary>
+    /// Enumerates this array's own enumerable string keys, honoring explicit
+    /// descriptors on both indexed and named properties.
+    /// </summary>
+    public IEnumerable<string> OwnEnumerableKeys()
+    {
+        long limit = Math.Min(_length, int.MaxValue);
+        for (long index = 0; index < limit; index++)
+        {
+            if (!HasIndex(index)) continue;
+            string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
+                yield return key;
+        }
+
+        if (_namedProperties == null) yield break;
+        foreach (var key in _namedProperties.Keys)
+        {
+            if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
+                yield return key;
+        }
+    }
+
+    public bool IsPropertyEnumerable(string name)
+        => HasOwnProperty(name)
+            && (_descriptors?.TryGetValue(name, out var flags) != true || flags.Enumerable);
+
+    /// <summary>
     /// Sets a named property value on the array.
     /// </summary>
     public void SetNamedProperty(string name, object? value)
@@ -950,44 +977,110 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (uint.TryParse(name, out uint uindex) && uindex < uint.MaxValue)
         {
             long index = uindex;
-            // Extend if needed (respect sealed)
-            if (index >= _length)
+            bool hasExisting = HasIndex(index);
+            bool existingIsAccessor = TryGetIndexAccessor(index, out var existingGetter, out var existingSetter);
+            bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
+            bool descriptorIsData = descriptor.HasValue || descriptor.HasWritable;
+
+            PropertyDescriptorFlags existingFlags = PropertyDescriptorFlags.Default;
+            if (hasExisting && _descriptors?.TryGetValue(name, out existingFlags) != true)
+                existingFlags = PropertyDescriptorFlags.Default;
+
+            // ValidateAndApplyPropertyDescriptor (§10.1.6.3): a
+            // non-configurable index cannot become configurable, change
+            // enumerability/kind, replace an accessor, or relax/change a
+            // non-writable data property.
+            if (hasExisting && existingFlags.HasExplicitDescriptor && !existingFlags.Configurable)
             {
-                if (IsSealed) return false;
-                SetCoreWithExtend(index,
-                    descriptor.HasValue ? descriptor.Value : ArrayHole.Instance);
-            }
-            else if (descriptor.HasValue)
-            {
-                SetCore(index, descriptor.Value);
+                if ((descriptor.HasConfigurable && descriptor.Configurable)
+                    || (descriptor.HasEnumerable
+                        && descriptor.Enumerable != existingFlags.Enumerable))
+                {
+                    return false;
+                }
+
+                if (existingIsAccessor)
+                {
+                    if (descriptorIsData
+                        || (descriptor.HasGet
+                            && !SameValue(descriptor.Get, existingGetter))
+                        || (descriptor.HasSet
+                            && !SameValue(descriptor.Set, existingSetter)))
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (descriptorIsAccessor)
+                        return false;
+                    if (!existingFlags.Writable
+                        && ((descriptor.HasWritable && descriptor.Writable)
+                            || (descriptor.HasValue
+                                && !SameValue(descriptor.Value, UnholeForRead(GetCore(index))))))
+                    {
+                        return false;
+                    }
+                }
             }
 
-            if (descriptor.HasGet || descriptor.HasSet)
+            if (!IsExtensible && !hasExisting)
+                return false;
+
+            // Omitted attributes preserve an existing property's values. They
+            // default to false only when this operation creates a new property
+            // or changes between data and accessor kinds.
+            bool preservesKind = hasExisting
+                && (!descriptorIsAccessor && !descriptorIsData
+                    || descriptorIsAccessor == existingIsAccessor);
+            bool writable = descriptor.HasWritable
+                ? descriptor.Writable
+                : preservesKind ? existingFlags.Writable : false;
+            bool enumerable = descriptor.HasEnumerable
+                ? descriptor.Enumerable
+                : hasExisting ? existingFlags.Enumerable : false;
+            bool configurable = descriptor.HasConfigurable
+                ? descriptor.Configurable
+                : hasExisting ? existingFlags.Configurable : false;
+
+            bool becomesAccessor = descriptorIsAccessor
+                || (!descriptorIsData && existingIsAccessor);
+
+            if (!hasExisting && index >= _length)
+            {
+                // Extending an array with an accessor still advances length, but
+                // the indexed data slot itself remains a hole.
+                SetCoreWithExtend(index, becomesAccessor
+                    ? ArrayHole.Instance
+                    : descriptor.HasValue ? descriptor.Value : SharpTSUndefined.Instance);
+            }
+
+            if (becomesAccessor)
             {
                 _indexAccessors ??= [];
-                _indexAccessors[uindex] = (descriptor.Get, descriptor.Set);
+                _indexAccessors[uindex] = (
+                    descriptor.HasGet ? descriptor.Get : existingIsAccessor ? existingGetter : null,
+                    descriptor.HasSet ? descriptor.Set : existingIsAccessor ? existingSetter : null);
                 // Accessors have no data value at the same index.
                 if (_sparse == null || index < _dense.Count)
                     _dense[(int)index] = ArrayHole.Instance;
                 else
                     _sparse.Remove(uindex);
             }
-            else if (descriptor.HasValue)
+            else
             {
                 _indexAccessors?.Remove(uindex);
-            }
-            else if (!HasIndex(index))
-            {
-                // A brand-new attribute-only data descriptor creates an own
-                // property whose value is undefined.
-                SetCore(index, SharpTSUndefined.Instance);
+                if (descriptor.HasValue)
+                    SetCore(index, descriptor.Value);
+                else if (!hasExisting || existingIsAccessor)
+                    SetCore(index, SharpTSUndefined.Instance);
             }
 
             _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
             _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-                descriptor.Writable,
-                descriptor.Enumerable,
-                descriptor.Configurable);
+                writable,
+                enumerable,
+                configurable);
             return true;
         }
 
@@ -1035,6 +1128,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 {
                     Get = getter,
                     Set = setter,
+                    HasGet = true,
+                    HasSet = true,
                     Enumerable = accessorFlags.Enumerable,
                     Configurable = accessorFlags.Configurable,
                 };
@@ -1073,6 +1168,23 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// ECMA-262 SameValue comparison used by descriptor validation.
+    /// </summary>
+    private static bool SameValue(object? left, object? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is double ld && right is double rd)
+        {
+            if (double.IsNaN(ld) && double.IsNaN(rd)) return true;
+            if (ld == 0 && rd == 0)
+                return BitConverter.DoubleToInt64Bits(ld)
+                    == BitConverter.DoubleToInt64Bits(rd);
+            return ld.Equals(rd);
+        }
+        return left?.Equals(right) == true;
     }
 
     public override string ToString()

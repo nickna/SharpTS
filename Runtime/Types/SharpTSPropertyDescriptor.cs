@@ -78,7 +78,10 @@ public class SharpTSPropertyDescriptor
     /// </summary>
     public SharpTSObject ToObject()
     {
-        var obj = new SharpTSObject(new Dictionary<string, object?>());
+        var obj = new SharpTSObject(new Dictionary<string, object?>())
+        {
+            PreserveCallableValueIdentity = true,
+        };
         bool isAccessor = HasGet || HasSet || Get != null || Set != null;
         if (isAccessor)
         {

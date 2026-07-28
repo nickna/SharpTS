@@ -153,6 +153,20 @@ public sealed class Issue1279ParityTests
     public void Array_index_descriptors_support_ordinary_properties_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-300-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-531-16.js")]
+    public void Arguments_index_accessors_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-463.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-481.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-498.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-516.js")]
+    public void Undefined_accessors_remain_own_properties_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();
