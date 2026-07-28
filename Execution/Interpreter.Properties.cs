@@ -444,18 +444,22 @@ public partial class Interpreter
         ex is not ThrowException && ex is not Diagnostics.Exceptions.SharpTSException;
 
     /// <summary>
-    /// Evaluates a <c>this</c> expression, returning the current instance.
+    /// Evaluates a <c>this</c> expression, returning the current binding.
     /// </summary>
     /// <param name="expr">The this expression AST node.</param>
-    /// <returns>The current class instance bound to <c>this</c>.</returns>
+    /// <returns>The current <c>this</c> value, or the global object for script code.</returns>
     /// <remarks>
-    /// The <c>this</c> keyword is bound in the environment when a method is called
-    /// on an instance.
+    /// Functions and methods install an explicit binding in their call
+    /// environment (including strict functions, which bind it to undefined).
+    /// Global script code has no environment entry, so it falls back to this
+    /// realm's global object per ECMA-262 Global Environment Records.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#this-at-runtime-in-classes">TypeScript this in Classes</seealso>
     private RuntimeValue EvaluateThis(Expr.This expr)
     {
-        return _environment.Get(expr.Keyword);
+        return _environment.TryGet("this", out var value)
+            ? value
+            : RuntimeValue.FromBoxed(GlobalThis);
     }
 
     /// <summary>
