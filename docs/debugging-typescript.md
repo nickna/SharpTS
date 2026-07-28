@@ -102,10 +102,15 @@ both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
 
 ## Manual smoke checklist
 
-Automating a real debugger session is not yet justified, so run this by hand when changing
-statement emission, the span model, or the symbol pipeline. The PDB-level assertions in
-`SharpTS.Tests/Compilation/DebugSymbolsTests.cs` cover the mechanics; this checks that a debugger
-agrees.
+`SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
+documents and checksums, sequence points and the lines they land on, named locals, lexical scope
+nesting, and a CodeView identity that still matches after the reference rewriter. What no automated
+test covers is a debugger actually stopping, so run this by hand when changing statement emission,
+the span model, or the symbol pipeline.
+
+Scripting `vsdbg` for this is not an option: it is licensed for use only with Visual Studio and
+VS Code, and enforces that with a handshake its own clients answer. Automating this would mean
+`netcoredbg`, which is separately installed; until that is set up, the check below is manual.
 
 Use a program with a function, a loop, a conditional, a `try`/`catch`, a class method, an `async`
 function, a generator, and an `import`.

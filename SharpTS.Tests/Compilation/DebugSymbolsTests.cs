@@ -331,6 +331,87 @@ public class DebugSymbolsTests
         Assert.Equal(expected, scopes);
     }
 
+    // ---------------------------------------------------------------- epic acceptance
+
+    /// <summary>
+    /// The epic's acceptance criterion, asserted together on one program rather than spread across
+    /// tests: two TypeScript documents with matching checksums, sequence points attributed to the
+    /// file each method was written in, named locals, lexical scopes, and a CodeView identity that
+    /// still matches after the reference rewriter has rebuilt the assembly.
+    /// </summary>
+    [Fact]
+    public void AMultiModuleDebugBuildCarriesCompleteSymbols()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"sharpts_multi_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string helperSource = """
+                export function twice(n: number): number {
+                  const doubled = n * 2;
+                  return doubled;
+                }
+                """;
+            string entrySource = """
+                import { twice } from "./helper";
+                function total(limit: number): number {
+                  let sum = 0;
+                  for (let i = 0; i < limit; i++) {
+                    sum = sum + twice(i);
+                  }
+                  return sum;
+                }
+                console.log(total(3));
+                """;
+
+            string helperPath = Path.Combine(directory, "helper.ts");
+            string entryPath = Path.Combine(directory, "main.ts");
+            File.WriteAllText(helperPath, helperSource);
+            File.WriteAllText(entryPath, entrySource);
+
+            var artifacts = CompileModules(entryPath, "main");
+            var pdb = ReadPdb(artifacts.Pdb!);
+
+            // ---- matching CodeView identity, after the real rewriter
+            AssertCodeViewMatchesPdb(artifacts.Assembly, artifacts.Pdb!, "main.pdb");
+            AssertLoadable(artifacts.Assembly);
+
+            // ---- two documents, each checksummed against what was actually compiled
+            var documents = pdb.Documents
+                .Select(pdb.GetDocument)
+                .ToDictionary(d => Path.GetFileName(pdb.GetString(d.Name)), d => pdb.GetBlobBytes(d.Hash));
+
+            Assert.Contains("helper.ts", documents.Keys);
+            Assert.Contains("main.ts", documents.Keys);
+            Assert.Equal(SHA256.HashData(File.ReadAllBytes(helperPath)), documents["helper.ts"]);
+            Assert.Equal(SHA256.HashData(File.ReadAllBytes(entryPath)), documents["main.ts"]);
+
+            // ---- sequence points, attributed to the file each method came from
+            var byMethod = SequencePointsByMethod(artifacts);
+
+            var helperMethod = Assert.Single(byMethod.Where(m => m.Key.Contains("twice", StringComparison.Ordinal)));
+            Assert.Equal("helper.ts", helperMethod.Value.Document);
+            Assert.Equal([2, 3], helperMethod.Value.Lines);
+
+            var entryMethod = Assert.Single(byMethod.Where(m => m.Key.Contains("total", StringComparison.Ordinal)));
+            Assert.Equal("main.ts", entryMethod.Value.Document);
+            Assert.Equal([3, 4, 5, 7], entryMethod.Value.Lines);
+
+            // ---- named locals, and lexical scopes that actually nest
+            var locals = AllLocals(artifacts);
+            var sum = Assert.Single(locals, local => local.Name == "sum");
+            var counter = Assert.Single(locals, local => local.Name == "i");
+            Assert.Contains(locals, local => local.Name == "doubled");
+
+            Assert.True(counter.ScopeStart > sum.ScopeStart && counter.ScopeLength < sum.ScopeLength,
+                "the loop binding should live in a scope nested inside the function body's");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
     // ---------------------------------------------------------------- just my code
 
     /// <summary>
@@ -352,20 +433,7 @@ public class DebugSymbolsTests
                 console.log(joined);
                 """);
 
-            var resolver = new ModuleResolver(entry);
-            var modules = resolver.GetRuntimeModulesInOrder(resolver.LoadProgram(entry));
-            var typeMap = new TypeChecker().CheckModules(resolver.GetModulesInOrder(modules), resolver);
-            var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
-
-            var compiler = new ILCompiler(
-                "app", preserveConstEnums: false, useReferenceAssemblies: true,
-                sdkPath: SdkResolver.FindReferenceAssembliesPath())
-            {
-                EmitDebugSymbols = true,
-            };
-            compiler.CompileModules(modules, resolver, typeMap, deadCode);
-
-            var nonUserCode = NonUserCodeMethods(compiler.SaveArtifacts("app.pdb").Assembly);
+            var nonUserCode = NonUserCodeMethods(CompileModules(entry, "app").Assembly);
 
             // The stdlib module SharpTS compiled in is skipped...
             Assert.Contains(nonUserCode, entry => entry.Method.Contains("path", StringComparison.Ordinal) && entry.IsNonUserCode);
@@ -604,6 +672,66 @@ public class DebugSymbolsTests
             .Distinct()
             .Order()
             .ToArray();
+
+    /// <summary>
+    /// Compiles a whole module graph the way the CLI does, with symbols, and returns the artifacts.
+    /// </summary>
+    private static CompilationArtifacts CompileModules(string entryPath, string assemblyName)
+    {
+        var resolver = new ModuleResolver(entryPath);
+        var modules = resolver.GetRuntimeModulesInOrder(resolver.LoadProgram(entryPath));
+        var typeMap = new TypeChecker().CheckModules(resolver.GetModulesInOrder(modules), resolver);
+        var deadCode = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
+
+        // useReferenceAssemblies forces the post-processing rewriter, which is the path symbols
+        // have to survive.
+        var compiler = new ILCompiler(
+            assemblyName, preserveConstEnums: false, useReferenceAssemblies: true,
+            sdkPath: SdkResolver.FindReferenceAssembliesPath())
+        {
+            EmitDebugSymbols = true,
+        };
+        compiler.CompileModules(modules, resolver, typeMap, deadCode);
+
+        return compiler.SaveArtifacts($"{assemblyName}.pdb");
+    }
+
+    /// <summary>
+    /// Maps each method that carries line information to the document it belongs to and the source
+    /// lines it can stop on.
+    /// </summary>
+    private static Dictionary<string, (string Document, int[] Lines)> SequencePointsByMethod(
+        CompilationArtifacts artifacts)
+    {
+        using var peReader = new PEReader(new MemoryStream(artifacts.Assembly, writable: false));
+        var metadata = peReader.GetMetadataReader();
+        var pdb = ReadPdb(artifacts.Pdb!);
+
+        var byMethod = new Dictionary<string, (string, int[])>();
+
+        foreach (var handle in pdb.MethodDebugInformation)
+        {
+            var info = pdb.GetMethodDebugInformation(handle);
+            if (info.SequencePointsBlob.IsNil) continue;
+
+            var points = info.GetSequencePoints().Where(p => !p.IsHidden).ToList();
+            if (points.Count == 0) continue;
+
+            var method = metadata.GetMethodDefinition(
+                MetadataTokens.MethodDefinitionHandle(MetadataTokens.GetRowNumber(handle)));
+            var declaringType = metadata.GetTypeDefinition(method.GetDeclaringType());
+            string name = $"{metadata.GetString(declaringType.Name)}::{metadata.GetString(method.Name)}";
+
+            // A method's points share one document unless it spans several, in which case each
+            // point names its own.
+            var documentHandle = info.Document.IsNil ? points[0].Document : info.Document;
+            string document = Path.GetFileName(pdb.GetString(pdb.GetDocument(documentHandle).Name));
+
+            byMethod[name] = (document, points.Select(p => p.StartLine).Distinct().Order().ToArray());
+        }
+
+        return byMethod;
+    }
 
     /// <summary>Every named local in the PDB, with the scope it is live over.</summary>
     private static List<(string Name, bool Hidden, int ScopeStart, int ScopeLength)> AllLocals(
