@@ -398,6 +398,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/seal/seal-arraybuffer.js")]
+    [InlineData("built-ins/Object/seal/seal-int8array.js")]
+    [InlineData("built-ins/Object/seal/seal-float64array.js")]
+    [InlineData("built-ins/Object/seal/seal-bigint64array.js")]
+    public void Zero_length_buffer_views_can_be_sealed_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
