@@ -480,7 +480,12 @@ public static partial class ObjectBuiltIns
                 break;
             case SharpTSArray arr:
                 // Arrays can have properties defined on them
+                if (propertyKey == "length" && descriptor.HasValue)
+                    descriptor.Value = interpreter.ToNumberWithPrimitive(descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
+                break;
+            case SharpTSArrayPrototype arrayPrototype:
+                success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
@@ -583,6 +588,8 @@ public static partial class ObjectBuiltIns
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`
             // and `length` as { writable: false, enumerable: false, configurable: true }

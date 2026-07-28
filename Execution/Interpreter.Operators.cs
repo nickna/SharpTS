@@ -504,6 +504,14 @@ public partial class Interpreter
         {
             var s = rv.AsString().Trim();
             if (s.Length == 0) return 0.0;
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                && ulong.TryParse(s.AsSpan(2),
+                    System.Globalization.NumberStyles.AllowHexSpecifier,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var hex))
+            {
+                return hex;
+            }
             if (double.TryParse(s, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var d))
                 return d;
@@ -518,6 +526,13 @@ public partial class Interpreter
             return CoerceToNumber(RuntimeValue.FromBoxed(prim));
         return double.NaN;
     }
+
+    /// <summary>
+    /// ToNumber including the object-to-primitive step. Array length
+    /// descriptors use this before validating the uint32 result.
+    /// </summary>
+    internal double ToNumberWithPrimitive(object? value)
+        => CoerceToNumber(RuntimeValue.FromBoxed(ToPrimitive(value, PrimitiveHint.Number)));
 
     private enum PrimitiveHint { Default, Number, String }
 

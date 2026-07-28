@@ -958,6 +958,9 @@ public partial class Interpreter
                 return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(classMethod, subclassArray));
         }
 
+        if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
+            return BindAccessorToObject(prototypeGetter, obj).CallV2(
+                this, ReadOnlySpan<RuntimeValue>.Empty);
         if (GetArrayPrototype().HasExtra(memberName))
             return RuntimeValue.FromBoxed(GetArrayPrototype().TryGetExtra(memberName));
 
@@ -980,6 +983,8 @@ public partial class Interpreter
         if (member != null)
             return RuntimeValue.FromBoxed(BindBuiltInMember(member, obj));
 
+        if (GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod objectMethod)
+            return RuntimeValue.FromObject(objectMethod.BindTo(obj));
         if (GetObjectPrototype().HasExtra(memberName))
             return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
 
@@ -1241,8 +1246,12 @@ public partial class Interpreter
     /// <summary>
     /// Binds an accessor function to an object for 'this' binding.
     /// </summary>
-    private static ISharpTSCallable BindAccessorToObject(ISharpTSCallable accessor, SharpTSObject obj)
+    private static ISharpTSCallable BindAccessorToObject(ISharpTSCallable accessor, object obj)
     {
+        if (accessor is SharpTSFunction function)
+        {
+            return function.BindThis(obj);
+        }
         if (accessor is SharpTSArrowFunction arrow && arrow.HasOwnThis)
         {
             return arrow.Bind(obj);
@@ -1318,6 +1327,8 @@ public partial class Interpreter
         }
         if (obj is SharpTSArrayPrototype arrProto)
         {
+            if (arrProto.GetExtraGetter(memberName) is { } getter)
+                return BindAccessorToObject(getter, arrProto).CallBoxed(this, []);
             return arrProto.GetMember(memberName) ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSArrayUnboundMethod unbound)

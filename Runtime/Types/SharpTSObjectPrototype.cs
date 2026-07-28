@@ -123,6 +123,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         {
             SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
             SharpTSInstance inst => inst.HasProperty(key),
+            SharpTSArray array => array.HasOwnProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls

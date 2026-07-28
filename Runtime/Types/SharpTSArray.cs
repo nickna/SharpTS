@@ -78,6 +78,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// value (used by the JS <c>length</c> property accessor).
     /// </summary>
     private long _length;
+    private bool _lengthWritable = true;
 
     /// <summary>
     /// Read-only view over the dense prefix. Present for compatibility with
@@ -644,7 +645,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void SetLength(long newLength)
     {
-        if (IsFrozen) return;
+        if (IsFrozen || !_lengthWritable) return;
         if (newLength < 0) throw new ThrowException(new SharpTSRangeError("Invalid array length."));
         if (newLength > MaxLength)
             throw new Exception($"RangeError: Array length {newLength} exceeds ECMA-262 uint32 maximum.");
@@ -855,6 +856,18 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         => _namedProperties?.ContainsKey(name) ?? false;
 
     /// <summary>
+    /// Checks the array's own properties, including its non-enumerable length
+    /// property, present numeric indices, and user-defined named properties.
+    /// </summary>
+    public bool HasOwnProperty(string name)
+    {
+        if (name == "length") return true;
+        if (uint.TryParse(name, out uint index) && index < uint.MaxValue)
+            return HasIndex(index);
+        return HasNamedProperty(name);
+    }
+
+    /// <summary>
     /// Sets a named property value on the array.
     /// </summary>
     public void SetNamedProperty(string name, object? value)
@@ -871,8 +884,43 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (IsFrozen) return false;
 
+        // ArraySetLength (ECMA-262 §10.4.2.4). The length property is a
+        // non-enumerable, non-configurable data property whose value controls
+        // the array's indexed storage rather than an ordinary named expando.
+        if (name == "length")
+        {
+            if (descriptor.HasGet || descriptor.HasSet
+                || (descriptor.HasEnumerable && descriptor.Enumerable)
+                || (descriptor.HasConfigurable && descriptor.Configurable)
+                || (!_lengthWritable && descriptor.HasWritable && descriptor.Writable))
+            {
+                return false;
+            }
+
+            if (descriptor.HasValue)
+            {
+                if (descriptor.Value is not double length
+                    || double.IsNaN(length)
+                    || double.IsInfinity(length)
+                    || length < 0
+                    || length > MaxLength
+                    || Math.Truncate(length) != length)
+                {
+                    throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+                }
+
+                if (!_lengthWritable && (long)length != _length)
+                    return false;
+                SetLength((long)length);
+            }
+
+            if (descriptor.HasWritable && !descriptor.Writable)
+                _lengthWritable = false;
+            return true;
+        }
+
         // Numeric index path — accept full uint32 range per ECMA-262.
-        if (uint.TryParse(name, out uint uindex))
+        if (uint.TryParse(name, out uint uindex) && uindex < uint.MaxValue)
         {
             long index = uindex;
             // Arrays don't support accessor properties on indices
@@ -923,7 +971,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = (double)_length,  // full long → double (accurate to 2^53)
-                Writable = true,
+                Writable = _lengthWritable,
                 Enumerable = false,
                 Configurable = false
             };

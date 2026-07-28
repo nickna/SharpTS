@@ -113,6 +113,19 @@ public sealed class Issue1279ParityTests
     public void Same_accessors_can_refine_nonconfigurable_properties_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-126.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-143.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-148.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-161.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-165.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-166.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-171.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-175.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-178.js")]
+    public void Array_length_descriptors_shrink_arrays_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

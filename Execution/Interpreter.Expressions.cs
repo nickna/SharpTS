@@ -1213,6 +1213,11 @@ public partial class Interpreter
             strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSArrayPrototype arrayProto)
+        {
+            arrayProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         // RegExp symbol-keyed assignment (`re[Symbol.match] = false`) stores an
         // own symbol property that shadows the inherited prototype method —

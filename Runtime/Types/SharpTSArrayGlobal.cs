@@ -68,18 +68,22 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSArrayPrototype
 {
-    private Dictionary<string, object?>? _extras;
+    // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
+    // descriptor-aware storage so defineProperty can install accessors and
+    // enforce writable/configurable flags instead of maintaining a parallel
+    // value-only expando dictionary.
+    private readonly SharpTSObject _extras = new([]);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ArrayPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
 
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
 
     // Mutating methods (push/pop/shift/unshift) keep the bespoke
     // SharpTSArrayUnboundMethod path because spec-compliant array-like
