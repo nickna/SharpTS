@@ -121,7 +121,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         var key = args[0]?.ToString() ?? "";
         return target switch
         {
-            SharpTSObject obj => obj.HasProperty(key),
+            SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
             SharpTSInstance inst => inst.HasProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties

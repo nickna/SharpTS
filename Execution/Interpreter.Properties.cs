@@ -1588,6 +1588,11 @@ public partial class Interpreter
             math.SetExtra(set.Name.Lexeme, value);
             return value;
         }
+        if (obj is SharpTSJSON json)
+        {
+            json.SetExtra(set.Name.Lexeme, value);
+            return value;
+        }
 
         // Number/Boolean/String.prototype are ordinary mutable objects per ECMA-262.
         // Test262 assigns indexed elements and `length` before calling

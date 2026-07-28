@@ -82,6 +82,16 @@ public sealed class Issue1279ParityTests
     public void Descriptor_fields_on_exotic_objects_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-41.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-94.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-147.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-173.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-226.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-256.js")]
+    public void Descriptor_fields_on_JSON_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

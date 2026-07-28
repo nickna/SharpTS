@@ -667,7 +667,9 @@ public static partial class ObjectBuiltIns
             SharpTSObjectNamespace => propertyKey == "prototype"
                 ? interpreter.GetObjectPrototype()
                 : GetStaticMethod(propertyKey),
-            SharpTSJSON => JSONBuiltIns.GetStaticMethod(propertyKey),
+            SharpTSJSON json => json.HasExtra(propertyKey)
+                ? json.TryGetExtra(propertyKey)
+                : JSONBuiltIns.GetStaticMethod(propertyKey),
             SharpTSStringNamespace str => propertyKey == "prototype"
                 ? interpreter.GetStringPrototype()
                 : str.GetMember(propertyKey),

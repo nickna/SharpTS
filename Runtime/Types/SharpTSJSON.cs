@@ -17,7 +17,17 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSJSON
 {
     public static readonly SharpTSJSON Instance = new();
-    private SharpTSJSON() { }
+    private Dictionary<string, object?>? _extras;
+    internal SharpTSJSON() { }
+
+    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
+    public object? TryGetExtra(string name) =>
+        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    public void SetExtra(string name, object? value)
+    {
+        _extras ??= new Dictionary<string, object?>();
+        _extras[name] = value;
+    }
 
     public override string ToString() => "[object JSON]";
 }

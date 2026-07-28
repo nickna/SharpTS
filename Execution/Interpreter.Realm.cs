@@ -283,6 +283,8 @@ public partial class Interpreter
     // resolve to this one instance, so `Math === globalThis.Math` holds.
     private Runtime.Types.SharpTSMath? _math;
     internal Runtime.Types.SharpTSMath GetMath() => _math ??= new Runtime.Types.SharpTSMath();
+    private Runtime.Types.SharpTSJSON? _json;
+    internal Runtime.Types.SharpTSJSON GetJSON() => _json ??= new Runtime.Types.SharpTSJSON();
 
     /// <summary>
     /// Resolves a per-realm mutable built-in intrinsic by its global name
@@ -293,9 +295,14 @@ public partial class Interpreter
     /// </summary>
     internal bool TryGetRealmIntrinsic(string name, out object? value)
     {
-        if (IsRealmIntrinsicName(name))
+        if (name == "Math")
         {
             value = GetMath();
+            return true;
+        }
+        if (name == "JSON")
+        {
+            value = GetJSON();
             return true;
         }
         value = null;
@@ -309,7 +316,7 @@ public partial class Interpreter
     /// member access, <c>globalThis</c>) pointing at the one realm instance so
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
-    internal static bool IsRealmIntrinsicName(string name) => name == "Math";
+    internal static bool IsRealmIntrinsicName(string name) => name is "Math" or "JSON";
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
     // object carrying a guest-writable _extras bag, so — like Math and
