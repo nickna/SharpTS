@@ -276,6 +276,15 @@ without merging unrelated script globals. The model records whether every config
 missing/broken configs and the open-document-only fallback are explicitly incomplete so safe rename
 can refuse them rather than silently emitting a partial edit.
 
+For multi-project workspaces, the server captures the initialized workspace folders, discovers each
+`tsconfig.json` (skipping dependency/build/tool directories), and follows in-workspace project
+references including explicitly named config files. Each project keeps its own module-resolution
+and checker options. References are joined across those independent semantic models by canonical
+declaration document/offset/namespace identity, so consuming projects with different `paths`
+mappings are both covered. A malformed config, failed root, or project reference outside the
+workspace makes the aggregate graph explicitly incomplete while preserving valid navigation
+results.
+
 The server advertises these features only in `--language-features full`; the VS Code extension
 continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
 
@@ -390,9 +399,9 @@ single-file binary so non-VS-Code editors don't need the full SDK.
 - 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
   symbols, semantic value/type binding identities, and module-aware go-to-definition through
   imports/re-exports have landed. The inverse binding index, configured-project reverse graph,
-  closed-importer references, and explicit graph-completeness boundary have also landed. Safe
-  rename, type-parameter navigation, qualified member navigation, and multi-config/project-reference
-  workspace expansion remain. VS Code stays in `interop-only`; these capabilities are for
+  closed-importer references, multi-config/project-reference workspace expansion, and explicit
+  graph-completeness boundaries have also landed. Safe rename, type-parameter navigation, and
+  qualified member navigation remain. VS Code stays in `interop-only`; these capabilities are for
   standalone clients.
 - ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
   packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);

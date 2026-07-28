@@ -17,11 +17,16 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly ReferenceService _references;
+    private readonly NavigationWorkspaceContext? _workspace;
 
-    public ReferencesHandler(DocumentStore store, ReferenceService references)
+    public ReferencesHandler(
+        DocumentStore store,
+        ReferenceService references,
+        NavigationWorkspaceContext? workspace = null)
     {
         _store = store;
         _references = references;
+        _workspace = workspace;
     }
 
     public override Task<LocationContainer?> Handle(
@@ -39,7 +44,8 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
             text,
             request.Position,
             request.Context.IncludeDeclaration,
-            _store.SnapshotFileSystemDocuments());
+            _store.SnapshotFileSystemDocuments(),
+            _workspace?.SnapshotRoots());
         return Task.FromResult<LocationContainer?>(
             new LocationContainer(locations));
     }

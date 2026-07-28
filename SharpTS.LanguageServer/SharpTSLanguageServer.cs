@@ -26,12 +26,19 @@ public static class SharpTSLanguageServer
         Func<IEnumerable<string>>? typeNames = null,
         LanguageFeatureMode mode = LanguageFeatureMode.Full)
     {
+        var workspaceContext = new NavigationWorkspaceContext();
         var server = await OmniSharp.Extensions.LanguageServer.Server.LanguageServer.From(options =>
         {
             options
+                .OnInitialize((_, request, _) =>
+                {
+                    workspaceContext.Initialize(request);
+                    return Task.CompletedTask;
+                })
                 .WithInput(Console.OpenStandardInput())
                 .WithOutput(Console.OpenStandardOutput())
                 .WithServices(services => services
+                    .AddSingleton(workspaceContext)
                     .AddSingleton<DocumentStore>()
                     .AddSingleton(new DiagnosticsService(resolve))
                     .AddSingleton(new DecoratorService(resolve, typeNames))
