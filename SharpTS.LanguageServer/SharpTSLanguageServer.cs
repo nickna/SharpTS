@@ -45,7 +45,8 @@ public static class SharpTSLanguageServer
                     .AddSingleton(new MemberHoverService(resolve))
                     .AddSingleton<DocumentSymbolService>()
                     .AddSingleton<DefinitionService>()
-                    .AddSingleton<ReferenceService>())
+                    .AddSingleton<ReferenceService>()
+                    .AddSingleton<RenameService>())
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
                 .WithHandler<HoverHandler>()
@@ -59,7 +60,9 @@ public static class SharpTSLanguageServer
                 options
                     .WithHandler<DocumentSymbolHandler>()
                     .WithHandler<DefinitionHandler>()
-                    .WithHandler<ReferencesHandler>();
+                    .WithHandler<ReferencesHandler>()
+                    .WithHandler<RenameHandler>()
+                    .WithHandler<PrepareRenameHandler>();
             }
         });
 
