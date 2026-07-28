@@ -34,8 +34,10 @@ internal static class NavigationModelBuilder
     public static CheckedNavigationModel? TryBuild(
         string path,
         string text,
-        IReadOnlyDictionary<string, string>? openDocuments)
+        IReadOnlyDictionary<string, string>? openDocuments,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         string absolutePath = Path.GetFullPath(path);
         Dictionary<string, string> overlay = CreateOverlay(
             absolutePath,
@@ -52,9 +54,14 @@ internal static class NavigationModelBuilder
                     absolutePath,
                     overlay,
                     NavigationWorkspace.FromProject(TsConfigLoader.Load(configPath)),
-                    requireMembership: true);
+                    requireMembership: true,
+                    cancellationToken);
                 if (configured.Model is not null)
                     return configured.Model;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -66,15 +73,18 @@ internal static class NavigationModelBuilder
             absolutePath,
             overlay,
             NavigationWorkspace.Unconfigured(absolutePath, configPath),
-            requireMembership: false).Model;
+            requireMembership: false,
+            cancellationToken).Model;
     }
 
     public static CheckedNavigationWorkspace BuildWorkspace(
         string path,
         string text,
         IReadOnlyDictionary<string, string>? openDocuments,
-        IReadOnlyList<string> workspaceRoots)
+        IReadOnlyList<string> workspaceRoots,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         string absolutePath = Path.GetFullPath(path);
         Dictionary<string, string> overlay = CreateOverlay(
             absolutePath,
@@ -87,11 +97,13 @@ internal static class NavigationModelBuilder
 
         foreach (TsConfigResult project in catalog.Projects)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ProjectBuildResult result = TryBuildProject(
                 absolutePath,
                 overlay,
                 NavigationWorkspace.FromProject(project),
-                requireMembership: true);
+                requireMembership: true,
+                cancellationToken);
             isComplete &= result.IsComplete;
             if (result.Model is not null)
                 models.Add(result.Model);
@@ -107,7 +119,8 @@ internal static class NavigationModelBuilder
         string absolutePath,
         IReadOnlyDictionary<string, string> overlay,
         NavigationWorkspace workspace,
-        bool requireMembership)
+        bool requireMembership,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -125,6 +138,7 @@ internal static class NavigationModelBuilder
             List<ParsedModule> declarationRoots = [];
             foreach (string declarationPath in workspace.DeclarationFiles)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     declarationRoots.Add(
@@ -142,6 +156,7 @@ internal static class NavigationModelBuilder
                          .Distinct(StringComparer.OrdinalIgnoreCase)
                          .Order(StringComparer.OrdinalIgnoreCase))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     ParsedModule root = resolver.LoadProgram(
@@ -172,6 +187,7 @@ internal static class NavigationModelBuilder
             foreach (string openPath in overlay.Keys
                          .Order(StringComparer.OrdinalIgnoreCase))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (string.Equals(
                         openPath,
                         absolutePath,
@@ -207,7 +223,8 @@ internal static class NavigationModelBuilder
                 .ToList();
 
             var checker = new TypeChecker(workspace.CheckerOptions)
-                .WithFilePath(absolutePath);
+                .WithFilePath(absolutePath)
+                .WithCancellation(cancellationToken);
             checker.SetDecoratorMode(workspace.DecoratorMode);
             checker.CheckModules(
                 resolver.GetModulesInOrder(connectedRoots),
@@ -222,6 +239,10 @@ internal static class NavigationModelBuilder
             return new ProjectBuildResult(
                 model,
                 workspace.IsConfigured && allRootsLoaded);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

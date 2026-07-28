@@ -29,17 +29,17 @@ public sealed class RenameHandler : RenameHandlerBase
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
-        if (!_store.TryGet(uri, out var text))
+        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
             return Task.FromResult<WorkspaceEdit?>(null);
 
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(
             _rename.Rename(
                 request.TextDocument.Uri.GetFileSystemPath(),
-                text,
+                snapshot.Document.Text,
                 request.Position,
                 request.NewName,
-                _store.SnapshotFileSystemDocuments(),
+                snapshot.TextOverlay,
                 _workspace.SnapshotRoots()));
     }
 
@@ -82,15 +82,15 @@ public sealed class PrepareRenameHandler : PrepareRenameHandlerBase
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
-        if (!_store.TryGet(uri, out var text))
+        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
             return Task.FromResult<RangeOrPlaceholderRange?>(null);
 
         ct.ThrowIfCancellationRequested();
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Range? range = _rename.Prepare(
             request.TextDocument.Uri.GetFileSystemPath(),
-            text,
+            snapshot.Document.Text,
             request.Position,
-            _store.SnapshotFileSystemDocuments(),
+            snapshot.TextOverlay,
             _workspace.SnapshotRoots());
         return Task.FromResult(
             range is null

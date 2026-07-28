@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.LanguageServer.Server;
 using SharpTS.LanguageServer.Handlers;
+using SharpTS.LanguageServer.Conversions;
 using SharpTS.LanguageServer.Services;
 
 namespace SharpTS.LanguageServer;
@@ -24,9 +25,12 @@ public static class SharpTSLanguageServer
     public static async Task RunAsync(
         Func<string, Type?>? resolve = null,
         Func<IEnumerable<string>>? typeNames = null,
-        LanguageFeatureMode mode = LanguageFeatureMode.Full)
+        LanguageFeatureMode mode = LanguageFeatureMode.Full,
+        DiagnosticPublishMode diagnosticMode =
+            DiagnosticPublishMode.SharpTsOnly)
     {
         var workspaceContext = new NavigationWorkspaceContext();
+        var diagnosticsSettings = new DiagnosticsSettings(diagnosticMode);
         var server = await OmniSharp.Extensions.LanguageServer.Server.LanguageServer.From(options =>
         {
             options
@@ -39,8 +43,11 @@ public static class SharpTSLanguageServer
                 .WithOutput(Console.OpenStandardOutput())
                 .WithServices(services => services
                     .AddSingleton(workspaceContext)
+                    .AddSingleton(diagnosticsSettings)
                     .AddSingleton<DocumentStore>()
                     .AddSingleton(new DiagnosticsService(resolve))
+                    .AddSingleton<DocumentDependencyGraph>()
+                    .AddSingleton<DiagnosticsCoordinator>()
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
                     .AddSingleton<DocumentSymbolService>()
@@ -49,6 +56,7 @@ public static class SharpTSLanguageServer
                     .AddSingleton<RenameService>())
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
+                .WithHandler<ConfigurationHandler>()
                 .WithHandler<HoverHandler>()
                 .WithHandler<CompletionHandler>()
                 .WithHandler<SignatureHelpHandler>();

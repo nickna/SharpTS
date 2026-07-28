@@ -722,6 +722,7 @@ public partial class TypeChecker
 
     // Error recovery support
     private readonly DiagnosticCollector _diagnostics = new();
+    private CancellationToken _cancellationToken;
 
     /// <summary>
     /// When &gt; 0, <see cref="RecordTypeError(TypeCheckException)"/> and its overload are no-ops.
@@ -783,12 +784,16 @@ public partial class TypeChecker
         if (!_recoveryMode)
         {
             foreach (Stmt statement in statements)
+            {
+                ThrowIfCancellationRequested();
                 CheckStmt(statement);
+            }
             return;
         }
 
         foreach (Stmt statement in statements)
         {
+            ThrowIfCancellationRequested();
             if (_diagnostics.HitErrorLimit) return;
             int? saved = _currentStatementLine;
             _currentStatementLine = TryGetStmtLine(statement) ?? saved;
@@ -810,6 +815,19 @@ public partial class TypeChecker
         _filePath = filePath;
         return this;
     }
+
+    /// <summary>
+    /// Supplies cooperative cancellation for editor checks. The checker observes it between
+    /// declarations, statements, and module passes without changing compiler callers.
+    /// </summary>
+    public TypeChecker WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        return this;
+    }
+
+    private void ThrowIfCancellationRequested() =>
+        _cancellationToken.ThrowIfCancellationRequested();
 
     /// <summary>
     /// Marks this checker as running a worker_threads worker script, so the
@@ -1078,6 +1096,7 @@ public partial class TypeChecker
         _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
+        ThrowIfCancellationRequested();
 
         // Module/top-level declarations live in their own declared-type frame so that
         // GetDeclaredType / IsDeclaredTypeTracked treat them like function locals (#743).
@@ -1157,15 +1176,19 @@ public partial class TypeChecker
 
         // Pre-register type declarations
         PreRegisterTypeDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist class declarations (as Any for forward references in function bodies)
         HoistClassDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist function declarations
         HoistFunctionDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist var declarations (pre-define as any for forward reference support)
         HoistVarDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist let/const declarations (pre-define as any so an earlier function body can
         // forward-reference a later block-scoped binding — #533)
@@ -1173,6 +1196,7 @@ public partial class TypeChecker
 
         foreach (Stmt statement in statements)
         {
+            ThrowIfCancellationRequested();
             if (_diagnostics.HitErrorLimit)
             {
                 _recoveryMode = false;
@@ -1424,6 +1448,7 @@ public partial class TypeChecker
         {
             foreach (var module in modules)
             {
+                ThrowIfCancellationRequested();
                 _currentModule = module;
                 // Attribute diagnostics to the module being checked — without
                 // this, errors raised inside module sources (including built-in
@@ -1469,6 +1494,7 @@ public partial class TypeChecker
         {
             foreach (var module in augmentationOrder)
             {
+                ThrowIfCancellationRequested();
                 foreach (var augmentation in module.GlobalAugmentations)
                 {
                     try { CheckAndMergeGlobalMember(augmentation); }
@@ -1484,6 +1510,7 @@ public partial class TypeChecker
         // Second pass: type-check each module with imports resolved
         foreach (var module in modules)
         {
+            ThrowIfCancellationRequested();
             if (module.IsTypeChecked)
             {
                 continue;
@@ -1516,6 +1543,7 @@ public partial class TypeChecker
                     // Check all statements with error recovery
                     foreach (var stmt in module.Statements)
                     {
+                        ThrowIfCancellationRequested();
                         // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
                         // the script path (CheckWithRecovery). Without it, module-mode errors render
                         // with no location (#468).
@@ -1576,6 +1604,7 @@ public partial class TypeChecker
                         // Third pass: check all statements with error recovery
                         foreach (var stmt in module.Statements)
                         {
+                            ThrowIfCancellationRequested();
                             // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
                             // the script path (CheckWithRecovery). Without it, module-mode errors render
                             // with no location (#468).

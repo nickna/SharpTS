@@ -56,7 +56,10 @@ public sealed class InteropAnalyzer
     private static SourceLocation Loc(Token start, Token end, PositionMap? pos)
         => pos is not null ? pos.Span(start, end) : SourceLocation.FromLine(start.Line);
 
-    public List<Diagnostic> Analyze(IEnumerable<Stmt> statements, PositionMap? positions = null)
+    public List<Diagnostic> Analyze(
+        IEnumerable<Stmt> statements,
+        PositionMap? positions = null,
+        CancellationToken cancellationToken = default)
     {
         var diags = new List<Diagnostic>();
         var bindings = new Dictionary<string, Type>(StringComparer.Ordinal);
@@ -67,6 +70,7 @@ public sealed class InteropAnalyzer
         // name -> CLR type bindings for the call-site pass.
         foreach (var stmt in stmtList)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (stmt is Stmt.Class cls)
                 AnalyzeClass(cls, diags, bindings, positions);
             else if (stmt is Stmt.Import import && DotNetImports.IsDotNetSpecifier(import.ModulePath))
@@ -79,7 +83,10 @@ public sealed class InteropAnalyzer
         // Pass 2 — Tier 3d: validate event-subscription call sites against the bindings.
         var visitor = new EventCallVisitor(bindings, diags, positions);
         foreach (var stmt in stmtList)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             visitor.Visit(stmt);
+        }
 
         return diags;
     }

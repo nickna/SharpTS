@@ -20,10 +20,15 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     public override Task<CompletionList> Handle(CompletionParams request, CancellationToken ct)
     {
-        if (!_store.TryGet(request.TextDocument.Uri.ToString(), out var text))
+        if (!_store.TryGetSnapshot(
+                request.TextDocument.Uri.ToString(),
+                out DocumentSnapshot? snapshot))
             return Task.FromResult(new CompletionList());
 
-        var list = _decorators.Completion(text, request.Position.Line, request.Position.Character);
+        var list = _decorators.Completion(
+            snapshot.Text,
+            request.Position.Line,
+            request.Position.Character);
         return Task.FromResult(list ?? new CompletionList());
     }
 

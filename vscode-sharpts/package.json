@@ -41,6 +41,16 @@
           },
           "default": [],
           "description": "Additional assembly paths to load for @DotNetType resolution."
+        },
+        "sharpts.diagnostics": {
+          "type": "string",
+          "enum": [
+            "sharpts-only",
+            "all",
+            "off"
+          ],
+          "default": "sharpts-only",
+          "description": "Diagnostics published by SharpTS. The default avoids duplicating tsserver diagnostics."
         }
       }
     },

@@ -29,16 +29,16 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
-        if (!_store.TryGet(uri, out var text))
+        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
             return Task.FromResult<LocationOrLocationLinks?>(null);
 
         ct.ThrowIfCancellationRequested();
 
         var locations = _definitions.FindDefinitions(
                 request.TextDocument.Uri.GetFileSystemPath(),
-                text,
+                snapshot.Document.Text,
                 request.Position,
-                _store.SnapshotFileSystemDocuments())
+                snapshot.TextOverlay)
             .Select(location => new LocationOrLocationLink(location));
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(locations));

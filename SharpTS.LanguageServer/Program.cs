@@ -1,5 +1,6 @@
 using SharpTS.Compilation;
 using SharpTS.LanguageServer;
+using SharpTS.LanguageServer.Conversions;
 using SharpTS.LanguageServer.Project;
 
 // Entry point for the `sharpts-lsp` tool: this executable *is* the language server
@@ -11,6 +12,7 @@ var references = new List<string>();
 // Standalone clients have no other TypeScript server, so navigation is on by default here. The
 // VS Code extension passes interop-only, where tsserver already provides it.
 var mode = LanguageFeatureMode.Full;
+var diagnosticMode = DiagnosticPublishMode.SharpTsOnly;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -30,6 +32,18 @@ for (int i = 0; i < args.Length; i++)
                         $"[LSP Fatal] Unknown --language-features value '{requested}'. Expected 'interop-only' or 'full'.");
                     Environment.Exit(64);
                     break;
+            }
+            break;
+        case "--diagnostics" when i + 1 < args.Length:
+            string requestedDiagnostics = args[++i];
+            if (!SharpTS.LanguageServer.Services.DiagnosticsSettings.TryParse(
+                    requestedDiagnostics,
+                    out diagnosticMode))
+            {
+                await Console.Error.WriteLineAsync(
+                    $"[LSP Fatal] Unknown --diagnostics value '{requestedDiagnostics}'. " +
+                    "Expected 'sharpts-only', 'all', or 'off'.");
+                Environment.Exit(64);
             }
             break;
     }
@@ -58,13 +72,17 @@ try
         await Console.Error.WriteLineAsync($"[LSP] sharpts.json ignored: {ex.Message}");
     }
 
-    using var loader = new AssemblyReferenceLoader(paths, sdkPath);
+    using var loader = new ReloadingAssemblyReferenceLoader(paths, sdkPath);
     Func<IEnumerable<string>> typeNames = () => loader.GetAllPublicTypes()
         .Select(t => t.FullName)
         .Where(n => !string.IsNullOrEmpty(n))
         .Cast<string>();
 
-    await SharpTSLanguageServer.RunAsync(loader.TryResolve, typeNames, mode);
+    await SharpTSLanguageServer.RunAsync(
+        loader.TryResolve,
+        typeNames,
+        mode,
+        diagnosticMode);
 }
 catch (Exception ex)
 {

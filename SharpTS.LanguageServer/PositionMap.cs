@@ -34,6 +34,17 @@ public sealed class PositionMap
         return (lo + 1, offset - _lineStarts[lo] + 1);
     }
 
+    /// <summary>Zero-based LSP position → global UTF-16 offset.</summary>
+    public int ToOffset(int line, int character)
+    {
+        if ((uint)line >= (uint)_lineStarts.Length)
+            throw new ArgumentOutOfRangeException(nameof(line));
+        if (character < 0)
+            throw new ArgumentOutOfRangeException(nameof(character));
+
+        return checked(_lineStarts[line] + character);
+    }
+
     /// <summary>Precise span for a single token (falls back to line-only if Start is unset).</summary>
     public SourceLocation Span(Token token)
     {
