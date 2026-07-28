@@ -438,7 +438,8 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.NumberPrototypeMethodWrapper
             or SharpTS.Runtime.Types.BooleanPrototypeMethodWrapper
             or SharpTS.Runtime.Types.SharpTSObjectUnboundMethod
-            or BoundFunction)
+            or BoundFunction
+            or BuiltInMethod { IsConstructor: false })
             return true;
         // Anything else that's not callable can't be a constructor.
         return value is not ISharpTSCallable;

@@ -636,7 +636,11 @@ public static partial class ObjectBuiltIns
             // data properties. test262's verifyProperty() checks introspect these
             // via getOwnPropertyDescriptor; without this branch the descriptor
             // lookup returns null and the assertion fails.
-            ISharpTSCallable callable when propertyKey is "name" or "length"
+            BuiltInMethod method when propertyKey is "name" or "length"
+                && method.HasMetadataProperty(propertyKey)
+                => GetCallableMetaDescriptor(method, propertyKey),
+            ISharpTSCallable callable when callable is not BuiltInMethod
+                && propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
             SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
             SharpTSArrowFunction arrow => GetFunctionOwnPropertyDescriptor(arrow, propertyKey),

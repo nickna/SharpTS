@@ -152,7 +152,7 @@ public sealed class BuiltInStaticBuilder
         int arity,
         Func<Interpreter, RuntimeValue, ReadOnlySpan<RuntimeValue>, RuntimeValue> implementation)
     {
-        _methods[name] = BuiltInMethod.CreateV2(name, arity, implementation);
+        _methods[name] = BuiltInMethod.CreateV2(name, arity, implementation).AsNonConstructor();
         return this;
     }
 
@@ -165,7 +165,8 @@ public sealed class BuiltInStaticBuilder
         int maxArity,
         Func<Interpreter, RuntimeValue, ReadOnlySpan<RuntimeValue>, RuntimeValue> implementation)
     {
-        _methods[name] = BuiltInMethod.CreateV2(name, minArity, maxArity, implementation);
+        _methods[name] = BuiltInMethod.CreateV2(name, minArity, maxArity, implementation)
+            .AsNonConstructor();
         return this;
     }
 
@@ -183,7 +184,8 @@ public sealed class BuiltInStaticBuilder
         Func<Interpreter, RuntimeValue, ReadOnlySpan<RuntimeValue>, RuntimeValue> implementation)
     {
         _methods[name] = BuiltInMethod.CreateV2(name, minArity, maxArity, implementation)
-            .WithSpecLength(specLength);
+            .WithSpecLength(specLength)
+            .AsNonConstructor();
         return this;
     }
 

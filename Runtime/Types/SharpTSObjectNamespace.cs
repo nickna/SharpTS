@@ -15,6 +15,7 @@ public class SharpTSObjectNamespace : ISharpTSCallable
     public static readonly SharpTSObjectNamespace Instance = new();
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly Dictionary<string, object?> _realmBuiltIns = [];
     // Each Interpreter owns a realm instance so guest mutations of Object's
     // configurable methods do not leak into other scripts or race in Test262.
     // The process-wide instance remains as a registry/template fallback.
@@ -32,7 +33,13 @@ public class SharpTSObjectNamespace : ISharpTSCallable
     {
         if (_extras.HasProperty(name)) return _extras.GetProperty(name);
         if (_deletedBuiltIns.Contains(name)) return null;
-        return ObjectBuiltIns.GetStaticMethod(name);
+        if (_realmBuiltIns.TryGetValue(name, out var cached)) return cached;
+        var member = ObjectBuiltIns.GetStaticMethod(name);
+        // Function metadata is mutable. Give every realm its own callable so
+        // deleting/redefining `name` or `length` cannot leak across scripts.
+        if (member is BuiltInMethod method) member = method.Bind(null);
+        if (member != null) _realmBuiltIns[name] = member;
+        return member;
     }
 
     public void SetProperty(string name, object? value)

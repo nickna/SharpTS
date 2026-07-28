@@ -139,6 +139,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             // per ECMA-262 §17. test262's verifyProperty calls
             // hasOwnProperty(fn, "name") before reading the descriptor — without
             // this branch the assertion fails before we ever see the descriptor.
+            BuiltInMethod method when key is "name" or "length"
+                => method.HasMetadataProperty(key),
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };
