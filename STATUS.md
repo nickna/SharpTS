@@ -464,7 +464,23 @@ SharpTS implements 35 Node.js built-in module specifiers, accessible via `import
 
 ---
 
-## 16. .NET INTEROP (`dotnet:` imports + `@DotNetType`)
+## 16. EDITOR TOOLING
+
+| Feature | Status | Notes |
+|---|---|---|
+| TypeScript-source portable PDBs | ✅ | `sharpts --compile app.ts -g`; source checksums, imported documents, sequence points, locals/scopes, state-machine mappings, and async stepping metadata |
+| VS Code debugging | ✅ | **SharpTS: Debug Current File** compiles the saved file and launches the installed `coreclr` adapter |
+| Interop language features | ✅ | Diagnostics, decorator/member hover, completion, signature help, and structured quick fixes in both LSP feature modes |
+| Standalone navigation | ✅ | Document symbols, definition, references, and safe rename across complete configured/project-reference workspaces |
+| Workspace lifecycle | ✅ | Incremental versioned sync, atomic snapshots, debounce/cancellation, cached analysis, reverse diagnostic invalidation, live diagnostics settings, and safe assembly reload |
+| General property/member rename | Deferred | Refused rather than producing a partial semantic edit |
+
+See [Language server setup](docs/language-server.md) and
+[Debugging compiled TypeScript](docs/debugging-typescript.md).
+
+---
+
+## 17. .NET INTEROP (`dotnet:` imports + `@DotNetType`)
 
 .NET types can be consumed two ways: **`dotnet:` import specifiers** (recommended — zero boilerplate, type surface synthesized from reflection; epic #1195) and **`@DotNetType` declare classes** (manual, curated surface, supports `@DotNetOverload` hints). **Both work in interpreter and compiled modes.**
 
@@ -492,7 +508,7 @@ Compiled mode uses late-bound reflection to the shim (`DotNetDelegateShim` / `Do
 
 ---
 
-## 17. CONFORMANCE TEST SUITES
+## 18. CONFORMANCE TEST SUITES
 
 Two external corpora pin SharpTS against canonical references. Both run as standalone projects (not in `SharpTS.sln`); see each project's README for full details. Pass rates here are subset-relative — neither suite runs the full corpus today.
 

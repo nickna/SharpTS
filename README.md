@@ -51,6 +51,14 @@ SharpTS supports two execution modes:
 - Compile to standalone executables or .NET assemblies
 - Reference assembly output for C# interop (`--ref-asm`)
 - IL verification (`--verify`)
+- Portable PDBs for debugging original TypeScript source (`--debug` / `-g`)
+
+### Editor Tooling
+
+- VS Code extension with interop IntelliSense and **Debug Current File**
+- Standalone `sharpts-lsp` tool for TypeScript/TSX diagnostics and safe interop quick fixes
+- Full standalone navigation: document symbols, definition, references, and completeness-gated rename
+- Neovim, Helix, and generic stdio-LSP setup documented in the [language server guide](docs/language-server.md)
 
 ### .NET Interop
 
@@ -113,6 +121,16 @@ sharpts script.ts
 ```bash
 sharpts --compile script.ts
 dotnet script.dll
+```
+
+Add `-g` to emit a portable PDB and debug the original `.ts` source. See
+[Debugging compiled TypeScript](docs/debugging-typescript.md).
+
+For editor support outside VS Code, install the separate language-server tool:
+
+```bash
+dotnet tool install --global SharpTS.LanguageServer
+sharpts-lsp --language-features full
 ```
 
 **Compile to self-contained executable:**
