@@ -306,7 +306,8 @@ public sealed class TypeScriptConformanceRunner
             "es3" or "es5" => "lib.d.ts",
             "es6" or "es2015" => "lib.es6.d.ts",
             "es2016" or "es2017" or "es2018" or "es2019" or
-            "es2020" or "es2021" or "es2022" or "es2023" =>
+            "es2020" or "es2021" or "es2022" or "es2023" or
+            "es2024" or "es2025" =>
                 $"lib.{selected}.full.d.ts",
             "esnext" or "latest" => "lib.esnext.full.d.ts",
             _ => "lib.d.ts",
@@ -377,6 +378,8 @@ public sealed class TypeScriptConformanceRunner
         "es2021" => 2021,
         "es2022" => 2022,
         "es2023" => 2023,
+        "es2024" => 2024,
+        "es2025" => 2025,
         "esnext" => int.MaxValue,
         _ => 0,
     };

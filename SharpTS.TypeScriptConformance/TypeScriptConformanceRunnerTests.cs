@@ -70,7 +70,7 @@ public class TypeScriptConformanceRunnerTests
     [Theory]
     [InlineData("es2019/importMeta/importMeta.ts")]
     [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]
-    [InlineData("es2022/es2022SharedMemory.ts")]
+    [InlineData("es2022/es2024SharedMemory.ts")]
     [InlineData("jsx/inline/inlineJsxFactoryDeclarations.tsx")]
     [InlineData("jsx/inline/inlineJsxFactoryDeclarationsLocalTypes.tsx")]
     [InlineData("jsx/inline/inlineJsxFactoryLocalTypeGlobalFallback.tsx")]

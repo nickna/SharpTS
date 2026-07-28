@@ -521,29 +521,39 @@ The 879 skips are `regexp-unicode-property-escapes` (516), `negative-test-deferr
 
 ### Microsoft TypeScript conformance (TS type-checker spec)
 
-`SharpTS.TypeScriptConformance/` runs a subset of [microsoft/TypeScript's conformance corpus](https://github.com/microsoft/TypeScript/tree/main/tests/cases/conformance) and diffs our type-checker diagnostics against `tsc`'s `*.errors.txt` baselines. Pinned to TS v5.5.4. Pass classification is on `(line, tsCode)` tuples — see [#1281](https://github.com/nickna/SharpTS/issues/1281) for the tracking issue.
+`SharpTS.TypeScriptConformance/` runs a subset of [microsoft/TypeScript's conformance corpus](https://github.com/microsoft/TypeScript/tree/main/tests/cases/conformance) and diffs our type-checker diagnostics against `tsc`'s `*.errors.txt` baselines. Pinned to TS v6.0.3. Pass classification is on `(line, tsCode)` tuples — see [#1281](https://github.com/nickna/SharpTS/issues/1281) for the tracking issue.
 
-The committed subset spans `types/typeRelationships/{assignmentCompatibility,subtypesAndSuperTypes}`, `types/conditional`, and the ES-version library folders (`Symbols`, `es6/Symbols`, `es2016`–`es2023`, `esnext`), from the baseline as of `bde494a` (2026-07-08):
+The committed v6.0.3 subset spans
+`types/typeRelationships/{assignmentCompatibility,subtypesAndSuperTypes}`,
+`types/conditional`, JSX, and the ES-version library folders (`Symbols`,
+`es6/Symbols`, `es2016`–`es2023`, `esnext`):
 
 | Bucket | Count | Share |
 |---|---:|---:|
-| `Pass` | **250** | 84.5% |
-| `Fail` | 29 | 9.8% |
-| `ParseError` | 0 | 0.0% |
-| `Skipped` (multi-file 8 / lib-drift 5 / directive 3) | 16 | 5.4% |
-| `TypeCheckError` | 1 | 0.3% |
-| **Total** | **296** | |
+| `Pass` | **151** | 29.4% |
+| `Fail` | 214 | 41.6% |
+| `ParseError` | 141 | 27.4% |
+| `Skipped` (lib-drift 4 / directive 4) | 8 | 1.6% |
+| **Total** | **514** | |
 
-**Excluding skips: 250/280 (89.3%)** — same aggregation semantics as Test262 above. Note this is a 14-folder slice of a corpus with hundreds of folders, so the rate is subset-relative; growing the subset is the main lever and is tracked on [#1281](https://github.com/nickna/SharpTS/issues/1281).
+**Excluding skips: 151/506 (29.8%)** — same aggregation semantics as
+Test262 above. This is a selected slice of a much larger corpus, so the rate
+is subset-relative; growing and hardening the subset is tracked on
+[#1281](https://github.com/nickna/SharpTS/issues/1281).
 
-The parser is no longer a bottleneck at all for this subset: an earlier sweep took the original subset's `ParseError` count from 57 → 24; a Track-1 round on the `symbolProperty*`/`symbolType*` cluster — computed well-known-symbol names in *value/class* position, which the [#99](https://github.com/nickna/SharpTS/issues/99) Phase-A parser work had only hardened for *type* position — took it 24 → 7; a follow-up round cleared the remaining 7-test long tail (7 unrelated, independently-scoped gaps: object-type-member ASI, parenthesized logical-assignment targets, `async` used as a plain identifier, `import.meta` as a statement, `export {}` inside `declare global`, `export * as ns from`, and untagged-template invalid-escape sequences recovering as a `TS1125` diagnostic instead of aborting the parse) — **`ParseError` is now 0 for the committed subset.** Other parser work along the way: ambient `declare` of non-class declarations, `declare function`, generic/this/conditional/mapped/indexed-access/constructor/leading-operator types, `module Foo {}` namespaces, call/construct/index signatures, keyword & string/numeric property names, function-type and arrow optional/rest parameters, computed-key class fields/interface members/object-type members without an explicit type annotation (implicit `any`), and more. Negative-test matching itself was unlocked by propagating canonical `TSnnnn` codes through the type-checker's error-recovery path ([#125](https://github.com/nickna/SharpTS/issues/125)), which also added a `strictNullChecks` option (default on; the runner follows each test's `@strict`/`@strictNullChecks` directive).
+The v5.5.4 → v6.0.3 baseline review found 8 added cases, 1 removed case, and
+183 changed outcomes on paths present in both pins. Of those common-path
+changes, 174 have changed upstream test sources. The remaining 9 unchanged
+sources all gained or changed upstream `tsc` error baselines, explaining their
+new classification. The updated JSX corpus accounts for 137 of the 141
+`ParseError` entries; four new arbitrary-module-namespace cases account for
+the rest. The `Fail` bucket remains checker diagnostic drift rather than a
+runner crash (`TypeCheckError` and `HarnessError` are both zero).
 
-`Fail` is the largest non-`Pass` bucket — tests that parse and reach the type checker but whose diagnostic set doesn't yet match `tsc`'s. A [#99](https://github.com/nickna/SharpTS/issues/99) measurement spike over the lib-sensitive folders decomposed these: of the original 66 lib-folder Fails, ~17 were **spurious** (SharpTS emitted an error `tsc` didn't; cleared by Track-1 — object literals/interfaces now model each computed well-known-symbol member as its own named member instead of collapsing them into one merged symbol index signature, closing the false positives on `Symbol.iterator`/`Symbol.toStringTag`/`Symbol.toPrimitive` reads+writes, string-index-signature compatibility, and `declare const x: unique symbol`), a long tail are individual checker gaps (assignability, symbol arithmetic, computed-name constraints), and only ~6 are explicit lib-version drift (`TS2550`/`TS2583`/`TS2585`). **The finding: loading `tsc`'s `lib.*.d.ts` is _not_ the current pass-rate lever — checker breadth and parser gaps dominate the divergence.** Loading `lib.*.d.ts` ([#1281](https://github.com/nickna/SharpTS/issues/1281) §4) remains valuable as an *enabler* (it removes the "`Pass` = coincidence" asterisk since globals resolve to `any` today, unblocks DOM/JSX wholesale, and is a prerequisite for per-node types/symbols in [#1281](https://github.com/nickna/SharpTS/issues/1281) §6), but the near-term levers are checker correctness (structural class-to-class assignability and cross-statement CFA narrowing for compound logical assignment — tracked on [#1281](https://github.com/nickna/SharpTS/issues/1281)) and clearing the remaining `Fail`-bucket long tail.
-
-`Skipped` includes:
-- **Multi-file tests** (`Skipped:multi-file-deferred`) — cross-file resolution into the runner is follow-up work.
-- **Lib-drift skips** (`Skipped:lib-drift`) — tests where `tsc` expects "method missing" diagnostics our checker doesn't reproduce because we have the surface always-available regardless of `@lib`. Conservative filter (only fires when our diagnostic set is empty AND every expected code is one of `TS2339`/`TS2304`/`TS2551`/`TS7053`). See [#1281](https://github.com/nickna/SharpTS/issues/1281) §4 for the deferred work that would eliminate the drift entirely (load `tsc`'s `lib.*.d.ts` files into the type checker; the original design was in retired issue #83).
-- **Directive skips** — tests with directives like `@experimentalDecorators`, `@jsx`, `@isolatedModules` we don't intend to honor in Phase 1.
+`Skipped:lib-drift` is the conservative fallback for missing-surface
+diagnostics, and the four directive skips are `allowJs` cases that the runner
+does not execute. Multi-file tests now flow through the program resolver
+instead of being skipped.
 
 ---
 

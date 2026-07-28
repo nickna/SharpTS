@@ -4,10 +4,10 @@ using SharpTS.Parsing;
 
 namespace SharpTS.Modules;
 
-/// <summary>Reads the TypeScript 5.5.4 <c>lib.*.d.ts</c> files embedded in SharpTS.</summary>
+/// <summary>Reads the TypeScript 6.0.3 <c>lib.*.d.ts</c> files embedded in SharpTS.</summary>
 internal static class TypeScriptLibProvider
 {
-    internal static readonly Version CompilerVersion = new(5, 5, 4);
+    internal static readonly Version CompilerVersion = new(6, 0, 3);
     internal const string VirtualPathPrefix = "typescript-lib:";
     private const string ResourcePrefix = "SharpTS.TypeScriptLib.";
     private static readonly ConcurrentDictionary<string, Lazy<ParsedLibrary>> ParsedLibraries =

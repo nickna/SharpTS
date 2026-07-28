@@ -49,7 +49,7 @@
     <EmbeddedResource Include="stdlib\npm\react-dom\*.ts"
                       LogicalName="SharpTS.stdlib.npm.react-dom.%(Filename)%(Extension)" />
     <None Remove="stdlib\**\*.ts" />
-    <!-- TypeScript 5.5.4 declaration libraries are the checker contract.  They
+    <!-- TypeScript 6.0.3 declaration libraries are the checker contract.  They
          describe types only; SharpTS's C# runtime implementations remain
          unchanged. -->
     <EmbeddedResource Include="Modules\TypeScriptLibResources\lib*.d.ts"

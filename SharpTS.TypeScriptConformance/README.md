@@ -6,7 +6,7 @@ Tracking epic: [#80](https://github.com/nickna/SharpTS/issues/80).
 
 ## Pinned TypeScript version
 
-The corpus is vendored as a git submodule at `external/typescript/`, pinned to **`v5.5.4`**. TypeScript rewords its diagnostic messages between versions, so the pin is load-bearing for baseline stability — bumping it is intentional, not incidental.
+The corpus is vendored as a git submodule at `external/typescript/`, pinned to **`v6.0.3`**. TypeScript rewords its diagnostic messages between versions, so the pin is load-bearing for baseline stability — bumping it is intentional, not incidental.
 
 ## Initial setup
 
@@ -93,7 +93,7 @@ for expected missing-surface diagnostics that produce no SharpTS diagnostic.
 
 | Path | Purpose |
 |---|---|
-| `external/typescript/` | Vendored TS repo (submodule, pinned to v5.5.4) |
+| `external/typescript/` | Vendored TS repo (submodule, pinned to v6.0.3) |
 | `external/typescript/tests/cases/conformance/` | The conformance corpus (~10–15k `.ts` files) |
 | `external/typescript/tests/baselines/reference/` | `tsc`'s `*.errors.txt` / `*.js` / `*.types` baselines |
 | `external/typescript/src/lib/` | Embedded `lib.es*.d.ts`, `lib.dom.d.ts`, and WebWorker declaration inputs |

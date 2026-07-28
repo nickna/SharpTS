@@ -1,0 +1,3 @@
+Modules/TypeScriptLibResources/lib*.d.ts text eol=lf
+Modules/TypeScriptLibResources/LICENSE.txt text eol=lf whitespace=-trailing-space
+Modules/TypeScriptLibResources/SHA256SUMS text eol=lf
