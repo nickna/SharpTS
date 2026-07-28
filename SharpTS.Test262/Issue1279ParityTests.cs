@@ -416,6 +416,14 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/split/argument-is-new-reg-exp-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/arguments-are-new-reg-exp-and-3-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-new-reg-exp.js")]
+    public void String_split_trims_empty_matches_from_constructed_RegExp_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
