@@ -268,11 +268,13 @@ re-exports. This makes hoisting, shadowing, parameters, overload merging, aliase
 provenance follow the real checker instead of a second editor-only scope walker.
 
 `textDocument/references` now uses the inverse side of that same index. It unions type/value facets
-only when the selected token has both, honors `includeDeclaration`, and discovers the connected
-component across open roots so references in open importers are included as well as forward
-dependencies without merging unrelated script globals. Unopened reverse importers are not yet a
-known-complete domain; safe rename must refuse that partial cross-module case until the lifecycle
-work maintains a workspace graph with reverse edges.
+only when the selected token has both and honors `includeDeclaration`. The navigation model now
+loads every root in the nearest `tsconfig.json` using that project's module-resolution, JSX,
+strictness, declaration-library, and ambient-type settings. An explicit reverse-edge map then
+selects the connected component, so references include closed importers in the configured project
+without merging unrelated script globals. The model records whether every configured root loaded;
+missing/broken configs and the open-document-only fallback are explicitly incomplete so safe rename
+can refuse them rather than silently emitting a partial edit.
 
 The server advertises these features only in `--language-features full`; the VS Code extension
 continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
@@ -387,10 +389,11 @@ single-file binary so non-VS-Code editors don't need the full SDK.
   surgery, no record-equality risk. ~7 tests + e2e (precise columns, declaration + usage hover).
 - 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
   symbols, semantic value/type binding identities, and module-aware go-to-definition through
-  imports/re-exports have landed. The inverse binding index and references across open module roots
-  have also landed. Safe rename, type-parameter navigation, qualified member navigation, and a
-  complete reverse workspace graph remain. VS Code stays in `interop-only`; these capabilities
-  are for standalone clients.
+  imports/re-exports have landed. The inverse binding index, configured-project reverse graph,
+  closed-importer references, and explicit graph-completeness boundary have also landed. Safe
+  rename, type-parameter navigation, qualified member navigation, and multi-config/project-reference
+  workspace expansion remain. VS Code stays in `interop-only`; these capabilities are for
+  standalone clients.
 - ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
   packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);
   loader reload on `.csproj`/`bin` change; STATUS.md/README updates. **NOT YET DONE.**

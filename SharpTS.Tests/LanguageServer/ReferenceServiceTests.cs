@@ -3,6 +3,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using SharpTS.LanguageServer;
 using SharpTS.LanguageServer.Handlers;
 using SharpTS.LanguageServer.Services;
+using SharpTS.Tests.IntegrationTests;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -174,6 +175,159 @@ public class ReferenceServiceTests
                 new Range(2, 0, 2, 5),
             ],
             references.Select(location => location.Range).ToArray());
+    }
+
+    [Fact]
+    public void ClosedImportersAreDiscoveredFromTheConfiguredProject()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile(
+            "tsconfig.json",
+            """{ "include": ["src/**/*.ts"], "exclude": ["excluded"] }""");
+        string dependencyPath = directory.CreateFile(
+            "src/dependency.ts",
+            "export const original = 1;\n");
+        string importerPath = directory.CreateFile(
+            "src/importer.ts",
+            """
+            import { original as local } from "./dependency";
+            console.log(local);
+            local;
+            """);
+        string excludedPath = directory.CreateFile(
+            "excluded/importer.ts",
+            """
+            import { original } from "../src/dependency";
+            original;
+            """);
+        string dependency = File.ReadAllText(dependencyPath);
+
+        var references = References(
+            dependencyPath,
+            dependency,
+            "original",
+            occurrence: 0,
+            includeDeclaration: false,
+            new Dictionary<string, string> { [dependencyPath] = dependency });
+
+        Assert.Equal(4, references.Count);
+        Assert.All(
+            references,
+            location => Assert.Equal(
+                DocumentUri.FromFileSystemPath(importerPath),
+                location.Uri));
+        Assert.DoesNotContain(
+            references,
+            location => location.Uri == DocumentUri.FromFileSystemPath(excludedPath));
+    }
+
+    [Fact]
+    public void ConfiguredModuleResolutionIsUsedForClosedReverseImporters()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile(
+            "tsconfig.json",
+            """
+            {
+              "compilerOptions": {
+                "baseUrl": ".",
+                "paths": { "@lib/*": ["src/lib/*"] }
+              },
+              "include": ["src/**/*.ts"]
+            }
+            """);
+        string dependencyPath = directory.CreateFile(
+            "src/lib/dependency.ts",
+            "export interface Shape { size: number; }\n");
+        string importerPath = directory.CreateFile(
+            "src/importer.ts",
+            """
+            import type { Shape as LocalShape } from "@lib/dependency";
+            const value: LocalShape = { size: 1 };
+            """);
+        string dependency = File.ReadAllText(dependencyPath);
+
+        var references = References(
+            dependencyPath,
+            dependency,
+            "Shape",
+            occurrence: 0,
+            includeDeclaration: false,
+            new Dictionary<string, string> { [dependencyPath] = dependency });
+
+        Assert.Equal(3, references.Count);
+        Assert.All(
+            references,
+            location => Assert.Equal(
+                DocumentUri.FromFileSystemPath(importerPath),
+                location.Uri));
+    }
+
+    [Fact]
+    public void ConfiguredRootSetReportsWhetherReverseDiscoveryIsComplete()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string configPath = directory.CreateFile(
+            "tsconfig.json",
+            """{ "include": ["src/**/*.ts"] }""");
+        string dependencyPath = directory.CreateFile(
+            "src/dependency.ts",
+            "export const value = 1;\n");
+        directory.CreateFile(
+            "src/importer.ts",
+            "import { value } from \"./dependency\";\nvalue;\n");
+        string dependency = File.ReadAllText(dependencyPath);
+
+        var model = Assert.IsType<CheckedNavigationModel>(
+            NavigationModelBuilder.TryBuild(
+                dependencyPath,
+                dependency,
+                new Dictionary<string, string> { [dependencyPath] = dependency }));
+
+        Assert.True(model.Scope.IsComplete);
+        Assert.Equal(Path.GetFullPath(configPath), model.Scope.ConfigPath);
+        Assert.Equal(2, model.Scope.RootFiles.Count);
+    }
+
+    [Fact]
+    public void FailedConfiguredRootMakesReverseDiscoveryExplicitlyIncomplete()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile(
+            "tsconfig.json",
+            """{ "include": ["src/**/*.ts"] }""");
+        string dependencyPath = directory.CreateFile(
+            "src/dependency.ts",
+            "export const value = 1;\n");
+        directory.CreateFile("src/broken.ts", "const = ;\n");
+        string dependency = File.ReadAllText(dependencyPath);
+
+        var model = Assert.IsType<CheckedNavigationModel>(
+            NavigationModelBuilder.TryBuild(
+                dependencyPath,
+                dependency,
+                new Dictionary<string, string> { [dependencyPath] = dependency }));
+
+        Assert.False(model.Scope.IsComplete);
+        Assert.NotNull(model.Scope.ConfigPath);
+    }
+
+    [Fact]
+    public void OpenDocumentFallbackIsExplicitlyIncompleteWithoutAConfig()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string path = directory.GetPath("standalone.ts");
+        const string source = "const value = 1;\nvalue;\n";
+
+        var model = Assert.IsType<CheckedNavigationModel>(
+            NavigationModelBuilder.TryBuild(
+                path,
+                source,
+                new Dictionary<string, string> { [path] = source }));
+
+        Assert.False(model.Scope.IsComplete);
+        Assert.Null(model.Scope.ConfigPath);
+        Assert.Empty(model.Scope.RootFiles);
     }
 
     [Fact]
