@@ -124,6 +124,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
             SharpTSInstance inst => inst.HasProperty(key),
             SharpTSArray array => array.HasOwnProperty(key),
+            SharpTSMath math => math.HasExtra(key),
+            SharpTSJSON json => json.HasExtra(key),
+            SharpTSDate date => date.HasExtra(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls
@@ -196,6 +199,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             // RegExp.prototype flag accessors) must return false, not just
             // "is present".
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             _ => false,
         };

@@ -126,6 +126,13 @@ public sealed class Issue1279ParityTests
     public void Array_length_descriptors_shrink_arrays_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-38.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-39.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-41.js")]
+    public void Exotic_ordinary_objects_support_descriptors_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

@@ -88,6 +88,14 @@ public static partial class ObjectBuiltIns
                 foreach (var kv in math.OwnEnumerableProperties)
                     yield return new(kv.Key, kv.Value);
                 yield break;
+            case SharpTSJSON json:
+                foreach (var key in json.OwnEnumerableKeys())
+                    yield return new(key, json.TryGetExtra(key));
+                yield break;
+            case SharpTSDate date:
+                foreach (var key in date.OwnEnumerableKeys())
+                    yield return new(key, date.TryGetExtra(key));
+                yield break;
             case SharpTSFunction fn:
                 foreach (var k in fn.PropertyKeys)
                     yield return new(k, fn.TryGetProperty(k, out var v) ? v : null);
@@ -487,6 +495,15 @@ public static partial class ObjectBuiltIns
             case SharpTSArrayPrototype arrayPrototype:
                 success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSMath math:
+                success = math.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSJSON json:
+                success = json.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSDate date:
+                success = date.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
                 var compiledDesc = CompiledPropertyDescriptor.FromAny(descriptorArg);
@@ -589,6 +606,12 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSMath math => math.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`

@@ -1195,6 +1195,16 @@ public partial class Interpreter
             math.SetExtra(index?.ToString() ?? "", value);
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSJSON json)
+        {
+            json.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSDate date)
+        {
+            date.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         // Number/Boolean/String.prototype are mutable ordinary objects — allow
         // bracket assignment (`Number.prototype[0] = 1`, `Number.prototype.length = 1`).

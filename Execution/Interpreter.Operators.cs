@@ -788,6 +788,9 @@ public partial class Interpreter
         {
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
+            SharpTSMath math => math.DeleteExtra(name),
+            SharpTSJSON json => json.DeleteExtra(name),
+            SharpTSDate date => date.DeleteExtra(name),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -826,6 +829,9 @@ public partial class Interpreter
         {
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
+            SharpTSMath math => math.DeleteExtra(keyStr),
+            SharpTSJSON json => json.DeleteExtra(keyStr),
+            SharpTSDate date => date.DeleteExtra(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };

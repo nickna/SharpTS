@@ -757,6 +757,9 @@ public partial class Interpreter
             // `for (var key in _) { ... }` to copy members onto the mixin target.
             SharpTSFunction f => f.PropertyKeys,
             SharpTSArrowFunction af => af.PropertyKeys,
+            SharpTSMath math => math.OwnEnumerableKeys(),
+            SharpTSJSON json => json.OwnEnumerableKeys(),
+            SharpTSDate date => date.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,
