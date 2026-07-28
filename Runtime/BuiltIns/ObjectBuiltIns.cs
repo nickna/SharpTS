@@ -101,6 +101,10 @@ public static partial class ObjectBuiltIns
                 foreach (var key in date.OwnEnumerableKeys())
                     yield return new(key, date.TryGetExtra(key));
                 yield break;
+            case SharpTSRegExp regex:
+                foreach (var key in regex.OwnEnumerableKeys())
+                    yield return new(key, regex.TryGetProperty(key, out var value) ? value : null);
+                yield break;
             case SharpTSFunction fn:
                 foreach (var k in fn.PropertyKeys)
                     yield return new(k, fn.TryGetProperty(k, out var v) ? v : null);
@@ -533,27 +537,10 @@ public static partial class ObjectBuiltIns
                 success = arrow.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSRegExp rx:
-                // RegExp instances are objects; ECMA-262 §22.2 declares
-                // `flags`/`global`/`unicode`/`lastIndex` as configurable
-                // accessors that user code can override via
-                // Object.defineProperty. Without this branch the descriptor
-                // is silently dropped on the floor, so test262 patterns that
-                // install throwing getters (.../coerce-global.js, etc.)
-                // never see the override fire. Per ECMA-262 §10.1.6.3, an
-                // attribute-only descriptor (just writable/enumerable/etc.,
-                // no value/get/set) preserves the existing value — we mirror
-                // that for the user-property dictionary so
-                // `Object.defineProperty(r, 'global', {writable:true})`
-                // followed by `r.global = false` reads back `false`, not null.
-                if (descriptor.Get != null || descriptor.Set != null)
-                {
-                    rx.DefineAccessor(propertyKey, descriptor.Get, descriptor.Set);
-                }
-                else if (descriptor.HasValue)
-                {
-                    rx.SetProperty(propertyKey, descriptor.Value);
-                }
-                success = true;
+                // RegExp expandos are ordinary descriptor-bearing properties.
+                // Reuse SharpTSObject validation so non-configurable properties
+                // reject illegal redefinitions and omitted fields are retained.
+                success = rx.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSPromise promise:
                 // Promise instances are objects; user code may install own
@@ -639,6 +626,8 @@ public static partial class ObjectBuiltIns
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`

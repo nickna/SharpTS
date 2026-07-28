@@ -226,6 +226,10 @@ public sealed class Issue1279ParityTests
     public void Callable_descriptor_values_preserve_identity_and_inheritance_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void RegExp_expando_descriptors_match_in_both_modes()
+        => AssertPassInBothModes("built-ins/Object/defineProperty/15.2.3.6-4-40.js");
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

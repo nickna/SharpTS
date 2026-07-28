@@ -127,6 +127,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.HasExtra(key),
             SharpTSJSON json => json.HasExtra(key),
             SharpTSDate date => date.HasExtra(key),
+            SharpTSRegExp regex => regex.HasOwnProperty(key),
             SharpTSObjectNamespace objectNamespace => objectNamespace.HasOwnProperty(key),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
@@ -211,6 +212,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSRegExp regex
+                => regex.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSObjectNamespace objectNamespace
                 => objectNamespace.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSFunctionPrototype functionPrototype
