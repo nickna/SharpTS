@@ -400,9 +400,12 @@ public static partial class ObjectBuiltIns
             throw new Exception("TypeError: Object.defineProperty called on null or undefined");
         }
 
-        if (descriptorArg == null)
+        if (descriptorArg is null or SharpTSUndefined or string or bool
+            or byte or sbyte or short or ushort or int or uint or long or ulong
+            or float or double or decimal or SharpTSBigInt or SharpTSSymbol)
         {
-            throw new Exception("TypeError: Property description must be an object");
+            throw new ThrowException(
+                new SharpTSTypeError("Property description must be an object"));
         }
 
         // Parse descriptor from object - use FromAnyObject to handle any object type
