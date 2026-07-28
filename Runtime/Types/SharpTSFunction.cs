@@ -587,7 +587,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
             }
         }
 
-        return null;
+        return SharpTSUndefined.Instance;
     }
 
     /// <summary>

@@ -326,6 +326,23 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/charAt/S15.5.4.4_A1.1.js")]
+    [InlineData("built-ins/String/prototype/charAt/pos-coerce-string.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1.1.js")]
+    [InlineData("built-ins/String/prototype/codePointAt/return-abrupt-from-object-pos-to-integer.js")]
+    [InlineData("built-ins/String/prototype/indexOf/searchstring-tostring.js")]
+    [InlineData("built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T3.js")]
+    [InlineData("built-ins/String/prototype/includes/coerced-values-of-position.js")]
+    [InlineData("built-ins/String/prototype/startsWith/searchstring-found-with-position.js")]
+    [InlineData("built-ins/String/prototype/endsWith/coerced-values-of-position.js")]
+    [InlineData("built-ins/String/prototype/endsWith/searchstring-is-regexp-throws.js")]
+    [InlineData("built-ins/String/prototype/slice/S15.5.4.13_A1_T1.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A2_T4.js")]
+    public void String_character_and_search_methods_coerce_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
