@@ -975,7 +975,7 @@ public partial class Interpreter
                 System.Globalization.CultureInfo.InvariantCulture, out int idx)
             && idx >= 0 && idx < arrIdx.Length)
         {
-            return RuntimeValue.FromBoxed(arrIdx[idx]);
+            return GetArrayIndexValue(arrIdx, idx);
         }
 
         // Standard array built-in members via category dispatch

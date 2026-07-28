@@ -180,6 +180,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public bool HasIndex(long index)
     {
         if ((ulong)index >= (ulong)_length) return false;
+        if (index <= uint.MaxValue
+            && (_indexAccessors?.ContainsKey((uint)index) ?? false))
+            return true;
         int denseCount = _dense.Count;
         if (_sparse == null) return index < denseCount && _dense[(int)index] is not ArrayHole;
         if (index < denseCount) return _dense[(int)index] is not ArrayHole;
@@ -198,6 +201,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (IsFrozen) return;
         if ((ulong)index >= (ulong)_length) return;
+        if (index <= uint.MaxValue)
+            _indexAccessors?.Remove((uint)index);
         if (_sparse == null || index < _dense.Count)
             _dense[(int)index] = ArrayHole.Instance;
         else if (index <= uint.MaxValue)
@@ -671,6 +676,12 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     foreach (var k in toRemove) _sparse.Remove(k);
                 }
             }
+            if (_indexAccessors != null)
+            {
+                foreach (var key in _indexAccessors.Keys.Where(
+                    key => key >= newLength).ToArray())
+                    _indexAccessors.Remove(key);
+            }
             while (_dense.Count > newLength)
                 _dense.RemoveAt(_dense.Count - 1);
             _length = newLength;
@@ -838,6 +849,22 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
     private Dictionary<string, object?>? _namedProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
+    private Dictionary<uint, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _indexAccessors;
+
+    public bool TryGetIndexAccessor(
+        long index, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (index >= 0 && index <= uint.MaxValue
+            && _indexAccessors?.TryGetValue((uint)index, out var pair) == true)
+        {
+            getter = pair.Get;
+            setter = pair.Set;
+            return true;
+        }
+        getter = null;
+        setter = null;
+        return false;
+    }
 
     /// <summary>
     /// Gets a named property value from the array.
@@ -923,18 +950,37 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (uint.TryParse(name, out uint uindex) && uindex < uint.MaxValue)
         {
             long index = uindex;
-            // Arrays don't support accessor properties on indices
-            if (descriptor.Get != null || descriptor.Set != null) return false;
-
             // Extend if needed (respect sealed)
             if (index >= _length)
             {
                 if (IsSealed) return false;
-                SetCoreWithExtend(index, descriptor.Value);
+                SetCoreWithExtend(index,
+                    descriptor.HasValue ? descriptor.Value : ArrayHole.Instance);
             }
-            else
+            else if (descriptor.HasValue)
             {
                 SetCore(index, descriptor.Value);
+            }
+
+            if (descriptor.HasGet || descriptor.HasSet)
+            {
+                _indexAccessors ??= [];
+                _indexAccessors[uindex] = (descriptor.Get, descriptor.Set);
+                // Accessors have no data value at the same index.
+                if (_sparse == null || index < _dense.Count)
+                    _dense[(int)index] = ArrayHole.Instance;
+                else
+                    _sparse.Remove(uindex);
+            }
+            else if (descriptor.HasValue)
+            {
+                _indexAccessors?.Remove(uindex);
+            }
+            else if (!HasIndex(index))
+            {
+                // A brand-new attribute-only data descriptor creates an own
+                // property whose value is undefined.
+                SetCore(index, SharpTSUndefined.Instance);
             }
 
             _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
@@ -980,6 +1026,19 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (uint.TryParse(name, out uint uindex) && (long)uindex < _length)
         {
             long index = uindex;
+            if (TryGetIndexAccessor(index, out var getter, out var setter))
+            {
+                PropertyDescriptorFlags accessorFlags = default;
+                if (_descriptors?.TryGetValue(name, out accessorFlags) != true)
+                    accessorFlags = PropertyDescriptorFlags.Default;
+                return new SharpTSPropertyDescriptor
+                {
+                    Get = getter,
+                    Set = setter,
+                    Enumerable = accessorFlags.Enumerable,
+                    Configurable = accessorFlags.Configurable,
+                };
+            }
             // Holes have no own property descriptor — ECMA-262 HasOwnProperty
             // returns false, and Object.getOwnPropertyDescriptor returns undefined.
             if (!HasIndex(index))

@@ -1023,6 +1023,15 @@ public partial class Interpreter
             var key = PropertyKeyConverter.ToPropertyKeyString(index);
             return RuntimeValue.FromBoxed(strProto.GetMember(key) ?? SharpTSUndefined.Instance);
         }
+        if (obj is SharpTSArrayPrototype arrayProto)
+        {
+            var key = PropertyKeyConverter.ToPropertyKeyString(index);
+            if (arrayProto.GetExtraGetter(key) is { } getter)
+                return BindAccessorToObject(getter, arrayProto).CallV2(
+                    this, ReadOnlySpan<RuntimeValue>.Empty);
+            return RuntimeValue.FromBoxed(
+                arrayProto.GetMember(key) ?? SharpTSUndefined.Instance);
+        }
 
         // ECMA-262 §22.2.5: RegExp.prototype has well-known-symbol-keyed methods
         // (@@match, @@matchAll, @@replace, @@search, @@split). These are bracket-only
@@ -1041,7 +1050,7 @@ public partial class Interpreter
 
         return RuntimeValue.FromBoxed(ResolveIndexTarget(obj, index) switch
         {
-            IndexTarget.Array t => t.Target.Get(t.Index),
+            IndexTarget.Array t => GetArrayIndexValue(t.Target, t.Index),
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
@@ -1064,6 +1073,17 @@ public partial class Interpreter
             IndexTarget.Unsupported => throw new InterpreterException("Index access not supported on this type."),
             _ => throw new InterpreterException("Index access not supported on this type.")
         });
+    }
+
+    private RuntimeValue GetArrayIndexValue(SharpTSArray array, long index)
+    {
+        if (array.TryGetIndexAccessor(index, out var getter, out _))
+        {
+            if (getter == null) return RuntimeValue.Undefined;
+            return BindAccessorToObject(getter, array).CallV2(
+                this, ReadOnlySpan<RuntimeValue>.Empty);
+        }
+        return RuntimeValue.FromBoxed(array.Get(index));
     }
 
     /// <summary>
@@ -1263,8 +1283,27 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
-                if (strictMode) t.Target.SetStrict(t.Index, value, strictMode);
-                else t.Target.Set(t.Index, value);
+                if (t.Target.TryGetIndexAccessor(
+                    t.Index, out _, out var indexSetter))
+                {
+                    if (indexSetter != null)
+                    {
+                        BindAccessorToObject(indexSetter, t.Target).CallBoxed(this, [value]);
+                    }
+                    else if (strictMode)
+                    {
+                        throw new InterpreterException(
+                            $"Cannot set array index '{t.Index}' which has only a getter.");
+                    }
+                }
+                else if (strictMode)
+                {
+                    t.Target.SetStrict(t.Index, value, strictMode);
+                }
+                else
+                {
+                    t.Target.Set(t.Index, value);
+                }
                 break;
 
             case IndexTarget.TypedArray t:
