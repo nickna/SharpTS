@@ -204,6 +204,20 @@ public partial class Interpreter
             // the Reference Record that supplies `this`.
             callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
         }
+        else if (call.Callee is Expr.GetIndex memberIndex)
+        {
+            object? receiver = (await ctx.EvaluateExprAsync(memberIndex.Object)).ToObject();
+            if (memberIndex.Optional && receiver is (null or SharpTSUndefined))
+            {
+                callee = SharpTSUndefined.Instance;
+            }
+            else
+            {
+                object? key = (await ctx.EvaluateExprAsync(memberIndex.Index)).ToObject();
+                callee = PerformIndexGet(memberIndex.Object, receiver, key).ToObject();
+                callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+            }
+        }
         else
         {
             callee = (await ctx.EvaluateExprAsync(call.Callee)).ToObject();
@@ -477,6 +491,20 @@ public partial class Interpreter
             object? receiver = Evaluate(memberGet.Object);
             callee = EvaluateGetOnObject(memberGet, receiver).ToObject();
             callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+        }
+        else if (call.Callee is Expr.GetIndex memberIndex)
+        {
+            object? receiver = Evaluate(memberIndex.Object);
+            if (memberIndex.Optional && receiver is (null or SharpTSUndefined))
+            {
+                callee = SharpTSUndefined.Instance;
+            }
+            else
+            {
+                object? key = Evaluate(memberIndex.Index);
+                callee = PerformIndexGet(memberIndex.Object, receiver, key).ToObject();
+                callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+            }
         }
         else
         {

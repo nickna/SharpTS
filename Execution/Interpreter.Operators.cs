@@ -716,6 +716,30 @@ public partial class Interpreter
         => Stringify(value is SharpTSObject ? ToPrimitive(value, PrimitiveHint.String) : value);
 
     /// <summary>
+    /// ECMA-262 ToString for built-in algorithm arguments. Unlike the
+    /// compatibility-oriented String() call path, this performs the complete
+    /// OrdinaryToPrimitive fallback and throws when both conversion methods
+    /// return objects.
+    /// </summary>
+    internal string ToStringForBuiltInArgument(object? value)
+    {
+        ThrowIfSymbolStringCoercion(value);
+        if (value is not SharpTSObject obj)
+            return Stringify(value);
+
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+            return Stringify(ToPrimitive(obj, PrimitiveHint.String));
+
+        if (TryCallConversion(obj, "toString", out var stringResult))
+            return Stringify(stringResult);
+        if (TryCallConversion(obj, "valueOf", out var valueResult))
+            return Stringify(valueResult);
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    /// <summary>
     /// ECMA-262 §7.1.19 ToPropertyKey for non-Symbol values. Property-key
     /// coercion uses the string hint, so arrays use their comma-joined form,
     /// boxed primitives unwrap, and user-defined toString/valueOf methods run

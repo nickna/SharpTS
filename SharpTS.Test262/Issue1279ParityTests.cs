@@ -275,6 +275,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
     [InlineData("built-ins/Object/prototype/toLocaleString/S15.2.4.3_A12.js")]
     [InlineData("built-ins/Object/prototype/toLocaleString/S15.2.4.3_A13.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A1_T16.js")]
     public void Full_baseline_regressions_pass_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
@@ -282,6 +283,9 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-8.js")]
     [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-16.js")]
     [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-9.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T1.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T2.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T3.js")]
     public void Full_interpreted_baseline_regressions_pass(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 

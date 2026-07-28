@@ -84,16 +84,16 @@ public static class StringBuiltIns
     public static BuiltInMethod? GetPrototypeMethod(string name)
         => _lookup.GetMethod(name);
 
-    private static RuntimeValue ReplaceV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var replacement = args[1].ToObject()?.ToString() ?? "";
+        var replacement = interpreter.ToStringForBuiltInArgument(args[1].ToObject());
 
         if (args[0].ToObject() is SharpTSRegExp regex)
         {
             return RuntimeValue.FromString(regex.Replace(str, replacement));
         }
 
-        var search = args[0].ToObject()?.ToString() ?? "";
+        var search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());
         var index = str.IndexOf(search);
         if (index < 0) return RuntimeValue.FromString(str);
         return RuntimeValue.FromString(str.Substring(0, index) + replacement + str.Substring(index + search.Length));
