@@ -116,6 +116,38 @@ public partial class TypeChecker
             Bindings.Bind(use, CurrentSourceDocument, symbol);
     }
 
+    private BindingSymbol RegisterTypeDeclaration(
+        TypeEnvironment environment,
+        Token declaration,
+        bool mergeWithLocal = false)
+    {
+        BindingSymbol? existing = mergeWithLocal
+            ? environment.GetLocalTypeSymbol(declaration.Lexeme)
+            : null;
+        BindingSymbol symbol = Bindings.Declare(
+            declaration,
+            CurrentSourceDocument,
+            BindingNamespace.Type,
+            existing);
+        environment.DefineTypeBinding(declaration.Lexeme, symbol);
+        return symbol;
+    }
+
+    private BindingSymbol RegisterTypeDeclaration(
+        Token declaration,
+        bool mergeWithLocal = false) =>
+        RegisterTypeDeclaration(_environment, declaration, mergeWithLocal);
+
+    private void BindTypeUse(Token? use, string name)
+    {
+        if (use is null)
+            return;
+
+        string rootName = name.Split('.', 2)[0];
+        if (_environment.GetTypeSymbol(rootName) is { } symbol)
+            Bindings.Bind(use, CurrentSourceDocument, symbol);
+    }
+
     /// <summary>
     /// When false (TypeScript's <c>strictNullChecks: off</c>), <c>null</c> and <c>undefined</c>
     /// are assignable to every type (except <c>never</c>). Defaults to true to preserve SharpTS's
@@ -1202,13 +1234,24 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Interface itf:
+                    RegisterTypeDeclaration(itf.Name, mergeWithLocal: true);
                     PreRegisterInterface(itf);
                     break;
                 case Stmt.TypeAlias alias:
+                    RegisterTypeDeclaration(alias.Name);
                     PreRegisterTypeAlias(alias);
                     break;
                 case Stmt.Enum enumStmt:
+                    RegisterTypeDeclaration(enumStmt.Name, mergeWithLocal: true);
                     PreRegisterEnum(enumStmt);
+                    break;
+                case Stmt.Class cls:
+                    // Register only the source identity here. The semantic class type is still
+                    // created by CheckClassDeclaration, preserving the existing inheritance order.
+                    RegisterTypeDeclaration(cls.Name);
+                    break;
+                case Stmt.Namespace ns:
+                    RegisterTypeDeclaration(ns.Name, mergeWithLocal: true);
                     break;
                 // Note: Classes are not pre-registered here because doing so creates MutableClass
                 // objects that break inheritance checking. Classes are properly registered during
@@ -1617,6 +1660,11 @@ public partial class TypeChecker
     /// </summary>
     private void CollectModuleExports(ParsedModule module)
     {
+        module.ExportedValueBindings.Clear();
+        module.ExportedTypeBindings.Clear();
+        module.DefaultValueBinding = null;
+        module.DefaultTypeBinding = null;
+
         var moduleEnv = new TypeEnvironment(_environment);
 
         // CJS modules have module, exports, and global in scope
@@ -1688,6 +1736,11 @@ public partial class TypeChecker
                             {
                                 var type = CheckExpr(export.DefaultExpr);
                                 module.DefaultExportType = type;
+                                if (export.DefaultExpr is Expr.Variable variable)
+                                {
+                                    module.DefaultValueBinding =
+                                        _environment.GetValueBinding(variable.Name.Lexeme);
+                                }
                             }
                             else if (export.NamedExports != null && export.FromModulePath == null)
                             {
@@ -1722,6 +1775,11 @@ public partial class TypeChecker
                     if (export.Declaration != null)
                     {
                         module.DefaultExportType = GetDeclaredType(export.Declaration);
+                        RecordExportedDeclarationBindings(
+                            module,
+                            export.Declaration,
+                            exportedName: "default",
+                            isDefault: true);
                     }
                     // DefaultExpr already handled above
                 }
@@ -1730,17 +1788,38 @@ public partial class TypeChecker
                     string name = GetDeclarationName(export.Declaration);
                     var type = GetDeclaredType(export.Declaration);
                     module.ExportedTypes[name] = type;
+                    RecordExportedDeclarationBindings(
+                        module,
+                        export.Declaration,
+                        exportedName: name,
+                        isDefault: false);
                 }
                 else if (export.NamedExports != null && export.FromModulePath == null)
                 {
                     foreach (var spec in export.NamedExports)
                     {
+                        bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
                         var type = _environment.Get(spec.LocalName.Lexeme)
                             ?? _environment.GetTypeBinding(spec.LocalName.Lexeme);
                         if (type != null)
                         {
                             string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                             module.ExportedTypes[exportedName] = type;
+                        }
+
+                        string bindingName = spec.LocalName.Lexeme;
+                        string exportedBindingName =
+                            spec.ExportedName?.Lexeme ?? bindingName;
+                        if (!isTypeOnly &&
+                            _environment.GetValueBinding(bindingName) is { } valueBinding)
+                        {
+                            module.ExportedValueBindings[exportedBindingName] = valueBinding;
+                            BindExportSpecifier(spec, valueBinding);
+                        }
+                        if (_environment.GetTypeSymbol(bindingName) is { } typeBinding)
+                        {
+                            module.ExportedTypeBindings[exportedBindingName] = typeBinding;
+                            BindExportSpecifier(spec, typeBinding);
                         }
                     }
                 }
@@ -1766,14 +1845,28 @@ public partial class TypeChecker
                         {
                             var namespaceType = CreateModuleNamespaceType(
                                 export.NamespaceExportName.Lexeme, sourceModule);
+                            var namespaceValueBinding = Bindings.Declare(
+                                export.NamespaceExportName,
+                                CurrentSourceDocument,
+                                BindingNamespace.Value);
+                            var namespaceTypeBinding = Bindings.Declare(
+                                export.NamespaceExportName,
+                                CurrentSourceDocument,
+                                BindingNamespace.Type);
                             if (export.NamespaceExportName.Type == TokenType.DEFAULT
                                 || export.NamespaceExportName.Lexeme == "default")
                             {
                                 module.DefaultExportType = namespaceType;
+                                module.DefaultValueBinding = namespaceValueBinding;
+                                module.DefaultTypeBinding = namespaceTypeBinding;
                             }
                             else
                             {
                                 module.ExportedTypes[export.NamespaceExportName.Lexeme] = namespaceType;
+                                module.ExportedValueBindings[export.NamespaceExportName.Lexeme] =
+                                    namespaceValueBinding;
+                                module.ExportedTypeBindings[export.NamespaceExportName.Lexeme] =
+                                    namespaceTypeBinding;
                             }
                         }
                         else if (export.NamedExports != null)
@@ -1786,6 +1879,7 @@ public partial class TypeChecker
                             foreach (var spec in export.NamedExports)
                             {
                                 string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
+                                bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
                                 if (sourceModule.ExportedTypes.TryGetValue(spec.LocalName.Lexeme, out var type))
                                 {
                                     module.ExportedTypes[exportedName] = type;
@@ -1793,6 +1887,22 @@ public partial class TypeChecker
                                 else if (sourceModule.IsCommonJs)
                                 {
                                     module.ExportedTypes[exportedName] = TypeInfo.Any.Shared;
+                                }
+
+                                if (!isTypeOnly &&
+                                    sourceModule.ExportedValueBindings.TryGetValue(
+                                        spec.LocalName.Lexeme,
+                                        out var valueBinding))
+                                {
+                                    module.ExportedValueBindings[exportedName] = valueBinding;
+                                    BindExportSpecifier(spec, valueBinding);
+                                }
+                                if (sourceModule.ExportedTypeBindings.TryGetValue(
+                                        spec.LocalName.Lexeme,
+                                        out var typeBinding))
+                                {
+                                    module.ExportedTypeBindings[exportedName] = typeBinding;
+                                    BindExportSpecifier(spec, typeBinding);
                                 }
                             }
                         }
@@ -1802,6 +1912,14 @@ public partial class TypeChecker
                             foreach (var (name, type) in sourceModule.ExportedTypes)
                             {
                                 module.ExportedTypes[name] = type;
+                            }
+                            foreach (var (name, binding) in sourceModule.ExportedValueBindings)
+                            {
+                                module.ExportedValueBindings[name] = binding;
+                            }
+                            foreach (var (name, binding) in sourceModule.ExportedTypeBindings)
+                            {
+                                module.ExportedTypeBindings[name] = binding;
                             }
                         }
                     }
@@ -1825,6 +1943,36 @@ public partial class TypeChecker
                 moduleEnv.Enclosing?.DefineImportAlias(globalName, globalType, isValue: true);
         }
         }
+    }
+
+    private void RecordExportedDeclarationBindings(
+        ParsedModule module,
+        Stmt declaration,
+        string exportedName,
+        bool isDefault)
+    {
+        string localName = GetDeclarationName(declaration);
+        if (_environment.GetValueBinding(localName) is { } valueBinding)
+        {
+            if (isDefault)
+                module.DefaultValueBinding = valueBinding;
+            else
+                module.ExportedValueBindings[exportedName] = valueBinding;
+        }
+        if (_environment.GetTypeSymbol(localName) is { } typeBinding)
+        {
+            if (isDefault)
+                module.DefaultTypeBinding = typeBinding;
+            else
+                module.ExportedTypeBindings[exportedName] = typeBinding;
+        }
+    }
+
+    private void BindExportSpecifier(Stmt.ExportSpecifier specifier, BindingSymbol binding)
+    {
+        Bindings.Bind(specifier.LocalName, CurrentSourceDocument, binding);
+        if (specifier.ExportedName is { } exportedName)
+            Bindings.Bind(exportedName, CurrentSourceDocument, binding);
     }
 
     private static TypeInfo.Namespace CreateModuleNamespaceType(
@@ -1864,6 +2012,10 @@ public partial class TypeChecker
                         if (isCjsImport)
                         {
                             env.Define(import.DefaultImport.Lexeme, TypeInfo.Any.Shared);
+                            BindImportedDeclaration(
+                                env,
+                                import.DefaultImport,
+                                BindingNamespace.Value);
                         }
                         else
                         {
@@ -1884,6 +2036,20 @@ public partial class TypeChecker
                                     importedModule.DefaultExportType,
                                     isValue: !import.IsTypeOnly);
                             }
+
+                            if (!import.IsTypeOnly)
+                            {
+                                BindImportedDeclaration(
+                                    env,
+                                    import.DefaultImport,
+                                    BindingNamespace.Value,
+                                    importedModule.DefaultValueBinding);
+                            }
+                            BindImportedDeclaration(
+                                env,
+                                import.DefaultImport,
+                                BindingNamespace.Type,
+                                importedModule.DefaultTypeBinding);
                         }
                     }
 
@@ -1893,12 +2059,27 @@ public partial class TypeChecker
                         if (isCjsImport)
                         {
                             env.Define(import.NamespaceImport.Lexeme, TypeInfo.Any.Shared);
+                            BindImportedDeclaration(
+                                env,
+                                import.NamespaceImport,
+                                BindingNamespace.Value);
                         }
                         else
                         {
                             var namespaceType = CreateModuleNamespaceType(
                                 import.NamespaceImport.Lexeme, importedModule);
                             env.DefineNamespace(import.NamespaceImport.Lexeme, namespaceType);
+                            if (!import.IsTypeOnly)
+                            {
+                                BindImportedDeclaration(
+                                    env,
+                                    import.NamespaceImport,
+                                    BindingNamespace.Value);
+                            }
+                            BindImportedDeclaration(
+                                env,
+                                import.NamespaceImport,
+                                BindingNamespace.Type);
                         }
                     }
 
@@ -1913,6 +2094,11 @@ public partial class TypeChecker
                             if (isCjsImport)
                             {
                                 env.Define(localName, TypeInfo.Any.Shared);
+                                BindImportedDeclaration(
+                                    env,
+                                    spec.LocalName ?? spec.Imported,
+                                    BindingNamespace.Value,
+                                    importedToken: spec.Imported);
                                 continue;
                             }
 
@@ -1924,6 +2110,32 @@ public partial class TypeChecker
                             env.DefineImportAlias(
                                 localName, type,
                                 isValue: !import.IsTypeOnly && !spec.IsTypeOnly);
+
+                            bool isTypeOnly = import.IsTypeOnly || spec.IsTypeOnly;
+                            Token localToken = spec.LocalName ?? spec.Imported;
+                            if (!isTypeOnly &&
+                                importedModule.ExportedValueBindings.TryGetValue(
+                                    importedName,
+                                    out var valueBinding))
+                            {
+                                BindImportedDeclaration(
+                                    env,
+                                    localToken,
+                                    BindingNamespace.Value,
+                                    valueBinding,
+                                    spec.Imported);
+                            }
+                            if (importedModule.ExportedTypeBindings.TryGetValue(
+                                    importedName,
+                                    out var typeBinding))
+                            {
+                                BindImportedDeclaration(
+                                    env,
+                                    localToken,
+                                    BindingNamespace.Type,
+                                    typeBinding,
+                                    spec.Imported);
+                            }
                         }
                     }
                 }
@@ -1942,6 +2154,29 @@ public partial class TypeChecker
                 }
             }
         }
+    }
+
+    private BindingSymbol BindImportedDeclaration(
+        TypeEnvironment environment,
+        Token localName,
+        BindingNamespace bindingNamespace,
+        BindingSymbol? sourceBinding = null,
+        Token? importedToken = null)
+    {
+        BindingSymbol binding = sourceBinding ?? Bindings.Declare(
+            localName,
+            CurrentSourceDocument,
+            bindingNamespace);
+
+        if (bindingNamespace == BindingNamespace.Value)
+            environment.DefineValueBinding(localName.Lexeme, binding);
+        else if (bindingNamespace == BindingNamespace.Type)
+            environment.DefineTypeBinding(localName.Lexeme, binding);
+
+        Bindings.Bind(localName, CurrentSourceDocument, binding);
+        if (importedToken is not null && !ReferenceEquals(importedToken, localName))
+            Bindings.Bind(importedToken, CurrentSourceDocument, binding);
+        return binding;
     }
 
     /// <summary>

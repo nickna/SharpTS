@@ -1,6 +1,7 @@
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using SharpTS.Diagnostics;
+using SharpTS.Configuration;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
@@ -8,50 +9,57 @@ using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 namespace SharpTS.LanguageServer.Services;
 
 /// <summary>
-/// Resolves source positions to checker-bound local value declarations.
+/// Resolves source positions to checker-bound declarations across a module graph.
 /// </summary>
 /// <remarks>
 /// The service intentionally returns no result for names the checker did not bind. In particular,
-/// property/member navigation and cross-module import targets need their own complete semantic
-/// domains; guessing from matching text would produce incorrect navigation under shadowing.
+/// property/member navigation still needs its own complete semantic domain; guessing from matching
+/// text would produce incorrect navigation under shadowing.
 /// </remarks>
 public sealed class DefinitionService
 {
     /// <summary>
-    /// Finds the local value declaration selected by an LSP position.
+    /// Finds the value or type declaration selected by an LSP position.
     /// </summary>
     public IReadOnlyList<Location> FindDefinitions(
         string path,
         string text,
-        Position position)
+        Position position,
+        IReadOnlyDictionary<string, string>? openDocuments = null)
     {
-        var document = new SourceDocument(path, text);
+        string absolutePath = Path.GetFullPath(path);
+        var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (openDocuments is not null)
+        {
+            foreach (var (documentPath, documentText) in openDocuments)
+                overlay[Path.GetFullPath(documentPath)] = documentText;
+        }
+        overlay[absolutePath] = text;
 
-        ParseDiagnosticResult parsed;
+        ParsedModule entry;
+        ModuleResolver resolver;
         try
         {
-            var parser = new Parser(
-                    new Lexer(text) { JsxTolerant = IsJsx(path) }.ScanTokens(),
-                    DecoratorMode.Stage3)
-                .WithSourceDocument(document);
-            if (IsJsx(path))
-                parser.WithJsx(text, JsxParseOptions.Default);
-            parsed = parser.Parse();
+            resolver = new ModuleResolver(
+                absolutePath,
+                ModuleResolutionOptions.Default,
+                overlay,
+                new TypeScriptProgramOptions { PreferDeclarationFiles = true },
+                virtualFilesFallBackToDisk: true);
+            entry = resolver.LoadModule(absolutePath, DecoratorMode.Stage3);
         }
         catch
         {
             return [];
         }
 
-        if (!parsed.IsSuccess)
+        if (entry.Document is not { } document)
             return [];
 
-        var checker = new TypeChecker().WithFilePath(path);
+        var checker = new TypeChecker().WithFilePath(absolutePath);
         try
         {
-            // Recovery keeps useful bindings from the rest of a file when an unrelated statement
-            // has a type error. A failure in checker setup still degrades safely to no definition.
-            checker.CheckWithRecovery(parsed.Statements, document);
+            checker.CheckModules(resolver.GetModulesInOrder(entry), resolver);
         }
         catch
         {
@@ -61,7 +69,14 @@ public sealed class DefinitionService
         int offset = document.Lines.ToOffset(
             (int)position.Line + 1,
             (int)position.Character + 1);
-        return checker.Bindings.FindDefinitions(document, offset)
+        IReadOnlyList<BindingDeclaration> declarations =
+            checker.Bindings.FindDefinitions(document, offset, BindingNamespace.Value);
+        if (declarations.Count == 0)
+        {
+            declarations =
+                checker.Bindings.FindDefinitions(document, offset, BindingNamespace.Type);
+        }
+        return declarations
             .Select(ToLocation)
             .ToArray();
     }
@@ -81,8 +96,4 @@ public sealed class DefinitionService
                 endColumn - 1),
         };
     }
-
-    private static bool IsJsx(string path) =>
-        path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
-        path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
 }

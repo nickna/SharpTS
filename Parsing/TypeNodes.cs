@@ -16,7 +16,11 @@ public abstract record TypeNode(int Line);
 /// <summary>A type reference by name: <c>Foo</c>, <c>Box&lt;string&gt;</c>. Type arguments are
 /// null for a bare reference. Also covers primitive/keyword names (<c>string</c>, <c>void</c>,
 /// …) — resolution treats them uniformly, exactly like the string path.</summary>
-public sealed record NamedTypeNode(string Name, List<TypeNode>? TypeArguments, int Line) : TypeNode(Line);
+public sealed record NamedTypeNode(
+    string Name,
+    List<TypeNode>? TypeArguments,
+    int Line,
+    Token? NameToken = null) : TypeNode(Line);
 
 /// <summary>A literal type: <c>"ok"</c>, <c>42</c>, <c>true</c>, <c>1n</c> (bigint literals carry
 /// their <c>System.Numerics.BigInteger</c> value).</summary>

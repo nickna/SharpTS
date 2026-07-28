@@ -260,17 +260,20 @@ items inside the decorator parens — small, real UX improvement.
 ### 5.4 General navigation (Phase 4)
 
 The reference-keyed `SpanTable` and per-file `SourceDocument` have now landed. Document symbols
-use statement spans, while local-value definition uses a checker-produced `BindingIndex`: semantic
-identities are attached when `TypeEnvironment` defines declarations and uses are captured at the
-same lookup seam. This makes hoisting, shadowing, parameters, and overload merging follow the real
-checker instead of a second editor-only scope walker.
+use statement spans, while definition uses a checker-produced `BindingIndex`: independent value
+and type identities are attached when `TypeEnvironment` defines declarations and uses are captured
+at the same lookup seam. The language server checks the resolver's real dependency graph, overlays
+dirty open documents on disk, and carries source identities through named/default imports and
+re-exports. This makes hoisting, shadowing, parameters, overload merging, aliases, and module
+provenance follow the real checker instead of a second editor-only scope walker.
 
 The server advertises these features only in `--language-features full`; the VS Code extension
 continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
 
-Still required for the complete navigation milestone: type-namespace bindings, import/re-export
-provenance across the module graph, the inverse reference index, and safe rename. Property/member
-definition remains deliberately absent until it can resolve a complete semantic domain.
+Still required for the complete navigation milestone: the inverse reference index, safe rename,
+and the remaining type/member domains (notably type parameters and qualified namespace/property
+members). Property/member definition remains deliberately absent until it can resolve a complete
+semantic domain.
 
 ---
 
@@ -377,9 +380,10 @@ single-file binary so non-VS-Code editors don't need the full SDK.
   checker's `TypeMap`, mapping the receiver's class name back to the binding). No parser
   surgery, no record-equality risk. ~7 tests + e2e (precise columns, declaration + usage hover).
 - 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
-  symbols, semantic binding identities, and local-value go-to-definition have landed. Type
-  bindings, module-aware definition, references, and safe rename remain. VS Code stays in
-  `interop-only`; these capabilities are for standalone clients.
+  symbols, semantic value/type binding identities, and module-aware go-to-definition through
+  imports/re-exports have landed. References, safe rename, type-parameter navigation, and
+  qualified member navigation remain. VS Code stays in `interop-only`; these capabilities are
+  for standalone clients.
 - ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
   packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);
   loader reload on `.csproj`/`bin` change; STATUS.md/README updates. **NOT YET DONE.**

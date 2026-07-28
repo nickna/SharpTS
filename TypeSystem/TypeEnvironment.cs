@@ -20,6 +20,8 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 {
     private readonly Dictionary<string, BindingSymbol> _valueBindings =
         new(StringComparer.Ordinal);
+    private readonly Dictionary<string, BindingSymbol> _typeBindings =
+        new(StringComparer.Ordinal);
 
     // TypeScript symbols have independent type and value facets.  Keeping these
     // bindings separate is essential for declarations such as
@@ -62,6 +64,19 @@ public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
         if (_valueBindings.TryGetValue(name, out var symbol))
             return symbol;
         return Enclosing?.GetValueBinding(name);
+    }
+
+    internal void DefineTypeBinding(string name, BindingSymbol symbol) =>
+        _typeBindings[name] = symbol;
+
+    internal BindingSymbol? GetLocalTypeSymbol(string name) =>
+        _typeBindings.GetValueOrDefault(name);
+
+    internal BindingSymbol? GetTypeSymbol(string name)
+    {
+        if (_typeBindings.TryGetValue(name, out var symbol))
+            return symbol;
+        return Enclosing?.GetTypeSymbol(name);
     }
 
     /// <summary>
