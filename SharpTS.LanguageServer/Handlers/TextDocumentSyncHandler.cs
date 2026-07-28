@@ -68,7 +68,8 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
         _facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
         {
             Uri = uri,
-            Diagnostics = new Container<Diagnostic>(_diagnostics.Analyze(text))
+            Diagnostics = new Container<Diagnostic>(
+                _diagnostics.Analyze(text, fileName: uri.GetFileSystemPath()))
         });
     }
 }

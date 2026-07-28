@@ -104,6 +104,17 @@ Shim code should be legal Node.js as far as syntax and semantics go.
 — all fair game. Anything that only works in SharpTS (or only exists in
 SharpTS) is out.
 
+## The `npm/` namespace (fallback shims)
+
+`stdlib/npm/<package>/` holds shims for npm packages (currently the react family
+powering JSX). Unlike `stdlib/node/`, these are **fallbacks**: the resolver
+consults them only after node_modules resolution misses, so a real installed
+package always wins (`EmbeddedNpmFallbackProvider`). `index.ts` marks the
+package root; resource names are pinned with `LogicalName` in `SharpTS.csproj`
+(default manifest naming would mangle hyphens like `react-dom`). The
+`react/index.ts` default export is a documented deviation from rule 1 —
+`import React from "react"` is the dominant classic-mode idiom.
+
 ## Specifier → file convention
 
 The module specifier maps 1:1 to a file path under `stdlib/node/`:

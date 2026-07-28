@@ -15,6 +15,12 @@ public partial class TypeChecker
 {
     private TypeInfo CheckCall(Expr.Call call)
     {
+        // JSX-origin calls (parser-lowered elements) bypass ordinary call checking entirely:
+        // the JSX pipeline owns their semantics and diagnostics (see TypeChecker.Jsx.cs), so
+        // the factory signature never produces TS2554/TS2345 alongside JSX-shaped errors.
+        if (call.JsxOrigin is { } jsxOrigin)
+            return CheckJsxExpression(call, jsxOrigin);
+
         if (TryCheckBuiltinCall(call, out var builtinCallResult))
             return builtinCallResult;
 

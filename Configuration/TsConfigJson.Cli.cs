@@ -98,6 +98,18 @@ internal sealed partial class TsConfigCompilerOptions
 
     [JsonPropertyName("tsBuildInfoFile")]
     public string? TsBuildInfoFile { get; set; }
+
+    [JsonPropertyName("jsx")]
+    public string? Jsx { get; set; }
+
+    [JsonPropertyName("jsxFactory")]
+    public string? JsxFactory { get; set; }
+
+    [JsonPropertyName("jsxFragmentFactory")]
+    public string? JsxFragmentFactory { get; set; }
+
+    [JsonPropertyName("jsxImportSource")]
+    public string? JsxImportSource { get; set; }
     /// <summary>See <see cref="TsConfigJson.UnknownKeys"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownKeys { get; set; }

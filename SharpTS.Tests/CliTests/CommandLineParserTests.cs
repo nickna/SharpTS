@@ -464,6 +464,67 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_JsxOptions()
+    {
+        var result = _parser.Parse([
+            "--jsx", "react",
+            "--jsxFactory=h",
+            "--jsxFragmentFactory", "HFragment",
+            "--jsxImportSource=preact",
+            "app.tsx",
+        ]);
+
+        var script = Assert.IsType<ParsedCommand.Script>(result);
+        Assert.Equal(JsxMode.React, script.Options.Jsx);
+        Assert.Equal("h", script.Options.JsxFactory);
+        Assert.Equal("HFragment", script.Options.JsxFragmentFactory);
+        Assert.Equal("preact", script.Options.JsxImportSource);
+        Assert.Equal(JsxMode.React, script.Options.ResolvedJsxOptions.Mode);
+        Assert.Equal("h", script.Options.ResolvedJsxOptions.Factory);
+    }
+
+    [Fact]
+    public void Parse_JsxDefaultsToAutomaticRuntime()
+    {
+        var result = _parser.Parse(["app.tsx"]);
+
+        var script = Assert.IsType<ParsedCommand.Script>(result);
+        Assert.Null(script.Options.Jsx);
+        var resolved = script.Options.ResolvedJsxOptions;
+        Assert.Equal(JsxMode.ReactJsx, resolved.Mode);
+        Assert.Equal("React.createElement", resolved.Factory);
+        Assert.Equal("React.Fragment", resolved.FragmentFactory);
+        Assert.Equal("react", resolved.ImportSource);
+    }
+
+    [Fact]
+    public void Parse_JsxPreserveIsRejectedWithEmitExplanation()
+    {
+        var result = _parser.Parse(["--jsx", "preserve", "app.tsx"]);
+
+        var error = Assert.IsType<ParsedCommand.Error>(result);
+        Assert.Contains("cannot emit .jsx output", error.Message);
+    }
+
+    [Fact]
+    public void Parse_JsxUnknownModeIsRejected()
+    {
+        var result = _parser.Parse(["--jsx", "vue", "app.tsx"]);
+
+        var error = Assert.IsType<ParsedCommand.Error>(result);
+        Assert.Contains("react-jsx", error.Message);
+    }
+
+    [Fact]
+    public void Parse_JsxWithoutValueIsRejected()
+    {
+        var result = _parser.Parse(["--jsx"]);
+
+        var error = Assert.IsType<ParsedCommand.Error>(result);
+        Assert.Contains("--jsx requires a mode", error.Message);
+    }
+
+    [Fact]
     public void Parse_TypeScriptProgramOptions()
     {
         var result = _parser.Parse([

@@ -92,7 +92,16 @@ public abstract record Expr
         TypeNode? RedeclarationTypeAnnotationNode = null) : Expr;
     // TypeArgNodes: per-element node twins of TypeArgs (type-AST migration) — same length as
     // TypeArgs when non-null; an element without node support is null without discarding siblings.
-    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr;
+    public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr
+    {
+        /// <summary>
+        /// Non-null when this call was produced by JSX lowering. The type checker dispatches
+        /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)
+        /// instead of ordinary call checking. Trailing init property so the visitor registries
+        /// (which key on node type) and all positional constructions are unaffected.
+        /// </summary>
+        public JsxCallInfo? JsxOrigin { get; init; } = null;
+    }
     // Defaulted: this property read was synthesized by destructuring desugaring and is covered
     // by a default (its own, or a default on an enclosing pattern). The type checker treats a
     // missing property as `undefined` for such reads instead of reporting TS2339, since the
@@ -509,7 +518,16 @@ public abstract record Stmt
         Token? NamespaceImport,
         string ModulePath,
         bool IsTypeOnly = false
-    ) : Stmt;
+    ) : Stmt
+    {
+        /// <summary>
+        /// True for the parser-synthesized automatic-JSX-runtime import
+        /// (<c>import { jsx as __sharpts_jsx, … } from "react/jsx-runtime"</c>). Single-file
+        /// checking binds its names leniently instead of demanding module mode, so isolated
+        /// buffers (tests, LSP hover) still check .tsx content.
+        /// </summary>
+        public bool IsSynthesizedJsxRuntime { get; init; } = false;
+    }
 
     /// <summary>
     /// Individual import specifier: { x } or { x as y } or { type x }

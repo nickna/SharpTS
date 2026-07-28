@@ -194,6 +194,8 @@ public static class TsConfigLoader
         bool? incremental = null, composite = null, declaration = null, emitDeclarationOnly = null;
         bool? noLib = null;
         DecoratorMode? decoratorMode = null;
+        JsxMode? jsx = null;
+        string? jsxFactory = null, jsxFragmentFactory = null, jsxImportSource = null;
         string? rootDir = null, outDir = null, declarationDir = null, baseUrl = null, buildInfoFile = null;
         IReadOnlyList<string>? files = null, includes = null, excludes = null;
         IReadOnlyList<string>? libs = null, types = null, typeRoots = null;
@@ -253,6 +255,15 @@ public static class TsConfigLoader
                 if (!string.IsNullOrWhiteSpace(opts.ModuleResolution))
                     resolutionMode = ParseModuleResolution(opts.ModuleResolution!, path);
 
+                if (!string.IsNullOrWhiteSpace(opts.Jsx))
+                    jsx = ParseJsxMode(opts.Jsx!, path);
+                if (!string.IsNullOrWhiteSpace(opts.JsxFactory))
+                    jsxFactory = opts.JsxFactory;
+                if (!string.IsNullOrWhiteSpace(opts.JsxFragmentFactory))
+                    jsxFragmentFactory = opts.JsxFragmentFactory;
+                if (!string.IsNullOrWhiteSpace(opts.JsxImportSource))
+                    jsxImportSource = opts.JsxImportSource;
+
                 if (opts.Paths is not null)
                 {
                     string pathsBase = baseUrl ?? dir;
@@ -301,6 +312,10 @@ public static class TsConfigLoader
             PreserveConstEnums: preserveConstEnums,
             DecoratorMode: decoratorMode,
             EmitDecoratorMetadata: emitDecoratorMetadata,
+            Jsx: jsx,
+            JsxFactory: jsxFactory,
+            JsxFragmentFactory: jsxFragmentFactory,
+            JsxImportSource: jsxImportSource,
             RootDir: rootDir,
             OutDir: outDir,
             Declaration: declaration,
@@ -320,6 +335,23 @@ public static class TsConfigLoader
             BuildInfoFile: ResolveBuildInfoFile(buildInfoFile, outDir, leaf.Path),
             Warnings: warnings);
     }
+
+    private static JsxMode ParseJsxMode(string value, string configPath) =>
+        value.ToLowerInvariant() switch
+        {
+            "react" => JsxMode.React,
+            "react-jsx" => JsxMode.ReactJsx,
+            "react-jsxdev" => JsxMode.ReactJsxDev,
+            // SharpTS extension: restores tsc's JSX-is-an-error-without---jsx behavior (TS17004).
+            "none" => JsxMode.None,
+            "preserve" or "react-native" => throw new Exception(
+                $"Error: {FileName} ('{configPath}'): jsx mode '{value}' is not supported: " +
+                "SharpTS executes TypeScript directly and cannot emit .jsx output. " +
+                "Use 'react-jsx', 'react-jsxdev', or 'react'."),
+            _ => throw new Exception(
+                $"Error: {FileName} ('{configPath}'): unsupported jsx mode '{value}'. " +
+                "Use react-jsx, react-jsxdev, react, or none."),
+        };
 
     private static ModuleResolutionMode ParseModuleResolution(string value, string configPath) =>
         value.ToLowerInvariant() switch
@@ -386,6 +418,10 @@ public sealed record TsConfigResult(
     bool? PreserveConstEnums,
     DecoratorMode? DecoratorMode,
     bool? EmitDecoratorMetadata,
+    JsxMode? Jsx,
+    string? JsxFactory,
+    string? JsxFragmentFactory,
+    string? JsxImportSource,
     string? RootDir,
     string? OutDir,
     bool? Declaration,

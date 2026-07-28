@@ -1277,9 +1277,16 @@ public partial class TypeChecker
         // External declaration modules (notably @types packages) commonly use
         // `declare global { ... }`. Their bodies are collected during the export
         // pass, then merged before any user module is checked.
+        // Stdlib shims merge first: namespace merging is last-wins per key, so ordering
+        // stdlib: modules ahead of everything else lets user/@types declarations (e.g. a
+        // real @types/react JSX namespace) override the embedded react shim's. Stable
+        // order is preserved within each group.
+        var augmentationOrder = modules
+            .OrderBy(m => m.Path.StartsWith("stdlib:", StringComparison.Ordinal) ? 0 : 1)
+            .ToList();
         using (new EnvironmentScope(this, scriptEnv))
         {
-            foreach (var module in modules)
+            foreach (var module in augmentationOrder)
             {
                 foreach (var augmentation in module.GlobalAugmentations)
                 {

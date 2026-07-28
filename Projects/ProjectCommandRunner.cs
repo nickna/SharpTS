@@ -152,7 +152,10 @@ public static class ProjectCommandRunner
             project.ConfigPath,
             project.ModuleResolution,
             virtualFiles: null,
-            options.TypeScriptProgramOptions);
+            options.TypeScriptProgramOptions)
+        {
+            JsxOptions = options.ResolvedJsxOptions,
+        };
         var declarationRoots = project.DeclarationFiles
             .Select(path => resolver.LoadModule(path, options.DecoratorMode))
             .ToArray();
@@ -228,6 +231,10 @@ public static class ProjectCommandRunner
             NoLib = cli.NoLib ?? project.NoLib,
             Types = cli.Types ?? project.Types,
             TypeRoots = cli.TypeRoots ?? project.TypeRoots,
+            Jsx = cli.Jsx ?? project.Jsx,
+            JsxFactory = cli.JsxFactory ?? project.JsxFactory,
+            JsxFragmentFactory = cli.JsxFragmentFactory ?? project.JsxFragmentFactory,
+            JsxImportSource = cli.JsxImportSource ?? project.JsxImportSource,
         };
 
     private static IReadOnlyList<string> CollapseWatchDirectories(IEnumerable<string> directories)
