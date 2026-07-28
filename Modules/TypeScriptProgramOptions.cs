@@ -9,7 +9,7 @@ public sealed record TypeScriptProgramOptions
     /// <summary>Preserves the legacy resolver behavior for embedding/tests.</summary>
     public static readonly TypeScriptProgramOptions Disabled = new();
 
-    /// <summary>TypeScript-compatible CLI defaults (target ES5's default lib set).</summary>
+    /// <summary>SharpTS compatibility defaults (the legacy ES5-rooted default lib set).</summary>
     public static readonly TypeScriptProgramOptions Default = new()
     {
         LoadDefaultLib = true,

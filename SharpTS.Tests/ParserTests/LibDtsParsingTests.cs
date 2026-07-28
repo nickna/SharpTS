@@ -40,6 +40,14 @@ public class LibDtsParsingTests
     }
 
     [Fact]
+    public void Method_WithRestBindingPattern_Parses()
+    {
+        // TypeScript 6's iterator declarations use a destructured rest parameter.
+        Assert.NotEmpty(Parse(
+            "interface I<TNext> { next(...[value]: [] | [TNext]): IteratorResult<TNext>; }"));
+    }
+
+    [Fact]
     public void ReadonlyIndexSignature_Parses()
     {
         Assert.NotEmpty(Parse("interface S { readonly [index: number]: string; }"));

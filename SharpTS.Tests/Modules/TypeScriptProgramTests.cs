@@ -10,6 +10,34 @@ public class TypeScriptProgramTests
     private static string VirtualPath(params string[] parts) =>
         Path.GetFullPath(Path.Combine([Path.GetTempPath(), "virtual-sharpts", .. parts]));
 
+    public static IEnumerable<object[]> BundledLibraries =>
+        TypeScriptLibProvider.AvailableLibraries.Select(library => new object[] { library });
+
+    public static IEnumerable<object[]> HostLibraryCombinations =>
+    [
+        new object[]
+        {
+            new[]
+            {
+                "lib.es2025.d.ts",
+                "lib.dom.d.ts",
+                "lib.dom.iterable.d.ts",
+                "lib.dom.asynciterable.d.ts",
+            },
+        },
+        new object[]
+        {
+            new[]
+            {
+                "lib.es2025.d.ts",
+                "lib.webworker.d.ts",
+                "lib.webworker.importscripts.d.ts",
+                "lib.webworker.iterable.d.ts",
+                "lib.webworker.asynciterable.d.ts",
+            },
+        },
+    ];
+
     [Fact]
     public void LoadProgram_LoadsPinnedDefaultLibraryGraph()
     {
@@ -52,6 +80,44 @@ public class TypeScriptProgramTests
             modules,
             module => module.Path == $"typescript-lib:{library}");
         Assert.Empty(checker.GetDiagnostics());
+    }
+
+    [Theory]
+    [MemberData(nameof(BundledLibraries))]
+    public void LoadProgram_ParsesEveryBundledLibraryGraph(string library)
+    {
+        string entryPath = VirtualPath("all-libraries", library, "main.ts");
+        var resolver = new ModuleResolver(
+            entryPath,
+            new Dictionary<string, string> { [entryPath] = "const x = 1;" },
+            TypeScriptProgramOptions.Default with { Lib = [library] });
+
+        var entry = resolver.LoadProgram(entryPath);
+        var modules = resolver.GetModulesInOrder(entry);
+
+        Assert.Contains(
+            modules,
+            module => module.Path == $"typescript-lib:{library}");
+    }
+
+    [Theory]
+    [MemberData(nameof(HostLibraryCombinations))]
+    public void LoadProgram_ParsesHostLibraryCombinations(string[] libraries)
+    {
+        string entryPath = VirtualPath("host-libraries", libraries[1], "main.ts");
+        var resolver = new ModuleResolver(
+            entryPath,
+            new Dictionary<string, string> { [entryPath] = "const x = 1;" },
+            TypeScriptProgramOptions.Default with { Lib = libraries });
+
+        var entry = resolver.LoadProgram(entryPath);
+        var modules = resolver.GetModulesInOrder(entry);
+
+        Assert.All(
+            libraries,
+            library => Assert.Contains(
+                modules,
+                module => module.Path == $"typescript-lib:{library}"));
     }
 
     [Fact]
@@ -169,6 +235,25 @@ public class TypeScriptProgramTests
     }
 
     [Fact]
+    public void ExplicitEmptyTypes_DisablesVisibleDeclarationPackages()
+    {
+        string entryPath = VirtualPath("empty-types", "src", "main.ts");
+        string declarationPath = VirtualPath(
+            "empty-types", "node_modules", "@types", "example", "index.d.ts");
+        var resolver = new ModuleResolver(entryPath, new Dictionary<string, string>
+        {
+            [entryPath] = "export const value = 1;",
+            [declarationPath] = "interface PackageGlobal { value: string; }",
+        }, TypeScriptProgramOptions.Default with { Types = [] });
+
+        var entry = resolver.LoadProgram(entryPath);
+
+        Assert.DoesNotContain(
+            resolver.GetModulesInOrder(entry),
+            module => module.Path == declarationPath);
+    }
+
+    [Fact]
     public void AutomaticTypes_AllowsPathReferencesFromDeclarationModules()
     {
         string entryPath = VirtualPath("declaration-path-reference", "src", "main.ts");
@@ -252,7 +337,7 @@ public class TypeScriptProgramTests
         string packageRoot = VirtualPath(
             "types-versions", "node_modules", "@types", "example");
         string rootDeclaration = Path.Combine(packageRoot, "index.d.ts");
-        string versionedDeclaration = Path.Combine(packageRoot, "ts5.6", "index.d.ts");
+        string versionedDeclaration = Path.Combine(packageRoot, "ts6.0", "index.d.ts");
         var resolver = new ModuleResolver(entryPath, new Dictionary<string, string>
         {
             [entryPath] = "export const value: VersionedGlobal = { version: 5 };",
@@ -260,8 +345,8 @@ public class TypeScriptProgramTests
                 {
                     "types": "index.d.ts",
                     "typesVersions": {
-                        "<=5.6": { "*": ["ts5.6/*"] },
-                        "<=5.7": { "*": ["ts5.7/*"] }
+                        "<=6.0.3": { "*": ["ts6.0/*"] },
+                        "<=6.1": { "*": ["ts6.1/*"] }
                     }
                 }
                 """,

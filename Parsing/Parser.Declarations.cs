@@ -701,9 +701,22 @@ public partial class Parser
             while (true)
             {
                 bool isRest = Match(TokenType.DOT_DOT_DOT);
-                string paramName = ConsumeIdentifierName("Expect parameter name.").Lexeme;
+                string? paramName;
+                if (IsDestructuredFunctionTypeParameter())
+                {
+                    // TypeScript 6's iterator declarations use a rest binding pattern:
+                    // `next(...[value]: [] | [TNext])`. Interface signatures only need
+                    // the binding's annotated type, so consume the pattern without
+                    // lowering it to a runtime parameter.
+                    _ = ParseDestructurePattern();
+                    paramName = null;
+                }
+                else
+                {
+                    paramName = ConsumeIdentifierName("Expect parameter name.").Lexeme;
+                }
                 bool isOptional = Match(TokenType.QUESTION);
-                Consume(TokenType.COLON, "Expect ':' after parameter name.");
+                Consume(TokenType.COLON, "Expect ':' after parameter name or binding pattern.");
                 string paramType = ParseTypeAnnotation();
                 if (TakeTypeNode() is { } paramTypeNode)
                     paramNodes.Add(new ParameterTypeNode(paramName, paramTypeNode, isOptional, isRest, paramTypeNode.Line));

@@ -7,19 +7,24 @@ License at http://www.apache.org/licenses/LICENSE-2.0
 THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
 WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
+MERCHANTABILITY OR NON-INFRINGEMENT.
 
 See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
 
 
-/// <reference no-default-lib="true"/>
-
-interface RegExp {
+interface RegExpConstructor {
     /**
-     * Returns a Boolean value indicating the state of the unicodeSets flag (v) used with a regular expression.
-     * Default is false. Read-only.
+     * Escapes any RegExp syntax characters in the input string, returning a
+     * new string that can be safely interpolated into a RegExp as a literal
+     * string to match.
+     * @example
+     * ```ts
+     * const regExp = new RegExp(RegExp.escape("foo.bar"));
+     * regExp.test("foo.bar"); // true
+     * regExp.test("foo!bar"); // false
+     * ```
      */
-    readonly unicodeSets: boolean;
+    escape(string: string): string;
 }

@@ -202,7 +202,7 @@ The project model also supports:
 - `moduleResolution` values `classic`, `node`/`node10`, `node16`, `nodenext`, and `bundler`;
 - `lib`, `noLib`, `types`, and `typeRoots`, loaded as type-only declaration inputs.
 
-The program resolver loads a pinned TypeScript 5.5.4 `lib.*.d.ts` graph, reachable `.d.ts`,
+The program resolver loads a pinned TypeScript 6.0.3 `lib.*.d.ts` graph, reachable `.d.ts`,
 `.d.mts`, and `.d.cts` modules, package `types`/`typings` and `"types"` exports, `typesVersions`,
 and visible `node_modules/@types` packages. `.tsx` files parse in the TSX dialect (JSX commits at
 `<`, angle-bracket assertions are rejected, as in tsc) and JSX intrinsic attributes are checked
@@ -210,6 +210,22 @@ against `JSX.IntrinsicElements`. The `jsx` family of options (`jsx`, `jsxFactory
 `jsxFragmentFactory`, `jsxImportSource`) is honored; the default is `react-jsx` — a deliberate
 deviation from tsc, which errors without an explicit `--jsx` (restore that behavior with
 `--jsx none`). `preserve`/`react-native` are rejected since SharpTS cannot emit .jsx output.
+
+The TypeScript 6 declaration update intentionally does not adopt TypeScript 6's new compiler
+defaults:
+
+- SharpTS keeps its mixed strictness defaults (`strictNullChecks` on; other implemented strict
+  checks off) instead of making `strict: true` implicit.
+- `target` and `module` remain .NET-emit options that SharpTS ignores. The default declaration
+  graph remains rooted at ES5's `lib.d.ts`, and source-module detection keeps SharpTS's existing
+  package/extension behavior rather than defaulting `module` to `"esnext"`.
+- Omitting `types` still discovers visible `node_modules/@types` packages; an explicit
+  `types: []` disables that discovery.
+- TypeScript 6 folds DOM iterable declarations into `lib.dom.d.ts`. The upstream
+  `lib.dom.iterable.d.ts` and `lib.dom.asynciterable.d.ts` compatibility stubs remain bundled so
+  existing explicit `lib` lists still resolve.
+- ES5 library selection and the legacy `classic`, `node`, and `node10` resolution modes remain
+  accepted even though TypeScript 6 deprecates them.
 
 **JSX out of the box:**
 

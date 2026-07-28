@@ -7,23 +7,17 @@ License at http://www.apache.org/licenses/LICENSE-2.0
 THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
 WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
+MERCHANTABILITY OR NON-INFRINGEMENT.
 
 See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
 
 
-/// <reference no-default-lib="true"/>
-
-interface String {
+interface Atomics {
     /**
-     * Returns true if all leading surrogates and trailing surrogates appear paired and in order.
+     * Performs a finite-time microwait by signaling to the operating system or
+     * CPU that the current executing code is in a spin-wait loop.
      */
-    isWellFormed(): boolean;
-
-    /**
-     * Returns a string where all lone or out-of-order surrogates have been replaced by the Unicode replacement character (U+FFFD).
-     */
-    toWellFormed(): string;
+    pause(n?: number): void;
 }
