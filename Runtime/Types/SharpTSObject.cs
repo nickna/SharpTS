@@ -535,19 +535,15 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         );
 
         // ECMA-262 §10.1.6.3 classification. SharpTSObject represents an accessor
-        // property only via a concrete getter/setter, so we take the accessor branch
-        // when the descriptor supplies a real getter/setter, when it refines an
-        // existing accessor (e.g. a `set`-only descriptor over one), or on an
-        // attribute-only redefine of an existing accessor — which must KEEP the
-        // accessor rather than convert it to a data property (#801, test 15.2.3.6-4-*).
-        // A descriptor whose only accessor field is undefined (`{get: undefined}`)
-        // on a fresh property falls through to a data property with value undefined,
-        // matching the observable result (hasOwnProperty true, value undefined).
+        // property only via its accessor-name marker plus optional concrete
+        // getter/setter callables. Any descriptor that specifies get or set is
+        // therefore classified as an accessor even when both are undefined; an
+        // attribute-only redefine of an existing accessor also keeps its kind.
         bool descHasRealAccessor = descriptor.Get != null || descriptor.Set != null;
         bool descSpecifiesAccessor = descriptor.HasGet || descriptor.HasSet;
         // Apply the descriptor
         if (descHasRealAccessor
-            || (descSpecifiesAccessor && existingIsAccessor)
+            || descSpecifiesAccessor
             || (!descSpecifiesAccessor && !descriptor.HasValue && existingIsAccessor))
         {
             // Accessor property - remove any data property value
