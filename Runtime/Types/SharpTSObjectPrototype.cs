@@ -160,6 +160,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";
+        if (target is SharpTSArguments) return "[object Arguments]";
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSMath) return "[object Math]";
         if (target is SharpTSJSON) return "[object JSON]";
