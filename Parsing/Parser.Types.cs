@@ -785,8 +785,9 @@ public partial class Parser
                  Check(TokenType.VOID) ||  // void type
                  Check(TokenType.NULL) || Check(TokenType.UNDEFINED) || Check(TokenType.UNKNOWN) || Check(TokenType.NEVER))
         {
-            typeName = Advance().Lexeme;
-            typeNode = new NamedTypeNode(typeName, null, Previous().Line);
+            Token nameToken = Advance();
+            typeName = nameToken.Lexeme;
+            typeNode = new NamedTypeNode(typeName, null, nameToken.Line, nameToken);
 
             // Qualified type name (namespace member): `Intl.CollatorOptions`, `NodeJS.Timer`.
             // The dotted name carries on the NamedTypeNode; resolution hands the whole "Foo.Bar"
@@ -797,7 +798,9 @@ public partial class Parser
             {
                 Advance(); // consume '.'
                 typeName += "." + Advance().Lexeme;
-                typeNode = new NamedTypeNode(typeName, null, Previous().Line);
+                typeNode = typeNode is NamedTypeNode named
+                    ? named with { Name = typeName }
+                    : new NamedTypeNode(typeName, null, nameToken.Line, nameToken);
             }
         }
         else

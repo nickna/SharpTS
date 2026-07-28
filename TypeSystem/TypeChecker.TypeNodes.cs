@@ -29,6 +29,7 @@ public partial class TypeChecker
             // identical semantics by construction, with none of the scanning hazards strings
             // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
+                BindTypeUse(named.NameToken, named.Name);
                 return ResolveTypeName(named.Name);
 
             // Generic references resolve their argument nodes and hand off to the shared
@@ -37,6 +38,7 @@ public partial class TypeChecker
             // errors). ResolveGenericType owns the built-ins-before-aliases shadowing precedence.
             case NamedTypeNode { TypeArguments: { } argNodes } named:
             {
+                BindTypeUse(named.NameToken, named.Name);
                 List<TypeInfo> typeArgs = new(argNodes.Count);
                 foreach (var argNode in argNodes)
                 {

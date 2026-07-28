@@ -70,7 +70,7 @@ public sealed class BindingSymbol
 /// </remarks>
 public sealed class BindingIndex
 {
-    private readonly Dictionary<Token, BindingSymbol> _tokens =
+    private readonly Dictionary<Token, Dictionary<BindingNamespace, BindingSymbol>> _tokens =
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, SourceDocument> _documents =
         new(ReferenceEqualityComparer.Instance);
@@ -90,7 +90,8 @@ public sealed class BindingIndex
         BindingNamespace bindingNamespace,
         BindingSymbol? existing = null)
     {
-        if (_tokens.TryGetValue(declaration, out var alreadyDeclared))
+        if (_tokens.TryGetValue(declaration, out var facets) &&
+            facets.TryGetValue(bindingNamespace, out var alreadyDeclared))
             return alreadyDeclared;
 
         var symbol = existing is { Generation: var generation } && generation == _generation
@@ -102,7 +103,12 @@ public sealed class BindingIndex
                 bindingNamespace);
 
         symbol.AddDeclaration(document, declaration);
-        _tokens[declaration] = symbol;
+        if (facets is null)
+        {
+            facets = [];
+            _tokens[declaration] = facets;
+        }
+        facets[bindingNamespace] = symbol;
         if (document is not null && declaration.Start >= 0)
             _documents[declaration] = document;
         return symbol;
@@ -113,7 +119,12 @@ public sealed class BindingIndex
         if (use.Start < 0 || symbol.Generation != _generation)
             return;
 
-        _tokens[use] = symbol;
+        if (!_tokens.TryGetValue(use, out var facets))
+        {
+            facets = [];
+            _tokens[use] = facets;
+        }
+        facets[symbol.Namespace] = symbol;
         if (document is not null)
             _documents[use] = document;
     }
@@ -129,9 +140,9 @@ public sealed class BindingIndex
         BindingSymbol? best = null;
         int bestLength = int.MaxValue;
 
-        foreach (var (token, symbol) in _tokens)
+        foreach (var (token, facets) in _tokens)
         {
-            if (symbol.Namespace != bindingNamespace ||
+            if (!facets.TryGetValue(bindingNamespace, out var symbol) ||
                 !_documents.TryGetValue(token, out var tokenDocument) ||
                 !ReferenceEquals(tokenDocument, document) ||
                 !token.Span.Contains(offset))

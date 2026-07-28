@@ -13,4 +13,8 @@ public sealed class DocumentStore
     public void Set(string uri, string text) => _docs[uri] = text;
     public bool TryGet(string uri, out string text) => _docs.TryGetValue(uri, out text!);
     public void Remove(string uri) => _docs.TryRemove(uri, out _);
+
+    /// <summary>Returns a stable snapshot of all open documents for module-resolution overlays.</summary>
+    public IReadOnlyDictionary<string, string> Snapshot() =>
+        new Dictionary<string, string>(_docs);
 }

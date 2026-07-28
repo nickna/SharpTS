@@ -122,6 +122,20 @@ public class DefinitionServiceTests
     }
 
     [Fact]
+    public void UnresolvedImportDoesNotEraseValidLocalBindings()
+    {
+        const string source = """
+            import { absent } from "./not-present";
+            const target = 1;
+            console.log(target);
+            """;
+
+        var definition = Assert.Single(Definitions(source, "target", occurrence: 1));
+
+        Assert.Equal(new Range(1, 6, 1, 12), definition.Range);
+    }
+
+    [Fact]
     public void PropertyNamesAreNotGuessedFromMatchingText()
     {
         const string source = """
@@ -192,6 +206,113 @@ public class DefinitionServiceTests
         Assert.Equal(new Range(0, 6, 0, 12), location.Range);
     }
 
+    [Fact]
+    public async Task HandlerResolvesAnAliasedImportToADirtyOpenDependency()
+    {
+        string root = Path.GetFullPath("open-module-definition-test");
+        string dependencyPath = Path.Combine(root, "dependency.ts");
+        string entryPath = Path.Combine(root, "entry.ts");
+        DocumentUri dependencyUri = DocumentUri.FromFileSystemPath(dependencyPath);
+        DocumentUri entryUri = DocumentUri.FromFileSystemPath(entryPath);
+        const string dependency = "export const original = 1;\n";
+        const string entry = """
+            import { original as local } from "./dependency";
+            console.log(local);
+            """;
+        var store = new DocumentStore();
+        store.Set(dependencyUri.ToString(), dependency);
+        store.Set(entryUri.ToString(), entry);
+        var handler = new DefinitionHandler(store, new DefinitionService());
+
+        var result = await handler.Handle(
+            new DefinitionParams
+            {
+                TextDocument = new TextDocumentIdentifier(entryUri),
+                Position = new Position(1, 12),
+            },
+            CancellationToken.None);
+
+        var target = Assert.Single(Assert.IsAssignableFrom<LocationOrLocationLinks>(result));
+        var location = Assert.IsType<Location>(target.Location);
+        Assert.Equal(dependencyUri, location.Uri);
+        Assert.Equal(new Range(0, 13, 0, 21), location.Range);
+    }
+
+    [Fact]
+    public void DefaultImportResolvesToTheNamedDefaultDeclaration()
+    {
+        string root = Path.GetFullPath("default-module-definition-test");
+        string dependencyPath = Path.Combine(root, "dependency.ts");
+        string entryPath = Path.Combine(root, "entry.ts");
+        const string dependency = "export default function launch(): void {}\n";
+        const string entry = """
+            import start from "./dependency";
+            start();
+            """;
+        var overlay = new Dictionary<string, string>
+        {
+            [dependencyPath] = dependency,
+            [entryPath] = entry,
+        };
+
+        var definition = Assert.Single(
+            Definitions(entryPath, entry, "start", occurrence: 1, overlay));
+
+        Assert.Equal(DocumentUri.FromFileSystemPath(dependencyPath), definition.Uri);
+        Assert.Equal(new Range(0, 24, 0, 30), definition.Range);
+    }
+
+    [Fact]
+    public void ReExportChainPreservesTheOriginalValueDeclaration()
+    {
+        string root = Path.GetFullPath("reexport-module-definition-test");
+        string dependencyPath = Path.Combine(root, "dependency.ts");
+        string barrelPath = Path.Combine(root, "barrel.ts");
+        string entryPath = Path.Combine(root, "entry.ts");
+        const string dependency = "export function run(): void {}\n";
+        const string barrel = "export { run as execute } from \"./dependency\";\n";
+        const string entry = """
+            import { execute as start } from "./barrel";
+            start();
+            """;
+        var overlay = new Dictionary<string, string>
+        {
+            [dependencyPath] = dependency,
+            [barrelPath] = barrel,
+            [entryPath] = entry,
+        };
+
+        var definition = Assert.Single(
+            Definitions(entryPath, entry, "start", occurrence: 1, overlay));
+
+        Assert.Equal(DocumentUri.FromFileSystemPath(dependencyPath), definition.Uri);
+        Assert.Equal(new Range(0, 16, 0, 19), definition.Range);
+    }
+
+    [Fact]
+    public void TypeOnlyImportInAnAnnotationResolvesToItsInterface()
+    {
+        string root = Path.GetFullPath("type-module-definition-test");
+        string dependencyPath = Path.Combine(root, "dependency.ts");
+        string entryPath = Path.Combine(root, "entry.ts");
+        const string dependency = "export interface Shape { size: number; }\n";
+        const string entry = """
+            import type { Shape as LocalShape } from "./dependency";
+            const value: LocalShape = { size: 1 };
+            """;
+        var overlay = new Dictionary<string, string>
+        {
+            [dependencyPath] = dependency,
+            [entryPath] = entry,
+        };
+
+        var definition = Assert.Single(
+            Definitions(entryPath, entry, "LocalShape", occurrence: 1, overlay));
+
+        Assert.Equal(DocumentUri.FromFileSystemPath(dependencyPath), definition.Uri);
+        Assert.Equal(new Range(0, 17, 0, 22), definition.Range);
+    }
+
     private IReadOnlyList<Location> Definitions(
         string source,
         string name,
@@ -204,6 +325,23 @@ public class DefinitionServiceTests
             Path.GetFullPath("definition-test.ts"),
             source,
             new Position(line - 1, column - 1));
+    }
+
+    private IReadOnlyList<Location> Definitions(
+        string path,
+        string source,
+        string name,
+        int occurrence,
+        IReadOnlyDictionary<string, string> openDocuments)
+    {
+        int offset = NthIndexOf(source, name, occurrence);
+        var lines = new SharpTS.Parsing.LineIndex(source);
+        var (line, column) = lines.ToPosition(offset);
+        return _definitions.FindDefinitions(
+            path,
+            source,
+            new Position(line - 1, column - 1),
+            openDocuments);
     }
 
     private static int NthIndexOf(string source, string value, int occurrence)

@@ -58,6 +58,19 @@ public class ParsedModule
     public Dictionary<string, TypeInfo> ExportedTypes { get; } = [];
 
     /// <summary>
+    /// Checker binding identities for named value exports. These preserve declaration provenance
+    /// through imports and re-exports for editor features; runtime export behavior remains in
+    /// <see cref="ExportedValues"/>.
+    /// </summary>
+    public Dictionary<string, BindingSymbol> ExportedValueBindings { get; } = [];
+
+    /// <summary>
+    /// Checker binding identities for named type exports. TypeScript's type and value facets are
+    /// tracked independently because declarations such as classes and enums participate in both.
+    /// </summary>
+    public Dictionary<string, BindingSymbol> ExportedTypeBindings { get; } = [];
+
+    /// <summary>
     /// Named exports from this module (name -> runtime value).
     /// Populated during interpretation.
     /// </summary>
@@ -68,6 +81,12 @@ public class ParsedModule
     /// Populated during type checking.
     /// </summary>
     public TypeInfo? DefaultExportType { get; set; }
+
+    /// <summary>Binding provenance for the default export's value facet, when source-backed.</summary>
+    public BindingSymbol? DefaultValueBinding { get; set; }
+
+    /// <summary>Binding provenance for the default export's type facet, when source-backed.</summary>
+    public BindingSymbol? DefaultTypeBinding { get; set; }
 
     /// <summary>
     /// Default export value, if any.

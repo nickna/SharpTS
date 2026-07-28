@@ -53,6 +53,7 @@ public class ModuleResolver
     /// <see cref="NormalizePath"/> (full path + OS-appropriate casing).
     /// </summary>
     private readonly Dictionary<string, string>? _virtualFiles;
+    private readonly bool _virtualFilesFallBackToDisk;
 
     /// <summary>
     /// Creates a new module resolver rooted at the given path.
@@ -77,6 +78,21 @@ public class ModuleResolver
     public ModuleResolver(string basePath, IReadOnlyDictionary<string, string>? virtualFiles)
         : this(basePath, ModuleResolutionOptions.Default, virtualFiles, TypeScriptProgramOptions.Disabled) { }
 
+    /// <summary>
+    /// Creates a resolver whose in-memory files overlay the real file system. Overlay content wins
+    /// for open/dirty documents while unopened dependencies continue resolving from disk.
+    /// </summary>
+    public ModuleResolver(
+        string basePath,
+        IReadOnlyDictionary<string, string> overlayFiles,
+        bool fallBackToFileSystem)
+        : this(
+            basePath,
+            ModuleResolutionOptions.Default,
+            overlayFiles,
+            TypeScriptProgramOptions.Disabled,
+            fallBackToFileSystem) { }
+
     public ModuleResolver(
         string basePath,
         IReadOnlyDictionary<string, string>? virtualFiles,
@@ -97,11 +113,13 @@ public class ModuleResolver
         string basePath,
         ModuleResolutionOptions resolutionOptions,
         IReadOnlyDictionary<string, string>? virtualFiles,
-        TypeScriptProgramOptions programOptions)
+        TypeScriptProgramOptions programOptions,
+        bool virtualFilesFallBackToDisk = false)
     {
         _basePath = Path.GetDirectoryName(Path.GetFullPath(basePath)) ?? ".";
         _resolutionOptions = resolutionOptions;
         _programOptions = programOptions;
+        _virtualFilesFallBackToDisk = virtualFilesFallBackToDisk;
         _stdlibChain = new StdlibProviderChain(
         [
             new PrimitiveProvider(),
@@ -122,7 +140,8 @@ public class ModuleResolver
     private bool ResolverFileExists(string path)
     {
         if (_virtualFiles is null) return File.Exists(path);
-        return _virtualFiles.ContainsKey(NormalizePath(path));
+        return _virtualFiles.ContainsKey(NormalizePath(path)) ||
+               (_virtualFilesFallBackToDisk && File.Exists(path));
     }
 
     private bool ResolverDirectoryExists(string path)
@@ -132,7 +151,7 @@ public class ModuleResolver
         var prefix = canonical + Path.DirectorySeparatorChar;
         foreach (var k in _virtualFiles.Keys)
             if (k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
+        return _virtualFilesFallBackToDisk && Directory.Exists(path);
     }
 
     private string ResolverReadAllText(string path)

@@ -7,7 +7,7 @@ using SharpTS.LanguageServer.Services;
 namespace SharpTS.LanguageServer.Handlers;
 
 /// <summary>
-/// Serves <c>textDocument/definition</c> for checker-resolved local value bindings.
+/// Serves <c>textDocument/definition</c> for checker-resolved value and type bindings.
 /// </summary>
 /// <remarks>
 /// Registered only in <see cref="LanguageFeatureMode.Full"/> so the VS Code extension continues
@@ -34,10 +34,21 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         ct.ThrowIfCancellationRequested();
 
+        var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (openUri, openText) in _store.Snapshot())
+        {
+            if (Uri.TryCreate(openUri, UriKind.Absolute, out var parsedUri) &&
+                parsedUri.IsFile)
+            {
+                overlay[Path.GetFullPath(parsedUri.LocalPath)] = openText;
+            }
+        }
+
         var locations = _definitions.FindDefinitions(
                 request.TextDocument.Uri.GetFileSystemPath(),
                 text,
-                request.Position)
+                request.Position,
+                overlay)
             .Select(location => new LocationOrLocationLink(location));
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(locations));
