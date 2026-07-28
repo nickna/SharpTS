@@ -582,6 +582,16 @@ public static partial class ObjectBuiltIns
             throw new Exception($"TypeError: Cannot define property '{propertyKey}': object is not extensible or property is not configurable");
         }
 
+        // A callable installed as a data-property value retains its identity on
+        // ordinary reads (`obj.prop === value`). Invocation still acquires the
+        // receiver at the call site; see EvaluateCallCore.
+        if (target is SharpTSObject identityObject
+            && descriptor.HasValue
+            && descriptor.Value is ISharpTSCallable)
+        {
+            identityObject.PreserveCallableValueIdentityFor(propertyKey);
+        }
+
         return target;
     }
 

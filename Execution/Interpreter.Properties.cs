@@ -1171,7 +1171,7 @@ public partial class Interpreter
         if (simpleObj.HasProperty(memberName))
         {
             var value = simpleObj.GetProperty(memberName);
-            if (!simpleObj.PreserveCallableValueIdentity
+            if (!simpleObj.ShouldPreserveCallableValueIdentity(memberName)
                 && TryBindReceiverForMethodAccess(value, simpleObj) is { } boundMethod)
                 return RuntimeValue.FromObject(boundMethod);
             return RuntimeValue.FromBoxed(value);
@@ -1468,6 +1468,19 @@ public partial class Interpreter
                 if (promiseMethod != null)
                     return SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub);
             }
+        }
+
+        // Callable objects inherit guest-defined fields from this realm's
+        // Function.prototype. Resolve that layer before the registry: registered
+        // callable types otherwise report "known type, missing member" and return
+        // undefined before the generic callable fallback can see the prototype.
+        if (obj is ISharpTSCallable
+            && memberName is not ("name" or "length" or "prototype"))
+        {
+            if (GetFunctionPrototype().GetExtraGetter(memberName) is { } getter)
+                return BindAccessorToObject(getter, obj).CallBoxed(this, []);
+            if (GetFunctionPrototype().HasExtra(memberName))
+                return GetFunctionPrototype().TryGetExtra(memberName);
         }
 
         // Handle built-in instance members: strings, arrays, Math, Promise

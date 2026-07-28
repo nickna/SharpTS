@@ -220,6 +220,12 @@ public sealed class Issue1279ParityTests
     public void Built_in_function_metadata_matches_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-390.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-417.js")]
+    public void Callable_descriptor_values_preserve_identity_and_inheritance_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

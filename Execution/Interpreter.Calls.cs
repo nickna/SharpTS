@@ -194,6 +194,16 @@ public partial class Interpreter
                 ? extension
                 : EvaluateGetOnObject(extensionGet, receiver).ToObject();
         }
+        else if (call.Callee is Expr.Get memberGet)
+        {
+            object? receiver = (await ctx.EvaluateExprAsync(memberGet.Object)).ToObject();
+            callee = EvaluateGetOnObject(memberGet, receiver).ToObject();
+            // Descriptor-defined callable data properties are returned raw so
+            // reference identity holds. Bind their dynamic receiver only for
+            // an actual member call (`obj.method()`), where JavaScript creates
+            // the Reference Record that supplies `this`.
+            callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+        }
         else
         {
             callee = (await ctx.EvaluateExprAsync(call.Callee)).ToObject();

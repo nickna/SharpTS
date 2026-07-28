@@ -21,6 +21,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
     private HashSet<string>? _accessorProperties;
+    private HashSet<string>? _callableIdentityProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
 
     /// <inheritdoc />
@@ -62,6 +63,16 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// object-literal methods and eagerly binding a receiver.
     /// </summary>
     internal bool PreserveCallableValueIdentity { get; init; }
+
+    internal void PreserveCallableValueIdentityFor(string name)
+    {
+        _callableIdentityProperties ??= [];
+        _callableIdentityProperties.Add(name);
+    }
+
+    internal bool ShouldPreserveCallableValueIdentity(string name)
+        => PreserveCallableValueIdentity
+            || (_callableIdentityProperties?.Contains(name) ?? false);
 
     /// <summary>
     /// Freezes this object, preventing any property changes.
