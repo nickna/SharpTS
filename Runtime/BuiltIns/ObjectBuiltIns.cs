@@ -818,14 +818,27 @@ public static partial class ObjectBuiltIns
         var target = args[0];
         var props = args[1];
 
-        if (target is null or SharpTSUndefined)
+        if (target is null or SharpTSUndefined or string or bool
+            or double or int or long or System.Numerics.BigInteger
+            or SharpTSBigInt or SharpTSSymbol)
         {
-            throw new Exception("TypeError: Object.defineProperties called on null or undefined");
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.defineProperties called on non-object"));
         }
 
         if (props is null or SharpTSUndefined)
         {
             throw new Exception("TypeError: Cannot convert undefined or null to object");
+        }
+
+        // ToObject on non-null primitives. Boolean/number/bigint/symbol wrappers
+        // have no enumerable own properties; the empty string used by the ES5
+        // boundary cases likewise contributes no descriptors.
+        if (props is bool or double or int or long or System.Numerics.BigInteger
+            or SharpTSBigInt or SharpTSSymbol
+            || props is string { Length: 0 })
+        {
+            return target;
         }
 
         // ECMA-262 §19.1.2.3 ObjectDefineProperties: for each own ENUMERABLE

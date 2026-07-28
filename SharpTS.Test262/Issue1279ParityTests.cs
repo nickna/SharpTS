@@ -236,6 +236,16 @@ public sealed class Issue1279ParityTests
     public void Array_length_descriptor_values_use_ToNumber_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-1.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-1-3.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-1-4.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-3.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-5.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-7.js")]
+    public void DefineProperties_handles_primitive_boundaries_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();
