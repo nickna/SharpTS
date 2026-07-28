@@ -26,9 +26,6 @@ public class InterfaceImplementationCompatibilityTests
         return new TypeChecker(maxErrors: 50).CheckWithRecovery(parseResult.Statements).Diagnostics;
     }
 
-    private static void AssertHasCode(IReadOnlyList<Diagnostic> diags, string tsCode) =>
-        Assert.Contains(diags, d => d.TsCode == tsCode);
-
     private static void AssertNoCode(IReadOnlyList<Diagnostic> diags, string tsCode) =>
         Assert.DoesNotContain(diags, d => d.TsCode == tsCode);
 

@@ -26,9 +26,6 @@ public class ReplCompletionProviderTests
     private static List<string> Names(ReplEngine engine, string text) =>
         engine.Completions.GetCandidates(text, text.Length).Select(c => c.Name).ToList();
 
-    private static List<string> Names(ReplEngine engine, string text, int caret) =>
-        engine.Completions.GetCandidates(text, caret).Select(c => c.Name).ToList();
-
     // ===================== Context classification =====================
 
     [Theory]
