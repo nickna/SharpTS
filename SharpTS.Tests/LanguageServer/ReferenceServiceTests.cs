@@ -260,6 +260,184 @@ public class ReferenceServiceTests
             references,
             location => Assert.Equal(
                 DocumentUri.FromFileSystemPath(importerPath),
+            location.Uri));
+    }
+
+    [Fact]
+    public void WorkspaceReferencesUnionConsumersWithDifferentProjectSettings()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile(
+            "tsconfig.json",
+            """
+            {
+              "files": [],
+              "references": [
+                { "path": "packages/lib" },
+                { "path": "apps/one" },
+                { "path": "apps/two/tsconfig.app.json" }
+              ]
+            }
+            """);
+        string dependencyPath = directory.CreateFile(
+            "packages/lib/src/dependency.ts",
+            "export const original = 1;\n");
+        directory.CreateFile(
+            "packages/lib/tsconfig.json",
+            """
+            {
+              "compilerOptions": { "composite": true },
+              "include": ["src/**/*.ts"]
+            }
+            """);
+        string firstPath = directory.CreateFile(
+            "apps/one/src/importer.ts",
+            """
+            import { original as first } from "@one/dependency";
+            first;
+            """);
+        directory.CreateFile(
+            "apps/one/tsconfig.json",
+            """
+            {
+              "compilerOptions": {
+                "composite": true,
+                "baseUrl": ".",
+                "paths": { "@one/*": ["../../packages/lib/src/*"] }
+              },
+              "include": ["src/**/*.ts"]
+            }
+            """);
+        string secondPath = directory.CreateFile(
+            "apps/two/src/importer.ts",
+            """
+            import { original as second } from "@two/dependency";
+            second;
+            """);
+        directory.CreateFile(
+            "apps/two/tsconfig.app.json",
+            """
+            {
+              "compilerOptions": {
+                "composite": true,
+                "baseUrl": ".",
+                "paths": { "@two/*": ["../../packages/lib/src/*"] }
+              },
+              "include": ["src/**/*.ts"]
+            }
+            """);
+        string first = File.ReadAllText(firstPath);
+        var openDocuments = new Dictionary<string, string>
+        {
+            [firstPath] = first,
+        };
+
+        NavigationReferenceResult result = ReferenceResult(
+            firstPath,
+            first,
+            "first",
+            occurrence: 1,
+            includeDeclaration: false,
+            openDocuments,
+            [directory.Path]);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(4, result.ConfigPaths.Count);
+        Assert.Equal(6, result.Locations.Count);
+        Assert.Equal(
+            3,
+            result.Locations.Count(location =>
+                location.Uri == DocumentUri.FromFileSystemPath(firstPath)));
+        Assert.Equal(
+            3,
+            result.Locations.Count(location =>
+                location.Uri == DocumentUri.FromFileSystemPath(secondPath)));
+        Assert.DoesNotContain(
+            result.Locations,
+            location =>
+                location.Uri == DocumentUri.FromFileSystemPath(dependencyPath));
+    }
+
+    [Fact]
+    public void BrokenWorkspaceConfigKeepsReferencesButMarksTheGraphIncomplete()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string dependencyPath = directory.CreateFile(
+            "project/dependency.ts",
+            "export const value = 1;\n");
+        string importerPath = directory.CreateFile(
+            "project/importer.ts",
+            "import { value } from \"./dependency\";\nvalue;\n");
+        directory.CreateFile(
+            "project/tsconfig.json",
+            """{ "include": ["*.ts"] }""");
+        directory.CreateFile("broken/tsconfig.json", "{ not json");
+        string dependency = File.ReadAllText(dependencyPath);
+
+        NavigationReferenceResult result = ReferenceResult(
+            dependencyPath,
+            dependency,
+            "value",
+            occurrence: 0,
+            includeDeclaration: false,
+            new Dictionary<string, string> { [dependencyPath] = dependency },
+            [directory.Path]);
+
+        Assert.False(result.IsComplete);
+        Assert.Equal(2, result.Locations.Count);
+        Assert.All(
+            result.Locations,
+            location => Assert.Equal(
+                DocumentUri.FromFileSystemPath(importerPath),
+                location.Uri));
+    }
+
+    [Fact]
+    public void WorkspaceProjectCatalogIsRefreshedBetweenRequests()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string dependencyPath = directory.CreateFile(
+            "lib/dependency.ts",
+            "export const value = 1;\n");
+        directory.CreateFile("lib/tsconfig.json", """{ "include": ["*.ts"] }""");
+        string dependency = File.ReadAllText(dependencyPath);
+        var openDocuments = new Dictionary<string, string>
+        {
+            [dependencyPath] = dependency,
+        };
+
+        NavigationReferenceResult before = ReferenceResult(
+            dependencyPath,
+            dependency,
+            "value",
+            occurrence: 0,
+            includeDeclaration: false,
+            openDocuments,
+            [directory.Path]);
+
+        string importerPath = directory.CreateFile(
+            "consumer/importer.ts",
+            "import { value } from \"../lib/dependency\";\nvalue;\n");
+        directory.CreateFile(
+            "consumer/tsconfig.json",
+            """{ "include": ["*.ts"] }""");
+        NavigationReferenceResult after = ReferenceResult(
+            dependencyPath,
+            dependency,
+            "value",
+            occurrence: 0,
+            includeDeclaration: false,
+            openDocuments,
+            [directory.Path]);
+
+        Assert.Empty(before.Locations);
+        Assert.True(before.IsComplete);
+        Assert.Equal(2, after.Locations.Count);
+        Assert.True(after.IsComplete);
+        Assert.All(
+            after.Locations,
+            location => Assert.Equal(
+                DocumentUri.FromFileSystemPath(importerPath),
                 location.Uri));
     }
 
@@ -530,6 +708,51 @@ public class ReferenceServiceTests
         Assert.Equal(new Range(1, 12, 1, 18), location.Range);
     }
 
+    [Fact]
+    public async Task HandlerUsesInitializedWorkspaceForClosedImporters()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string dependencyPath = directory.CreateFile(
+            "dependency.ts",
+            "export const answer = 42;\n");
+        string importerPath = directory.CreateFile(
+            "importer.ts",
+            "import { answer } from \"./dependency\";\nanswer;\n");
+        directory.CreateFile(
+            "tsconfig.json",
+            """{ "include": ["*.ts"] }""");
+        string dependency = File.ReadAllText(dependencyPath);
+        DocumentUri uri = DocumentUri.FromFileSystemPath(dependencyPath);
+        var store = new DocumentStore();
+        store.Set(uri.ToString(), dependency);
+        var workspace = new NavigationWorkspaceContext();
+        workspace.Initialize(new InitializeParams
+        {
+            RootUri = DocumentUri.FromFileSystemPath(directory.Path),
+        });
+        var handler = new ReferencesHandler(
+            store,
+            new ReferenceService(),
+            workspace);
+
+        var result = Assert.IsAssignableFrom<LocationContainer>(
+            await handler.Handle(
+                new ReferenceParams
+                {
+                    TextDocument = new TextDocumentIdentifier(uri),
+                    Position = new Position(0, 13),
+                    Context = new ReferenceContext { IncludeDeclaration = false },
+                },
+                CancellationToken.None));
+
+        Assert.Equal(2, result.Count());
+        Assert.All(
+            result,
+            location => Assert.Equal(
+                DocumentUri.FromFileSystemPath(importerPath),
+                location.Uri));
+    }
+
     private IReadOnlyList<Location> References(
         string source,
         string name,
@@ -552,7 +775,8 @@ public class ReferenceServiceTests
         string name,
         int occurrence,
         bool includeDeclaration,
-        IReadOnlyDictionary<string, string> openDocuments)
+        IReadOnlyDictionary<string, string> openDocuments,
+        IReadOnlyList<string>? workspaceRoots = null)
     {
         int offset = NthIndexOf(source, name, occurrence);
         var lines = new LineIndex(source);
@@ -562,7 +786,29 @@ public class ReferenceServiceTests
             source,
             new Position(line - 1, column - 1),
             includeDeclaration,
-            openDocuments);
+            openDocuments,
+            workspaceRoots);
+    }
+
+    private NavigationReferenceResult ReferenceResult(
+        string path,
+        string source,
+        string name,
+        int occurrence,
+        bool includeDeclaration,
+        IReadOnlyDictionary<string, string> openDocuments,
+        IReadOnlyList<string> workspaceRoots)
+    {
+        int offset = NthIndexOf(source, name, occurrence);
+        var lines = new LineIndex(source);
+        var (line, column) = lines.ToPosition(offset);
+        return _references.FindReferenceResult(
+            path,
+            source,
+            new Position(line - 1, column - 1),
+            includeDeclaration,
+            openDocuments,
+            workspaceRoots);
     }
 
     private static int NthIndexOf(string source, string value, int occurrence)

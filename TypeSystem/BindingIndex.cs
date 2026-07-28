@@ -217,6 +217,16 @@ public sealed class BindingIndex
         bool includeDeclarations)
     {
         IReadOnlyList<BindingSymbol> symbols = FindSymbols(document, offset);
+        return FindReferences(symbols, includeDeclarations);
+    }
+
+    /// <summary>
+    /// Returns all checker-bound occurrences for explicit symbols from this index.
+    /// </summary>
+    public IReadOnlyList<BindingOccurrence> FindReferences(
+        IReadOnlyList<BindingSymbol> symbols,
+        bool includeDeclarations)
+    {
         if (symbols.Count == 0)
             return [];
 
@@ -258,7 +268,10 @@ public sealed class BindingIndex
             .ToArray();
     }
 
-    private IReadOnlyList<BindingSymbol> FindSymbols(
+    /// <summary>
+    /// Returns the narrowest checker-bound value/type facets at a UTF-16 source offset.
+    /// </summary>
+    public IReadOnlyList<BindingSymbol> FindSymbols(
         SourceDocument document,
         int offset)
     {

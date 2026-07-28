@@ -21,6 +21,11 @@ internal sealed record NavigationGraphScope(
     IReadOnlyList<string> RootFiles,
     bool IsComplete);
 
+internal sealed record CheckedNavigationWorkspace(
+    IReadOnlyList<CheckedNavigationModel> Models,
+    IReadOnlyList<string> ConfigPaths,
+    bool IsComplete);
+
 /// <summary>
 /// Builds the semantic module graph shared by definition, references, and later rename support.
 /// </summary>
@@ -31,18 +36,81 @@ internal static class NavigationModelBuilder
         string text,
         IReadOnlyDictionary<string, string>? openDocuments)
     {
+        string absolutePath = Path.GetFullPath(path);
+        Dictionary<string, string> overlay = CreateOverlay(
+            absolutePath,
+            text,
+            openDocuments);
+        string directory = Path.GetDirectoryName(absolutePath)
+            ?? Directory.GetCurrentDirectory();
+        string? configPath = TsConfigLoader.Discover(directory);
+        if (configPath is not null)
+        {
+            try
+            {
+                ProjectBuildResult configured = TryBuildProject(
+                    absolutePath,
+                    overlay,
+                    NavigationWorkspace.FromProject(TsConfigLoader.Load(configPath)),
+                    requireMembership: true);
+                if (configured.Model is not null)
+                    return configured.Model;
+            }
+            catch
+            {
+                // Fall through to an explicitly incomplete open-document model.
+            }
+        }
+
+        return TryBuildProject(
+            absolutePath,
+            overlay,
+            NavigationWorkspace.Unconfigured(absolutePath, configPath),
+            requireMembership: false).Model;
+    }
+
+    public static CheckedNavigationWorkspace BuildWorkspace(
+        string path,
+        string text,
+        IReadOnlyDictionary<string, string>? openDocuments,
+        IReadOnlyList<string> workspaceRoots)
+    {
+        string absolutePath = Path.GetFullPath(path);
+        Dictionary<string, string> overlay = CreateOverlay(
+            absolutePath,
+            text,
+            openDocuments);
+        NavigationProjectCatalog catalog =
+            NavigationProjectCatalog.Discover(workspaceRoots);
+        var models = new List<CheckedNavigationModel>();
+        bool isComplete = catalog.IsComplete;
+
+        foreach (TsConfigResult project in catalog.Projects)
+        {
+            ProjectBuildResult result = TryBuildProject(
+                absolutePath,
+                overlay,
+                NavigationWorkspace.FromProject(project),
+                requireMembership: true);
+            isComplete &= result.IsComplete;
+            if (result.Model is not null)
+                models.Add(result.Model);
+        }
+
+        return new CheckedNavigationWorkspace(
+            models,
+            catalog.ConfigPaths,
+            isComplete && models.Count > 0);
+    }
+
+    private static ProjectBuildResult TryBuildProject(
+        string absolutePath,
+        IReadOnlyDictionary<string, string> overlay,
+        NavigationWorkspace workspace,
+        bool requireMembership)
+    {
         try
         {
-            string absolutePath = Path.GetFullPath(path);
-            var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (openDocuments is not null)
-            {
-                foreach (var (documentPath, documentText) in openDocuments)
-                    overlay[Path.GetFullPath(documentPath)] = documentText;
-            }
-            overlay[absolutePath] = text;
-
-            NavigationWorkspace workspace = DiscoverWorkspace(absolutePath);
             var resolver = new ModuleResolver(
                 workspace.BasePath,
                 workspace.ResolutionOptions,
@@ -69,25 +137,11 @@ internal static class NavigationModelBuilder
             }
             resolver.RegisterAmbientModuleDeclarations(declarationRoots);
 
-            ParsedModule entry = resolver.LoadProgram(
-                absolutePath,
-                workspace.DecoratorMode);
-            if (entry.Document is not { } document)
-                return null;
-
-            // Every configured root is a possible reverse importer. Open roots are retained as
-            // the fallback for files without a tsconfig and include dirty/new buffers that the
-            // disk-backed config matcher cannot yet enumerate.
-            List<ParsedModule> loadedRoots = [entry];
-            var rootPaths = workspace.RootFiles
-                .Concat(overlay.Keys)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Order(StringComparer.OrdinalIgnoreCase);
-            foreach (string rootPath in rootPaths)
+            List<ParsedModule> loadedRoots = [];
+            foreach (string rootPath in workspace.RootFiles
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .Order(StringComparer.OrdinalIgnoreCase))
             {
-                if (string.Equals(rootPath, absolutePath, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
                 try
                 {
                     ParsedModule root = resolver.LoadProgram(
@@ -98,12 +152,48 @@ internal static class NavigationModelBuilder
                 }
                 catch
                 {
-                    if (workspace.RootFiles.Contains(
-                            rootPath,
-                            StringComparer.OrdinalIgnoreCase))
-                    {
-                        allRootsLoaded = false;
-                    }
+                    allRootsLoaded = false;
+                }
+            }
+
+            ParsedModule? entry = resolver.GetCachedModule(absolutePath);
+            bool isMember = entry is not null;
+            if (entry is null && requireMembership)
+                return new ProjectBuildResult(null, allRootsLoaded);
+
+            entry ??= resolver.LoadProgram(absolutePath, workspace.DecoratorMode);
+            if (entry.Document is not { } document)
+                return new ProjectBuildResult(null, IsComplete: false);
+            if (!loadedRoots.Contains(entry))
+                loadedRoots.Add(entry);
+
+            // Dirty/new open buffers can be reverse importers even before the disk-backed
+            // tsconfig matcher sees them.
+            foreach (string openPath in overlay.Keys
+                         .Order(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.Equals(
+                        openPath,
+                        absolutePath,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    workspace.RootFiles.Contains(
+                        openPath,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    ParsedModule root = resolver.LoadProgram(
+                        openPath,
+                        workspace.DecoratorMode);
+                    if (!loadedRoots.Contains(root))
+                        loadedRoots.Add(root);
+                }
+                catch
+                {
+                    // Configured roots, not unrelated dirty buffers, define completeness.
                 }
             }
 
@@ -122,17 +212,20 @@ internal static class NavigationModelBuilder
             checker.CheckModules(
                 resolver.GetModulesInOrder(connectedRoots),
                 resolver);
-            return new CheckedNavigationModel(
+            var model = new CheckedNavigationModel(
                 checker,
                 document,
                 new NavigationGraphScope(
                     workspace.ConfigPath,
                     workspace.RootFiles,
-                    workspace.IsConfigured && allRootsLoaded));
+                    workspace.IsConfigured && isMember && allRootsLoaded));
+            return new ProjectBuildResult(
+                model,
+                workspace.IsConfigured && allRootsLoaded);
         }
         catch
         {
-            return null;
+            return new ProjectBuildResult(null, IsComplete: false);
         }
     }
 
@@ -178,18 +271,38 @@ internal static class NavigationModelBuilder
         return component;
     }
 
-    private static NavigationWorkspace DiscoverWorkspace(string absolutePath)
+    private static Dictionary<string, string> CreateOverlay(
+        string absolutePath,
+        string text,
+        IReadOnlyDictionary<string, string>? openDocuments)
     {
-        string directory = Path.GetDirectoryName(absolutePath)
-            ?? Directory.GetCurrentDirectory();
-        string? configPath = TsConfigLoader.Discover(directory);
-        if (configPath is null)
-            return NavigationWorkspace.Unconfigured(absolutePath);
-
-        try
+        var overlay = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        if (openDocuments is not null)
         {
-            TsConfigResult project = TsConfigLoader.Load(configPath);
-            DecoratorMode decoratorMode = project.DecoratorMode ?? DecoratorMode.Stage3;
+            foreach (var (documentPath, documentText) in openDocuments)
+                overlay[Path.GetFullPath(documentPath)] = documentText;
+        }
+        overlay[absolutePath] = text;
+        return overlay;
+    }
+
+    private sealed record NavigationWorkspace(
+        string BasePath,
+        ModuleResolutionOptions ResolutionOptions,
+        TypeScriptProgramOptions ProgramOptions,
+        TypeCheckerOptions CheckerOptions,
+        DecoratorMode DecoratorMode,
+        JsxParseOptions JsxOptions,
+        IReadOnlyList<string> RootFiles,
+        IReadOnlyList<string> DeclarationFiles,
+        string? ConfigPath,
+        bool IsConfigured)
+    {
+        public static NavigationWorkspace FromProject(TsConfigResult project)
+        {
+            DecoratorMode decoratorMode =
+                project.DecoratorMode ?? DecoratorMode.Stage3;
             return new NavigationWorkspace(
                 BasePath: project.ConfigPath,
                 ResolutionOptions: project.ModuleResolution,
@@ -214,26 +327,7 @@ internal static class NavigationModelBuilder
                 ConfigPath: project.ConfigPath,
                 IsConfigured: true);
         }
-        catch
-        {
-            // A broken config must not erase navigation in the requested/open files. The
-            // resulting scope is explicitly incomplete, so safe rename cannot use it.
-            return NavigationWorkspace.Unconfigured(absolutePath, configPath);
-        }
-    }
 
-    private sealed record NavigationWorkspace(
-        string BasePath,
-        ModuleResolutionOptions ResolutionOptions,
-        TypeScriptProgramOptions ProgramOptions,
-        TypeCheckerOptions CheckerOptions,
-        DecoratorMode DecoratorMode,
-        JsxParseOptions JsxOptions,
-        IReadOnlyList<string> RootFiles,
-        IReadOnlyList<string> DeclarationFiles,
-        string? ConfigPath,
-        bool IsConfigured)
-    {
         public static NavigationWorkspace Unconfigured(
             string absolutePath,
             string? configPath = null) =>
@@ -252,6 +346,10 @@ internal static class NavigationModelBuilder
                 ConfigPath: configPath,
                 IsConfigured: false);
     }
+
+    private sealed record ProjectBuildResult(
+        CheckedNavigationModel? Model,
+        bool IsComplete);
 }
 
 internal static class NavigationLocations
