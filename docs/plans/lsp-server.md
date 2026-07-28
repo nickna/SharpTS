@@ -1,13 +1,12 @@
 # Plan: Replace the LspBridge with a real Language Server (Direction B)
 
-**Status:** In progress on branch `wrk/lsp-server`. Landed: Phase 0, Phase 1
-(interop analyzer + project refs), LspBridge teardown, Phase 2 (decorator hover,
-completion, CLR-type-name completion, signatureHelp), Phase 3 (extension rewrite),
-Phase 4a (token-based: precise diagnostic columns + .NET member hover for declarations
-& usages), and the OmniSharp split (the server now lives in a separate `SharpTS.LanguageServer`
-executable / `sharpts-lsp` tool — OmniSharp is fully out of the core `SharpTS.dll`/tool/package).
-Remaining: Phase 4b (general TS hover/go-to-def — deferred, competes with tsserver),
-Phase 5 (polish/multi-editor packaging).
+**Status:** In progress. Landed: Phase 0, Phase 1 (interop analyzer + project refs),
+LspBridge teardown, Phase 2 (decorator hover, completion, CLR-type-name completion,
+signatureHelp), Phase 3 (extension rewrite), Phase 4a (token-based interop navigation),
+source spans and document symbols, plus the first Phase 4b slice: checker-resolved local-value
+go-to-definition. The server lives in the separate `SharpTS.LanguageServer` executable /
+`sharpts-lsp` tool, keeping OmniSharp out of the core package. Remaining: type-namespace and
+cross-module definition, references, safe rename, and Phase 5 lifecycle/polish.
 **Author:** investigation + design pass, 2026-06-22
 **Decision:** Throw away the bespoke `LspBridge` JSON protocol and the hand-rolled
 VS Code providers. Stand up a genuine LSP server over SharpTS's own
@@ -258,25 +257,20 @@ Also surface the half-built **named-arg properties** (`GetAttributeInfoHandler`
 returns settable properties that the old client never used) as additional completion
 items inside the decorator parens — small, real UX improvement.
 
-### 5.4 Hover-for-types & go-to-definition  (Phase 4 — needs new infra)
-The explore pass found the blocker: **AST nodes carry no source spans** (only
-`Token` has line + char-offset, no end), and `TypeMap` keys expressions by *object
-identity*, not position. There is no `position → AST node` index. So general hover
-("what's the type here?") and go-to-definition require new infrastructure:
+### 5.4 General navigation (Phase 4)
 
-- **Preferred (the right thing):** add a `SourceSpan` (start+end line/col) to the
-  `Expr`/`Stmt` base records in `Parsing/AST.cs` and populate it in the parser from
-  the consumed tokens. This is invasive (touches many parser productions) but it is
-  also **the single biggest lever for IDE quality** because it simultaneously fixes
-  the "diagnostic column defaults to 1 / no end span" problem across the *entire*
-  checker — every squiggle gets a precise range, not just the line. Scope it as its
-  own phase with the parser owner.
-- With spans in place: build `PositionIndex` (interval tree over nodes), map
-  position → narrowest `Expr`, look it up in the `TypeMap` from the check pass for
-  hover, and trace named types to their declaration token for definition.
+The reference-keyed `SpanTable` and per-file `SourceDocument` have now landed. Document symbols
+use statement spans, while local-value definition uses a checker-produced `BindingIndex`: semantic
+identities are attached when `TypeEnvironment` defines declarations and uses are captured at the
+same lookup seam. This makes hoisting, shadowing, parameters, and overload merging follow the real
+checker instead of a second editor-only scope walker.
 
-This phase is explicitly **deferred** — Phases 1–3 deliver the headline value
-(live SharpTS diagnostics + decorator IntelliSense in every editor) without it.
+The server advertises these features only in `--language-features full`; the VS Code extension
+continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
+
+Still required for the complete navigation milestone: type-namespace bindings, import/re-export
+provenance across the module graph, the inverse reference index, and safe rename. Property/member
+definition remains deliberately absent until it can resolve a complete semantic domain.
 
 ---
 
@@ -382,9 +376,10 @@ single-file binary so non-VS-Code editors don't need the full SDK.
   member hover for `@DotNetType` members (declarations token-based; usages via the type
   checker's `TypeMap`, mapping the receiver's class name back to the binding). No parser
   surgery, no record-equality risk. ~7 tests + e2e (precise columns, declaration + usage hover).
-- ⬜ **Phase 4b — general TS hover + go-to-definition (deferred).** Only if worth competing
-  with `tsserver`: parser-wide AST spans (reference-keyed side table, NOT base-record fields —
-  value equality) + position→`TypeMap` index + symbol table. **NOT DONE / may not be worth it.**
+- 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
+  symbols, semantic binding identities, and local-value go-to-definition have landed. Type
+  bindings, module-aware definition, references, and safe rename remain. VS Code stays in
+  `interop-only`; these capabilities are for standalone clients.
 - ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
   packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);
   loader reload on `.csproj`/`bin` change; STATUS.md/README updates. **NOT YET DONE.**

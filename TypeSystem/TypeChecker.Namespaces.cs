@@ -16,6 +16,7 @@ public partial class TypeChecker
     private void CheckNamespace(Stmt.Namespace ns)
     {
         string name = ns.Name.Lexeme;
+        RegisterValueDeclaration(ns.Name, mergeWithLocal: true);
 
         // Get or create namespace - use mutable dictionaries for construction
         TypeInfo.Namespace? existingNs = _environment.GetNamespace(name);
@@ -353,6 +354,8 @@ public partial class TypeChecker
         };
 
         // Register the alias
+        if (isValue)
+            RegisterValueDeclaration(importAlias.AliasName);
         _environment.DefineImportAlias(aliasName, resolvedType, isValue);
     }
 }

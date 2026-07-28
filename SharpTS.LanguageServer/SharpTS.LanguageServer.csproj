@@ -10,7 +10,7 @@
     <ToolCommandName>sharpts-lsp</ToolCommandName>
     <PackageId>SharpTS.LanguageServer</PackageId>
     <IsPackable>true</IsPackable>
-    <Description>LSP language server for SharpTS (.NET interop diagnostics, hover, completion).</Description>
+    <Description>LSP language server for SharpTS (.NET interop diagnostics, completion, and standalone navigation).</Description>
   </PropertyGroup>
 
   <!-- Directory.Build.props sets PackageLicenseFile=LICENSE for all packages; include the

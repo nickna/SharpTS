@@ -165,10 +165,12 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Var v when v.IsVar:
+                    RegisterValueDeclaration(v.Name, mergeWithLocal: true);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when v.IsVar:
+                    RegisterValueDeclaration(v.Name, mergeWithLocal: true);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
@@ -201,18 +203,22 @@ public partial class TypeChecker
             {
                 // `let` is Stmt.Var with IsVar == false; `var` is handled by HoistVarDeclarations.
                 case Stmt.Var v when !v.IsVar:
+                    RegisterValueDeclaration(v.Name);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Const c:
+                    RegisterValueDeclaration(c.Name);
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
                         _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when !v.IsVar:
+                    RegisterValueDeclaration(v.Name);
                     if (!_environment.IsDefinedLocally(v.Name.Lexeme))
                         _environment.Define(v.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Const c }:
+                    RegisterValueDeclaration(c.Name);
                     if (!_environment.IsDefinedLocally(c.Name.Lexeme))
                         _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
@@ -241,11 +247,13 @@ public partial class TypeChecker
             switch (stmt)
             {
                 case Stmt.Class cls:
+                    RegisterValueDeclaration(cls.Name);
                     _classDeclarationLines[cls.Name.Lexeme] = cls.Name.Line;
                     if (!_environment.IsDefinedLocally(cls.Name.Lexeme))
                         _environment.Define(cls.Name.Lexeme, TypeInfo.Any.Shared);
                     break;
                 case Stmt.Export { Declaration: Stmt.Class exportCls }:
+                    RegisterValueDeclaration(exportCls.Name);
                     _classDeclarationLines[exportCls.Name.Lexeme] = exportCls.Name.Line;
                     if (!_environment.IsDefinedLocally(exportCls.Name.Lexeme))
                         _environment.Define(exportCls.Name.Lexeme, TypeInfo.Any.Shared);
@@ -286,6 +294,8 @@ public partial class TypeChecker
     /// </summary>
     private void HoistConstFunctionExpression(Token name, string? typeAnnotation, Expr.ArrowFunction arrow, TypeNode? typeAnnotationNode = null)
     {
+        RegisterValueDeclaration(name);
+
         // Skip if already defined
         if (_environment.IsDefinedLocally(name.Lexeme)) return;
 
@@ -385,6 +395,7 @@ public partial class TypeChecker
     private void HoistSingleFunction(Stmt.Function funcStmt)
     {
         string funcName = funcStmt.Name.Lexeme;
+        RegisterValueDeclaration(funcStmt.Name, mergeWithLocal: true);
 
         // Skip if already defined (e.g., from overload processing)
         // But allow overwriting built-in Any types (like process, console) with user definitions
@@ -474,6 +485,8 @@ public partial class TypeChecker
     /// </summary>
     private void CheckFunctionDeclaration(Stmt.Function funcStmt)
     {
+        RegisterValueDeclaration(funcStmt.Name, mergeWithLocal: true);
+
         string funcName = funcStmt.Name.Lexeme;
 
         // Build the function type for this declaration
@@ -675,7 +688,10 @@ public partial class TypeChecker
         var bodyParamTypes = WidenOptionalParamsForBody(paramTypes, funcStmt.Parameters);
         for (int i = 0; i < funcStmt.Parameters.Count; i++)
         {
-            funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, bodyParamTypes[i]);
+            DeclareValue(
+                funcEnv,
+                funcStmt.Parameters[i].Name,
+                bodyParamTypes[i]);
         }
 
         // Save and set context - function bodies are isolated from outer loop/switch/label context

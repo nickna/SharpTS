@@ -11,6 +11,8 @@ public partial class TypeChecker
 {
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
+        RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
+
         Dictionary<string, object> members = [];
         double? currentNumericValue = null;
         bool hasNumeric = false;
@@ -98,7 +100,7 @@ public partial class TypeChecker
         };
 
         var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst);
-        _environment.Define(enumStmt.Name.Lexeme, enumType);
+        DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
 

@@ -60,6 +60,61 @@ public partial class TypeChecker
 
     private TypeEnvironment _environment = new();
     private TypeMap _typeMap = new();
+    private SourceDocument? _standaloneSourceDocument;
+
+    /// <summary>
+    /// Semantic declaration identities and use-to-declaration bindings produced by the most recent
+    /// check.
+    /// </summary>
+    public BindingIndex Bindings { get; } = new();
+
+    private SourceDocument? CurrentSourceDocument =>
+        _currentModule?.Document ?? _standaloneSourceDocument;
+
+    private void DeclareValue(
+        TypeEnvironment environment,
+        Token declaration,
+        TypeInfo type,
+        bool mergeWithLocal = false)
+    {
+        BindingSymbol symbol = RegisterValueDeclaration(
+            environment,
+            declaration,
+            mergeWithLocal);
+        environment.Define(declaration.Lexeme, type);
+        environment.DefineValueBinding(declaration.Lexeme, symbol);
+    }
+
+    private BindingSymbol RegisterValueDeclaration(
+        TypeEnvironment environment,
+        Token declaration,
+        bool mergeWithLocal = false)
+    {
+        BindingSymbol? existing = mergeWithLocal
+            ? environment.GetLocalValueBinding(declaration.Lexeme)
+            : null;
+        BindingSymbol symbol = Bindings.Declare(
+            declaration,
+            CurrentSourceDocument,
+            BindingNamespace.Value,
+            existing);
+        environment.DefineValueBinding(declaration.Lexeme, symbol);
+        return symbol;
+    }
+
+    private void DeclareValue(Token declaration, TypeInfo type, bool mergeWithLocal = false) =>
+        DeclareValue(_environment, declaration, type, mergeWithLocal);
+
+    private BindingSymbol RegisterValueDeclaration(
+        Token declaration,
+        bool mergeWithLocal = false) =>
+        RegisterValueDeclaration(_environment, declaration, mergeWithLocal);
+
+    private void BindValueUse(Token use)
+    {
+        if (_environment.GetValueBinding(use.Lexeme) is { } symbol)
+            Bindings.Bind(use, CurrentSourceDocument, symbol);
+    }
 
     /// <summary>
     /// When false (TypeScript's <c>strictNullChecks: off</c>), <c>null</c> and <c>undefined</c>
@@ -796,7 +851,7 @@ public partial class TypeChecker
 
             if (param.IsRest)
             {
-                paramScope.Define(param.Name.Lexeme, paramType);
+                DeclareValue(paramScope, param.Name, paramType);
                 continue;
             }
 
@@ -831,8 +886,12 @@ public partial class TypeChecker
                 requiredParams++;
             }
 
-            paramScope.Define(param.Name.Lexeme,
-                param.IsOptional && param.DefaultValue == null ? CreateUnion(paramType, TypeInfo.Undefined.Shared) : paramType);
+            DeclareValue(
+                paramScope,
+                param.Name,
+                param.IsOptional && param.DefaultValue == null
+                    ? CreateUnion(paramType, TypeInfo.Undefined.Shared)
+                    : paramType);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
@@ -913,8 +972,16 @@ public partial class TypeChecker
     /// </summary>
     /// <param name="statements">The AST statements to check.</param>
     /// <returns>A TypeMap containing the resolved type for each expression.</returns>
-    public TypeMap Check(List<Stmt> statements)
+    public TypeMap Check(List<Stmt> statements) => Check(statements, sourceDocument: null);
+
+    /// <summary>
+    /// Type-checks statements while retaining their source document in the semantic binding index.
+    /// </summary>
+    public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
+        Bindings.Clear();
+        _standaloneSourceDocument = sourceDocument;
+
         // Clear caches for fresh check
         _compatibilityCache = null;
         _expandedTypeAliasCache = null;
@@ -963,8 +1030,20 @@ public partial class TypeChecker
     /// </summary>
     /// <param name="statements">The AST statements to check.</param>
     /// <returns>A TypeCheckDiagnosticResult containing the type map and any errors encountered.</returns>
-    public TypeCheckDiagnosticResult CheckWithRecovery(List<Stmt> statements)
+    public TypeCheckDiagnosticResult CheckWithRecovery(List<Stmt> statements) =>
+        CheckWithRecovery(statements, sourceDocument: null);
+
+    /// <summary>
+    /// Type-checks statements with recovery while retaining their source document in the semantic
+    /// binding index.
+    /// </summary>
+    public TypeCheckDiagnosticResult CheckWithRecovery(
+        List<Stmt> statements,
+        SourceDocument? sourceDocument)
     {
+        Bindings.Clear();
+        _standaloneSourceDocument = sourceDocument;
+
         _diagnostics.Clear();
         _recoveryMode = true;
         // Clear caches for fresh check
@@ -1196,7 +1275,7 @@ public partial class TypeChecker
             EnumKind.Numeric,
             enumStmt.IsConst
         );
-        _environment.Define(enumStmt.Name.Lexeme, enumType);
+        DeclareValue(enumStmt.Name, enumType);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
 
@@ -1208,6 +1287,9 @@ public partial class TypeChecker
     /// <returns>A TypeMap containing resolved types for all expressions across all modules</returns>
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
+        Bindings.Clear();
+        _standaloneSourceDocument = null;
+
         // Clear compatibility cache for fresh check
         _compatibilityCache = null;
 
