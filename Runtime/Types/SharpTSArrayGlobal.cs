@@ -68,8 +68,18 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSArrayPrototype
 {
+    private Dictionary<string, object?>? _extras;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ArrayPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
+
+    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
+    public object? TryGetExtra(string name) =>
+        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    public void SetExtra(string name, object? value)
+    {
+        _extras ??= new Dictionary<string, object?>();
+        _extras[name] = value;
+    }
 
     // Mutating methods (push/pop/shift/unshift) keep the bespoke
     // SharpTSArrayUnboundMethod path because spec-compliant array-like
@@ -81,6 +91,7 @@ public sealed class SharpTSArrayPrototype
     // coercion in ArrayPrototypeMethodWrapper.
     public object? GetMember(string name)
     {
+        if (HasExtra(name)) return TryGetExtra(name);
         if (name == "constructor") return SharpTSArrayGlobal.Instance;
 
         var legacy = name switch

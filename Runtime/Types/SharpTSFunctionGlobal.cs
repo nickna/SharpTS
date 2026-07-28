@@ -39,8 +39,20 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSFunctionPrototype
 {
+    private Dictionary<string, object?>? _extras;
+
+    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
+    public object? TryGetExtra(string name) =>
+        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    public void SetExtra(string name, object? value)
+    {
+        _extras ??= new Dictionary<string, object?>();
+        _extras[name] = value;
+    }
+
     public object? GetMember(string name)
     {
+        if (HasExtra(name)) return TryGetExtra(name);
         var method = BuiltIns.FunctionBuiltIns.GetPrototypeMethod(name);
         if (method != null) return method;
         if (name == "toString") return SharpTSFunctionProtoToString.Instance;

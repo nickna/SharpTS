@@ -665,13 +665,21 @@ public static partial class ObjectBuiltIns
         var value = target switch
         {
             SharpTSObjectNamespace => propertyKey == "prototype"
-                ? SharpTSObjectPrototype.Instance
+                ? interpreter.GetObjectPrototype()
                 : GetStaticMethod(propertyKey),
             SharpTSJSON => JSONBuiltIns.GetStaticMethod(propertyKey),
-            SharpTSStringNamespace str => str.GetMember(propertyKey),
-            SharpTSNumberNamespace num => num.GetMember(propertyKey),
-            SharpTSBooleanNamespace boolean => boolean.GetMember(propertyKey),
-            SharpTSArrayGlobal array => array.GetMember(propertyKey),
+            SharpTSStringNamespace str => propertyKey == "prototype"
+                ? interpreter.GetStringPrototype()
+                : str.GetMember(propertyKey),
+            SharpTSNumberNamespace num => propertyKey == "prototype"
+                ? interpreter.GetNumberPrototype()
+                : num.GetMember(propertyKey),
+            SharpTSBooleanNamespace boolean => propertyKey == "prototype"
+                ? interpreter.GetBooleanPrototype()
+                : boolean.GetMember(propertyKey),
+            SharpTSArrayGlobal array => propertyKey == "prototype"
+                ? interpreter.GetArrayPrototype()
+                : array.GetMember(propertyKey),
             _ => interpreter.GetProperty(target, propertyKey),
         };
         if (value is BuiltInMethod { IsConstant: true } constant)

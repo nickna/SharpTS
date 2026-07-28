@@ -322,9 +322,15 @@ public partial class Interpreter
     private Runtime.Types.SharpTSStringPrototype? _stringPrototype;
     private Runtime.Types.SharpTSNumberPrototype? _numberPrototype;
     private Runtime.Types.SharpTSBooleanPrototype? _booleanPrototype;
+    private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
+    private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
+    private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
     internal Runtime.Types.SharpTSStringPrototype GetStringPrototype() => _stringPrototype ??= new();
     internal Runtime.Types.SharpTSNumberPrototype GetNumberPrototype() => _numberPrototype ??= new();
     internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype() => _booleanPrototype ??= new();
+    internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype() => _arrayPrototype ??= new();
+    internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
+    internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
 
     // Per-realm globalThis. The global object holds guest-assigned properties
     // (`globalThis.x = …`), which must stay realm-local and not race across
@@ -357,6 +363,15 @@ public partial class Interpreter
                 return true;
             case Runtime.Types.SharpTSBooleanNamespace:
                 prototype = GetBooleanPrototype();
+                return true;
+            case Runtime.Types.SharpTSArrayGlobal:
+                prototype = GetArrayPrototype();
+                return true;
+            case Runtime.Types.SharpTSFunctionGlobal:
+                prototype = GetFunctionPrototype();
+                return true;
+            case Runtime.Types.SharpTSObjectNamespace:
+                prototype = GetObjectPrototype();
                 return true;
             default:
                 prototype = null;

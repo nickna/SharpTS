@@ -13,19 +13,33 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSObjectPrototype
 {
     public static readonly SharpTSObjectPrototype Instance = new();
-    private SharpTSObjectPrototype() { }
+    private Dictionary<string, object?>? _extras;
+    internal SharpTSObjectPrototype() { }
 
-    public object? GetMember(string name) => name switch
+    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
+    public object? TryGetExtra(string name) =>
+        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    public void SetExtra(string name, object? value)
     {
-        "constructor" => SharpTSObjectNamespace.Instance,
-        "hasOwnProperty" => SharpTSObjectUnboundMethod.HasOwnProperty,
-        "toString" => SharpTSObjectUnboundMethod.ToString_,
-        "toLocaleString" => SharpTSObjectUnboundMethod.ToLocaleString,
-        "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
-        "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
-        "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
-        _ => null,
-    };
+        _extras ??= new Dictionary<string, object?>();
+        _extras[name] = value;
+    }
+
+    public object? GetMember(string name)
+    {
+        if (HasExtra(name)) return TryGetExtra(name);
+        return name switch
+        {
+            "constructor" => SharpTSObjectNamespace.Instance,
+            "hasOwnProperty" => SharpTSObjectUnboundMethod.HasOwnProperty,
+            "toString" => SharpTSObjectUnboundMethod.ToString_,
+            "toLocaleString" => SharpTSObjectUnboundMethod.ToLocaleString,
+            "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
+            "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
+            "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
+            _ => null,
+        };
+    }
 
     public override string ToString() => "[object Object]";
 }
