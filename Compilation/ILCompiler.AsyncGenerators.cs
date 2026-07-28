@@ -55,6 +55,17 @@ public partial class ILCompiler
             _types.IAsyncEnumerableOfObject,  // Async generator returns IAsyncEnumerable<object>
             paramTypes
         );
+        RegisterStateMachine(
+            methodBuilder,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextAsyncMethod,
+            EmittedStateMachineKind.AsyncIterator,
+            smBuilder.CurrentGetMethod,
+            smBuilder.DisposeAsyncMethod,
+            smBuilder.GetAsyncEnumeratorMethod,
+            smBuilder.NextMethod,
+            smBuilder.ReturnMethod,
+            smBuilder.ThrowMethod);
 
         _functions.Builders[qualifiedName] = methodBuilder;
 
@@ -184,6 +195,17 @@ public partial class ILCompiler
             isInstanceMethod: isInstanceMethod,
             runtime: _runtime
         );
+        RegisterStateMachine(
+            methodBuilder,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextAsyncMethod,
+            EmittedStateMachineKind.AsyncIterator,
+            smBuilder.CurrentGetMethod,
+            smBuilder.DisposeAsyncMethod,
+            smBuilder.GetAsyncEnumeratorMethod,
+            smBuilder.NextMethod,
+            smBuilder.ReturnMethod,
+            smBuilder.ThrowMethod);
 
         // #725: wire the function display class registered for this async generator method in
         // DefineClass so a sync arrow that writes a captured method local shares storage with the

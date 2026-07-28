@@ -306,6 +306,7 @@ public partial class ILCompiler
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
                     _types.Object
                 );
+                MarkCompilerGenerated(displayClass);
 
                 // Add fields for captured variables
                 Dictionary<string, FieldBuilder> fieldMap = [];

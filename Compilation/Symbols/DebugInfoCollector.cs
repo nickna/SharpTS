@@ -29,12 +29,27 @@ internal sealed class DebugInfoCollector
     /// <summary>GUID identifying SHA-256 as a document hash algorithm, per the portable PDB spec.</summary>
     private static readonly Guid Sha256HashAlgorithm = new("8829d00f-11b8-4213-878b-770e8597ac16");
 
+    /// <summary>
+    /// GUID identifying C# source documents. SharpTS emits managed IL and uses the C# debugger
+    /// pipeline; a zero language GUID makes managed debuggers reject otherwise valid TypeScript
+    /// sequence points as having no associated target-code type.
+    /// </summary>
+    private static readonly Guid ManagedSourceLanguage =
+        new("3f5162f8-07c6-11d3-9053-00c04fa302a1");
+
     /// <summary>Line number marking a hidden sequence point in the debugger's own conventions.</summary>
     internal const int HiddenLine = 0xfeefee;
 
     private readonly Dictionary<string, SourceFile> _documents = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<MethodBase, List<Point>> _methods = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<MethodBase, MethodLocalSymbols> _locals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, MethodBase> _stateMachines =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, List<AsyncStep>> _asyncSteps =
+        new(ReferenceEqualityComparer.Instance);
+
+    private static readonly Guid AsyncMethodSteppingInformationKind =
+        new("54fd2ac5-e925-401a-9c2a-f94f171072f8");
 
     /// <summary>
     /// Starts collecting named locals and lexical scopes for a method body, returning the sink to
@@ -71,6 +86,31 @@ internal sealed class DebugInfoCollector
 
     /// <summary>A sequence point. <see cref="Document"/> is null for a hidden point.</summary>
     private readonly record struct Point(int IlOffset, SourceFile? Document, int StartLine, int StartColumn, int EndLine, int EndColumn);
+    private readonly record struct AsyncStep(int YieldOffset, int ResumeOffset);
+
+    /// <summary>
+    /// Associates a generated MoveNext body with the source-level kickoff method. Portable-PDB
+    /// readers use this table to present the original async/iterator frame instead of raw
+    /// state-machine plumbing.
+    /// </summary>
+    internal void RecordStateMachine(
+        MethodBase kickoffMethod,
+        MethodBase moveNextMethod)
+    {
+        _stateMachines[moveNextMethod] = kickoffMethod;
+    }
+
+    /// <summary>Records one await suspension/resume pair for async stepping.</summary>
+    internal void RecordAsyncStep(
+        MethodBase moveNextMethod,
+        int yieldOffset,
+        int resumeOffset)
+    {
+        if (!_asyncSteps.TryGetValue(moveNextMethod, out List<AsyncStep>? steps))
+            _asyncSteps[moveNextMethod] = steps = [];
+        if (steps.Count == 0 || steps[^1] != new AsyncStep(yieldOffset, resumeOffset))
+            steps.Add(new AsyncStep(yieldOffset, resumeOffset));
+    }
 
     /// <summary>
     /// Registers a source file, returning a stable key to pass to
@@ -164,7 +204,7 @@ internal sealed class DebugInfoCollector
                 name: pdb.GetOrAddDocumentName(document.Path),
                 hashAlgorithm: pdb.GetOrAddGuid(Sha256HashAlgorithm),
                 hash: pdb.GetOrAddBlob(document.Hash),
-                language: pdb.GetOrAddGuid(default));
+                language: pdb.GetOrAddGuid(ManagedSourceLanguage));
         }
 
         var byRid = new Dictionary<int, List<Point>>(_methods.Count);
@@ -187,9 +227,47 @@ internal sealed class DebugInfoCollector
             pdb.AddMethodDebugInformation(single?.Handle ?? default, pdb.GetOrAddBlob(blob));
         }
 
+        WriteStateMachineMetadata(pdb);
         WriteLocalScopes(pdb, methodIlSize);
         EmbedSources(pdb);
         return pdb;
+    }
+
+    private void WriteStateMachineMetadata(MetadataBuilder pdb)
+    {
+        foreach (var (moveNext, kickoff) in _stateMachines
+            .Select(pair => (
+                MoveNext: MethodHandle(pair.Key),
+                Kickoff: MethodHandle(pair.Value)))
+            .OrderBy(pair => MetadataTokens.GetRowNumber(pair.MoveNext)))
+        {
+            pdb.AddStateMachineMethod(moveNext, kickoff);
+        }
+
+        GuidHandle kind = pdb.GetOrAddGuid(AsyncMethodSteppingInformationKind);
+        foreach (var (method, steps) in _asyncSteps
+            .OrderBy(pair => MetadataTokens.GetRowNumber(MethodHandle(pair.Key))))
+        {
+            if (steps.Count == 0)
+                continue;
+
+            MethodDefinitionHandle moveNext = MethodHandle(method);
+            var blob = new BlobBuilder();
+            blob.WriteInt32(-1); // no catch-handler offset
+            foreach (AsyncStep step in steps.OrderBy(step => step.YieldOffset))
+            {
+                blob.WriteInt32(step.YieldOffset);
+                blob.WriteInt32(step.ResumeOffset);
+                blob.WriteCompressedInteger(MetadataTokens.GetRowNumber(moveNext));
+            }
+            pdb.AddCustomDebugInformation(
+                moveNext,
+                kind,
+                pdb.GetOrAddBlob(blob));
+        }
+
+        static MethodDefinitionHandle MethodHandle(MethodBase method) =>
+            MetadataTokens.MethodDefinitionHandle(method.MetadataToken);
     }
 
     /// <summary>

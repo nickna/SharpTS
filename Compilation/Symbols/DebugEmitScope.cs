@@ -57,6 +57,12 @@ internal sealed class DebugEmitScope(
         Collector.RecordSequencePoint(method, Document, ilOffset, startLine, startColumn, endLine, endColumn);
     }
 
+    internal void RecordAsyncStep(
+        MethodBase method,
+        int yieldOffset,
+        int resumeOffset) =>
+        Collector.RecordAsyncStep(method, yieldOffset, resumeOffset);
+
     /// <summary>
     /// Whether a statement is one a debugger should be able to stop on.
     /// </summary>
