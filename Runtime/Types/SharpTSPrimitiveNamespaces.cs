@@ -80,6 +80,8 @@ public sealed class SharpTSStringPrototype
     internal SharpTSStringPrototype() { }
 
     private Dictionary<string, object?>? _extras;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, StringPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
     public object? TryGetExtra(string name) =>
         _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
@@ -91,9 +93,10 @@ public sealed class SharpTSStringPrototype
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (name == "constructor") return SharpTSStringNamespace.Instance;
         var method = StringBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
-        return new StringPrototypeMethodWrapper(name, method);
+        return _methodCache.GetOrAdd(name, _ => new StringPrototypeMethodWrapper(name, method));
     }
 
     public override string ToString() => "[object String]";
@@ -252,6 +255,8 @@ public sealed class SharpTSNumberPrototype
     internal SharpTSNumberPrototype() { }
 
     private Dictionary<string, object?>? _extras;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
     public object? TryGetExtra(string name) =>
         _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
@@ -263,9 +268,10 @@ public sealed class SharpTSNumberPrototype
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (name == "constructor") return SharpTSNumberNamespace.Instance;
         var method = NumberBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
-        return new NumberPrototypeMethodWrapper(name, method);
+        return _methodCache.GetOrAdd(name, _ => new NumberPrototypeMethodWrapper(name, method));
     }
 
     public override string ToString() => "[object Number]";
@@ -394,6 +400,7 @@ public sealed class SharpTSBooleanPrototype
         if (HasExtra(name)) return TryGetExtra(name);
         return name switch
         {
+            "constructor" => SharpTSBooleanNamespace.Instance,
             "toString" => BooleanPrototypeMethodWrapper.ToStringInstance,
             "valueOf" => BooleanPrototypeMethodWrapper.ValueOfInstance,
             _ => null,

@@ -18,6 +18,8 @@ public static class StringBuiltIns
             .MethodV2("indexOf", 1, 2, IndexOfV2)
             .MethodV2("toUpperCase", 0, ToUpperCaseV2)
             .MethodV2("toLowerCase", 0, ToLowerCaseV2)
+            .MethodV2("toLocaleUpperCase", 0, ToUpperCaseV2)
+            .MethodV2("toLocaleLowerCase", 0, ToLowerCaseV2)
             .MethodV2("trim", 0, TrimV2)
             .MethodV2("replace", 2, ReplaceV2)
             .MethodV2("split", 1, 2, specLength: 2, SplitV2)

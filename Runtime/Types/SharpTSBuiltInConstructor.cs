@@ -10,6 +10,8 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 public sealed class SharpTSBuiltInConstructor : ISharpTSCallable
 {
+    private static readonly SharpTSDate DatePrototype = new(double.NaN);
+
     public string Name { get; }
     private readonly BuiltInConstructorFactory.ConstructorHandler _factory;
 
@@ -51,6 +53,9 @@ public sealed class SharpTSBuiltInConstructor : ISharpTSCallable
         // mutations (delete / defineProperty) across all interpreters in
         // the process. RegExpBuiltIns.BuildPrototype() is still the source
         // of the per-realm object the Interpreter caches.
+
+        if (name == "prototype" && Name == BuiltInNames.Date)
+            return DatePrototype;
 
         return BuiltInRegistry.Instance.GetStaticMethod(Name, name);
     }

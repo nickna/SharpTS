@@ -17,8 +17,10 @@ public sealed class SharpTSObjectPrototype
 
     public object? GetMember(string name) => name switch
     {
+        "constructor" => SharpTSObjectNamespace.Instance,
         "hasOwnProperty" => SharpTSObjectUnboundMethod.HasOwnProperty,
         "toString" => SharpTSObjectUnboundMethod.ToString_,
+        "toLocaleString" => SharpTSObjectUnboundMethod.ToLocaleString,
         "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
         "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
         "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
@@ -37,6 +39,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
 {
     public static readonly SharpTSObjectUnboundMethod HasOwnProperty = new("hasOwnProperty", HasOwnPropertyImpl);
     public static readonly SharpTSObjectUnboundMethod ToString_ = new("toString", ToStringImpl);
+    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToStringImpl);
     public static readonly SharpTSObjectUnboundMethod ValueOf = new("valueOf", ValueOfImpl);
     public static readonly SharpTSObjectUnboundMethod IsPrototypeOf = new("isPrototypeOf", IsPrototypeOfImpl);
     public static readonly SharpTSObjectUnboundMethod PropertyIsEnumerable = new("propertyIsEnumerable", PropertyIsEnumerableImpl);

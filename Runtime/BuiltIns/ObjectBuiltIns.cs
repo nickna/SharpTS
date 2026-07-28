@@ -586,7 +586,9 @@ public static partial class ObjectBuiltIns
             // lookup returns null and the assertion fails.
             ISharpTSCallable callable when propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
-            _ => null
+            SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
+            SharpTSArrowFunction arrow => GetFunctionOwnPropertyDescriptor(arrow, propertyKey),
+            _ => GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)
         };
 
         if (descriptor == null)
@@ -597,6 +599,101 @@ public static partial class ObjectBuiltIns
         // Return as an object
         return descriptor.ToObject();
     }
+
+    private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
+        SharpTSFunction function,
+        string propertyKey)
+    {
+        if (function.TryGetAccessor(propertyKey, out var getter, out var setter))
+        {
+            return new SharpTSPropertyDescriptor
+            {
+                Get = getter,
+                Set = setter,
+                Enumerable = false,
+                Configurable = true,
+            };
+        }
+
+        return function.TryGetProperty(propertyKey, out var value)
+            ? DataDescriptor(value, writable: true, enumerable: true, configurable: true)
+            : null;
+    }
+
+    private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
+        SharpTSArrowFunction function,
+        string propertyKey)
+    {
+        if (function.TryGetAccessor(propertyKey, out var getter, out var setter))
+        {
+            return new SharpTSPropertyDescriptor
+            {
+                Get = getter,
+                Set = setter,
+                Enumerable = false,
+                Configurable = true,
+            };
+        }
+
+        return function.TryGetProperty(propertyKey, out var value)
+            ? DataDescriptor(value, writable: true, enumerable: true, configurable: true)
+            : null;
+    }
+
+    /// <summary>
+    /// Synthesizes the standard descriptor shape for members exposed by the
+    /// interpreter's built-in registry. Methods are writable/configurable and
+    /// non-enumerable; constructor prototype properties and numeric constants
+    /// are read-only, non-enumerable, and non-configurable.
+    /// </summary>
+    private static SharpTSPropertyDescriptor? GetBuiltInOwnPropertyDescriptor(
+        Interpreter interpreter,
+        object target,
+        string propertyKey)
+    {
+        bool isKnownBuiltIn = target is ISharpTSCallable
+            || target is SharpTSArrayPrototype or SharpTSFunctionPrototype
+            || BuiltInRegistry.Instance.HasInstanceMembers(target);
+        if (!isKnownBuiltIn)
+            return null;
+
+        var value = target switch
+        {
+            SharpTSObjectNamespace => propertyKey == "prototype"
+                ? SharpTSObjectPrototype.Instance
+                : GetStaticMethod(propertyKey),
+            SharpTSJSON => JSONBuiltIns.GetStaticMethod(propertyKey),
+            SharpTSStringNamespace str => str.GetMember(propertyKey),
+            SharpTSNumberNamespace num => num.GetMember(propertyKey),
+            SharpTSBooleanNamespace boolean => boolean.GetMember(propertyKey),
+            SharpTSArrayGlobal array => array.GetMember(propertyKey),
+            _ => interpreter.GetProperty(target, propertyKey),
+        };
+        if (value is BuiltInMethod { IsConstant: true } constant)
+            value = constant.CallBoxed(interpreter, []);
+        if (value is null or SharpTSUndefined)
+            return null;
+
+        bool isMethod = value is ISharpTSCallable;
+        return DataDescriptor(
+            value,
+            writable: isMethod,
+            enumerable: false,
+            configurable: isMethod);
+    }
+
+    private static SharpTSPropertyDescriptor DataDescriptor(
+        object? value,
+        bool writable,
+        bool enumerable,
+        bool configurable) => new()
+    {
+        Value = value,
+        HasValue = true,
+        Writable = writable,
+        Enumerable = enumerable,
+        Configurable = configurable,
+    };
 
     /// <summary>
     /// Returns ECMA-262 §17 spec descriptor for a callable's `name` or

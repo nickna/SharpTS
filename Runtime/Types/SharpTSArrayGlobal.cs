@@ -68,6 +68,9 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSArrayPrototype
 {
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ArrayPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
+
     // Mutating methods (push/pop/shift/unshift) keep the bespoke
     // SharpTSArrayUnboundMethod path because spec-compliant array-like
     // mutation would require writing indexed properties back onto the
@@ -78,6 +81,8 @@ public sealed class SharpTSArrayPrototype
     // coercion in ArrayPrototypeMethodWrapper.
     public object? GetMember(string name)
     {
+        if (name == "constructor") return SharpTSArrayGlobal.Instance;
+
         var legacy = name switch
         {
             "push" => (object?)SharpTSArrayUnboundMethod.Push,
@@ -95,7 +100,7 @@ public sealed class SharpTSArrayPrototype
         // TypeError if this is null or undefined. Wrap with a receiver-check
         // so `Array.prototype.map.call(null)` throws a real TypeError in JS
         // instead of surfacing a C# InvalidCastException via the method body.
-        return new ArrayPrototypeMethodWrapper(name, method);
+        return _methodCache.GetOrAdd(name, _ => new ArrayPrototypeMethodWrapper(name, method));
     }
 
     public override string ToString() => "[object Array]";
