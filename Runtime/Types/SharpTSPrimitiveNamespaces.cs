@@ -139,6 +139,7 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
 {
     private readonly string _name;
     private readonly BuiltInMethod _inner;
+    private readonly HashSet<string> _deletedMetadataProperties;
     private readonly object? _receiver;
     private readonly bool _hasReceiver;
 
@@ -146,12 +147,18 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
     {
         _name = name;
         _inner = inner;
+        _deletedMetadataProperties = [];
     }
 
-    private StringPrototypeMethodWrapper(string name, BuiltInMethod inner, object? receiver)
+    private StringPrototypeMethodWrapper(
+        string name,
+        BuiltInMethod inner,
+        HashSet<string> deletedMetadataProperties,
+        object? receiver)
     {
         _name = name;
         _inner = inner;
+        _deletedMetadataProperties = deletedMetadataProperties;
         _receiver = receiver;
         _hasReceiver = true;
     }
@@ -159,7 +166,21 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
     public int Arity() => _inner.SpecLength;
 
     public StringPrototypeMethodWrapper Bind(object? receiver)
-        => new(_name, _inner, receiver);
+        => new(_name, _inner, _deletedMetadataProperties, receiver);
+
+    internal string FunctionName => _name;
+
+    internal bool HasMetadataProperty(string name)
+        => name is "name" or "length"
+            && !_deletedMetadataProperties.Contains(name);
+
+    internal bool DeleteMetadataProperty(string name)
+    {
+        if (name is not ("name" or "length"))
+            return true;
+        _deletedMetadataProperties.Add(name);
+        return true;
+    }
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {

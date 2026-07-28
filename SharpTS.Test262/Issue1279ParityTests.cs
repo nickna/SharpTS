@@ -424,6 +424,21 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/split/name.js")]
+    [InlineData("built-ins/String/prototype/split/checking-if-deleting-the-string-prototype-split-length-property-fails.js")]
+    public void String_split_function_metadata_matches_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void String_split_function_metadata_is_isolated_between_realms()
+    {
+        const string relativePath = "built-ins/String/prototype/split/name.js";
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+    }
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

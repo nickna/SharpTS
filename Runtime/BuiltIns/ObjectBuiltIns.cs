@@ -678,7 +678,11 @@ public static partial class ObjectBuiltIns
             BuiltInMethod method when propertyKey is "name" or "length"
                 && method.HasMetadataProperty(propertyKey)
                 => GetCallableMetaDescriptor(method, propertyKey),
+            StringPrototypeMethodWrapper method when propertyKey is "name" or "length"
+                && method.HasMetadataProperty(propertyKey)
+                => GetCallableMetaDescriptor(method, propertyKey),
             ISharpTSCallable callable when callable is not BuiltInMethod
+                and not StringPrototypeMethodWrapper
                 && propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
             SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
