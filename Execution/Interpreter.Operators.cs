@@ -660,6 +660,39 @@ public partial class Interpreter
         => Stringify(value is SharpTSObject ? ToPrimitive(value, PrimitiveHint.String) : value);
 
     /// <summary>
+    /// ECMA-262 §7.1.19 ToPropertyKey for non-Symbol values. Property-key
+    /// coercion uses the string hint, so arrays use their comma-joined form,
+    /// boxed primitives unwrap, and user-defined toString/valueOf methods run
+    /// in the required order.
+    /// </summary>
+    internal string ToPropertyKeyString(object? value)
+    {
+        if (!IsObjectLike(value))
+            return PropertyKeyConverter.ToPropertyKeyString(value);
+
+        // Boxed String/Number/Boolean objects carry their primitive in an
+        // interpreter-only internal slot. Their prototype conversion methods
+        // expect the unboxed receiver, so use the wrapper-aware coercion path.
+        if (TryGetBoxedPrimitiveValue(value, out _))
+            return PropertyKeyConverter.ToPropertyKeyString(
+                ToPrimitive(value, PrimitiveHint.String));
+
+        foreach (var methodName in new[] { "toString", "valueOf" })
+        {
+            var method = GetProperty(value, methodName);
+            if (method is not ISharpTSCallable callable)
+                continue;
+
+            var primitive = FunctionBuiltIns.CallWithThis(this, callable, value, []);
+            if (!IsObjectLike(primitive))
+                return PropertyKeyConverter.ToPropertyKeyString(primitive);
+        }
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    /// <summary>
     /// ECMA-262 §25.5.2.1 step 4.b: coerce a replacer-array element to a
     /// PropertyList key. A String stays as-is; a Number coerces via ToString;
     /// an Object carrying a [[StringData]]/[[NumberData]] slot (a boxed

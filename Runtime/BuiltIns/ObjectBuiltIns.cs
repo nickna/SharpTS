@@ -460,7 +460,7 @@ public static partial class ObjectBuiltIns
 
         // ECMA-262 §7.1.19: coerce non-Symbol property keys via ToPropertyKey
         // (undefined → "undefined", null → "null", -0 → "0", booleans lowercase).
-        var propertyKey = PropertyKeyConverter.ToPropertyKeyString(args[1]);
+        var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
         PreserveOmittedAttributes(target, propertyKey, descriptor, descriptorArg, interpreter);
 
@@ -553,7 +553,7 @@ public static partial class ObjectBuiltIns
     /// <summary>
     /// Object.getOwnPropertyDescriptor(obj, prop) - returns the property descriptor for an own property.
     /// </summary>
-    private static object? GetOwnPropertyDescriptor(Interpreter _, List<object?> args)
+    private static object? GetOwnPropertyDescriptor(Interpreter interpreter, List<object?> args)
     {
         var target = args[0];
 
@@ -571,7 +571,7 @@ public static partial class ObjectBuiltIns
         }
 
         // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
-        var propertyKey = PropertyKeyConverter.ToPropertyKeyString(args[1]);
+        var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
         SharpTSPropertyDescriptor? descriptor = target switch
         {
