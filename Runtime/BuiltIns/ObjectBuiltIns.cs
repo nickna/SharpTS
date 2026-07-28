@@ -1,6 +1,7 @@
 using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -418,6 +419,7 @@ public static partial class ObjectBuiltIns
         // accessors); FromAnyObject only saw own fields. Re-derive them prototype-aware
         // and record presence so omitted-vs-undefined is preserved downstream (#801).
         ApplyValueAndAccessors(descriptor, descriptorArg, interpreter);
+        ValidatePropertyDescriptor(descriptor);
 
         // Handle Symbol-keyed property definition — route through Symbol storage.
         // Per ECMA-262 §10.1.6 / §6.2.5.6, a descriptor that omits `value` (only
@@ -1118,12 +1120,21 @@ public static partial class ObjectBuiltIns
     private static void ApplyBooleanAttributes(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
-        var w = interpreter.GetProperty(descObj, "writable");
-        if (w is not (null or SharpTSUndefined)) descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
-        var e = interpreter.GetProperty(descObj, "enumerable");
-        if (e is not (null or SharpTSUndefined)) descriptor.Enumerable = Compilation.RuntimeTypes.IsTruthy(e);
-        var c = interpreter.GetProperty(descObj, "configurable");
-        if (c is not (null or SharpTSUndefined)) descriptor.Configurable = Compilation.RuntimeTypes.IsTruthy(c);
+        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
+        {
+            descriptor.HasWritable = true;
+            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "enumerable", out var e))
+        {
+            descriptor.HasEnumerable = true;
+            descriptor.Enumerable = Compilation.RuntimeTypes.IsTruthy(e);
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "configurable", out var c))
+        {
+            descriptor.HasConfigurable = true;
+            descriptor.Configurable = Compilation.RuntimeTypes.IsTruthy(c);
+        }
     }
 
     /// <summary>
@@ -1150,12 +1161,38 @@ public static partial class ObjectBuiltIns
         if (interpreter.TryGetDescriptorField(descObj, "get", out var g))
         {
             descriptor.HasGet = true;
-            descriptor.Get = g as ISharpTSCallable;
+            descriptor.Get = g switch
+            {
+                SharpTSUndefined => null,
+                ISharpTSCallable callable => callable,
+                _ => throw new ThrowException(
+                    new SharpTSTypeError("Getter must be a function or undefined")),
+            };
         }
         if (interpreter.TryGetDescriptorField(descObj, "set", out var s))
         {
             descriptor.HasSet = true;
-            descriptor.Set = s as ISharpTSCallable;
+            descriptor.Set = s switch
+            {
+                SharpTSUndefined => null,
+                ISharpTSCallable callable => callable,
+                _ => throw new ThrowException(
+                    new SharpTSTypeError("Setter must be a function or undefined")),
+            };
+        }
+    }
+
+    /// <summary>
+    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor rejects descriptors that combine
+    /// accessor fields with data-property fields.
+    /// </summary>
+    private static void ValidatePropertyDescriptor(SharpTSPropertyDescriptor descriptor)
+    {
+        if ((descriptor.HasGet || descriptor.HasSet) &&
+            (descriptor.HasValue || descriptor.HasWritable))
+        {
+            throw new ThrowException(
+                new SharpTSTypeError("Invalid property descriptor: cannot specify accessors and a value or writable attribute"));
         }
     }
 

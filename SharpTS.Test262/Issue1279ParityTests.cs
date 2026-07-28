@@ -40,6 +40,29 @@ public sealed class Issue1279ParityTests
     public void Built_in_object_descriptors_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    public static TheoryData<string> ObjectDescriptorValidationCases => new()
+    {
+        "built-ins/Object/defineProperty/15.2.3.6-3-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-2.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-3.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-4.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-5.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-6.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-7.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-8.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-9.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-10.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-11.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-12.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-13.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-14.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ObjectDescriptorValidationCases))]
+    public void Invalid_object_descriptors_throw_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();
