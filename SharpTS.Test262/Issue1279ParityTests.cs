@@ -22,6 +22,15 @@ public sealed class Issue1279ParityTests
     [Theory]
     [MemberData(nameof(ObjectPropertyKeyCases))]
     public void Object_property_keys_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-2-1.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-2-2.js")]
+    public void Missing_object_descriptors_are_undefined_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();
         if (root is null)

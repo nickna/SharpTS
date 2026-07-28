@@ -591,7 +591,7 @@ public static partial class ObjectBuiltIns
 
         if (descriptor == null)
         {
-            return null;
+            return SharpTSUndefined.Instance;
         }
 
         // Return as an object
@@ -630,7 +630,7 @@ public static partial class ObjectBuiltIns
             case SharpTSInstance inst when inst.HasSymbolProperty(key):
                 return DescriptorObjectFor(inst.GetBySymbol(key));
             default:
-                return null;
+                return SharpTSUndefined.Instance;
         }
 
         static object? DescriptorObjectFor(object? value) => new SharpTSPropertyDescriptor
