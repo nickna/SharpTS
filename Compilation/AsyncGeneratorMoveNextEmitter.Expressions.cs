@@ -485,10 +485,19 @@ public partial class AsyncGeneratorMoveNextEmitter
         // For async generators, we need to return a ValueTask<bool> that will complete when the await completes
         // The simplest approach: wrap the continuing task
         // Create a continuation that resumes MoveNextAsync
+        int yieldOffset = _il.ILOffset;
         EmitAwaitSuspensionReturn();
 
         // 7. Resume point (jumped to from state switch)
         _il.MarkLabel(resumeLabel);
+        if (_ctx.DebugScope is { } debugScope &&
+            _ctx.CurrentMethod is { } currentMethod)
+        {
+            debugScope.RecordAsyncStep(
+                currentMethod,
+                yieldOffset,
+                _il.ILOffset);
+        }
 
         // Reset state to -1 (running)
         _il.Emit(OpCodes.Ldarg_0);

@@ -20,11 +20,16 @@ public sealed class SignatureHelpHandler : SignatureHelpHandlerBase
 
     public override Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken ct)
     {
-        if (!_store.TryGet(request.TextDocument.Uri.ToString(), out var text))
+        if (!_store.TryGetSnapshot(
+                request.TextDocument.Uri.ToString(),
+                out DocumentSnapshot? snapshot))
             return Task.FromResult<SignatureHelp?>(null);
 
         return Task.FromResult(
-            _decorators.SignatureHelp(text, request.Position.Line, request.Position.Character));
+            _decorators.SignatureHelp(
+                snapshot.Text,
+                request.Position.Line,
+                request.Position.Character));
     }
 
     protected override SignatureHelpRegistrationOptions CreateRegistrationOptions(

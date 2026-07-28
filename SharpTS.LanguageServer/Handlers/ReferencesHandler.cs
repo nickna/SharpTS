@@ -34,17 +34,17 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
-        if (!_store.TryGet(uri, out var text))
+        if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
             return Task.FromResult<LocationContainer?>(null);
 
         ct.ThrowIfCancellationRequested();
 
         var locations = _references.FindReferences(
             request.TextDocument.Uri.GetFileSystemPath(),
-            text,
+            snapshot.Document.Text,
             request.Position,
             request.Context.IncludeDeclaration,
-            _store.SnapshotFileSystemDocuments(),
+            snapshot.TextOverlay,
             _workspace?.SnapshotRoots());
         return Task.FromResult<LocationContainer?>(
             new LocationContainer(locations));

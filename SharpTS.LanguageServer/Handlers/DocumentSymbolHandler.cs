@@ -29,12 +29,14 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
         DocumentSymbolParams request, CancellationToken ct)
     {
         string uri = request.TextDocument.Uri.ToString();
-        if (!_store.TryGet(uri, out var text))
+        if (!_store.TryGetSnapshot(uri, out DocumentSnapshot? snapshot))
             return Task.FromResult<SymbolInformationOrDocumentSymbolContainer?>(null);
 
         ct.ThrowIfCancellationRequested();
 
-        var symbols = _symbols.GetSymbols(request.TextDocument.Uri.GetFileSystemPath(), text)
+        var symbols = _symbols.GetSymbols(
+                request.TextDocument.Uri.GetFileSystemPath(),
+                snapshot.Text)
             .Select(symbol => new SymbolInformationOrDocumentSymbol(symbol))
             .ToArray();
 

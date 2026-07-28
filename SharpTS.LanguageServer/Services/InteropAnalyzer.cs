@@ -41,9 +41,15 @@ namespace SharpTS.LanguageServer.Services;
 public sealed class InteropAnalyzer
 {
     private readonly Func<string, Type?> _resolve;
+    private readonly Func<IEnumerable<string>>? _typeNames;
 
-    public InteropAnalyzer(Func<string, Type?>? resolve = null)
-        => _resolve = resolve ?? DotNetTypeRegistry.Resolve;
+    public InteropAnalyzer(
+        Func<string, Type?>? resolve = null,
+        Func<IEnumerable<string>>? typeNames = null)
+    {
+        _resolve = resolve ?? DotNetTypeRegistry.Resolve;
+        _typeNames = typeNames;
+    }
 
     // DOM-style addEventListener/removeEventListener are event-binder intrinsics
     // (Runtime/DotNet/DotNetEventBinder.cs), not real CLR methods — never flag them as
@@ -56,7 +62,10 @@ public sealed class InteropAnalyzer
     private static SourceLocation Loc(Token start, Token end, PositionMap? pos)
         => pos is not null ? pos.Span(start, end) : SourceLocation.FromLine(start.Line);
 
-    public List<Diagnostic> Analyze(IEnumerable<Stmt> statements, PositionMap? positions = null)
+    public List<Diagnostic> Analyze(
+        IEnumerable<Stmt> statements,
+        PositionMap? positions = null,
+        CancellationToken cancellationToken = default)
     {
         var diags = new List<Diagnostic>();
         var bindings = new Dictionary<string, Type>(StringComparer.Ordinal);
@@ -67,6 +76,7 @@ public sealed class InteropAnalyzer
         // name -> CLR type bindings for the call-site pass.
         foreach (var stmt in stmtList)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (stmt is Stmt.Class cls)
                 AnalyzeClass(cls, diags, bindings, positions);
             else if (stmt is Stmt.Import import && DotNetImports.IsDotNetSpecifier(import.ModulePath))
@@ -79,7 +89,10 @@ public sealed class InteropAnalyzer
         // Pass 2 — Tier 3d: validate event-subscription call sites against the bindings.
         var visitor = new EventCallVisitor(bindings, diags, positions);
         foreach (var stmt in stmtList)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             visitor.Visit(stmt);
+        }
 
         return diags;
     }
@@ -143,9 +156,25 @@ public sealed class InteropAnalyzer
 
         if (import.DefaultImport != null)
         {
-            diags.Add(Diagnostic.TypeError(
+            Diagnostic diagnostic = Diagnostic.TypeError(
                 $"'{import.ModulePath}' has no default export — dotnet: modules support named imports only.",
-                Loc(import.DefaultImport, pos)));
+                Loc(import.DefaultImport, pos));
+            string? exportName = ResolveDefaultImportExportName(specifier);
+            if (exportName is not null)
+            {
+                string localName = import.DefaultImport.Lexeme;
+                string replacement = string.Equals(
+                    exportName,
+                    localName,
+                    StringComparison.Ordinal)
+                    ? $"{{ {exportName} }}"
+                    : $"{{ {exportName} as {localName} }}";
+                diagnostic = WithReplacement(
+                    diagnostic,
+                    $"Convert to named import '{exportName}'",
+                    replacement);
+            }
+            diags.Add(diagnostic);
         }
 
         if (import.NamespaceImport != null)
@@ -175,7 +204,7 @@ public sealed class InteropAnalyzer
 
     private void AnalyzeClass(Stmt.Class cls, List<Diagnostic> diags, Dictionary<string, Type> bindings, PositionMap? pos)
     {
-        var (mapping, at, nameTok) = FindDotNetType(cls);
+        var (mapping, at, nameTok, endTok) = FindDotNetType(cls);
         if (mapping is null) return;
 
         Type? type;
@@ -193,9 +222,22 @@ public sealed class InteropAnalyzer
         if (type == null)
         {
             // Tier 1 — mirrors Interpreter.DotNet.cs:31, surfaced statically at edit time.
-            diags.Add(Diagnostic.TypeError(
+            string? suggestion = FindNearest(
+                mapping,
+                _typeNames?.Invoke() ?? []);
+            Diagnostic diagnostic = Diagnostic.TypeError(
                 $"@DotNetType: .NET type '{mapping}' not found in any loaded assembly.",
-                Loc(at!, nameTok!, pos)));
+                suggestion is null
+                    ? Loc(at!, nameTok!, pos)
+                    : Loc(at!, endTok!, pos));
+            if (suggestion is not null)
+            {
+                diagnostic = WithReplacement(
+                    diagnostic,
+                    $"Change .NET type to '{suggestion}'",
+                    $"@DotNetType(\"{suggestion}\")");
+            }
+            diags.Add(diagnostic);
             return;
         }
 
@@ -238,15 +280,34 @@ public sealed class InteropAnalyzer
         {
             string declared = isStatic ? "static" : "instance";
             string actual = isStatic ? "instance" : "static";
-            diags.Add(Diagnostic.TypeError(
+            Diagnostic diagnostic = Diagnostic.TypeError(
                 $"@DotNetType '{type.FullName}': member '{name}' exists but is {actual}, not {declared} as declared.",
-                Loc(token, pos)));
+                Loc(token, pos));
+            if (!isStatic)
+            {
+                diagnostic = WithReplacement(
+                    diagnostic,
+                    $"Make '{name}' static",
+                    $"static {name}");
+            }
+            diags.Add(diagnostic);
         }
         else
         {
-            diags.Add(Diagnostic.TypeError(
+            Diagnostic diagnostic = Diagnostic.TypeError(
                 $"@DotNetType '{type.FullName}': no {kind} '{name}' (nor PascalCase '{pascal}').",
-                Loc(token, pos)));
+                Loc(token, pos));
+            string? suggestion = FindNearest(
+                name,
+                MemberCandidates(type, isStatic, kind, name));
+            if (suggestion is not null)
+            {
+                diagnostic = WithReplacement(
+                    diagnostic,
+                    $"Change member to '{suggestion}'",
+                    suggestion);
+            }
+            diags.Add(diagnostic);
         }
     }
 
@@ -272,16 +333,43 @@ public sealed class InteropAnalyzer
     /// *matching* belongs to Tier 3e (by type name, not identity).</summary>
     private void CheckOverloadHint(Stmt.Function m, Type type, List<Diagnostic> diags, PositionMap? pos)
     {
-        string? hint = ExtractDecoratorArg(m.Decorators, "DotNetOverload");
-        if (hint is null) return;
+        var decorator = FindDecoratorStringArg(
+            m.Decorators,
+            "DotNetOverload");
+        if (decorator is null) return;
+        string hint = decorator.Value.Value;
         if (DotNetTypeRegistry.GetMethods(type, m.Name.Lexeme, m.IsStatic).Length == 0) return;
 
-        foreach (var part in hint.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        string[] parts = hint.Split(
+            ',',
+            StringSplitOptions.TrimEntries |
+            StringSplitOptions.RemoveEmptyEntries);
+        for (int index = 0; index < parts.Length; index++)
         {
+            string part = parts[index];
             if (HintAliases.Contains(part) || _resolve(part) != null) continue;
-            diags.Add(Diagnostic.TypeError(
+            string? suggestion = FindNearest(
+                part,
+                HintAliases.Concat(_typeNames?.Invoke() ?? []));
+            Diagnostic diagnostic = Diagnostic.TypeError(
                 $"@DotNetOverload(\"{hint}\") on '{m.Name.Lexeme}': unknown type '{part}' in hint.",
-                Loc(m.Name, pos)));
+                suggestion is null
+                    ? Loc(m.Name, pos)
+                    : Loc(
+                        decorator.Value.At,
+                        decorator.Value.End,
+                        pos));
+            if (suggestion is not null)
+            {
+                string[] replacementParts = [.. parts];
+                replacementParts[index] = suggestion;
+                string replacementHint = string.Join(", ", replacementParts);
+                diagnostic = WithReplacement(
+                    diagnostic,
+                    $"Change overload type to '{suggestion}'",
+                    $"@DotNetOverload(\"{replacementHint}\")");
+            }
+            diags.Add(diagnostic);
         }
     }
 
@@ -297,25 +385,142 @@ public sealed class InteropAnalyzer
                 Loc(token, pos)));
     }
 
-    private static (string? mapping, Token? at, Token? name) FindDotNetType(Stmt.Class cls)
+    private static (string? mapping, Token? at, Token? name, Token? end) FindDotNetType(Stmt.Class cls)
     {
-        if (cls.Decorators == null) return (null, null, null);
+        if (cls.Decorators == null) return (null, null, null, null);
         foreach (var d in cls.Decorators)
-            if (d.Expression is Expr.Call { Callee: Expr.Variable v, Arguments: [Expr.Literal { Value: string typeName }] }
+            if (d.Expression is Expr.Call { Callee: Expr.Variable v, Arguments: [Expr.Literal { Value: string typeName }] } call
                 && v.Name.Lexeme == "DotNetType")
-                return (typeName, d.AtToken, v.Name);
-        return (null, null, null);
+                return (typeName, d.AtToken, v.Name, call.Paren);
+        return (null, null, null, null);
     }
 
-    private static string? ExtractDecoratorArg(List<Decorator>? decorators, string name)
+    private static (string Value, Token At, Token End)?
+        FindDecoratorStringArg(
+            List<Decorator>? decorators,
+            string name)
     {
         if (decorators == null) return null;
         foreach (var d in decorators)
-            if (d.Expression is Expr.Call { Callee: Expr.Variable v, Arguments: [Expr.Literal { Value: string arg }] }
+            if (d.Expression is Expr.Call { Callee: Expr.Variable v, Arguments: [Expr.Literal { Value: string arg }] } call
                 && v.Name.Lexeme == name)
-                return arg;
+                return (arg, d.AtToken, call.Paren);
         return null;
     }
+
+    private string? ResolveDefaultImportExportName(string specifier)
+    {
+        try
+        {
+            Type? type =
+                DotNetTypeRegistry.ResolveFriendly(specifier, _resolve);
+            if (type is null)
+                return null;
+            int genericMarker = type.Name.IndexOf('`');
+            return genericMarker < 0
+                ? type.Name
+                : type.Name[..genericMarker];
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static IEnumerable<string> MemberCandidates(
+        Type type,
+        bool isStatic,
+        string kind,
+        string sourceName)
+    {
+        BindingFlags flags = BindingFlags.Public |
+            (isStatic
+                ? BindingFlags.Static | BindingFlags.FlattenHierarchy
+                : BindingFlags.Instance);
+        IEnumerable<string> names = string.Equals(
+            kind,
+            "method",
+            StringComparison.Ordinal)
+            ? type.GetMethods(flags)
+                .Where(method => !method.IsSpecialName)
+                .Select(method => method.Name)
+            : type.GetProperties(flags)
+                .Select(property => property.Name)
+                .Concat(type.GetFields(flags).Select(field => field.Name));
+
+        bool lowerCamel =
+            sourceName.Length > 0 && char.IsLower(sourceName[0]);
+        return names
+            .Select(name =>
+                lowerCamel && name.Length > 0
+                    ? char.ToLowerInvariant(name[0]) + name[1..]
+                    : name)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? FindNearest(
+        string source,
+        IEnumerable<string> candidates)
+    {
+        int bestDistance = int.MaxValue;
+        string? best = null;
+        bool tied = false;
+        foreach (string candidate in candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            int distance = EditDistance(source, candidate);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+                tied = false;
+            }
+            else if (distance == bestDistance &&
+                     !string.Equals(
+                         best,
+                         candidate,
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                tied = true;
+            }
+        }
+
+        return bestDistance <= 2 && !tied ? best : null;
+    }
+
+    private static int EditDistance(string left, string right)
+    {
+        int[] previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        int[] current = new int[right.Length + 1];
+        for (int i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            for (int j = 1; j <= right.Length; j++)
+            {
+                int substitution = char.ToUpperInvariant(left[i - 1]) ==
+                    char.ToUpperInvariant(right[j - 1])
+                    ? 0
+                    : 1;
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + substitution);
+            }
+            (previous, current) = (current, previous);
+        }
+        return previous[right.Length];
+    }
+
+    private static Diagnostic WithReplacement(
+        Diagnostic diagnostic,
+        string title,
+        string newText) =>
+        diagnostic with
+        {
+            Properties = InteropCodeActionMetadata.Replacement(
+                title,
+                newText),
+        };
 
     /// <summary>Tier 3d: finds addEventListener/removeEventListener calls whose receiver
     /// resolves (purely structurally) to a known @DotNetType, and checks arity + event name.

@@ -18,7 +18,9 @@ reach into the SharpTS runtime carry working symbols too. Keep the `.pdb` beside
 Breakpoints bind and stepping follows executable TypeScript statements, in ordinary functions,
 class members, module top level, `async` functions, and generators — the state machines go through
 the same emission path, so their `MoveNext` bodies carry line information for the statements you
-wrote. Imported modules resolve to their own files.
+wrote. Portable-PDB state-machine mappings and async suspension/resume records let managed
+debuggers present kickoff methods and step across `await` without exposing raw plumbing. Imported
+modules resolve to their own files.
 
 Statements the compiler synthesized are marked hidden and stepped over rather than attributed to a
 nearby line: the `var` declarations hoisting moves to the top of a body, the aliases left where a
@@ -44,8 +46,10 @@ the static fields of `$Program` rather than in the locals window.
 
 *Locals of `async` functions and generators* are hoisted into the state machine's fields so they
 survive suspension, so they appear as fields of the `<name>d__N` frame instead of as locals of
-`MoveNext`. Presenting them as locals again needs the portable-PDB custom debug information that
-describes a state machine's hoisted-variable mapping, which is a follow-up.
+`MoveNext`. The generated state-machine and display-class names are stable, and their fields retain
+the source binding names. Reconstructing every hoisted field as an ordinary locals-window entry
+would require additional debugger-specific hoisted-local metadata and remains outside the accepted
+v1 behavior.
 
 ### Stepping and the bundled stdlib
 
@@ -58,13 +62,15 @@ through the stdlib stays readable, and turning Just My Code off lets you step in
 The emitted runtime helpers need no such marking: they carry no debug information at all, which
 already puts them outside user code.
 
+State-machine and closure types are marked compiler-generated. Their infrastructure methods
+(`MoveNext`, enumerator plumbing, and `SetStateMachine`) are non-user code, while their portable
+PDB mapping still takes a debugger back to the source-level async or generator function.
+
 One consequence worth knowing: because the stdlib travels in the PDB with its source embedded,
 importing a large module makes the `.pdb` noticeably bigger. It costs nothing at run time and
 nothing in the assembly; only the symbol file grows.
 
-Not yet done: async and generator stepping fidelity — the state machines carry line information,
-but not the custom debug information that makes a debugger present an `await` as a single step.
-Interpreter debugging is out of scope.
+Interpreter debugging remains out of scope.
 
 ## Editor setup
 
@@ -104,9 +110,10 @@ both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
 
 `SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
 documents and checksums, sequence points and the lines they land on, named locals, lexical scope
-nesting, and a CodeView identity that still matches after the reference rewriter. What no automated
-test covers is a debugger actually stopping, so run this by hand when changing statement emission,
-the span model, or the symbol pipeline.
+nesting, state-machine mappings, async suspension/resume records, generated-code attributes, and a
+CodeView identity that still matches after the reference rewriter. What no automated test covers is
+a debugger actually stopping, so run this by hand when changing statement emission, the span model,
+or the symbol pipeline.
 
 Scripting `vsdbg` for this is not an option: it is licensed for use only with Visual Studio and
 VS Code, and enforces that with a handshake its own clients answer. Automating this would mean

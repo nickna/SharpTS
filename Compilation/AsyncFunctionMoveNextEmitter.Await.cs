@@ -123,6 +123,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         // would not reach the continuation's snapshot (#400). Suspending path only.
         _helpers.PersistLiveSpillsBeforeSuspend();
 
+        int yieldOffset = IL.ILOffset;
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldflda, AsyncBuilderField);
         IL.Emit(OpCodes.Ldarg_0);
@@ -134,6 +135,14 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // 7. Resume point (jumped to from the state switch)
         MarkAwaitResumeLabel(stateNumber);
+        if (Ctx.DebugScope is { } debugScope &&
+            Ctx.CurrentMethod is { } currentMethod)
+        {
+            debugScope.RecordAsyncStep(
+                currentMethod,
+                yieldOffset,
+                IL.ILOffset);
+        }
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldc_I4_M1);
         IL.Emit(OpCodes.Stfld, AsyncStateField);

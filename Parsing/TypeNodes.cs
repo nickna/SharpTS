@@ -20,7 +20,8 @@ public sealed record NamedTypeNode(
     string Name,
     List<TypeNode>? TypeArguments,
     int Line,
-    Token? NameToken = null) : TypeNode(Line);
+    Token? NameToken = null,
+    List<Token>? NameTokens = null) : TypeNode(Line);
 
 /// <summary>A literal type: <c>"ok"</c>, <c>42</c>, <c>true</c>, <c>1n</c> (bigint literals carry
 /// their <c>System.Numerics.BigInteger</c> value).</summary>
@@ -73,7 +74,11 @@ public sealed record ConditionalTypeNode(TypeNode CheckType, TypeNode ExtendsTyp
 /// constrained (<c>infer U extends C</c>). Resolves to <c>TypeInfo.InferredTypeParameter</c>;
 /// the constraint gates the match in <c>EvaluateConditionalType</c> (an inferred type that does
 /// not satisfy it sends the conditional to its false branch).</summary>
-public sealed record InferTypeNode(string Name, int Line, TypeNode? Constraint = null) : TypeNode(Line);
+public sealed record InferTypeNode(
+    string Name,
+    int Line,
+    TypeNode? Constraint = null,
+    Token? NameToken = null) : TypeNode(Line);
 
 /// <summary>A <c>typeof entity</c> query. The entity path is carried in its string-path spelling
 /// (<c>obj.prop</c>, <c>arr[0]</c>) and resolved by <c>EvaluateTypeOf</c> — the same evaluator the
@@ -137,7 +142,8 @@ public sealed record MappedTypeNode(
     bool RemoveReadonly,
     bool AddOptional,
     bool RemoveOptional,
-    int Line) : TypeNode(Line);
+    int Line,
+    Token? ParamToken = null) : TypeNode(Line);
 
 /// <summary>A member of an <see cref="ObjectTypeNode"/>. Not itself a type.</summary>
 public abstract record ObjectTypeMemberNode(int Line);

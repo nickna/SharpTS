@@ -36,7 +36,14 @@ export async function activate(context: vscode.ExtensionContext) {
     // here is the .NET interop surface — diagnostics, hover, completion, signature help — and
     // nothing tsserver already provides. The standalone `sharpts-lsp` tool defaults to full
     // navigation instead, for editors with no TypeScript server of their own.
-    const args = [serverDll, '--language-features', 'interop-only'];
+    const diagnostics = config.get<string>('diagnostics') || 'sharpts-only';
+    const args = [
+        serverDll,
+        '--language-features',
+        'interop-only',
+        '--diagnostics',
+        diagnostics
+    ];
     const projectFile = config.get<string>('projectFile');
     if (projectFile) {
         args.push('--project', projectFile);

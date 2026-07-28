@@ -69,7 +69,11 @@ public partial class TypeChecker
             isOnLoop = true;
         }
 
-        _activeLabels[labelName] = isOnLoop;
+        BindingSymbol labelSymbol = Bindings.Declare(
+            stmt.Label,
+            CurrentSourceDocument,
+            BindingNamespace.Label);
+        _activeLabels[labelName] = new ActiveLabel(isOnLoop, labelSymbol);
         try
         {
             CheckStmt(stmt.Statement);
@@ -1117,10 +1121,14 @@ public partial class TypeChecker
         if (stmt.Label != null)
         {
             string labelName = stmt.Label.Lexeme;
-            if (!_activeLabels.ContainsKey(labelName))
+            if (!_activeLabels.TryGetValue(labelName, out var activeLabel))
             {
                 throw new TypeCheckException($"Label '{labelName}' not found", tsCode: "TS1116");
             }
+            Bindings.Bind(
+                stmt.Label,
+                CurrentSourceDocument,
+                activeLabel.Symbol);
         }
         else
         {
@@ -1155,14 +1163,18 @@ public partial class TypeChecker
         if (stmt.Label != null)
         {
             string labelName = stmt.Label.Lexeme;
-            if (!_activeLabels.TryGetValue(labelName, out bool isOnLoop))
+            if (!_activeLabels.TryGetValue(labelName, out var activeLabel))
             {
                 throw new TypeCheckException($"Label '{labelName}' not found", tsCode: "TS1116");
             }
-            if (!isOnLoop)
+            if (!activeLabel.IsOnLoop)
             {
                 throw new TypeOperationException($"Cannot continue to non-loop label '{labelName}'", tsCode: "TS1116");
             }
+            Bindings.Bind(
+                stmt.Label,
+                CurrentSourceDocument,
+                activeLabel.Symbol);
         }
         else
         {

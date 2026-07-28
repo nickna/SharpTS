@@ -1555,17 +1555,24 @@ public partial class ILCompiler
     /// <see cref="EmitDebugSymbols"/> is set.
     /// </summary>
     /// <param name="pdbPath">
-    /// Where to write the PDB, and the path recorded in the assembly's CodeView entry. Defaults to
-    /// <paramref name="outputPath"/> with a <c>.pdb</c> extension. EXE builds pass the final
-    /// executable's location explicitly, because the assembly itself is emitted to a temporary
-    /// file before being bundled.
+    /// Where to write the PDB. Defaults to <paramref name="outputPath"/> with a <c>.pdb</c>
+    /// extension. The CodeView entry uses only the file name when the PDB is beside the output
+    /// assembly, which lets debuggers resolve relative output paths from the assembly directory;
+    /// otherwise it uses the PDB's full path. EXE builds pass the final executable's location
+    /// explicitly, because the assembly itself is emitted to a temporary file before being bundled.
     /// </param>
     public void Save(string outputPath, string? pdbPath)
     {
         if (EmitDebugSymbols)
             pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
 
-        var artifacts = SaveArtifacts(pdbPath);
+        string? codeViewPdbPath = pdbPath is null
+            ? null
+            : Path.GetDirectoryName(Path.GetFullPath(outputPath)) ==
+                Path.GetDirectoryName(Path.GetFullPath(pdbPath))
+                ? Path.GetFileName(pdbPath)
+                : Path.GetFullPath(pdbPath);
+        var artifacts = SaveArtifacts(codeViewPdbPath);
 
         File.WriteAllBytes(outputPath, artifacts.Assembly);
         if (artifacts.Pdb is not null)
@@ -1968,6 +1975,7 @@ public partial class ILCompiler
             "<>c__EntryPointDisplayClass",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
+        MarkCompilerGenerated(displayClass);
 
         var ctor = displayClass.DefineConstructor(
             MethodAttributes.Public,

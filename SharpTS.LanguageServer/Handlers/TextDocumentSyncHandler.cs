@@ -10,19 +10,18 @@ using SharpTS.LanguageServer.Services;
 namespace SharpTS.LanguageServer.Handlers;
 
 /// <summary>
-/// Full-document text sync: on open/change, re-analyze and publish diagnostics; on close,
-/// clear them. Full sync is fine for Phase 1 (single-file analyzer); incremental sync +
-/// debounce + the module overlay come with the larger diagnostics work.
+/// Incremental text sync backed by immutable versions. Diagnostics are queued through the
+/// debounced workspace coordinator rather than computed on the protocol thread.
 /// </summary>
 public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
 {
-    private readonly ILanguageServerFacade _facade;
     private readonly DocumentStore _store;
-    private readonly DiagnosticsService _diagnostics;
+    private readonly DiagnosticsCoordinator _diagnostics;
 
-    public TextDocumentSyncHandler(ILanguageServerFacade facade, DocumentStore store, DiagnosticsService diagnostics)
+    public TextDocumentSyncHandler(
+        DocumentStore store,
+        DiagnosticsCoordinator diagnostics)
     {
-        _facade = facade;
         _store = store;
         _diagnostics = diagnostics;
     }
@@ -31,13 +30,31 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidOpenTextDocumentParams request, CancellationToken ct)
     {
-        Refresh(request.TextDocument.Uri, request.TextDocument.Text);
+        string uri = request.TextDocument.Uri.ToString();
+        if (_store.Open(
+                uri,
+                request.TextDocument.Text,
+                request.TextDocument.Version ?? 0))
+        {
+            _diagnostics.Queue(uri);
+        }
         return Unit.Task;
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken ct)
     {
-        Refresh(request.TextDocument.Uri, request.ContentChanges.LastOrDefault()?.Text ?? "");
+        string uri = request.TextDocument.Uri.ToString();
+        int version = request.TextDocument.Version ??
+            (_store.TryGetSnapshot(uri, out DocumentSnapshot? current)
+                ? current.Version + 1
+                : 0);
+        if (_store.ApplyChanges(
+                uri,
+                version,
+                request.ContentChanges))
+        {
+            _diagnostics.Queue(uri);
+        }
         return Unit.Task;
     }
 
@@ -45,12 +62,8 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken ct)
     {
-        _store.Remove(request.TextDocument.Uri.ToString());
-        _facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
-        {
-            Uri = request.TextDocument.Uri,
-            Diagnostics = new Container<Diagnostic>()
-        });
+        if (_store.Remove(request.TextDocument.Uri.ToString()) is { } closed)
+            _diagnostics.Close(closed);
         return Unit.Task;
     }
 
@@ -59,17 +72,7 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
         => new()
         {
             DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact"),
-            Change = TextDocumentSyncKind.Full
+            Change = TextDocumentSyncKind.Incremental,
+            Save = new SaveOptions { IncludeText = false },
         };
-
-    private void Refresh(DocumentUri uri, string text)
-    {
-        _store.Set(uri.ToString(), text);
-        _facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
-        {
-            Uri = uri,
-            Diagnostics = new Container<Diagnostic>(
-                _diagnostics.Analyze(text, fileName: uri.GetFileSystemPath()))
-        });
-    }
 }

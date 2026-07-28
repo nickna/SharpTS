@@ -71,6 +71,20 @@ public partial class ILCompiler
             _types.IEnumerableOfObject,  // Generator returns IEnumerable<object>
             paramTypes
         );
+        RegisterStateMachine(
+            methodBuilder,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextMethod,
+            EmittedStateMachineKind.Iterator,
+            smBuilder.CurrentGetMethod,
+            smBuilder.NonGenericCurrentGetMethod,
+            smBuilder.ResetMethod,
+            smBuilder.DisposeMethod,
+            smBuilder.GetEnumeratorMethod,
+            smBuilder.NonGenericGetEnumeratorMethod,
+            smBuilder.NextMethod,
+            smBuilder.ReturnMethod,
+            smBuilder.ThrowMethod);
 
         _functions.Builders[qualifiedName] = methodBuilder;
 
@@ -431,6 +445,20 @@ public partial class ILCompiler
             isInstanceMethod: isInstanceMethod,
             runtime: _runtime
         );
+        RegisterStateMachine(
+            methodBuilder,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextMethod,
+            EmittedStateMachineKind.Iterator,
+            smBuilder.CurrentGetMethod,
+            smBuilder.NonGenericCurrentGetMethod,
+            smBuilder.ResetMethod,
+            smBuilder.DisposeMethod,
+            smBuilder.GetEnumeratorMethod,
+            smBuilder.NonGenericGetEnumeratorMethod,
+            smBuilder.NextMethod,
+            smBuilder.ReturnMethod,
+            smBuilder.ThrowMethod);
 
         // #724: wire the function display class registered for this method in DefineClass so an arrow
         // that WRITES a captured method local shares storage with the generator (mirrors the free-

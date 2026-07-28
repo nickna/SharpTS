@@ -287,6 +287,7 @@ public partial class ILCompiler
             $"<>c__FuncDisplayClass_{qualifiedFunctionName.Replace(".", "_").Replace(":", "_")}_{_closures.DisplayClassCounter++}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
+        MarkCompilerGenerated(displayClass);
 
         // Define fields for each captured variable
         var fieldMap = new Dictionary<string, FieldBuilder>();

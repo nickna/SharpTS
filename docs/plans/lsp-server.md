@@ -1,12 +1,11 @@
 # Plan: Replace the LspBridge with a real Language Server (Direction B)
 
-**Status:** In progress. Landed: Phase 0, Phase 1 (interop analyzer + project refs),
-LspBridge teardown, Phase 2 (decorator hover, completion, CLR-type-name completion,
-signatureHelp), Phase 3 (extension rewrite), Phase 4a (token-based interop navigation),
-source spans and document symbols, plus the first Phase 4b slice: checker-resolved local-value
-go-to-definition. The server lives in the separate `SharpTS.LanguageServer` executable /
-`sharpts-lsp` tool, keeping OmniSharp out of the core package. Remaining: type-namespace and
-cross-module definition, references, safe rename, and Phase 5 lifecycle/polish.
+**Status:** Implemented. Phases 0–5 have landed: interop analysis and IntelliSense, the
+`vscode-languageclient` extension, source spans, complete supported semantic navigation domains,
+completeness-gated workspace rename, versioned workspace lifecycle and diagnostics, structured
+interop quick fixes, and standalone-editor documentation. The server lives in the separate
+`SharpTS.LanguageServer` executable / `sharpts-lsp` tool, keeping OmniSharp out of the core
+package. General property/member navigation remains the deliberate scope boundary described below.
 **Author:** investigation + design pass, 2026-06-22
 **Decision:** Throw away the bespoke `LspBridge` JSON protocol and the hand-rolled
 VS Code providers. Stand up a genuine LSP server over SharpTS's own
@@ -288,9 +287,12 @@ results.
 The server advertises these features only in `--language-features full`; the VS Code extension
 continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
 
-Still required for the complete navigation milestone: safe rename and the remaining type/member
-domains (notably type parameters and qualified namespace/property members). Property/member
-definition remains deliberately absent until it can resolve a complete semantic domain.
+Safe rename uses the same semantic identities and refuses to produce a `WorkspaceEdit` unless all
+configured roots and project references for the affected domain loaded successfully. Type
+parameters, labels, namespace imports, qualified namespace members, and type/value facets are
+covered. General object/class property-member navigation and rename remain deliberately absent:
+that larger semantic domain is not required for the scoped standalone-navigation milestone, and
+partial edits would be unsafe.
 
 ---
 
@@ -303,22 +305,28 @@ definition remains deliberately absent until it can resolve a complete semantic 
 - **Severity:** map `DiagnosticSeverity` → LSP `DiagnosticSeverity`.
 - Set `code` from `Diagnostic.Code`/`TsCode` and `source = "sharpts"` so users can
   tell our diagnostics from `tsserver`'s.
+- Interop diagnostics with a safe fix carry versioned JSON `data` describing the edit. The
+  `textDocument/codeAction` handler consumes that structure directly; it never reparses localized
+  or revised diagnostic message text.
 
 ---
 
 ## 7. Concurrency, lifecycle & performance
-- **Debounce** document-change checks (~250–300 ms) and **cancel** in-flight checks
-  via the per-request `CancellationToken` OmniSharp supplies. (Today's providers
-  ignore cancellation entirely and use 30 s timeouts.)
-- **Scope re-checks** to the module graph reachable from the changed/open files;
-  don't re-check the whole workspace on every keystroke.
-- **WorkspaceContext** owns one `AssemblyReferenceLoader` per workspace, built from
-  `sharpts.projectFile`/`additionalReferences` via `CsprojParser`. Reload it on a
-  file-watcher event for the `.csproj` or the referenced `bin/` outputs (replaces the
-  current "config changed → please restart the bridge" prompt).
-- No incremental type-checking exists; full parse+check per change is the model.
-  Acceptable for typical files with debounce; flagged as a risk (§10) for very large
-  module graphs.
+- `DocumentStore` keeps immutable text + version snapshots, applies incremental changes, rejects
+  stale updates, and captures one atomic overlay for each request.
+- Document checks are debounced and replace a per-workspace cancellation source. Cancellation is
+  observed between lex/parse/interop/type-check stages and inside long-running checker work.
+- `DiagnosticsService` caches source text, tokens, AST, spans, interop diagnostics, and the
+  optional full type-check result by exact document version.
+- `DocumentDependencyGraph` maintains forward and reverse edges. A dependency signature change
+  invalidates and republishes affected open importers, including clearing diagnostics that became
+  stale.
+- `sharpts.diagnostics` is honored at startup and through live
+  `workspace/didChangeConfiguration`; `off` clears published diagnostics immediately.
+- `ReloadingAssemblyReferenceLoader` detects changed reference outputs and atomically swaps in a
+  new metadata context while retaining old contexts for in-flight requests.
+- Whole-file checking remains the model. The versioned caches, graph scoping, debounce, and
+  cancellation avoid repeated stale work without introducing an unproven incremental tree checker.
 
 ---
 
@@ -396,16 +404,17 @@ single-file binary so non-VS-Code editors don't need the full SDK.
   member hover for `@DotNetType` members (declarations token-based; usages via the type
   checker's `TypeMap`, mapping the receiver's class name back to the binding). No parser
   surgery, no record-equality risk. ~7 tests + e2e (precise columns, declaration + usage hover).
-- 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
+- ✅ **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
   symbols, semantic value/type binding identities, and module-aware go-to-definition through
   imports/re-exports have landed. The inverse binding index, configured-project reverse graph,
   closed-importer references, multi-config/project-reference workspace expansion, and explicit
-  graph-completeness boundaries have also landed. Safe rename, type-parameter navigation, and
-  qualified member navigation remain. VS Code stays in `interop-only`; these capabilities are for
-  standalone clients.
-- ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
-  packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);
-  loader reload on `.csproj`/`bin` change; STATUS.md/README updates. **NOT YET DONE.**
+  graph-completeness boundaries have also landed. Safe rename, type-parameter/label navigation,
+  and qualified namespace-member navigation complete the supported domains. VS Code stays in
+  `interop-only`; these capabilities are for standalone clients.
+- ✅ **Phase 5 — Polish & reach.** The separately packaged `SharpTS.LanguageServer` dotnet tool,
+  [multi-editor setup](../language-server.md), versioned snapshots/caches,
+  debounce/cancellation, reverse diagnostic invalidation, live `sharpts.diagnostics` wiring,
+  safe metadata-loader reload, and structured interop code actions are implemented.
 
 ---
 

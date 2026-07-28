@@ -172,11 +172,28 @@ public partial class TypeChecker
         // Expression-space lookup must prefer the value facet when a namespace
         // exports both a type and a value with the same name (for example
         // `interface Intl.PluralRules` plus `const Intl.PluralRules`).
-        var memberType = nsType.Values.GetValueOrDefault(memberName.Lexeme)
-            ?? nsType.Types.GetValueOrDefault(memberName.Lexeme);
-        if (memberType != null)
+        if (nsType.Values.GetValueOrDefault(memberName.Lexeme)
+            is { } valueMember)
         {
-            return memberType;
+            if (nsType.GetValueBinding(memberName.Lexeme) is { } valueBinding)
+                Bindings.Bind(
+                    memberName,
+                    CurrentSourceDocument,
+                    valueBinding);
+            return valueMember;
+        }
+        if (nsType.Types.GetValueOrDefault(memberName.Lexeme)
+            is { } typeMember)
+        {
+            BindingSymbol? binding =
+                nsType.GetValueBinding(memberName.Lexeme)
+                ?? nsType.GetTypeBinding(memberName.Lexeme);
+            if (binding is not null)
+                Bindings.Bind(
+                    memberName,
+                    CurrentSourceDocument,
+                    binding);
+            return typeMember;
         }
         throw new TypeCheckException($" '{memberName.Lexeme}' does not exist on namespace '{nsType.Name}'.", tsCode: "TS2694");
     }

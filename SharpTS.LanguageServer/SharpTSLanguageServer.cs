@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.LanguageServer.Server;
 using SharpTS.LanguageServer.Handlers;
+using SharpTS.LanguageServer.Conversions;
 using SharpTS.LanguageServer.Services;
 
 namespace SharpTS.LanguageServer;
@@ -24,9 +25,12 @@ public static class SharpTSLanguageServer
     public static async Task RunAsync(
         Func<string, Type?>? resolve = null,
         Func<IEnumerable<string>>? typeNames = null,
-        LanguageFeatureMode mode = LanguageFeatureMode.Full)
+        LanguageFeatureMode mode = LanguageFeatureMode.Full,
+        DiagnosticPublishMode diagnosticMode =
+            DiagnosticPublishMode.SharpTsOnly)
     {
         var workspaceContext = new NavigationWorkspaceContext();
+        var diagnosticsSettings = new DiagnosticsSettings(diagnosticMode);
         var server = await OmniSharp.Extensions.LanguageServer.Server.LanguageServer.From(options =>
         {
             options
@@ -39,18 +43,25 @@ public static class SharpTSLanguageServer
                 .WithOutput(Console.OpenStandardOutput())
                 .WithServices(services => services
                     .AddSingleton(workspaceContext)
+                    .AddSingleton(diagnosticsSettings)
                     .AddSingleton<DocumentStore>()
-                    .AddSingleton(new DiagnosticsService(resolve))
+                    .AddSingleton(new DiagnosticsService(resolve, typeNames))
+                    .AddSingleton<DocumentDependencyGraph>()
+                    .AddSingleton<DiagnosticsCoordinator>()
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
+                    .AddSingleton<InteropCodeActionService>()
                     .AddSingleton<DocumentSymbolService>()
                     .AddSingleton<DefinitionService>()
-                    .AddSingleton<ReferenceService>())
+                    .AddSingleton<ReferenceService>()
+                    .AddSingleton<RenameService>())
                 // Served in both modes: this is the interop knowledge no other server has.
                 .WithHandler<TextDocumentSyncHandler>()
+                .WithHandler<ConfigurationHandler>()
                 .WithHandler<HoverHandler>()
                 .WithHandler<CompletionHandler>()
-                .WithHandler<SignatureHelpHandler>();
+                .WithHandler<SignatureHelpHandler>()
+                .WithHandler<CodeActionHandler>();
 
             // Registering a handler is what advertises its capability, so the mode has to be
             // decided here rather than consulted later.
@@ -59,7 +70,9 @@ public static class SharpTSLanguageServer
                 options
                     .WithHandler<DocumentSymbolHandler>()
                     .WithHandler<DefinitionHandler>()
-                    .WithHandler<ReferencesHandler>();
+                    .WithHandler<ReferencesHandler>()
+                    .WithHandler<RenameHandler>()
+                    .WithHandler<PrepareRenameHandler>();
             }
         });
 

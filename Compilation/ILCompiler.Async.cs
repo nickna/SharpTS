@@ -37,6 +37,12 @@ public partial class ILCompiler
             _types.TaskOfObject,
             paramTypes
         );
+        RegisterStateMachine(
+            stubMethod,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextMethod,
+            EmittedStateMachineKind.Async,
+            smBuilder.SetStateMachineMethod);
 
         // Store for later body emission
         _functions.Builders[qualifiedFunctionName] = stubMethod;
@@ -359,6 +365,12 @@ public partial class ILCompiler
                 // Define the stub method that will be called to invoke the async arrow
                 arrowBuilder.DefineStubMethod(_programType, _runtime);
                 MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+                RegisterStateMachine(
+                    arrowBuilder.StubMethod,
+                    arrowBuilder.StateMachineType,
+                    arrowBuilder.MoveNextMethod,
+                    EmittedStateMachineKind.Async,
+                    arrowBuilder.SetStateMachineMethod);
 
                 _async.ArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
                 continue; // Already handled the full setup
@@ -375,6 +387,12 @@ public partial class ILCompiler
             // Define the stub method that will be called to invoke the async arrow
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            RegisterStateMachine(
+                arrowBuilder.StubMethod,
+                arrowBuilder.StateMachineType,
+                arrowBuilder.MoveNextMethod,
+                EmittedStateMachineKind.Async,
+                arrowBuilder.SetStateMachineMethod);
 
             _async.ArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
         }
@@ -999,6 +1017,12 @@ public partial class ILCompiler
             hasAsyncArrows: hasAsyncArrows,
             hasLock: hasLock
         );
+        RegisterStateMachine(
+            methodBuilder,
+            smBuilder.StateMachineType,
+            smBuilder.MoveNextMethod,
+            EmittedStateMachineKind.Async,
+            smBuilder.SetStateMachineMethod);
 
         // #682/#follow-up: attach the method's function display class (registered in Phase 4) to the
         // state machine so a direct-child async arrow's write AND a nested sync arrow's write/read share
@@ -1145,6 +1169,12 @@ public partial class ILCompiler
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            RegisterStateMachine(
+                arrowBuilder.StubMethod,
+                arrowBuilder.StateMachineType,
+                arrowBuilder.MoveNextMethod,
+                EmittedStateMachineKind.Async,
+                arrowBuilder.SetStateMachineMethod);
 
             // Store the builder
             _async.ArrowBuilders[arrow] = arrowBuilder;

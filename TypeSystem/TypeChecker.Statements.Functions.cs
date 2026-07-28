@@ -18,7 +18,17 @@ public partial class TypeChecker
     private List<TypeInfo.TypeParameter> BuildGenericTypeParameters(List<TypeParam> decls, TypeEnvironment env)
     {
         foreach (var tp in decls)
-            env.DefineTypeParameter(tp.Name.Lexeme, new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance));
+        {
+            DefineSourceTypeParameter(
+                env,
+                tp,
+                new TypeInfo.TypeParameter(
+                    tp.Name.Lexeme,
+                    null,
+                    null,
+                    tp.IsConst,
+                    tp.Variance));
+        }
 
         List<TypeInfo.TypeParameter> result = [];
         for (int pass = 0; pass < decls.Count; pass++)
@@ -30,7 +40,7 @@ public partial class TypeChecker
                 TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                 result.Add(typeParam);
-                env.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                DefineSourceTypeParameter(env, tp, typeParam);
             }
         }
         return result;
@@ -143,8 +153,23 @@ public partial class TypeChecker
         // references inside the body resolve and the inferred return is expressed in those terms.
         if (typeParams is { Count: > 0 })
         {
-            foreach (var tp in typeParams)
-                funcEnv.DefineTypeParameter(tp.Name, tp);
+            for (int i = 0; i < typeParams.Count; i++)
+            {
+                if (funcStmt.TypeParams is { } declarations &&
+                    i < declarations.Count)
+                {
+                    DefineSourceTypeParameter(
+                        funcEnv,
+                        declarations[i],
+                        typeParams[i]);
+                }
+                else
+                {
+                    funcEnv.DefineTypeParameter(
+                        typeParams[i].Name,
+                        typeParams[i]);
+                }
+            }
         }
         CheckFunctionBodyAndInferReturn(
             funcStmt, funcEnv, paramTypes, requiredParams, hasRest,
@@ -701,7 +726,7 @@ public partial class TypeChecker
         bool previousInGenerator = _inGeneratorFunction;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
-        var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
+        var previousActiveLabels = new Dictionary<string, ActiveLabel>(_activeLabels);
         bool previousRecoveryMode = _recoveryMode;
 
         var previousInferredReturnTypes = _inferredReturnTypes;

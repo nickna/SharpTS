@@ -34,7 +34,8 @@ public sealed class ReferenceService
         Position position,
         bool includeDeclaration,
         IReadOnlyDictionary<string, string>? openDocuments = null,
-        IReadOnlyList<string>? workspaceRoots = null)
+        IReadOnlyList<string>? workspaceRoots = null,
+        bool includeDeclarationFacets = false)
     {
         if (NavigationModelBuilder.TryBuild(path, text, openDocuments) is not { } model)
             return new NavigationReferenceResult([], [], IsComplete: false);
@@ -44,6 +45,24 @@ public sealed class ReferenceService
             (int)position.Character + 1);
         IReadOnlyList<BindingSymbol> selectedSymbols =
             model.Checker.Bindings.FindSymbols(model.Document, offset);
+        if (includeDeclarationFacets)
+        {
+            var expandedSymbols = new HashSet<BindingSymbol>(
+                selectedSymbols,
+                ReferenceEqualityComparer.Instance);
+            foreach (BindingSymbol symbol in selectedSymbols)
+            {
+                foreach (BindingDeclaration declaration in symbol.Declarations)
+                {
+                    expandedSymbols.UnionWith(
+                        model.Checker.Bindings.FindSymbols(
+                            declaration.Document,
+                            declaration.Name.Start));
+                }
+            }
+
+            selectedSymbols = expandedSymbols.ToArray();
+        }
         if (selectedSymbols.Count == 0)
         {
             return new NavigationReferenceResult(

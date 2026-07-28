@@ -279,6 +279,7 @@ public partial class ILCompiler
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
                     _types.Object
                 );
+                MarkCompilerGenerated(displayClass);
 
                 // Determine if any captured vars are top-level captured vars
                 bool needsEntryPointDC = _closures.EntryPointDisplayClass != null &&
@@ -1126,6 +1127,7 @@ public partial class ILCompiler
             $"<>c__{nameSuffix}{_closures.DisplayClassCounter++}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
+        MarkCompilerGenerated(displayClass);
 
         var fieldMap = new Dictionary<string, FieldBuilder>();
         foreach (var varName in capturedLocals)

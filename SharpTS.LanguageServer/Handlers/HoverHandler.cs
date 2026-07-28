@@ -22,13 +22,16 @@ public sealed class HoverHandler : HoverHandlerBase
 
     public override Task<Hover?> Handle(HoverParams request, CancellationToken ct)
     {
-        if (!_store.TryGet(request.TextDocument.Uri.ToString(), out var text))
+        if (!_store.TryGetSnapshot(
+                request.TextDocument.Uri.ToString(),
+                out DocumentSnapshot? snapshot))
             return Task.FromResult<Hover?>(null);
 
         int line = request.Position.Line, ch = request.Position.Character;
         // Decorator hover first (cursor on @DotNetType / a builtin); then .NET member hover.
         return Task.FromResult(
-            _decorators.Hover(text, line, ch) ?? _members.Hover(text, line, ch));
+            _decorators.Hover(snapshot.Text, line, ch) ??
+            _members.Hover(snapshot.Text, line, ch));
     }
 
     protected override HoverRegistrationOptions CreateRegistrationOptions(

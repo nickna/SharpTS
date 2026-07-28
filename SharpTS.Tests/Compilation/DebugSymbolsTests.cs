@@ -68,6 +68,9 @@ public class DebugSymbolsTests
         var document = Assert.Single(reader.Documents.Select(reader.GetDocument));
         Assert.Equal(fixture.DocumentPath, reader.GetString(document.Name));
         Assert.Equal(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(SourceText)), reader.GetBlobBytes(document.Hash));
+        Assert.Equal(
+            new Guid("3f5162f8-07c6-11d3-9053-00c04fa302a1"),
+            reader.GetGuid(document.Language));
 
         // MethodDebugInformation is parallel to MethodDef: row N describes method N.
         Assert.Equal(fixture.MethodDefRowCount, reader.MethodDebugInformation.Count);
@@ -412,6 +415,160 @@ public class DebugSymbolsTests
         }
     }
 
+    [Fact]
+    public void AsyncAndGeneratorBodiesCarryStateMachineDebugMetadata()
+    {
+        const string source = """
+            async function asyncWork(input: number): Promise<number> {
+              const before = input + 1;
+              const awaited = await Promise.resolve(before);
+              return awaited + 1;
+            }
+            function* numbers(limit: number): Generator<number> {
+              let current = 0;
+              while (current < limit) {
+                yield current;
+                current++;
+              }
+            }
+            async function* stream(): AsyncGenerator<number> {
+              const value = await Promise.resolve(1);
+              yield value;
+            }
+            asyncWork(1);
+            numbers(2);
+            stream();
+            """;
+
+        CompilationArtifacts artifacts = CompileTypeScript(
+            source,
+            emitDebugSymbols: true);
+        Dictionary<string, (string Document, int[] Lines)> byMethod =
+            SequencePointsByMethod(artifacts);
+
+        var asyncMoveNext = Assert.Single(
+            byMethod,
+            pair => pair.Key.Contains("<asyncWork>d__", StringComparison.Ordinal) &&
+                pair.Key.EndsWith("::MoveNext", StringComparison.Ordinal));
+        Assert.Equal([2, 3, 4], asyncMoveNext.Value.Lines);
+
+        var generatorMoveNext = Assert.Single(
+            byMethod,
+            pair => pair.Key.Contains("<numbers>d__", StringComparison.Ordinal) &&
+                pair.Key.EndsWith("::MoveNext", StringComparison.Ordinal));
+        Assert.Contains(8, generatorMoveNext.Value.Lines);
+        Assert.Contains(10, generatorMoveNext.Value.Lines);
+
+        var asyncGeneratorMoveNext = Assert.Single(
+            byMethod,
+            pair => pair.Key.Contains("<stream>d__", StringComparison.Ordinal) &&
+                pair.Key.EndsWith("::MoveNextAsync", StringComparison.Ordinal));
+        Assert.Equal([14, 15], asyncGeneratorMoveNext.Value.Lines);
+
+        MetadataReader pdb = ReadPdb(artifacts.Pdb!);
+        Assert.Equal(3, pdb.GetTableRowCount(TableIndex.StateMachineMethod));
+        Assert.Equal(
+            ["asyncWork", "numbers", "stream"],
+            StateMachineKickoffNames(artifacts));
+        Assert.True(
+            HasCustomDebugInformation(
+                pdb,
+                new Guid("54fd2ac5-e925-401a-9c2a-f94f171072f8")),
+            "async MoveNext methods should carry suspension/resume stepping information");
+        AssertAsyncStepRecordsAreValid(pdb);
+    }
+
+    [Fact]
+    public void StateMachineAndDisplayClassPresentationIsStable()
+    {
+        const string source = """
+            async function work(seed: number): Promise<number> {
+              let carried = seed;
+              const increment = () => ++carried;
+              await Promise.resolve(0);
+              return increment();
+            }
+            function* sequence(limit: number): Generator<number> {
+              let current = 0;
+              while (current < limit) {
+                yield current++;
+              }
+            }
+            work(1);
+            sequence(2);
+            """;
+
+        CompilationArtifacts first = CompileTypeScript(source, emitDebugSymbols: true);
+        CompilationArtifacts second = CompileTypeScript(source, emitDebugSymbols: true);
+        Assert.Equal(
+            GeneratedTypeNames(first.Assembly),
+            GeneratedTypeNames(second.Assembly));
+
+        using var reader = new PEReader(
+            new MemoryStream(first.Assembly, writable: false));
+        MetadataReader metadata = reader.GetMetadataReader();
+        TypeDefinitionHandle[] generatedTypes = metadata.TypeDefinitions
+            .Where(handle =>
+            {
+                string name = metadata.GetString(
+                    metadata.GetTypeDefinition(handle).Name);
+                return name.Contains("d__", StringComparison.Ordinal) ||
+                    name.Contains("DisplayClass", StringComparison.Ordinal);
+            })
+            .ToArray();
+        Assert.NotEmpty(generatedTypes);
+        Assert.All(generatedTypes, handle =>
+            Assert.True(HasAttribute(
+                metadata,
+                metadata.GetTypeDefinition(handle).GetCustomAttributes(),
+                "CompilerGeneratedAttribute")));
+
+        TypeDefinition asyncType = metadata.GetTypeDefinition(
+            Assert.Single(generatedTypes, handle =>
+                metadata.GetString(metadata.GetTypeDefinition(handle).Name)
+                    .Contains("<work>d__", StringComparison.Ordinal)));
+        string[] asyncFields = asyncType.GetFields()
+            .Select(handle => metadata.GetString(
+                metadata.GetFieldDefinition(handle).Name))
+            .ToArray();
+        Assert.Contains("seed", asyncFields);
+        Assert.Contains("increment", asyncFields);
+        Assert.Contains(generatedTypes, handle =>
+        {
+            TypeDefinition type = metadata.GetTypeDefinition(handle);
+            return metadata.GetString(type.Name)
+                    .Contains("FuncDisplayClass", StringComparison.Ordinal) &&
+                type.GetFields().Any(field =>
+                    metadata.GetString(metadata.GetFieldDefinition(field).Name) ==
+                    "carried");
+        });
+
+        MethodDefinitionHandle[] kickoffMethods = metadata.MethodDefinitions
+            .Where(handle =>
+            {
+                MethodDefinition method = metadata.GetMethodDefinition(handle);
+                return HasAttribute(
+                    metadata,
+                    method.GetCustomAttributes(),
+                    "AsyncStateMachineAttribute") ||
+                    HasAttribute(
+                        metadata,
+                        method.GetCustomAttributes(),
+                        "IteratorStateMachineAttribute");
+            })
+            .ToArray();
+        Assert.Equal(2, kickoffMethods.Length);
+
+        Assert.Contains(
+            metadata.MethodDefinitions.Select(metadata.GetMethodDefinition),
+            method =>
+                metadata.GetString(method.Name) == "SetStateMachine" &&
+                HasAttribute(
+                    metadata,
+                    method.GetCustomAttributes(),
+                    "DebuggerNonUserCodeAttribute"));
+    }
+
     // ---------------------------------------------------------------- just my code
 
     /// <summary>
@@ -476,6 +633,11 @@ public class DebugSymbolsTests
             string pdbPath = Path.Combine(directory, "program.pdb");
             Assert.True(File.Exists(pdbPath), "Save(path) should write symbols beside the assembly.");
             AssertCodeViewMatchesPdb(File.ReadAllBytes(dllPath), File.ReadAllBytes(pdbPath), "program.pdb");
+            using var reader = new PEReader(File.OpenRead(dllPath));
+            DebugDirectoryEntry codeView = Assert.Single(
+                reader.ReadDebugDirectory(),
+                entry => entry.Type == DebugDirectoryEntryType.CodeView);
+            Assert.Equal("program.pdb", reader.ReadCodeViewDebugDirectoryData(codeView).Path);
         }
         finally
         {
@@ -803,6 +965,103 @@ public class DebugSymbolsTests
             if (metadata.GetString(type.Name) == "DebuggableAttribute") return true;
         }
         return false;
+    }
+
+    private static string[] GeneratedTypeNames(byte[] image)
+    {
+        using var reader = new PEReader(
+            new MemoryStream(image, writable: false));
+        MetadataReader metadata = reader.GetMetadataReader();
+        return metadata.TypeDefinitions
+            .Select(metadata.GetTypeDefinition)
+            .Select(type => metadata.GetString(type.Name))
+            .Where(name =>
+                name.StartsWith("<>", StringComparison.Ordinal) ||
+                name.Contains("d__", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool HasAttribute(
+        MetadataReader metadata,
+        CustomAttributeHandleCollection attributes,
+        string name) =>
+        attributes
+            .Select(metadata.GetCustomAttribute)
+            .Any(attribute => AttributeTypeName(metadata, attribute) == name);
+
+    private static bool HasCustomDebugInformation(
+        MetadataReader metadata,
+        Guid kind)
+    {
+        foreach (CustomDebugInformationHandle handle in
+                 metadata.CustomDebugInformation)
+        {
+            CustomDebugInformation information =
+                metadata.GetCustomDebugInformation(handle);
+            if (metadata.GetGuid(information.Kind) == kind)
+                return true;
+        }
+        return false;
+    }
+
+    private static string[] StateMachineKickoffNames(
+        CompilationArtifacts artifacts)
+    {
+        using var reader = new PEReader(
+            new MemoryStream(artifacts.Assembly, writable: false));
+        MetadataReader metadata = reader.GetMetadataReader();
+        MetadataReader pdb = ReadPdb(artifacts.Pdb!);
+        var names = new List<string>();
+
+        for (int rid = 1; rid <= metadata.MethodDefinitions.Count; rid++)
+        {
+            MethodDebugInformation debugInformation =
+                pdb.GetMethodDebugInformation(
+                    MetadataTokens.MethodDebugInformationHandle(rid));
+            MethodDefinitionHandle kickoff =
+                debugInformation.GetStateMachineKickoffMethod();
+            if (!kickoff.IsNil)
+            {
+                names.Add(metadata.GetString(
+                    metadata.GetMethodDefinition(kickoff).Name));
+            }
+        }
+
+        return names.Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static void AssertAsyncStepRecordsAreValid(
+        MetadataReader metadata)
+    {
+        Guid asyncKind =
+            new("54fd2ac5-e925-401a-9c2a-f94f171072f8");
+        int records = 0;
+        foreach (CustomDebugInformationHandle handle in
+                 metadata.CustomDebugInformation)
+        {
+            CustomDebugInformation information =
+                metadata.GetCustomDebugInformation(handle);
+            if (metadata.GetGuid(information.Kind) != asyncKind)
+                continue;
+
+            Assert.Equal(HandleKind.MethodDefinition, information.Parent.Kind);
+            int moveNextRid = MetadataTokens.GetRowNumber(
+                (MethodDefinitionHandle)information.Parent);
+            BlobReader blob = metadata.GetBlobReader(information.Value);
+            Assert.Equal(-1, blob.ReadInt32());
+            while (blob.RemainingBytes > 0)
+            {
+                int yieldOffset = blob.ReadInt32();
+                int resumeOffset = blob.ReadInt32();
+                int resumeMethodRid = blob.ReadCompressedInteger();
+                Assert.True(yieldOffset < resumeOffset);
+                Assert.Equal(moveNextRid, resumeMethodRid);
+                records++;
+            }
+        }
+
+        Assert.True(records >= 2, "the async function and async generator should both record awaits");
     }
 
     private static List<SequencePoint> SequencePoints(MetadataReader pdb, int methodRid)

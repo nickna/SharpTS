@@ -138,14 +138,68 @@ public partial class TypeChecker
         bool mergeWithLocal = false) =>
         RegisterTypeDeclaration(_environment, declaration, mergeWithLocal);
 
-    private void BindTypeUse(Token? use, string name)
+    private void DefineSourceTypeParameter(
+        TypeEnvironment environment,
+        TypeParam declaration,
+        TypeInfo typeParameter)
     {
-        if (use is null)
+        BindingSymbol symbol = Bindings.Declare(
+            declaration.Name,
+            CurrentSourceDocument,
+            BindingNamespace.Type,
+            environment.GetLocalTypeSymbol(declaration.Name.Lexeme));
+        environment.DefineTypeBinding(declaration.Name.Lexeme, symbol);
+        environment.DefineTypeParameter(declaration.Name.Lexeme, typeParameter);
+    }
+
+    private void DefineSourceTypeParameter(
+        TypeEnvironment environment,
+        Token declaration,
+        TypeInfo typeParameter)
+    {
+        BindingSymbol symbol = Bindings.Declare(
+            declaration,
+            CurrentSourceDocument,
+            BindingNamespace.Type,
+            environment.GetLocalTypeSymbol(declaration.Lexeme));
+        environment.DefineTypeBinding(declaration.Lexeme, symbol);
+        environment.DefineTypeParameter(declaration.Lexeme, typeParameter);
+    }
+
+    private void BindTypeUse(NamedTypeNode named)
+    {
+        if (named.NameToken is null)
             return;
 
-        string rootName = name.Split('.', 2)[0];
+        string rootName = named.Name.Split('.', 2)[0];
         if (_environment.GetTypeSymbol(rootName) is { } symbol)
-            Bindings.Bind(use, CurrentSourceDocument, symbol);
+            Bindings.Bind(named.NameToken, CurrentSourceDocument, symbol);
+
+        if (named.NameTokens is not { Count: > 1 } tokens ||
+            _environment.GetNamespace(rootName) is not { } currentNamespace)
+        {
+            return;
+        }
+
+        for (int i = 1; i < tokens.Count; i++)
+        {
+            Token member = tokens[i];
+            BindingSymbol? memberSymbol =
+                currentNamespace.GetTypeBinding(member.Lexeme)
+                ?? currentNamespace.GetValueBinding(member.Lexeme);
+            if (memberSymbol is not null)
+                Bindings.Bind(member, CurrentSourceDocument, memberSymbol);
+
+            if (currentNamespace.Types.GetValueOrDefault(member.Lexeme)
+                is TypeInfo.Namespace nested)
+            {
+                currentNamespace = nested;
+            }
+            else
+            {
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -668,6 +722,7 @@ public partial class TypeChecker
 
     // Error recovery support
     private readonly DiagnosticCollector _diagnostics = new();
+    private CancellationToken _cancellationToken;
 
     /// <summary>
     /// When &gt; 0, <see cref="RecordTypeError(TypeCheckException)"/> and its overload are no-ops.
@@ -729,12 +784,16 @@ public partial class TypeChecker
         if (!_recoveryMode)
         {
             foreach (Stmt statement in statements)
+            {
+                ThrowIfCancellationRequested();
                 CheckStmt(statement);
+            }
             return;
         }
 
         foreach (Stmt statement in statements)
         {
+            ThrowIfCancellationRequested();
             if (_diagnostics.HitErrorLimit) return;
             int? saved = _currentStatementLine;
             _currentStatementLine = TryGetStmtLine(statement) ?? saved;
@@ -756,6 +815,19 @@ public partial class TypeChecker
         _filePath = filePath;
         return this;
     }
+
+    /// <summary>
+    /// Supplies cooperative cancellation for editor checks. The checker observes it between
+    /// declarations, statements, and module passes without changing compiler callers.
+    /// </summary>
+    public TypeChecker WithCancellation(CancellationToken cancellationToken)
+    {
+        _cancellationToken = cancellationToken;
+        return this;
+    }
+
+    private void ThrowIfCancellationRequested() =>
+        _cancellationToken.ThrowIfCancellationRequested();
 
     /// <summary>
     /// Marks this checker as running a worker_threads worker script, so the
@@ -969,7 +1041,9 @@ public partial class TypeChecker
     private bool _inGeneratorFunction = false;
 
     // Track active labels for labeled statements (label name -> isOnLoop)
-    private readonly Dictionary<string, bool> _activeLabels = [];
+    private sealed record ActiveLabel(bool IsOnLoop, BindingSymbol Symbol);
+
+    private readonly Dictionary<string, ActiveLabel> _activeLabels = [];
 
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
@@ -1022,6 +1096,7 @@ public partial class TypeChecker
         _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
+        ThrowIfCancellationRequested();
 
         // Module/top-level declarations live in their own declared-type frame so that
         // GetDeclaredType / IsDeclaredTypeTracked treat them like function locals (#743).
@@ -1101,15 +1176,19 @@ public partial class TypeChecker
 
         // Pre-register type declarations
         PreRegisterTypeDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist class declarations (as Any for forward references in function bodies)
         HoistClassDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist function declarations
         HoistFunctionDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist var declarations (pre-define as any for forward reference support)
         HoistVarDeclarations(statements);
+        ThrowIfCancellationRequested();
 
         // Hoist let/const declarations (pre-define as any so an earlier function body can
         // forward-reference a later block-scoped binding — #533)
@@ -1117,6 +1196,7 @@ public partial class TypeChecker
 
         foreach (Stmt statement in statements)
         {
+            ThrowIfCancellationRequested();
             if (_diagnostics.HitErrorLimit)
             {
                 _recoveryMode = false;
@@ -1368,6 +1448,7 @@ public partial class TypeChecker
         {
             foreach (var module in modules)
             {
+                ThrowIfCancellationRequested();
                 _currentModule = module;
                 // Attribute diagnostics to the module being checked — without
                 // this, errors raised inside module sources (including built-in
@@ -1413,6 +1494,7 @@ public partial class TypeChecker
         {
             foreach (var module in augmentationOrder)
             {
+                ThrowIfCancellationRequested();
                 foreach (var augmentation in module.GlobalAugmentations)
                 {
                     try { CheckAndMergeGlobalMember(augmentation); }
@@ -1428,6 +1510,7 @@ public partial class TypeChecker
         // Second pass: type-check each module with imports resolved
         foreach (var module in modules)
         {
+            ThrowIfCancellationRequested();
             if (module.IsTypeChecked)
             {
                 continue;
@@ -1460,6 +1543,7 @@ public partial class TypeChecker
                     // Check all statements with error recovery
                     foreach (var stmt in module.Statements)
                     {
+                        ThrowIfCancellationRequested();
                         // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
                         // the script path (CheckWithRecovery). Without it, module-mode errors render
                         // with no location (#468).
@@ -1520,6 +1604,7 @@ public partial class TypeChecker
                         // Third pass: check all statements with error recovery
                         foreach (var stmt in module.Statements)
                         {
+                            ThrowIfCancellationRequested();
                             // Fallback line for diagnostics whose throw-site doesn't carry one, mirroring
                             // the script path (CheckWithRecovery). Without it, module-mode errors render
                             // with no location (#468).
@@ -1979,7 +2064,16 @@ public partial class TypeChecker
         string name, ParsedModule module)
     {
         var members = module.ExportedTypes.ToFrozenDictionary();
-        return new TypeInfo.Namespace(name, members, members);
+        return new TypeInfo.Namespace(
+            name,
+            members,
+            members,
+            module.ExportedTypeBindings.Count == 0
+                ? null
+                : module.ExportedTypeBindings.ToFrozenDictionary(),
+            module.ExportedValueBindings.Count == 0
+                ? null
+                : module.ExportedValueBindings.ToFrozenDictionary());
     }
 
     /// <summary>

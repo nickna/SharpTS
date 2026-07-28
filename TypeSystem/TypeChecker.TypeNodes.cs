@@ -29,7 +29,7 @@ public partial class TypeChecker
             // identical semantics by construction, with none of the scanning hazards strings
             // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
-                BindTypeUse(named.NameToken, named.Name);
+                BindTypeUse(named);
                 return ResolveTypeName(named.Name);
 
             // Generic references resolve their argument nodes and hand off to the shared
@@ -38,7 +38,7 @@ public partial class TypeChecker
             // errors). ResolveGenericType owns the built-ins-before-aliases shadowing precedence.
             case NamedTypeNode { TypeArguments: { } argNodes } named:
             {
-                BindTypeUse(named.NameToken, named.Name);
+                BindTypeUse(named);
                 List<TypeInfo> typeArgs = new(argNodes.Count);
                 foreach (var argNode in argNodes)
                 {
@@ -134,7 +134,17 @@ public partial class TypeChecker
                 {
                     var inferEnv = new TypeEnvironment(_environment);
                     foreach (var inf in clauseInfers)
-                        inferEnv.DefineTypeParameter(inf.Name, new TypeInfo.InferredTypeParameter(inf.Name));
+                    {
+                        TypeInfo inferred =
+                            new TypeInfo.InferredTypeParameter(inf.Name);
+                        if (inf.NameToken is { } nameToken)
+                            DefineSourceTypeParameter(
+                                inferEnv,
+                                nameToken,
+                                inferred);
+                        else
+                            inferEnv.DefineTypeParameter(inf.Name, inferred);
+                    }
                     using (new EnvironmentScope(this, inferEnv))
                     {
                         extendsType = TryToTypeInfo(conditional.ExtendsType);
@@ -448,7 +458,12 @@ public partial class TypeChecker
 
         // First pass: declare every name unconstrained.
         foreach (var tp in typeParameters)
-            typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, new TypeInfo.TypeParameter(tp.Name.Lexeme));
+        {
+            DefineSourceTypeParameter(
+                typeParamEnv,
+                tp,
+                new TypeInfo.TypeParameter(tp.Name.Lexeme));
+        }
 
         var typeParams = new List<TypeInfo.TypeParameter>();
         TypeInfo? bodyType;
@@ -461,7 +476,7 @@ public partial class TypeChecker
                 TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var resolved = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 typeParams.Add(resolved);
-                typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, resolved);
+                DefineSourceTypeParameter(typeParamEnv, tp, resolved);
             }
 
             bodyType = TryToTypeInfo(body);
@@ -488,16 +503,30 @@ public partial class TypeChecker
 
         _openTypeVariablesInScope ??= new HashSet<string>(StringComparer.Ordinal);
         bool openVarAdded = _openTypeVariablesInScope.Add(mapped.ParamName);
+        var mappedEnv = new TypeEnvironment(_environment);
+        TypeInfo mappedParameter = new TypeInfo.TypeParameter(mapped.ParamName);
+        if (mapped.ParamToken is { } parameterToken)
+            DefineSourceTypeParameter(mappedEnv, parameterToken, mappedParameter);
+        else
+            mappedEnv.DefineTypeParameter(mapped.ParamName, mappedParameter);
         try
         {
-            TypeInfo? asClause = null;
-            if (mapped.AsClause is { } asNode)
+            using (new EnvironmentScope(this, mappedEnv))
             {
-                if (TryToTypeInfo(asNode) is not { } resolvedAs) return null;
-                asClause = resolvedAs;
+                TypeInfo? asClause = null;
+                if (mapped.AsClause is { } asNode)
+                {
+                    if (TryToTypeInfo(asNode) is not { } resolvedAs) return null;
+                    asClause = resolvedAs;
+                }
+                if (TryToTypeInfo(mapped.ValueType) is not { } valueType) return null;
+                return new TypeInfo.MappedType(
+                    mapped.ParamName,
+                    constraint,
+                    valueType,
+                    modifiers,
+                    asClause);
             }
-            if (TryToTypeInfo(mapped.ValueType) is not { } valueType) return null;
-            return new TypeInfo.MappedType(mapped.ParamName, constraint, valueType, modifiers, asClause);
         }
         finally
         {
