@@ -1607,7 +1607,7 @@ test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-5.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-6.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-7.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-8.js Pass
-test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-9.js Timeout
+test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-9.js Fail
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-1.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-10.js Fail
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-11.js Fail
@@ -6230,7 +6230,7 @@ test/built-ins/Object/freeze/15.2.3.9-2-2.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-3.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-4.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-1.js Pass
-test/built-ins/Object/freeze/15.2.3.9-2-a-10.js Fail
+test/built-ins/Object/freeze/15.2.3.9-2-a-10.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-11.js Fail
 test/built-ins/Object/freeze/15.2.3.9-2-a-12.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-13.js Pass
@@ -6240,7 +6240,7 @@ test/built-ins/Object/freeze/15.2.3.9-2-a-3.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-4.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-5.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-6.js Pass
-test/built-ins/Object/freeze/15.2.3.9-2-a-7.js Fail
+test/built-ins/Object/freeze/15.2.3.9-2-a-7.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-8.js Pass
 test/built-ins/Object/freeze/15.2.3.9-2-a-9.js Fail
 test/built-ins/Object/freeze/15.2.3.9-2-b-i-1.js Pass
@@ -7340,8 +7340,8 @@ test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-function-object-th
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-number-object-that-uses-object-s-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-reg-exp-object-that-uses-object-s-get-own-property.js Fail
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-a-string-object-which-implements-its-own-get-own-property.js Pass
-test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js Fail
-test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js Fail
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js Pass
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-error-object-that-uses-object-s-get-own-property.js Pass
 test/built-ins/Object/seal/object-seal-returned-object-is-not-extensible.js Pass
 test/built-ins/Object/seal/object-seal-the-extension-of-o-is-prevented-already.js Pass

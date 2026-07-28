@@ -495,6 +495,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void Freeze()
     {
+        SetNamedPropertyIntegrityLevel(frozen: true);
         IsFrozen = true;
         IsSealed = true; // Frozen implies sealed
         IsExtensible = false; // Frozen implies non-extensible
@@ -505,6 +506,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void Seal()
     {
+        SetNamedPropertyIntegrityLevel(frozen: false);
         IsSealed = true;
         IsExtensible = false;
     }
@@ -926,8 +928,30 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void SetNamedProperty(string name, object? value)
     {
+        if (IsFrozen) return;
+
         _namedProperties ??= new Dictionary<string, object?>();
         _namedProperties[name] = value;
+    }
+
+    /// <summary>
+    /// Applies ordinary SetIntegrityLevel descriptor changes to named expandos.
+    /// Array indices and length retain their separate array-exotic handling.
+    /// </summary>
+    private void SetNamedPropertyIntegrityLevel(bool frozen)
+    {
+        if (_namedProperties is null) return;
+        _descriptors ??= [];
+        foreach (var name in _namedProperties.Keys)
+        {
+            PropertyDescriptorFlags current = PropertyDescriptorFlags.Default;
+            if (_descriptors.TryGetValue(name, out var stored))
+                current = stored;
+            _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+                writable: frozen ? false : current.Writable,
+                enumerable: current.Enumerable,
+                configurable: false);
+        }
     }
 
     /// <summary>
