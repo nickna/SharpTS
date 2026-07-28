@@ -285,6 +285,21 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-9.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-11.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-12.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-13.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-14.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-1-11.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-1-13.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-1-14.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-1-9.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-1-12.js")]
+    public void Array_prototype_methods_support_generic_receivers_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

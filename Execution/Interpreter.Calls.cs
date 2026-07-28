@@ -1066,6 +1066,13 @@ public partial class Interpreter
         if (right is SharpTSBooleanNamespace)
             return IsBoxedPrimitiveOfType(left, "Boolean");
 
+        // The Function global is represented by a namespace-style callable
+        // rather than SharpTSBuiltInConstructor. OrdinaryHasInstance for it
+        // accepts every callable guest value, including declarations,
+        // expressions/arrows, classes, and native built-ins.
+        if (right is SharpTSFunctionGlobal)
+            return left is ISharpTSCallable;
+
         // Bare-value constructors for the built-in binary types (ArrayBuffer,
         // SharedArrayBuffer, DataView, typed arrays) are plain ISharpTSCallables,
         // so they carry their own instance predicate (#334).
