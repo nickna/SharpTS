@@ -1141,6 +1141,9 @@ public partial class Interpreter
         SharpTSAsyncArrowGeneratorFunction saag when saag.HasOwnThis => saag.Bind(receiver),
         SharpTSGeneratorFunction gf when gf.HasDynamicThis => gf.BindToReceiver(receiver),
         SharpTSAsyncGeneratorFunction agf when agf.HasDynamicThis => agf.BindToReceiver(receiver),
+        StringPrototypeMethodWrapper stringMethod => stringMethod.Bind(receiver),
+        NumberPrototypeMethodWrapper numberMethod => numberMethod.Bind(receiver),
+        BooleanPrototypeMethodWrapper booleanMethod => booleanMethod.Bind(receiver),
         _ => null,
     };
 
@@ -1232,19 +1235,20 @@ public partial class Interpreter
                 if (GetStringPrototype().GetExtraGetter(memberName) is { } stringGetter)
                     return BindAccessorToObject(stringGetter, simpleObj).CallV2(
                         this, ReadOnlySpan<RuntimeValue>.Empty);
-                if (GetStringPrototype().HasExtra(memberName))
-                    return RuntimeValue.FromBoxed(GetStringPrototype().TryGetExtra(memberName));
+                if (GetStringPrototype().GetMember(memberName) is { } stringMember)
+                    return RuntimeValue.FromBoxed(stringMember);
             }
             if (primitiveType == "Number")
             {
                 if (GetNumberPrototype().GetExtraGetter(memberName) is { } numberGetter)
                     return BindAccessorToObject(numberGetter, simpleObj).CallV2(
                         this, ReadOnlySpan<RuntimeValue>.Empty);
-                if (GetNumberPrototype().HasExtra(memberName))
-                    return RuntimeValue.FromBoxed(GetNumberPrototype().TryGetExtra(memberName));
+                if (GetNumberPrototype().GetMember(memberName) is { } numberMember)
+                    return RuntimeValue.FromBoxed(numberMember);
             }
-            if (primitiveType == "Boolean" && GetBooleanPrototype().HasExtra(memberName))
-                return RuntimeValue.FromBoxed(GetBooleanPrototype().TryGetExtra(memberName));
+            if (primitiveType == "Boolean"
+                && GetBooleanPrototype().GetMember(memberName) is { } booleanMember)
+                return RuntimeValue.FromBoxed(booleanMember);
 
             var pv = simpleObj.GetProperty("__primitiveValue");
             if (pv != null)

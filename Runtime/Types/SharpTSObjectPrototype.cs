@@ -1,4 +1,5 @@
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
@@ -53,7 +54,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
 {
     public static readonly SharpTSObjectUnboundMethod HasOwnProperty = new("hasOwnProperty", HasOwnPropertyImpl);
     public static readonly SharpTSObjectUnboundMethod ToString_ = new("toString", ToStringImpl);
-    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToStringImpl);
+    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToLocaleStringImpl);
     public static readonly SharpTSObjectUnboundMethod ValueOf = new("valueOf", ValueOfImpl);
     public static readonly SharpTSObjectUnboundMethod IsPrototypeOf = new("isPrototypeOf", IsPrototypeOfImpl);
     public static readonly SharpTSObjectUnboundMethod PropertyIsEnumerable = new("propertyIsEnumerable", PropertyIsEnumerableImpl);
@@ -171,6 +172,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             or BuiltInMethod or ISharpTSCallable or SharpTSBufferConstructor)
             return "[object Function]";
         return "[object Object]";
+    }
+
+    private static object? ToLocaleStringImpl(object? target, List<object?> args)
+    {
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert undefined or null to object"));
+        return ToStringImpl(target, args);
     }
 
     private static object? ValueOfImpl(object? target, List<object?> args) => target;

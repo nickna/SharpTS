@@ -404,8 +404,9 @@ public static class BuiltInConstructorFactory
     /// </summary>
     private static SharpTSObject CreateBoxedString(IReadOnlyList<object?> args)
     {
-        var arg = args.Count > 0 ? args[0] : null;
-        string value = arg switch
+        string value = args.Count == 0
+            ? ""
+            : args[0] switch
         {
             null => "null",
             SharpTSUndefined => "undefined",
@@ -413,7 +414,7 @@ public static class BuiltInConstructorFactory
             double d => RuntimeTypes.Stringify(d),
             string s => s,
             SharpTSArray arr => arr.ToString()!,
-            _ => arg.ToString() ?? "",
+            _ => args[0]?.ToString() ?? "",
         };
         var dict = new Dictionary<string, object?>
         {

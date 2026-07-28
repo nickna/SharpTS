@@ -863,7 +863,7 @@ public static partial class ObjectBuiltIns
         {
             SharpTSObject obj => OwnEnumerablePropertyKeys(obj),
             SharpTSArray array => array.OwnEnumerableKeys(),
-            SharpTSInstance instance => instance.GetFieldNames(),
+            SharpTSInstance instance => instance.OwnEnumerableKeys(),
             IDictionary<string, object?> dict => dict.Keys,
             SharpTSMath math => math.OwnEnumerableKeys(),
             SharpTSJSON json => json.OwnEnumerableKeys(),
@@ -1108,10 +1108,14 @@ public static partial class ObjectBuiltIns
         if (proto is null)
             result.IsNullPrototype = true;
 
-        // If propertiesObject is provided, define properties using defineProperty semantics
-        if (propertiesObject != null)
+        // Object.create's second argument uses the same
+        // ObjectDefineProperties algorithm as Object.defineProperties. Reusing
+        // it preserves abrupt completion for invalid descriptor values such as
+        // an explicit undefined instead of silently treating them as empty
+        // descriptors.
+        if (args.Count > 1 && propertiesObject is not SharpTSUndefined)
         {
-            DefinePropertiesFromDescriptors(propertiesObject, result, interpreter);
+            DefineProperties(interpreter, [result, propertiesObject]);
         }
 
         return result;
@@ -1154,31 +1158,6 @@ public static partial class ObjectBuiltIns
                     target.SetProperty(kv.Key, kv.Value);
                 }
                 break;
-        }
-    }
-
-    /// <summary>
-    /// Defines properties on target using property descriptors from propertiesObject.
-    /// Each property in propertiesObject should be a descriptor object.
-    /// </summary>
-    private static void DefinePropertiesFromDescriptors(object propertiesObject, SharpTSObject target, Interpreter interpreter)
-    {
-        IEnumerable<KeyValuePair<string, object?>>? entries = propertiesObject switch
-        {
-            SharpTSObject obj => obj.Fields,
-            Dictionary<string, object?> dict => dict,
-            _ => null
-        };
-
-        if (entries == null) return;
-
-        foreach (var kv in entries)
-        {
-            if (kv.Value == null) continue;
-
-            var descriptor = SharpTSPropertyDescriptor.FromAnyObject(kv.Value);
-            ApplyBooleanAttributes(descriptor, kv.Value, interpreter);
-            target.DefineProperty(kv.Key, descriptor);
         }
     }
 

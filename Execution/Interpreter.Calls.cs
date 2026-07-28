@@ -472,6 +472,12 @@ public partial class Interpreter
                 ? extension
                 : EvaluateGetOnObject(extensionGet, receiver).ToObject();
         }
+        else if (call.Callee is Expr.Get memberGet)
+        {
+            object? receiver = Evaluate(memberGet.Object);
+            callee = EvaluateGetOnObject(memberGet, receiver).ToObject();
+            callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+        }
         else
         {
             callee = Evaluate(call.Callee);

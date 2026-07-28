@@ -269,7 +269,35 @@ public sealed class Issue1279ParityTests
     public void DefineProperties_supports_object_carriers_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
+    [InlineData("built-ins/Object/prototype/toLocaleString/S15.2.4.3_A12.js")]
+    [InlineData("built-ins/Object/prototype/toLocaleString/S15.2.4.3_A13.js")]
+    public void Full_baseline_regressions_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-8.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-16.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-9.js")]
+    public void Full_interpreted_baseline_regressions_pass(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPassInBothModes(string relativePath)
+    {
+        foreach (var mode in new[]
+                 {
+                     Test262ExecutionMode.Interpreted,
+                     Test262ExecutionMode.Compiled,
+                 })
+        {
+            AssertPass(relativePath, mode);
+        }
+    }
+
+    private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
         if (root is null)
@@ -281,19 +309,12 @@ public sealed class Issue1279ParityTests
         var testPath = Path.Combine(Test262Paths.TestDir(root), relativePath);
         Assert.True(File.Exists(testPath), $"Expected Test262 file at {testPath}");
 
-        foreach (var mode in new[]
-                 {
-                     Test262ExecutionMode.Interpreted,
-                     Test262ExecutionMode.Compiled,
-                 })
-        {
-            var runner = new Test262Runner(root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
-            var result = runner.RunOne(testPath, mode);
+        var runner = new Test262Runner(root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
+        var result = runner.RunOne(testPath, mode);
 
-            _output.WriteLine($"{mode} {relativePath} -> {result.Outcome}: {result.Message}");
-            Assert.True(
-                result.Outcome == Test262Outcome.Pass,
-                $"{mode} {relativePath} -> {result.Outcome}: {result.Message}");
-        }
+        _output.WriteLine($"{mode} {relativePath} -> {result.Outcome}: {result.Message}");
+        Assert.True(
+            result.Outcome == Test262Outcome.Pass,
+            $"{mode} {relativePath} -> {result.Outcome}: {result.Message}");
     }
 }
