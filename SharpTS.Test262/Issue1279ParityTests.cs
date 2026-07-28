@@ -369,6 +369,17 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-1.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-3.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-4.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-b-i-1.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-data-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-accessor-property.js")]
+    public void Ordinary_object_integrity_levels_update_property_descriptors_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

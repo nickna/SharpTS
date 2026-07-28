@@ -67,6 +67,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public void Freeze()
     {
+        SetOwnPropertyIntegrityLevel(frozen: true);
         IsFrozen = true;
         IsSealed = true; // Frozen implies sealed
         IsExtensible = false; // Frozen implies non-extensible
@@ -77,8 +78,26 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public void Seal()
     {
+        SetOwnPropertyIntegrityLevel(frozen: false);
         IsSealed = true;
         IsExtensible = false;
+    }
+
+    /// <summary>
+    /// Applies SetIntegrityLevel's descriptor changes to every own instance
+    /// field, preserving writability when sealing and clearing it when freezing.
+    /// </summary>
+    private void SetOwnPropertyIntegrityLevel(bool frozen)
+    {
+        _descriptors ??= [];
+        foreach (var name in _fields.Keys)
+        {
+            var current = GetPropertyFlags(name);
+            _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+                writable: frozen ? false : current.Writable,
+                enumerable: current.Enumerable,
+                configurable: false);
+        }
     }
 
     /// <summary>
