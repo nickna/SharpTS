@@ -167,15 +167,15 @@ public static class TsConfigLoader
         }
 
         // Bare specifier: an honest subset of node resolution — walk up looking in node_modules.
-        var dir = new DirectoryInfo(declaringDir);
+        string? dir = declaringDir;
         while (dir != null)
         {
-            string baseDir = Path.Combine(dir.FullName, "node_modules", spec);
+            string baseDir = Path.Combine(dir, "node_modules", spec);
             foreach (var candidate in new[] { baseDir, baseDir + ".json", Path.Combine(baseDir, FileName) })
             {
                 if (File.Exists(candidate)) return Path.GetFullPath(candidate);
             }
-            dir = dir.Parent;
+            dir = FileDiscovery.AmbientParent(dir);
         }
 
         throw new Exception(

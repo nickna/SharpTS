@@ -5,7 +5,9 @@ namespace SharpTS.Configuration;
 /// <summary>
 /// Shared upward config/manifest-file discovery used by <see cref="TsConfigLoader"/>,
 /// <see cref="Packaging.PackageJsonLoader"/>, and <see cref="References.SharpTsManifestLoader"/>,
-/// so all three loaders apply one walk policy.
+/// so all three loaders apply one walk policy. Ambient walks elsewhere (module resolution's
+/// node_modules/@types/package.json probes) share the same ceilings via
+/// <see cref="AmbientParent"/>.
 /// </summary>
 internal static class FileDiscovery
 {
@@ -39,14 +41,7 @@ internal static class FileDiscovery
             ? NormalizeDir(new DirectoryInfo(stopDirectory).FullName)
             : null;
 
-        var ceilings = new[]
-            {
-                Path.GetTempPath(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            }
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Select(p => NormalizeDir(Path.GetFullPath(p)))
-            .ToArray();
+        var ceilings = WalkCeilings();
 
         bool isStartDirectory = true;
         while (dir != null)
@@ -75,6 +70,35 @@ internal static class FileDiscovery
 
         return null;
     }
+
+    /// <summary>
+    /// The parent of <paramref name="directory"/> for ambient upward walks, or null when
+    /// ascending would enter a ceiling (system temp root or user profile root). The caller's
+    /// start directory is always probed — even when it is itself a ceiling — matching the
+    /// <see cref="FindNearestFile"/> policy: files directly under a ceiling are ambient noise
+    /// from unrelated tooling, not part of the program being resolved.
+    /// </summary>
+    internal static string? AmbientParent(string directory)
+    {
+        string? parent = Path.GetDirectoryName(NormalizeDir(directory));
+        if (string.IsNullOrEmpty(parent))
+            return null;
+        string normalized = NormalizeDir(Path.GetFullPath(parent));
+        return WalkCeilings().Any(c => string.Equals(normalized, c, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : parent;
+    }
+
+    // Recomputed per call: tests and embedders may redirect TMP/TEMP at runtime.
+    private static string[] WalkCeilings() =>
+        new[]
+            {
+                Path.GetTempPath(),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            }
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => NormalizeDir(Path.GetFullPath(p)))
+            .ToArray();
 
     private static string NormalizeDir(string path) =>
         path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

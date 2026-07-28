@@ -406,8 +406,8 @@ public class ModuleResolver
                 }
             }
 
-            // Move up one directory
-            currentDir = Path.GetDirectoryName(currentDir);
+            // Move up one directory, stopping at ambient-walk ceilings (temp root, user profile)
+            currentDir = FileDiscovery.AmbientParent(currentDir);
         }
 
         return null;
@@ -583,7 +583,7 @@ public class ModuleResolver
                 // Found a package.json but no matching import — stop walking
                 return null;
             }
-            dir = Path.GetDirectoryName(dir);
+            dir = FileDiscovery.AmbientParent(dir);
         }
         return null;
     }
@@ -612,7 +612,7 @@ public class ModuleResolver
                     return ResolveExportsPath(resolved, dir);
                 return null;
             }
-            dir = Path.GetDirectoryName(dir);
+            dir = FileDiscovery.AmbientParent(dir);
         }
         return null;
     }
@@ -1756,7 +1756,7 @@ public class ModuleResolver
         while (directory is not null)
         {
             roots.Add(Path.Combine(directory, "node_modules", "@types"));
-            directory = Path.GetDirectoryName(directory);
+            directory = FileDiscovery.AmbientParent(directory);
         }
         return roots;
     }
