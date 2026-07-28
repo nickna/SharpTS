@@ -34,21 +34,11 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         ct.ThrowIfCancellationRequested();
 
-        var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (openUri, openText) in _store.Snapshot())
-        {
-            if (Uri.TryCreate(openUri, UriKind.Absolute, out var parsedUri) &&
-                parsedUri.IsFile)
-            {
-                overlay[Path.GetFullPath(parsedUri.LocalPath)] = openText;
-            }
-        }
-
         var locations = _definitions.FindDefinitions(
                 request.TextDocument.Uri.GetFileSystemPath(),
                 text,
                 request.Position,
-                overlay)
+                _store.SnapshotFileSystemDocuments())
             .Select(location => new LocationOrLocationLink(location));
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(locations));

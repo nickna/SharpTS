@@ -267,13 +267,19 @@ dirty open documents on disk, and carries source identities through named/defaul
 re-exports. This makes hoisting, shadowing, parameters, overload merging, aliases, and module
 provenance follow the real checker instead of a second editor-only scope walker.
 
+`textDocument/references` now uses the inverse side of that same index. It unions type/value facets
+only when the selected token has both, honors `includeDeclaration`, and discovers the connected
+component across open roots so references in open importers are included as well as forward
+dependencies without merging unrelated script globals. Unopened reverse importers are not yet a
+known-complete domain; safe rename must refuse that partial cross-module case until the lifecycle
+work maintains a workspace graph with reverse edges.
+
 The server advertises these features only in `--language-features full`; the VS Code extension
 continues to launch `interop-only`, leaving ordinary TypeScript navigation to `tsserver`.
 
-Still required for the complete navigation milestone: the inverse reference index, safe rename,
-and the remaining type/member domains (notably type parameters and qualified namespace/property
-members). Property/member definition remains deliberately absent until it can resolve a complete
-semantic domain.
+Still required for the complete navigation milestone: safe rename and the remaining type/member
+domains (notably type parameters and qualified namespace/property members). Property/member
+definition remains deliberately absent until it can resolve a complete semantic domain.
 
 ---
 
@@ -381,9 +387,10 @@ single-file binary so non-VS-Code editors don't need the full SDK.
   surgery, no record-equality risk. ~7 tests + e2e (precise columns, declaration + usage hover).
 - 🟨 **Phase 4b — standalone general navigation.** Reference-keyed source spans, document
   symbols, semantic value/type binding identities, and module-aware go-to-definition through
-  imports/re-exports have landed. References, safe rename, type-parameter navigation, and
-  qualified member navigation remain. VS Code stays in `interop-only`; these capabilities are
-  for standalone clients.
+  imports/re-exports have landed. The inverse binding index and references across open module roots
+  have also landed. Safe rename, type-parameter navigation, qualified member navigation, and a
+  complete reverse workspace graph remain. VS Code stays in `interop-only`; these capabilities
+  are for standalone clients.
 - ⬜ **Phase 5 — Polish & reach.** Multi-editor docs; `dotnet tool`/self-contained
   packaging; debounce/cancellation; config→server wiring (`sharpts.diagnostics`);
   loader reload on `.csproj`/`bin` change; STATUS.md/README updates. **NOT YET DONE.**

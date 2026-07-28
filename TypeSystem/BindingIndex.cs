@@ -18,6 +18,14 @@ public enum BindingNamespace
 public sealed record BindingDeclaration(SourceDocument Document, Token Name);
 
 /// <summary>
+/// One source occurrence of a semantic binding.
+/// </summary>
+public sealed record BindingOccurrence(
+    SourceDocument Document,
+    Token Name,
+    bool IsDeclaration);
+
+/// <summary>
 /// Stable identity for one checker-resolved symbol.
 /// </summary>
 /// <remarks>
@@ -74,6 +82,8 @@ public sealed class BindingIndex
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, SourceDocument> _documents =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<BindingSymbol, Dictionary<Token, SourceDocument>> _occurrences =
+        new(ReferenceEqualityComparer.Instance);
     private int _nextId = 1;
     private int _generation;
 
@@ -81,6 +91,7 @@ public sealed class BindingIndex
     {
         _tokens.Clear();
         _documents.Clear();
+        _occurrences.Clear();
         _generation++;
     }
 
@@ -110,7 +121,10 @@ public sealed class BindingIndex
         }
         facets[bindingNamespace] = symbol;
         if (document is not null && declaration.Start >= 0)
+        {
             _documents[declaration] = document;
+            RecordOccurrence(symbol, declaration, document);
+        }
         return symbol;
     }
 
@@ -124,9 +138,41 @@ public sealed class BindingIndex
             facets = [];
             _tokens[use] = facets;
         }
+        else if (facets.TryGetValue(symbol.Namespace, out var previous) &&
+                 !ReferenceEquals(previous, symbol))
+        {
+            RemoveOccurrence(previous, use);
+        }
         facets[symbol.Namespace] = symbol;
         if (document is not null)
+        {
             _documents[use] = document;
+            RecordOccurrence(symbol, use, document);
+        }
+    }
+
+    private void RecordOccurrence(
+        BindingSymbol symbol,
+        Token token,
+        SourceDocument document)
+    {
+        if (!_occurrences.TryGetValue(symbol, out var occurrences))
+        {
+            occurrences = new Dictionary<Token, SourceDocument>(
+                ReferenceEqualityComparer.Instance);
+            _occurrences[symbol] = occurrences;
+        }
+        occurrences[token] = document;
+    }
+
+    private void RemoveOccurrence(BindingSymbol symbol, Token token)
+    {
+        if (!_occurrences.TryGetValue(symbol, out var occurrences))
+            return;
+
+        occurrences.Remove(token);
+        if (occurrences.Count == 0)
+            _occurrences.Remove(symbol);
     }
 
     /// <summary>
@@ -158,5 +204,97 @@ public sealed class BindingIndex
         }
 
         return best?.Declarations ?? [];
+    }
+
+    /// <summary>
+    /// Returns all checker-bound occurrences for the semantic binding at a UTF-16 source offset.
+    /// When the selected token has both value and type facets (for example a class declaration),
+    /// occurrences from both identities are unioned.
+    /// </summary>
+    public IReadOnlyList<BindingOccurrence> FindReferences(
+        SourceDocument document,
+        int offset,
+        bool includeDeclarations)
+    {
+        IReadOnlyList<BindingSymbol> symbols = FindSymbols(document, offset);
+        if (symbols.Count == 0)
+            return [];
+
+        var occurrences = new Dictionary<Token, OccurrenceBuilder>(
+            ReferenceEqualityComparer.Instance);
+        foreach (var symbol in symbols)
+        {
+            if (!_occurrences.TryGetValue(symbol, out var symbolOccurrences))
+                continue;
+
+            foreach (var (token, occurrenceDocument) in symbolOccurrences)
+            {
+                bool isDeclaration = symbol.Declarations.Any(declaration =>
+                    ReferenceEquals(declaration.Document, occurrenceDocument) &&
+                    ReferenceEquals(declaration.Name, token));
+
+                if (occurrences.TryGetValue(token, out var existing))
+                {
+                    existing.IsDeclarationInEveryFacet &= isDeclaration;
+                }
+                else
+                {
+                    occurrences[token] = new OccurrenceBuilder(
+                        occurrenceDocument,
+                        isDeclaration);
+                }
+            }
+        }
+
+        return occurrences
+            .Where(pair =>
+                includeDeclarations || !pair.Value.IsDeclarationInEveryFacet)
+            .Select(pair => new BindingOccurrence(
+                pair.Value.Document,
+                pair.Key,
+                pair.Value.IsDeclarationInEveryFacet))
+            .OrderBy(occurrence => occurrence.Document.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(occurrence => occurrence.Name.Start)
+            .ToArray();
+    }
+
+    private IReadOnlyList<BindingSymbol> FindSymbols(
+        SourceDocument document,
+        int offset)
+    {
+        var symbols = new HashSet<BindingSymbol>(ReferenceEqualityComparer.Instance);
+        int bestLength = int.MaxValue;
+
+        foreach (var (token, facets) in _tokens)
+        {
+            if (!_documents.TryGetValue(token, out var tokenDocument) ||
+                !ReferenceEquals(tokenDocument, document) ||
+                !token.Span.Contains(offset))
+            {
+                continue;
+            }
+
+            if (token.Span.Length < bestLength)
+            {
+                symbols.Clear();
+                bestLength = token.Span.Length;
+            }
+            if (token.Span.Length == bestLength)
+            {
+                foreach (var symbol in facets.Values)
+                    symbols.Add(symbol);
+            }
+        }
+
+        return symbols.ToArray();
+    }
+
+    private sealed class OccurrenceBuilder(
+        SourceDocument document,
+        bool isDeclarationInEveryFacet)
+    {
+        public SourceDocument Document { get; } = document;
+        public bool IsDeclarationInEveryFacet { get; set; } =
+            isDeclarationInEveryFacet;
     }
 }
