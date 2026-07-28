@@ -451,6 +451,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     {
         // Get existing descriptor flags if any
         bool hasExisting = _fields.ContainsKey(name) || HasGetter(name) || HasSetter(name);
+        bool existingIsAccessor = HasGetter(name) || HasSetter(name);
+        bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
+        bool descriptorIsData = descriptor.HasValue || descriptor.HasWritable;
         PropertyDescriptorFlags existingFlags = default;
 
         if (hasExisting && _descriptors?.TryGetValue(name, out existingFlags) != true)
@@ -462,28 +465,34 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         // Check if we can modify the property
         if (hasExisting && existingFlags.HasExplicitDescriptor && !existingFlags.Configurable)
         {
-            // Non-configurable property - limited modifications allowed
-            // Can only change value if writable, cannot change other attributes
-            if (descriptor.Get != null || descriptor.Set != null)
+            // Non-configurable properties cannot become configurable, change
+            // enumerability, or switch between data/accessor kinds.
+            if ((descriptor.HasConfigurable && descriptor.Configurable) ||
+                (descriptor.HasEnumerable && descriptor.Enumerable != existingFlags.Enumerable))
             {
-                // Cannot change accessor on non-configurable property
                 return false;
             }
-            if (descriptor.Writable != existingFlags.Writable ||
-                descriptor.Enumerable != existingFlags.Enumerable ||
-                descriptor.Configurable != existingFlags.Configurable)
+
+            if (existingIsAccessor)
             {
-                // Cannot change attributes on non-configurable property
-                return false;
-            }
-            if (!existingFlags.Writable && descriptor.HasValue)
-            {
-                // Cannot change value of non-writable, non-configurable property
-                var currentValue = _fields.TryGetValue(name, out var v) ? v : null;
-                if (!ReferenceEquals(currentValue, descriptor.Value) &&
-                    (currentValue == null || !currentValue.Equals(descriptor.Value)))
-                {
+                if (descriptorIsData)
                     return false;
+                if (descriptor.HasGet && !SameValue(descriptor.Get, GetGetter(name)))
+                    return false;
+                if (descriptor.HasSet && !SameValue(descriptor.Set, GetSetter(name)))
+                    return false;
+            }
+            else
+            {
+                if (descriptorIsAccessor)
+                    return false;
+                if (!existingFlags.Writable)
+                {
+                    if (descriptor.HasWritable && descriptor.Writable)
+                        return false;
+                    var currentValue = _fields.TryGetValue(name, out var value) ? value : SharpTSUndefined.Instance;
+                    if (descriptor.HasValue && !SameValue(descriptor.Value, currentValue))
+                        return false;
                 }
             }
         }
@@ -517,8 +526,6 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         // matching the observable result (hasOwnProperty true, value undefined).
         bool descHasRealAccessor = descriptor.Get != null || descriptor.Set != null;
         bool descSpecifiesAccessor = descriptor.HasGet || descriptor.HasSet;
-        bool existingIsAccessor = HasGetter(name) || HasSetter(name);
-
         // Apply the descriptor
         if (descHasRealAccessor
             || (descSpecifiesAccessor && existingIsAccessor)
@@ -564,6 +571,24 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// ECMA-262 SameValue comparison used by ValidateAndApplyPropertyDescriptor.
+    /// Object/callable identity is reference-based; numbers additionally keep
+    /// NaN equal to itself and distinguish positive from negative zero.
+    /// </summary>
+    private static bool SameValue(object? left, object? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is double ld && right is double rd)
+        {
+            if (double.IsNaN(ld) && double.IsNaN(rd)) return true;
+            if (ld == 0 && rd == 0)
+                return BitConverter.DoubleToInt64Bits(ld) == BitConverter.DoubleToInt64Bits(rd);
+            return ld.Equals(rd);
+        }
+        return left?.Equals(right) == true;
     }
 
     /// <summary>

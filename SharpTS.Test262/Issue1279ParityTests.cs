@@ -105,6 +105,14 @@ public sealed class Issue1279ParityTests
     public void Descriptor_fields_on_global_object_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-75.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-77.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-96.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-98.js")]
+    public void Same_accessors_can_refine_nonconfigurable_properties_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         var root = Test262Paths.TryFindRoot();

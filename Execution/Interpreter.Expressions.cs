@@ -1261,8 +1261,27 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ObjectString t:
-                if (strictMode) t.Target.SetPropertyStrict(t.Key, value, strictMode);
-                else t.Target.SetProperty(t.Key, value);
+                // Bracket assignment uses the same [[Set]] path as dot assignment:
+                // invoke an own setter before considering the descriptor's writable
+                // flag. Object.defineProperty accessors have writable=false in their
+                // stored flags, but that flag applies only to data descriptors.
+                if (t.Target.GetSetter(t.Key) is { } setter)
+                {
+                    BindAccessorToObject(setter, t.Target).CallBoxed(this, [value]);
+                }
+                else if (t.Target.HasGetter(t.Key))
+                {
+                    if (strictMode)
+                        throw new InterpreterException($"Cannot set property '{t.Key}' which has only a getter.");
+                }
+                else if (strictMode)
+                {
+                    t.Target.SetPropertyStrict(t.Key, value, strictMode);
+                }
+                else
+                {
+                    t.Target.SetProperty(t.Key, value);
+                }
                 break;
 
             case IndexTarget.ObjectSymbol t:
