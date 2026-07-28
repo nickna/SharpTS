@@ -341,6 +341,28 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public IEnumerable<string> GetFieldNames() => _fields.Keys;
 
+    /// <summary>
+    /// Enumerates own string keys whose descriptors are enumerable.
+    /// Built-in instances can carry non-enumerable internal fields alongside
+    /// ordinary user-assigned properties, so spec algorithms must not treat
+    /// every backing field as enumerable.
+    /// </summary>
+    internal IEnumerable<string> OwnEnumerableKeys()
+    {
+        foreach (var key in _fields.Keys)
+            if (GetPropertyFlags(key).Enumerable)
+                yield return key;
+    }
+
+    internal void MarkNonEnumerable(string name)
+    {
+        if (!_fields.ContainsKey(name)) return;
+        var flags = GetPropertyFlags(name);
+        _descriptors ??= [];
+        _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+            flags.Writable, enumerable: false, flags.Configurable);
+    }
+
     /// <inheritdoc />
     public IEnumerable<string> PropertyNames => GetFieldNames();
 

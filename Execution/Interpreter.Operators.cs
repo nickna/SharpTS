@@ -504,6 +504,14 @@ public partial class Interpreter
         {
             var s = rv.AsString().Trim();
             if (s.Length == 0) return 0.0;
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                && ulong.TryParse(s.AsSpan(2),
+                    System.Globalization.NumberStyles.AllowHexSpecifier,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var hex))
+            {
+                return hex;
+            }
             if (double.TryParse(s, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var d))
                 return d;
@@ -517,6 +525,54 @@ public partial class Interpreter
         if (rv.Kind == ValueKind.Object && TryGetBoxedPrimitiveValue(rv.ToObject(), out var prim))
             return CoerceToNumber(RuntimeValue.FromBoxed(prim));
         return double.NaN;
+    }
+
+    /// <summary>
+    /// ToNumber including the object-to-primitive step. Array length
+    /// descriptors use this before validating the uint32 result.
+    /// </summary>
+    internal double ToNumberWithPrimitive(object? value)
+    {
+        object? primitive = value is SharpTSObject obj
+            ? OrdinaryToPrimitiveNumber(obj)
+            : ToPrimitive(value, PrimitiveHint.Number);
+        return CoerceToNumber(RuntimeValue.FromBoxed(primitive));
+    }
+
+    /// <summary>
+    /// OrdinaryToPrimitive with a number hint for plain objects. Unlike the
+    /// compatibility-oriented general ToPrimitive path below, this performs
+    /// full prototype-chain Get for valueOf/toString and throws when neither
+    /// callable returns a primitive, as ArraySetLength requires.
+    /// </summary>
+    private object? OrdinaryToPrimitiveNumber(SharpTSObject obj)
+    {
+        // Boxed primitives retain the dedicated internal-slot behavior used by
+        // the wider coercion paths.
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+            return ToPrimitive(obj, PrimitiveHint.Number);
+
+        if (TryCallConversion(obj, "valueOf", out var valueOfResult))
+            return valueOfResult;
+        if (TryCallConversion(obj, "toString", out var toStringResult))
+            return toStringResult;
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    private bool TryCallConversion(SharpTSObject receiver, string name, out object? result)
+    {
+        result = null;
+        if (GetProperty(receiver, name) is not ISharpTSCallable callable)
+            return false;
+
+        var converted = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
+        if (IsObjectLike(converted))
+            return false;
+
+        result = converted;
+        return true;
     }
 
     private enum PrimitiveHint { Default, Number, String }
@@ -660,6 +716,63 @@ public partial class Interpreter
         => Stringify(value is SharpTSObject ? ToPrimitive(value, PrimitiveHint.String) : value);
 
     /// <summary>
+    /// ECMA-262 ToString for built-in algorithm arguments. Unlike the
+    /// compatibility-oriented String() call path, this performs the complete
+    /// OrdinaryToPrimitive fallback and throws when both conversion methods
+    /// return objects.
+    /// </summary>
+    internal string ToStringForBuiltInArgument(object? value)
+    {
+        ThrowIfSymbolStringCoercion(value);
+        if (value is not SharpTSObject obj)
+            return Stringify(value);
+
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+            return Stringify(ToPrimitive(obj, PrimitiveHint.String));
+
+        if (TryCallConversion(obj, "toString", out var stringResult))
+            return Stringify(stringResult);
+        if (TryCallConversion(obj, "valueOf", out var valueResult))
+            return Stringify(valueResult);
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    /// <summary>
+    /// ECMA-262 §7.1.19 ToPropertyKey for non-Symbol values. Property-key
+    /// coercion uses the string hint, so arrays use their comma-joined form,
+    /// boxed primitives unwrap, and user-defined toString/valueOf methods run
+    /// in the required order.
+    /// </summary>
+    internal string ToPropertyKeyString(object? value)
+    {
+        if (!IsObjectLike(value))
+            return PropertyKeyConverter.ToPropertyKeyString(value);
+
+        // Boxed String/Number/Boolean objects carry their primitive in an
+        // interpreter-only internal slot. Their prototype conversion methods
+        // expect the unboxed receiver, so use the wrapper-aware coercion path.
+        if (TryGetBoxedPrimitiveValue(value, out _))
+            return PropertyKeyConverter.ToPropertyKeyString(
+                ToPrimitive(value, PrimitiveHint.String));
+
+        foreach (var methodName in new[] { "toString", "valueOf" })
+        {
+            var method = GetProperty(value, methodName);
+            if (method is not ISharpTSCallable callable)
+                continue;
+
+            var primitive = FunctionBuiltIns.CallWithThis(this, callable, value, []);
+            if (!IsObjectLike(primitive))
+                return PropertyKeyConverter.ToPropertyKeyString(primitive);
+        }
+
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
+    }
+
+    /// <summary>
     /// ECMA-262 §25.5.2.1 step 4.b: coerce a replacer-array element to a
     /// PropertyList key. A String stays as-is; a Number coerces via ToString;
     /// an Object carrying a [[StringData]]/[[NumberData]] slot (a boxed
@@ -740,6 +853,17 @@ public partial class Interpreter
         {
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
+            SharpTSMath math => math.DeleteExtra(name),
+            SharpTSJSON json => json.DeleteExtra(name),
+            SharpTSDate date => date.DeleteExtra(name),
+            SharpTSRegExp regex => regex.DeleteProperty(name),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
+            SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(name),
+            BuiltInMethod method => method.DeleteMetadataProperty(name),
+            SharpTSFunction function => function.DeleteProperty(name),
+            SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -778,6 +902,17 @@ public partial class Interpreter
         {
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
+            SharpTSMath math => math.DeleteExtra(keyStr),
+            SharpTSJSON json => json.DeleteExtra(keyStr),
+            SharpTSDate date => date.DeleteExtra(keyStr),
+            SharpTSRegExp regex => regex.DeleteProperty(keyStr),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(keyStr),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(keyStr),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(keyStr),
+            SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(keyStr),
+            BuiltInMethod method => method.DeleteMetadataProperty(keyStr),
+            SharpTSFunction function => function.DeleteProperty(keyStr),
+            SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };

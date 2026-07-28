@@ -79,21 +79,51 @@ public sealed class SharpTSStringPrototype
     // instance; only the _extras overlay differs between instances.
     internal SharpTSStringPrototype() { }
 
-    private Dictionary<string, object?>? _extras;
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
+    private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, StringPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
     }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    private bool IsBuiltIn(string name)
+        => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
+        if (name == "constructor") return SharpTSStringNamespace.Instance;
         var method = StringBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
-        return new StringPrototypeMethodWrapper(name, method);
+        return _methodCache.GetOrAdd(name, _ => new StringPrototypeMethodWrapper(name, method));
     }
 
     public override string ToString() => "[object String]";
@@ -251,21 +281,25 @@ public sealed class SharpTSNumberPrototype
     // instance; only the _extras overlay differs between instances.
     internal SharpTSNumberPrototype() { }
 
-    private Dictionary<string, object?>? _extras;
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    private readonly SharpTSObject _extras = new([]);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (name == "constructor") return SharpTSNumberNamespace.Instance;
         var method = NumberBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
-        return new NumberPrototypeMethodWrapper(name, method);
+        return _methodCache.GetOrAdd(name, _ => new NumberPrototypeMethodWrapper(name, method));
     }
 
     public override string ToString() => "[object Number]";
@@ -394,6 +428,7 @@ public sealed class SharpTSBooleanPrototype
         if (HasExtra(name)) return TryGetExtra(name);
         return name switch
         {
+            "constructor" => SharpTSBooleanNamespace.Instance,
             "toString" => BooleanPrototypeMethodWrapper.ToStringInstance,
             "valueOf" => BooleanPrototypeMethodWrapper.ValueOfInstance,
             _ => null,

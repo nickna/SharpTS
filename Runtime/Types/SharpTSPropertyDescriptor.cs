@@ -78,22 +78,22 @@ public class SharpTSPropertyDescriptor
     /// </summary>
     public SharpTSObject ToObject()
     {
-        var obj = new SharpTSObject(new Dictionary<string, object?>());
-
-        if (Value != null)
+        var obj = new SharpTSObject(new Dictionary<string, object?>())
+        {
+            PreserveCallableValueIdentity = true,
+        };
+        bool isAccessor = HasGet || HasSet || Get != null || Set != null;
+        if (isAccessor)
+        {
+            // FromPropertyDescriptor returns a COMPLETE accessor descriptor:
+            // both get and set are present, using undefined for an absent half.
+            obj.SetProperty("get", Get is null ? SharpTSUndefined.Instance : Get);
+            obj.SetProperty("set", Set is null ? SharpTSUndefined.Instance : Set);
+        }
+        else
         {
             obj.SetProperty("value", Value);
             obj.SetProperty("writable", Writable);
-        }
-
-        if (Get != null)
-        {
-            obj.SetProperty("get", Get);
-        }
-
-        if (Set != null)
-        {
-            obj.SetProperty("set", Set);
         }
 
         obj.SetProperty("enumerable", Enumerable);

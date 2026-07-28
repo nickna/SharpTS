@@ -62,6 +62,7 @@ public static class NumberBuiltIns
             .MethodV2("toPrecision", 0, 1, ToPrecisionV2)
             .MethodV2("toExponential", 0, 1, ToExponentialV2)
             .MethodV2("toString", 0, 1, ToStringMethodV2)
+            .MethodV2("toLocaleString", 0, 1, ToStringMethodV2)
             // ECMA-262 §21.1.3.7: Number.prototype.valueOf returns thisNumberValue.
             // Needed so `(new Number(5)).valueOf()` and ToPrimitive(number-wrapper)
             // unwrap to the primitive instead of resolving Object.prototype.valueOf.

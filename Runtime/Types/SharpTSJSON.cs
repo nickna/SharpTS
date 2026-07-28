@@ -17,7 +17,18 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSJSON
 {
     public static readonly SharpTSJSON Instance = new();
-    private SharpTSJSON() { }
+    private readonly SharpTSObject _extras = new([]);
+    internal SharpTSJSON() { }
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public bool DeleteExtra(string name) => _extras.DeleteProperty(name);
+    internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     public override string ToString() => "[object JSON]";
 }

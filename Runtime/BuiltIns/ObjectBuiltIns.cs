@@ -1,6 +1,7 @@
 using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -62,18 +63,23 @@ public static partial class ObjectBuiltIns
     ///   callables have none.
     /// Throws for non-object receivers; <paramref name="apiName"/> qualifies the message.
     /// </summary>
-    private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(object? arg, string apiName)
+    private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(
+        Interpreter interpreter, object? arg, string apiName)
     {
         switch (arg)
         {
             case SharpTSObject obj:
                 foreach (var k in obj.OwnEnumerableKeys())
-                    yield return new(k, obj.Fields[k]);
+                    yield return new(k, interpreter.GetProperty(obj, k));
                 yield break;
             case SharpTSArray arr:
-                for (int i = 0; i < arr.Length; i++)
-                    if (arr.HasIndex(i))
-                        yield return new(i.ToString(), arr[i]);
+                foreach (var key in arr.OwnEnumerableKeys())
+                {
+                    object? value = uint.TryParse(key, out uint index)
+                        ? interpreter.GetProperty(arr, key)
+                        : arr.GetNamedProperty(key);
+                    yield return new(key, value);
+                }
                 yield break;
             case SharpTSInstance inst:
                 foreach (var n in inst.GetFieldNames())
@@ -86,6 +92,18 @@ public static partial class ObjectBuiltIns
             case SharpTSMath math:
                 foreach (var kv in math.OwnEnumerableProperties)
                     yield return new(kv.Key, kv.Value);
+                yield break;
+            case SharpTSJSON json:
+                foreach (var key in json.OwnEnumerableKeys())
+                    yield return new(key, json.TryGetExtra(key));
+                yield break;
+            case SharpTSDate date:
+                foreach (var key in date.OwnEnumerableKeys())
+                    yield return new(key, date.TryGetExtra(key));
+                yield break;
+            case SharpTSRegExp regex:
+                foreach (var key in regex.OwnEnumerableKeys())
+                    yield return new(key, regex.TryGetProperty(key, out var value) ? value : null);
                 yield break;
             case SharpTSFunction fn:
                 foreach (var k in fn.PropertyKeys)
@@ -102,23 +120,23 @@ public static partial class ObjectBuiltIns
         }
     }
 
-    private static RuntimeValue KeysV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue KeysV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var keys = EnumerateOwnEnumerable(args[0].ToObject(), "Object.keys()")
+        var keys = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.keys()")
             .Select(kv => (object?)kv.Key).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(keys));
     }
 
-    private static RuntimeValue ValuesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ValuesV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var values = EnumerateOwnEnumerable(args[0].ToObject(), "Object.values()")
+        var values = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.values()")
             .Select(kv => kv.Value).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(values));
     }
 
-    private static RuntimeValue EntriesV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue EntriesV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var entries = EnumerateOwnEnumerable(args[0].ToObject(), "Object.entries()")
+        var entries = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.entries()")
             .Select(kv => (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(entries));
     }
@@ -399,9 +417,12 @@ public static partial class ObjectBuiltIns
             throw new Exception("TypeError: Object.defineProperty called on null or undefined");
         }
 
-        if (descriptorArg == null)
+        if (descriptorArg is null or SharpTSUndefined or string or bool
+            or byte or sbyte or short or ushort or int or uint or long or ulong
+            or float or double or decimal or SharpTSBigInt or SharpTSSymbol)
         {
-            throw new Exception("TypeError: Property description must be an object");
+            throw new ThrowException(
+                new SharpTSTypeError("Property description must be an object"));
         }
 
         // Parse descriptor from object - use FromAnyObject to handle any object type
@@ -418,6 +439,7 @@ public static partial class ObjectBuiltIns
         // accessors); FromAnyObject only saw own fields. Re-derive them prototype-aware
         // and record presence so omitted-vs-undefined is preserved downstream (#801).
         ApplyValueAndAccessors(descriptor, descriptorArg, interpreter);
+        ValidatePropertyDescriptor(descriptor);
 
         // Handle Symbol-keyed property definition — route through Symbol storage.
         // Per ECMA-262 §10.1.6 / §6.2.5.6, a descriptor that omits `value` (only
@@ -460,7 +482,7 @@ public static partial class ObjectBuiltIns
 
         // ECMA-262 §7.1.19: coerce non-Symbol property keys via ToPropertyKey
         // (undefined → "undefined", null → "null", -0 → "0", booleans lowercase).
-        var propertyKey = PropertyKeyConverter.ToPropertyKeyString(args[1]);
+        var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
         PreserveOmittedAttributes(target, propertyKey, descriptor, descriptorArg, interpreter);
 
@@ -470,12 +492,38 @@ public static partial class ObjectBuiltIns
             case SharpTSObject obj:
                 success = obj.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSObjectNamespace objectNamespace:
+                success = objectNamespace.DefineProperty(propertyKey, descriptor);
+                break;
             case SharpTSInstance inst:
                 success = inst.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSArray arr:
                 // Arrays can have properties defined on them
+                if (propertyKey == "length" && descriptor.HasValue)
+                    descriptor.Value = interpreter.ToNumberWithPrimitive(descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
+                break;
+            case SharpTSArrayPrototype arrayPrototype:
+                success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSMath math:
+                success = math.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSJSON json:
+                success = json.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSDate date:
+                success = date.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSStringPrototype stringPrototype:
+                success = stringPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSNumberPrototype numberPrototype:
+                success = numberPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSFunctionPrototype functionPrototype:
+                success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
@@ -483,42 +531,16 @@ public static partial class ObjectBuiltIns
                 success = PropertyDescriptorStore.DefineProperty(dict, propertyKey, compiledDesc);
                 break;
             case SharpTSFunction fn:
-                // JS functions are objects — store accessor (get/set) or value
-                // descriptors directly on the function. Attribute-only
-                // descriptors (no value/get/set) preserve the existing value
-                // per ECMA-262 §10.1.6.3.
-                if (descriptor.Get != null || descriptor.Set != null)
-                {
-                    fn.DefineAccessor(propertyKey, descriptor.Get, descriptor.Set);
-                }
-                else if (descriptor.HasValue)
-                {
-                    fn.SetProperty(propertyKey, descriptor.Value);
-                }
-                success = true;
+                success = fn.DefineProperty(propertyKey, descriptor);
+                break;
+            case SharpTSArrowFunction arrow:
+                success = arrow.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSRegExp rx:
-                // RegExp instances are objects; ECMA-262 §22.2 declares
-                // `flags`/`global`/`unicode`/`lastIndex` as configurable
-                // accessors that user code can override via
-                // Object.defineProperty. Without this branch the descriptor
-                // is silently dropped on the floor, so test262 patterns that
-                // install throwing getters (.../coerce-global.js, etc.)
-                // never see the override fire. Per ECMA-262 §10.1.6.3, an
-                // attribute-only descriptor (just writable/enumerable/etc.,
-                // no value/get/set) preserves the existing value — we mirror
-                // that for the user-property dictionary so
-                // `Object.defineProperty(r, 'global', {writable:true})`
-                // followed by `r.global = false` reads back `false`, not null.
-                if (descriptor.Get != null || descriptor.Set != null)
-                {
-                    rx.DefineAccessor(propertyKey, descriptor.Get, descriptor.Set);
-                }
-                else if (descriptor.HasValue)
-                {
-                    rx.SetProperty(propertyKey, descriptor.Value);
-                }
-                success = true;
+                // RegExp expandos are ordinary descriptor-bearing properties.
+                // Reuse SharpTSObject validation so non-configurable properties
+                // reject illegal redefinitions and omitted fields are retained.
+                success = rx.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSPromise promise:
                 // Promise instances are objects; user code may install own
@@ -547,13 +569,23 @@ public static partial class ObjectBuiltIns
             throw new Exception($"TypeError: Cannot define property '{propertyKey}': object is not extensible or property is not configurable");
         }
 
+        // A callable installed as a data-property value retains its identity on
+        // ordinary reads (`obj.prop === value`). Invocation still acquires the
+        // receiver at the call site; see EvaluateCallCore.
+        if (target is SharpTSObject identityObject
+            && descriptor.HasValue
+            && descriptor.Value is ISharpTSCallable)
+        {
+            identityObject.PreserveCallableValueIdentityFor(propertyKey);
+        }
+
         return target;
     }
 
     /// <summary>
     /// Object.getOwnPropertyDescriptor(obj, prop) - returns the property descriptor for an own property.
     /// </summary>
-    private static object? GetOwnPropertyDescriptor(Interpreter _, List<object?> args)
+    private static object? GetOwnPropertyDescriptor(Interpreter interpreter, List<object?> args)
     {
         var target = args[0];
 
@@ -571,32 +603,132 @@ public static partial class ObjectBuiltIns
         }
 
         // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
-        var propertyKey = PropertyKeyConverter.ToPropertyKeyString(args[1]);
+        var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
         SharpTSPropertyDescriptor? descriptor = target switch
         {
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSObjectNamespace objectNamespace
+                => objectNamespace.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSMath math => math.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSStringPrototype stringPrototype => stringPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`
             // and `length` as { writable: false, enumerable: false, configurable: true }
             // data properties. test262's verifyProperty() checks introspect these
             // via getOwnPropertyDescriptor; without this branch the descriptor
             // lookup returns null and the assertion fails.
-            ISharpTSCallable callable when propertyKey is "name" or "length"
+            BuiltInMethod method when propertyKey is "name" or "length"
+                && method.HasMetadataProperty(propertyKey)
+                => GetCallableMetaDescriptor(method, propertyKey),
+            ISharpTSCallable callable when callable is not BuiltInMethod
+                && propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
-            _ => null
+            SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
+            SharpTSArrowFunction arrow => GetFunctionOwnPropertyDescriptor(arrow, propertyKey),
+            _ => GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)
         };
 
         if (descriptor == null)
         {
-            return null;
+            return SharpTSUndefined.Instance;
         }
 
         // Return as an object
         return descriptor.ToObject();
     }
+
+    private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
+        SharpTSFunction function,
+        string propertyKey)
+        => function.GetOwnPropertyDescriptor(propertyKey);
+
+    private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
+        SharpTSArrowFunction function,
+        string propertyKey)
+        => function.GetOwnPropertyDescriptor(propertyKey);
+
+    /// <summary>
+    /// Synthesizes the standard descriptor shape for members exposed by the
+    /// interpreter's built-in registry. Methods are writable/configurable and
+    /// non-enumerable; constructor prototype properties and numeric constants
+    /// are read-only, non-enumerable, and non-configurable.
+    /// </summary>
+    private static SharpTSPropertyDescriptor? GetBuiltInOwnPropertyDescriptor(
+        Interpreter interpreter,
+        object target,
+        string propertyKey)
+    {
+        bool isKnownBuiltIn = target is ISharpTSCallable
+            || target is SharpTSArrayPrototype or SharpTSFunctionPrototype
+            || BuiltInRegistry.Instance.HasInstanceMembers(target);
+        if (!isKnownBuiltIn)
+            return null;
+
+        var value = target switch
+        {
+            SharpTSObjectNamespace objectNamespace => propertyKey == "prototype"
+                ? interpreter.GetObjectPrototype()
+                : objectNamespace.GetMember(propertyKey),
+            SharpTSJSON json => json.HasExtra(propertyKey)
+                ? json.TryGetExtra(propertyKey)
+                : JSONBuiltIns.GetStaticMethod(propertyKey),
+            SharpTSStringNamespace str => propertyKey == "prototype"
+                ? interpreter.GetStringPrototype()
+                : str.GetMember(propertyKey),
+            SharpTSNumberNamespace num => propertyKey == "prototype"
+                ? interpreter.GetNumberPrototype()
+                : num.GetMember(propertyKey),
+            SharpTSBooleanNamespace boolean => propertyKey == "prototype"
+                ? interpreter.GetBooleanPrototype()
+                : boolean.GetMember(propertyKey),
+            SharpTSArrayGlobal array => propertyKey == "prototype"
+                ? interpreter.GetArrayPrototype()
+                : array.GetMember(propertyKey),
+            _ => interpreter.GetProperty(target, propertyKey),
+        };
+        if (value is BuiltInMethod { IsConstant: true } constant)
+            value = constant.CallBoxed(interpreter, []);
+        if (value is null or SharpTSUndefined)
+            return null;
+
+        bool isMethod = value is ISharpTSCallable;
+        return DataDescriptor(
+            value,
+            writable: isMethod,
+            enumerable: false,
+            configurable: isMethod);
+    }
+
+    private static SharpTSPropertyDescriptor DataDescriptor(
+        object? value,
+        bool writable,
+        bool enumerable,
+        bool configurable) => new()
+    {
+        Value = value,
+        HasValue = true,
+        Writable = writable,
+        Enumerable = enumerable,
+        Configurable = configurable,
+    };
 
     /// <summary>
     /// Returns ECMA-262 §17 spec descriptor for a callable's `name` or
@@ -630,7 +762,7 @@ public static partial class ObjectBuiltIns
             case SharpTSInstance inst when inst.HasSymbolProperty(key):
                 return DescriptorObjectFor(inst.GetBySymbol(key));
             default:
-                return null;
+                return SharpTSUndefined.Instance;
         }
 
         static object? DescriptorObjectFor(object? value) => new SharpTSPropertyDescriptor
@@ -686,9 +818,12 @@ public static partial class ObjectBuiltIns
         var target = args[0];
         var props = args[1];
 
-        if (target is null or SharpTSUndefined)
+        if (target is null or SharpTSUndefined or string or bool
+            or double or int or long or System.Numerics.BigInteger
+            or SharpTSBigInt or SharpTSSymbol)
         {
-            throw new Exception("TypeError: Object.defineProperties called on null or undefined");
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.defineProperties called on non-object"));
         }
 
         if (props is null or SharpTSUndefined)
@@ -696,32 +831,24 @@ public static partial class ObjectBuiltIns
             throw new Exception("TypeError: Cannot convert undefined or null to object");
         }
 
-        // ECMA-262 §19.1.2.3 ObjectDefineProperties: for each own ENUMERABLE
-        // property key of props, read its descriptor object via Get — firing any
-        // accessor getter with `this` bound to props — then DefineProperty on the
-        // target. Reading via Get (not the raw field) matters when props is a
-        // boxed primitive wrapper carrying an accessor descriptor, e.g.
-        // `Object.defineProperties(o, new Number(n))` where the descriptor lives
-        // behind a getter whose body inspects `this instanceof Number`. (#454)
-        if (props is SharpTSObject obj)
+        // ToObject on non-null primitives. Boolean/number/bigint/symbol wrappers
+        // have no enumerable own properties; the empty string used by the ES5
+        // boundary cases likewise contributes no descriptors.
+        if (props is bool or double or int or long or System.Numerics.BigInteger
+            or SharpTSBigInt or SharpTSSymbol
+            || props is string { Length: 0 })
         {
-            foreach (var key in OwnEnumerablePropertyKeys(obj))
-            {
-                var descriptor = interpreter.GetProperty(obj, key);
-                DefineProperty(interpreter, [target, key, descriptor]);
-            }
             return target;
         }
 
-        // SharpTSInstance / plain Dictionary carriers store data only (no
-        // separate accessor storage), so a raw field read already matches Get.
-        IEnumerable<KeyValuePair<string, object?>> entries = props switch
-        {
-            SharpTSInstance inst => inst.GetFieldNames()
-                .Select(k => new KeyValuePair<string, object?>(k, inst.GetRawField(k))),
-            Dictionary<string, object?> dict => dict,
-            _ => throw new Exception("TypeError: Property descriptions must be an object")
-        };
+        // ECMA-262 §19.1.2.3 ObjectDefineProperties: snapshot own enumerable
+        // keys and read every descriptor through Get before applying it. The
+        // carrier may be any object kind (function, array/arguments, Math,
+        // Date, RegExp, JSON, …), and accessor reads bind `this` to that carrier.
+        var entries = OwnEnumerableKeysForDefineProperties(props)
+            .Select(key => new KeyValuePair<string, object?>(
+                key, ReadDefinePropertiesValue(interpreter, props, key)))
+            .ToList();
 
         foreach (var entry in entries)
         {
@@ -729,6 +856,52 @@ public static partial class ObjectBuiltIns
         }
 
         return target;
+    }
+
+    private static IEnumerable<string> OwnEnumerableKeysForDefineProperties(object props)
+        => props switch
+        {
+            SharpTSObject obj => OwnEnumerablePropertyKeys(obj),
+            SharpTSArray array => array.OwnEnumerableKeys(),
+            SharpTSInstance instance => instance.OwnEnumerableKeys(),
+            IDictionary<string, object?> dict => dict.Keys,
+            SharpTSMath math => math.OwnEnumerableKeys(),
+            SharpTSJSON json => json.OwnEnumerableKeys(),
+            SharpTSDate date => date.OwnEnumerableKeys(),
+            SharpTSRegExp regex => regex.OwnEnumerableKeys(),
+            SharpTSFunction function => function.PropertyKeys,
+            SharpTSArrowFunction arrow => arrow.PropertyKeys,
+            ISharpTSCallable => [],
+            _ => throw new ThrowException(new SharpTSTypeError(
+                "Property descriptions must be an object")),
+        };
+
+    private static object? ReadDefinePropertiesValue(
+        Interpreter interpreter,
+        object carrier,
+        string key)
+    {
+        SharpTSPropertyDescriptor? descriptor = carrier switch
+        {
+            SharpTSObject obj => obj.GetOwnPropertyDescriptor(key),
+            SharpTSArray array => array.GetOwnPropertyDescriptor(key),
+            SharpTSMath math => math.GetOwnPropertyDescriptor(key),
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(key),
+            SharpTSDate date => date.GetOwnPropertyDescriptor(key),
+            SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(key),
+            SharpTSFunction function => function.GetOwnPropertyDescriptor(key),
+            SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(key),
+            _ => null,
+        };
+
+        if (descriptor is { HasGet: true })
+        {
+            return descriptor.Get is { } getter
+                ? FunctionBuiltIns.CallWithThis(interpreter, getter, carrier, [])
+                : SharpTSUndefined.Instance;
+        }
+
+        return interpreter.GetProperty(carrier, key);
     }
 
     /// <summary>
@@ -935,10 +1108,14 @@ public static partial class ObjectBuiltIns
         if (proto is null)
             result.IsNullPrototype = true;
 
-        // If propertiesObject is provided, define properties using defineProperty semantics
-        if (propertiesObject != null)
+        // Object.create's second argument uses the same
+        // ObjectDefineProperties algorithm as Object.defineProperties. Reusing
+        // it preserves abrupt completion for invalid descriptor values such as
+        // an explicit undefined instead of silently treating them as empty
+        // descriptors.
+        if (args.Count > 1 && propertiesObject is not SharpTSUndefined)
         {
-            DefinePropertiesFromDescriptors(propertiesObject, result, interpreter);
+            DefineProperties(interpreter, [result, propertiesObject]);
         }
 
         return result;
@@ -985,31 +1162,6 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// Defines properties on target using property descriptors from propertiesObject.
-    /// Each property in propertiesObject should be a descriptor object.
-    /// </summary>
-    private static void DefinePropertiesFromDescriptors(object propertiesObject, SharpTSObject target, Interpreter interpreter)
-    {
-        IEnumerable<KeyValuePair<string, object?>>? entries = propertiesObject switch
-        {
-            SharpTSObject obj => obj.Fields,
-            Dictionary<string, object?> dict => dict,
-            _ => null
-        };
-
-        if (entries == null) return;
-
-        foreach (var kv in entries)
-        {
-            if (kv.Value == null) continue;
-
-            var descriptor = SharpTSPropertyDescriptor.FromAnyObject(kv.Value);
-            ApplyBooleanAttributes(descriptor, kv.Value, interpreter);
-            target.DefineProperty(kv.Key, descriptor);
-        }
-    }
-
-    /// <summary>
     /// ECMA-262 §6.2.5.5 ToPropertyDescriptor boolean-attribute coercion done
     /// with interpreter access: each of writable/enumerable/configurable, when
     /// resolvable via <c>Get</c> (own or inherited, data or accessor), is
@@ -1021,12 +1173,21 @@ public static partial class ObjectBuiltIns
     private static void ApplyBooleanAttributes(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
-        var w = interpreter.GetProperty(descObj, "writable");
-        if (w is not (null or SharpTSUndefined)) descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
-        var e = interpreter.GetProperty(descObj, "enumerable");
-        if (e is not (null or SharpTSUndefined)) descriptor.Enumerable = Compilation.RuntimeTypes.IsTruthy(e);
-        var c = interpreter.GetProperty(descObj, "configurable");
-        if (c is not (null or SharpTSUndefined)) descriptor.Configurable = Compilation.RuntimeTypes.IsTruthy(c);
+        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
+        {
+            descriptor.HasWritable = true;
+            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "enumerable", out var e))
+        {
+            descriptor.HasEnumerable = true;
+            descriptor.Enumerable = Compilation.RuntimeTypes.IsTruthy(e);
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "configurable", out var c))
+        {
+            descriptor.HasConfigurable = true;
+            descriptor.Configurable = Compilation.RuntimeTypes.IsTruthy(c);
+        }
     }
 
     /// <summary>
@@ -1053,12 +1214,38 @@ public static partial class ObjectBuiltIns
         if (interpreter.TryGetDescriptorField(descObj, "get", out var g))
         {
             descriptor.HasGet = true;
-            descriptor.Get = g as ISharpTSCallable;
+            descriptor.Get = g switch
+            {
+                SharpTSUndefined => null,
+                ISharpTSCallable callable => callable,
+                _ => throw new ThrowException(
+                    new SharpTSTypeError("Getter must be a function or undefined")),
+            };
         }
         if (interpreter.TryGetDescriptorField(descObj, "set", out var s))
         {
             descriptor.HasSet = true;
-            descriptor.Set = s as ISharpTSCallable;
+            descriptor.Set = s switch
+            {
+                SharpTSUndefined => null,
+                ISharpTSCallable callable => callable,
+                _ => throw new ThrowException(
+                    new SharpTSTypeError("Setter must be a function or undefined")),
+            };
+        }
+    }
+
+    /// <summary>
+    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor rejects descriptors that combine
+    /// accessor fields with data-property fields.
+    /// </summary>
+    private static void ValidatePropertyDescriptor(SharpTSPropertyDescriptor descriptor)
+    {
+        if ((descriptor.HasGet || descriptor.HasSet) &&
+            (descriptor.HasValue || descriptor.HasWritable))
+        {
+            throw new ThrowException(
+                new SharpTSTypeError("Invalid property descriptor: cannot specify accessors and a value or writable attribute"));
         }
     }
 

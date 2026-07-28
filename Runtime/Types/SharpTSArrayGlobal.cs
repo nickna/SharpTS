@@ -68,16 +68,35 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSArrayPrototype
 {
-    // Mutating methods (push/pop/shift/unshift) keep the bespoke
-    // SharpTSArrayUnboundMethod path because spec-compliant array-like
-    // mutation would require writing indexed properties back onto the
-    // original receiver — a larger refactor. Non-mutating methods
-    // (slice/concat — pure reads returning new arrays, plus indexOf) are
-    // routed through ArrayBuiltIns, so they share one implementation with
-    // instance-method dispatch and inherit the array-like receiver
-    // coercion in ArrayPrototypeMethodWrapper.
-    public object? GetMember(string name)
+    // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
+    // descriptor-aware storage so defineProperty can install accessors and
+    // enforce writable/configurable flags instead of maintaining a parallel
+    // value-only expando dictionary.
+    private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ArrayPrototypeMethodWrapper>
+        _methodCache = new(StringComparer.Ordinal);
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value)
     {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+
+    private object? GetBuiltInMember(string name)
+    {
+        if (name == "constructor") return SharpTSArrayGlobal.Instance;
+
         var legacy = name switch
         {
             "push" => (object?)SharpTSArrayUnboundMethod.Push,
@@ -89,13 +108,39 @@ public sealed class SharpTSArrayPrototype
         if (legacy is not null) return legacy;
 
         var method = BuiltIns.ArrayBuiltIns.GetPrototypeMethod(name);
-        if (method is null) return null;
+        return method is null
+            ? null
+            : _methodCache.GetOrAdd(name, _ => new ArrayPrototypeMethodWrapper(name, method));
+    }
 
-        // ECMA-262: Array.prototype.* starts with ToObject(this), which throws
-        // TypeError if this is null or undefined. Wrap with a receiver-check
-        // so `Array.prototype.map.call(null)` throws a real TypeError in JS
-        // instead of surfacing a C# InvalidCastException via the method body.
-        return new ArrayPrototypeMethodWrapper(name, method);
+    private bool IsBuiltIn(string name) => GetBuiltInMember(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    // Mutating methods (push/pop/shift/unshift) keep the bespoke
+    // SharpTSArrayUnboundMethod path because spec-compliant array-like
+    // mutation would require writing indexed properties back onto the
+    // original receiver — a larger refactor. Non-mutating methods
+    // (slice/concat — pure reads returning new arrays, plus indexOf) are
+    // routed through ArrayBuiltIns, so they share one implementation with
+    // instance-method dispatch and inherit the array-like receiver
+    // coercion in ArrayPrototypeMethodWrapper.
+    public object? GetMember(string name)
+    {
+        if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
+        return GetBuiltInMember(name);
     }
 
     public override string ToString() => "[object Array]";

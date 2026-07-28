@@ -18,6 +18,8 @@ public static class StringBuiltIns
             .MethodV2("indexOf", 1, 2, IndexOfV2)
             .MethodV2("toUpperCase", 0, ToUpperCaseV2)
             .MethodV2("toLowerCase", 0, ToLowerCaseV2)
+            .MethodV2("toLocaleUpperCase", 0, ToUpperCaseV2)
+            .MethodV2("toLocaleLowerCase", 0, ToLowerCaseV2)
             .MethodV2("trim", 0, TrimV2)
             .MethodV2("replace", 2, ReplaceV2)
             .MethodV2("split", 1, 2, specLength: 2, SplitV2)
@@ -82,16 +84,16 @@ public static class StringBuiltIns
     public static BuiltInMethod? GetPrototypeMethod(string name)
         => _lookup.GetMethod(name);
 
-    private static RuntimeValue ReplaceV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var replacement = args[1].ToObject()?.ToString() ?? "";
+        var replacement = interpreter.ToStringForBuiltInArgument(args[1].ToObject());
 
         if (args[0].ToObject() is SharpTSRegExp regex)
         {
             return RuntimeValue.FromString(regex.Replace(str, replacement));
         }
 
-        var search = args[0].ToObject()?.ToString() ?? "";
+        var search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());
         var index = str.IndexOf(search);
         if (index < 0) return RuntimeValue.FromString(str);
         return RuntimeValue.FromString(str.Substring(0, index) + replacement + str.Substring(index + search.Length));

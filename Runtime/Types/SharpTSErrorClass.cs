@@ -145,6 +145,12 @@ public class SharpTSErrorClass : SharpTSClass
                 instance.SetRawField("cause", opts.GetProperty("cause"));
             }
         }
+
+        // Error's standard own slots are non-enumerable. Assigning a new value
+        // to one of these existing properties preserves that attribute, while
+        // later user-created expandos remain enumerable.
+        foreach (var key in new[] { "name", "message", "stack", "cause", "errors" })
+            instance.MarkNonEnumerable(key);
     }
 
     /// <summary>

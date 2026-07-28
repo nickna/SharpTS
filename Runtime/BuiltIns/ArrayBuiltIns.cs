@@ -38,6 +38,7 @@ public static class ArrayBuiltIns
             .MethodV2("join", 0, 1, specLength: 1, JoinV2)
             // Array.prototype.toString = join() with ","; distinct from the debug ToString().
             .MethodV2("toString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
+            .MethodV2("toLocaleString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
             // Array.prototype.concat accepts any number of args (variadic).
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
             .MethodV2("reverse", 0, ReverseV2)

@@ -41,6 +41,13 @@ public static class FunctionBuiltIns
             return ownValue;
         }
 
+        if (receiver is BuiltInMethod method
+            && name is "name" or "length"
+            && !method.HasMetadataProperty(name))
+        {
+            return null;
+        }
+
         switch (name)
         {
             case "bind": return _bind.Bind(receiver);

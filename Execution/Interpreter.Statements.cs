@@ -751,12 +751,19 @@ public partial class Interpreter
             SharpTSInstance i => i.GetFieldNames(),
             // for...in skips holes per ECMA-262 (only own enumerable index properties
             // that actually exist — holes don't).
-            SharpTSArray a => Enumerable.Range(0, a.Length).Where(a.HasIndex).Select(i => i.ToString()),
+            SharpTSArray a => a.OwnEnumerableKeys(),
             // JS functions are objects; enumerate user-assigned properties. Lodash iterates
             // its own utility namespace (which is a function returning the wrapper) with
             // `for (var key in _) { ... }` to copy members onto the mixin target.
             SharpTSFunction f => f.PropertyKeys,
             SharpTSArrowFunction af => af.PropertyKeys,
+            SharpTSMath math => math.OwnEnumerableKeys(),
+            SharpTSJSON json => json.OwnEnumerableKeys(),
+            SharpTSDate date => date.OwnEnumerableKeys(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnEnumerableKeys(),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.OwnEnumerableKeys(),
+            SharpTSStringPrototype stringPrototype => stringPrototype.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,

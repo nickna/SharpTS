@@ -35,6 +35,7 @@ public class BuiltInMethod : ISharpTSCallable
     // MinArity for compatibility with the many call sites that already report
     // the correct value via MinArity.
     private int _specLength = -1;
+    private HashSet<string>? _deletedMetadataProperties;
 
     // Cache for bound methods - uses weak references to avoid memory leaks
     // Key: receiver object, Value: bound method instance
@@ -70,6 +71,13 @@ public class BuiltInMethod : ISharpTSCallable
     /// (<c>var nativeNow = Date.now; nativeNow();</c> is a lodash/polyfill idiom).
     /// </summary>
     public bool IsConstant { get; }
+
+    /// <summary>
+    /// Whether this callable implements [[Construct]]. Kept true by default for
+    /// compatibility with legacy constructor registrations; method builders
+    /// explicitly mark ordinary built-in functions as non-constructors.
+    /// </summary>
+    public bool IsConstructor { get; private set; } = true;
 
     /// <summary>
     /// Returns true if this method has a native V2 (RuntimeValue) implementation,
@@ -215,6 +223,24 @@ public class BuiltInMethod : ISharpTSCallable
         return this;
     }
 
+    public BuiltInMethod AsNonConstructor()
+    {
+        IsConstructor = false;
+        return this;
+    }
+
+    public bool HasMetadataProperty(string name)
+        => name is "name" or "length"
+            && !(_deletedMetadataProperties?.Contains(name) ?? false);
+
+    public bool DeleteMetadataProperty(string name)
+    {
+        if (name is not ("name" or "length")) return true;
+        _deletedMetadataProperties ??= [];
+        _deletedMetadataProperties.Add(name);
+        return true;
+    }
+
     public BuiltInMethod Bind(object? receiver)
     {
         // Null receivers don't need caching
@@ -223,6 +249,7 @@ public class BuiltInMethod : ISharpTSCallable
             var unboundCopy = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, (object?)null);
             unboundCopy._specLength = _specLength;
             unboundCopy.OwnProperties = OwnProperties;
+            unboundCopy.IsConstructor = IsConstructor;
             return unboundCopy;
         }
 
@@ -233,6 +260,7 @@ public class BuiltInMethod : ISharpTSCallable
             var valBound = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, receiver);
             valBound._specLength = _specLength;
             valBound.OwnProperties = OwnProperties;
+            valBound.IsConstructor = IsConstructor;
             return valBound;
         }
 
@@ -249,6 +277,7 @@ public class BuiltInMethod : ISharpTSCallable
         var bound = new BuiltInMethod(_name, _minArity, _maxArity, _implementation, _implementationV2, receiver);
         bound._specLength = _specLength;
         bound.OwnProperties = OwnProperties;
+        bound.IsConstructor = IsConstructor;
         _boundMethodCache.AddOrUpdate(receiver, bound);
         return bound;
     }

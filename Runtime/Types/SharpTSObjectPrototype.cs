@@ -1,4 +1,5 @@
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
@@ -13,17 +14,33 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSObjectPrototype
 {
     public static readonly SharpTSObjectPrototype Instance = new();
-    private SharpTSObjectPrototype() { }
+    private Dictionary<string, object?>? _extras;
+    internal SharpTSObjectPrototype() { }
 
-    public object? GetMember(string name) => name switch
+    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
+    public object? TryGetExtra(string name) =>
+        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    public void SetExtra(string name, object? value)
     {
-        "hasOwnProperty" => SharpTSObjectUnboundMethod.HasOwnProperty,
-        "toString" => SharpTSObjectUnboundMethod.ToString_,
-        "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
-        "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
-        "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
-        _ => null,
-    };
+        _extras ??= new Dictionary<string, object?>();
+        _extras[name] = value;
+    }
+
+    public object? GetMember(string name)
+    {
+        if (HasExtra(name)) return TryGetExtra(name);
+        return name switch
+        {
+            "constructor" => SharpTSObjectNamespace.Instance,
+            "hasOwnProperty" => SharpTSObjectUnboundMethod.HasOwnProperty,
+            "toString" => SharpTSObjectUnboundMethod.ToString_,
+            "toLocaleString" => SharpTSObjectUnboundMethod.ToLocaleString,
+            "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
+            "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
+            "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
+            _ => null,
+        };
+    }
 
     public override string ToString() => "[object Object]";
 }
@@ -37,6 +54,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
 {
     public static readonly SharpTSObjectUnboundMethod HasOwnProperty = new("hasOwnProperty", HasOwnPropertyImpl);
     public static readonly SharpTSObjectUnboundMethod ToString_ = new("toString", ToStringImpl);
+    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToLocaleStringImpl);
     public static readonly SharpTSObjectUnboundMethod ValueOf = new("valueOf", ValueOfImpl);
     public static readonly SharpTSObjectUnboundMethod IsPrototypeOf = new("isPrototypeOf", IsPrototypeOfImpl);
     public static readonly SharpTSObjectUnboundMethod PropertyIsEnumerable = new("propertyIsEnumerable", PropertyIsEnumerableImpl);
@@ -104,13 +122,27 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         var key = args[0]?.ToString() ?? "";
         return target switch
         {
-            SharpTSObject obj => obj.HasProperty(key),
+            SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
             SharpTSInstance inst => inst.HasProperty(key),
+            SharpTSArray array => array.HasOwnProperty(key),
+            SharpTSMath math => math.HasExtra(key),
+            SharpTSJSON json => json.HasExtra(key),
+            SharpTSDate date => date.HasExtra(key),
+            SharpTSRegExp regex => regex.HasOwnProperty(key),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.HasOwnProperty(key),
+            SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
+            SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
+            SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetMember(key) != null,
+            SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
+            SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls
             // hasOwnProperty(fn, "name") before reading the descriptor — without
             // this branch the assertion fails before we ever see the descriptor.
+            BuiltInMethod method when key is "name" or "length"
+                => method.HasMetadataProperty(key),
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };
@@ -140,6 +172,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             or BuiltInMethod or ISharpTSCallable or SharpTSBufferConstructor)
             return "[object Function]";
         return "[object Object]";
+    }
+
+    private static object? ToLocaleStringImpl(object? target, List<object?> args)
+    {
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert undefined or null to object"));
+        return ToStringImpl(target, args);
     }
 
     private static object? ValueOfImpl(object? target, List<object?> args) => target;
@@ -178,6 +218,22 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             // RegExp.prototype flag accessors) must return false, not just
             // "is present".
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSDate date => date.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSRegExp regex
+                => regex.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSObjectNamespace objectNamespace
+                => objectNamespace.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSFunctionPrototype functionPrototype
+                => functionPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSArrayPrototype arrayPrototype
+                => arrayPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSStringPrototype stringPrototype
+                => stringPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSFunction function => function.IsPropertyEnumerable(key),
+            SharpTSArrowFunction arrow => arrow.IsPropertyEnumerable(key),
+            SharpTSArray array => array.IsPropertyEnumerable(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             _ => false,
         };

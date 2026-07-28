@@ -16,6 +16,12 @@ public static class MathBuiltIns
             // Constants
             .Constant("PI", Math.PI)
             .Constant("E", Math.E)
+            .Constant("LN10", Math.Log(10))
+            .Constant("LN2", Math.Log(2))
+            .Constant("LOG10E", Math.Log10(Math.E))
+            .Constant("LOG2E", Math.Log2(Math.E))
+            .Constant("SQRT1_2", Math.Sqrt(0.5))
+            .Constant("SQRT2", Math.Sqrt(2))
             // Single argument methods (V2 — no boxing)
             .MethodV2("abs", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Abs(args[0].AsNumber())))
@@ -37,6 +43,12 @@ public static class MathBuiltIns
                 RuntimeValue.FromNumber(Math.Log(args[0].AsNumber())))
             .MethodV2("exp", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Exp(args[0].AsNumber())))
+            .MethodV2("acos", 1, (_, _, args) =>
+                RuntimeValue.FromNumber(Math.Acos(args[0].AsNumber())))
+            .MethodV2("asin", 1, (_, _, args) =>
+                RuntimeValue.FromNumber(Math.Asin(args[0].AsNumber())))
+            .MethodV2("atan", 1, (_, _, args) =>
+                RuntimeValue.FromNumber(Math.Atan(args[0].AsNumber())))
             .MethodV2("cbrt", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Cbrt(args[0].AsNumber())))
             .MethodV2("log2", 1, (_, _, args) =>
@@ -50,6 +62,8 @@ public static class MathBuiltIns
             // Two argument methods
             .MethodV2("pow", 2, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Pow(args[0].AsNumber(), args[1].AsNumber())))
+            .MethodV2("atan2", 2, (_, _, args) =>
+                RuntimeValue.FromNumber(Math.Atan2(args[0].AsNumber(), args[1].AsNumber())))
             // Variable arity methods
             // min-arity 0 (Math.min()/max()/hypot() are legal -> Infinity / -Infinity / 0),
             // spec length 2 (the .length property each exposes per ECMA-262).

@@ -59,15 +59,14 @@ public class SharpTSRegExp : ITypeCategorized
     // (e.g. minimatch's `Object.assign(new RegExp(...), { _src, _glob })`).
     // internal: emitted $RegExp has its own storage; runtime↔emitted parity
     // tests track public methods only (see RuntimeTypeSyncTests).
-    private Dictionary<string, object?>? _properties;
+    private readonly SharpTSObject _properties = new([]);
     // ECMA-262 §22.2 defines `flags`/`global`/`unicode`/`lastIndex` as
     // configurable getters on RegExp.prototype — user code can override them
     // via `Object.defineProperty(rx, "flags", {get: ...})`. Without per-
     // instance accessor storage the override is silently ignored: tests that
     // install throwing getters (test262 .../coerce-global.js,
-    // .../get-flags-throws.js, etc.) bypass the user code entirely. Stored
-    // here as a tuple so a single dictionary lookup retrieves both halves.
-    private Dictionary<string, (ISharpTSCallable? Getter, ISharpTSCallable? Setter)>? _accessors;
+    // .../get-flags-throws.js, etc.) bypass the user code entirely. Data and
+    // accessor properties share the descriptor-aware _properties store.
     // Symbol-keyed own properties. ECMA-262 lets a regex carry symbol keys
     // (e.g. `re[Symbol.match] = false`), and IsRegExp (§22.2.7.2) reads
     // `Get(re, @@match)` — a user override must win over the inherited
@@ -95,17 +94,29 @@ public class SharpTSRegExp : ITypeCategorized
 
     internal bool TryGetProperty(string name, out object? value)
     {
-        if (_properties != null && _properties.TryGetValue(name, out value))
+        var descriptor = _properties.GetOwnPropertyDescriptor(name);
+        if (descriptor is { HasGet: false, HasSet: false })
+        {
+            value = _properties.GetProperty(name);
             return true;
+        }
         value = null;
         return false;
     }
 
-    internal void SetProperty(string name, object? value)
-    {
-        _properties ??= [];
-        _properties[name] = value;
-    }
+    internal void SetProperty(string name, object? value) => _properties.SetProperty(name, value);
+
+    internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _properties.DefineProperty(name, descriptor);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _properties.GetOwnPropertyDescriptor(name);
+
+    internal bool HasOwnProperty(string name) => _properties.HasProperty(name);
+
+    internal bool DeleteProperty(string name) => _properties.DeleteProperty(name);
+
+    internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
 
     /// <summary>
     /// Registers an accessor pair from <c>Object.defineProperty</c>. Either
@@ -115,8 +126,17 @@ public class SharpTSRegExp : ITypeCategorized
     /// </summary>
     public void DefineAccessor(string name, ISharpTSCallable? getter, ISharpTSCallable? setter)
     {
-        _accessors ??= [];
-        _accessors[name] = (getter, setter);
+        _properties.DefineProperty(name, new SharpTSPropertyDescriptor
+        {
+            Get = getter,
+            Set = setter,
+            HasGet = true,
+            HasSet = true,
+            Enumerable = false,
+            Configurable = true,
+            HasEnumerable = true,
+            HasConfigurable = true,
+        });
     }
 
     /// <summary>
@@ -125,10 +145,11 @@ public class SharpTSRegExp : ITypeCategorized
     /// </summary>
     public bool TryGetAccessor(string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
-        if (_accessors != null && _accessors.TryGetValue(name, out var pair))
+        var descriptor = _properties.GetOwnPropertyDescriptor(name);
+        if (descriptor is { HasGet: true } or { HasSet: true })
         {
-            getter = pair.Getter;
-            setter = pair.Setter;
+            getter = descriptor.Get;
+            setter = descriptor.Set;
             return true;
         }
         getter = null;

@@ -844,7 +844,13 @@ public partial class Interpreter
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
     private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
     {
-        (SharpTSArray array, double idx) => new IndexTarget.Array(array, (long)idx),
+        (SharpTSArray array, double idx)
+            when idx >= 0
+                && idx <= SharpTSArray.MaxWriteIndex
+                && Math.Truncate(idx) == idx
+            => new IndexTarget.Array(array, (long)idx),
+        (SharpTSArray array, _) => new IndexTarget.ArrayString(
+            array, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
@@ -1023,6 +1029,15 @@ public partial class Interpreter
             var key = PropertyKeyConverter.ToPropertyKeyString(index);
             return RuntimeValue.FromBoxed(strProto.GetMember(key) ?? SharpTSUndefined.Instance);
         }
+        if (obj is SharpTSArrayPrototype arrayProto)
+        {
+            var key = PropertyKeyConverter.ToPropertyKeyString(index);
+            if (arrayProto.GetExtraGetter(key) is { } getter)
+                return BindAccessorToObject(getter, arrayProto).CallV2(
+                    this, ReadOnlySpan<RuntimeValue>.Empty);
+            return RuntimeValue.FromBoxed(
+                arrayProto.GetMember(key) ?? SharpTSUndefined.Instance);
+        }
 
         // ECMA-262 §22.2.5: RegExp.prototype has well-known-symbol-keyed methods
         // (@@match, @@matchAll, @@replace, @@search, @@split). These are bracket-only
@@ -1041,7 +1056,10 @@ public partial class Interpreter
 
         return RuntimeValue.FromBoxed(ResolveIndexTarget(obj, index) switch
         {
-            IndexTarget.Array t => t.Target.Get(t.Index),
+            IndexTarget.Array t => GetArrayIndexValue(t.Target, t.Index),
+            IndexTarget.ArrayString t => t.Target.HasNamedProperty(t.Key)
+                ? t.Target.GetNamedProperty(t.Key)
+                : SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
@@ -1064,6 +1082,17 @@ public partial class Interpreter
             IndexTarget.Unsupported => throw new InterpreterException("Index access not supported on this type."),
             _ => throw new InterpreterException("Index access not supported on this type.")
         });
+    }
+
+    private RuntimeValue GetArrayIndexValue(SharpTSArray array, long index)
+    {
+        if (array.TryGetIndexAccessor(index, out var getter, out _))
+        {
+            if (getter == null) return RuntimeValue.Undefined;
+            return BindAccessorToObject(getter, array).CallV2(
+                this, ReadOnlySpan<RuntimeValue>.Empty);
+        }
+        return RuntimeValue.FromBoxed(array.Get(index));
     }
 
     /// <summary>
@@ -1195,6 +1224,21 @@ public partial class Interpreter
             math.SetExtra(index?.ToString() ?? "", value);
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSJSON json)
+        {
+            json.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSDate date)
+        {
+            date.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSObjectNamespace objectNamespace)
+        {
+            objectNamespace.SetProperty(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         // Number/Boolean/String.prototype are mutable ordinary objects — allow
         // bracket assignment (`Number.prototype[0] = 1`, `Number.prototype.length = 1`).
@@ -1211,6 +1255,16 @@ public partial class Interpreter
         if (obj is SharpTSStringPrototype strProto)
         {
             strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSArrayPrototype arrayProto)
+        {
+            arrayProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSFunctionPrototype functionProto)
+        {
+            functionProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
 
@@ -1248,8 +1302,31 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
-                if (strictMode) t.Target.SetStrict(t.Index, value, strictMode);
-                else t.Target.Set(t.Index, value);
+                if (t.Target.TryGetIndexAccessor(
+                    t.Index, out _, out var indexSetter))
+                {
+                    if (indexSetter != null)
+                    {
+                        BindAccessorToObject(indexSetter, t.Target).CallBoxed(this, [value]);
+                    }
+                    else if (strictMode)
+                    {
+                        throw new InterpreterException(
+                            $"Cannot set array index '{t.Index}' which has only a getter.");
+                    }
+                }
+                else if (strictMode)
+                {
+                    t.Target.SetStrict(t.Index, value, strictMode);
+                }
+                else
+                {
+                    t.Target.Set(t.Index, value);
+                }
+                break;
+
+            case IndexTarget.ArrayString t:
+                t.Target.SetNamedProperty(t.Key, value);
                 break;
 
             case IndexTarget.TypedArray t:
@@ -1261,8 +1338,33 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ObjectString t:
-                if (strictMode) t.Target.SetPropertyStrict(t.Key, value, strictMode);
-                else t.Target.SetProperty(t.Key, value);
+                // Bracket assignment uses the same [[Set]] path as dot assignment:
+                // invoke an own setter before considering the descriptor's writable
+                // flag. Object.defineProperty accessors have writable=false in their
+                // stored flags, but that flag applies only to data descriptors.
+                if (t.Target.GetSetter(t.Key) is { } setter)
+                {
+                    BindAccessorToObject(setter, t.Target).CallBoxed(this, [value]);
+                }
+                else if (t.Target.HasGetter(t.Key))
+                {
+                    if (strictMode)
+                        throw new InterpreterException($"Cannot set property '{t.Key}' which has only a getter.");
+                }
+                else if (TrySetBoxedPrimitiveInheritedProperty(
+                    t.Target, t.Key, value, strictMode))
+                {
+                    // The inherited setter handled the write, or an inherited
+                    // non-writable/getter-only descriptor blocked it.
+                }
+                else if (strictMode)
+                {
+                    t.Target.SetPropertyStrict(t.Key, value, strictMode);
+                }
+                else
+                {
+                    t.Target.SetProperty(t.Key, value);
+                }
                 break;
 
             case IndexTarget.ObjectSymbol t:
