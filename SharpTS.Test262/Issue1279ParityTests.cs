@@ -444,6 +444,15 @@ public sealed class Issue1279ParityTests
             "built-ins/String/prototype/split/separator-tostring-error.js");
 
     [Theory]
+    [InlineData("built-ins/String/S15.5.2.1_A1_T7.js")]
+    [InlineData("built-ins/String/S15.5.2.1_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/split/separator-override-valueof.js")]
+    public void Boxed_string_construction_coerces_objects_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
