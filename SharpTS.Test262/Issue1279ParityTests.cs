@@ -460,6 +460,19 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-number-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-string-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T1.js")]
+    [InlineData("built-ins/String/prototype/search/cstm-search-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A1_T4.js")]
+    public void String_match_and_search_coerce_non_RegExp_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
