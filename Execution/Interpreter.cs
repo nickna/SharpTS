@@ -1109,7 +1109,10 @@ public partial class Interpreter : IDisposable
         if (name.Lexeme == "__filename") return RuntimeValue.FromString(_currentModule?.Path ?? "");
         if (name.Lexeme == "__dirname") return RuntimeValue.FromString(Path.GetDirectoryName(_currentModule?.Path) ?? "");
 
-        throw new InterpreterException($"Undefined variable '{name.Lexeme}'.");
+        // ECMA-262 §9.4.2: resolving an unbound name is a ReferenceError. The name prefix
+        // is what routes this to a guest ReferenceError at the catch binding
+        // (Interpreter.Statements.cs TryCreateGuestErrorFromMessage).
+        throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
     }
 
     /// <summary>

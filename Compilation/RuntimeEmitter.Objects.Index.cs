@@ -484,6 +484,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(doArrayGetLabel);
+
+        // An index can carry an ACCESSOR descriptor: `Object.defineProperty(arr, "0",
+        // {get})` (ECMA-262 §10.4.2.1 routes an array-index [[DefineOwnProperty]] through
+        // OrdinaryDefineOwnProperty, which accepts accessor descriptors). Those live in the
+        // PDS keyed by the index's string form, not in the element storage, so the raw
+        // element read below would answer `undefined`. Consult the PDS first.
+        var tsArrayNoIdxGetterLabel = il.DefineLabel();
+        var tsArrayIdxGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        // Key off the ORIGINAL index argument, via the same ToJsString the named-property
+        // route above uses, so `arr[0]` and `arr["0"]` land on one PDS key.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldloca, tsArrayIdxGetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        il.Emit(OpCodes.Brfalse, tsArrayNoIdxGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);                    // receiver
+        il.Emit(OpCodes.Ldloc, tsArrayIdxGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);      // empty args
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayNoIdxGetterLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);

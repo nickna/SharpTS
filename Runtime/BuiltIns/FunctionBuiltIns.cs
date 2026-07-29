@@ -41,15 +41,11 @@ public static class FunctionBuiltIns
             return ownValue;
         }
 
-        if (receiver is BuiltInMethod method
+        // A deleted `name`/`length` (ECMA-262 §17 makes both configurable) must read
+        // back as undefined, not resurrect from the switch below.
+        if (receiver is IBuiltInFunctionMetadata meta
             && name is "name" or "length"
-            && !method.HasMetadataProperty(name))
-        {
-            return null;
-        }
-        if (receiver is Types.StringPrototypeMethodWrapper stringMethod
-            && name is "name" or "length"
-            && !stringMethod.HasMetadataProperty(name))
+            && !meta.HasMetadataProperty(name))
         {
             return null;
         }
@@ -69,9 +65,7 @@ public static class FunctionBuiltIns
                     ? (double)bim.SpecLength
                     : (double)receiver.Arity();
             case "name":
-                return receiver is Types.StringPrototypeMethodWrapper stringWrapper
-                    ? stringWrapper.FunctionName
-                    : GetFunctionName(receiver);
+                return GetFunctionName(receiver);
         }
         // Functions inherit Object.prototype — propertyHelper.js's verifyXxx
         // helpers call `fn.hasOwnProperty('length')` directly. Resolve those
@@ -86,12 +80,14 @@ public static class FunctionBuiltIns
     {
         return callable switch
         {
+            // Built-in wrappers know their own spec name; without this they fell through
+            // to "" and every `<method>/name.js` test failed.
+            IBuiltInFunctionMetadata builtIn => builtIn.FunctionName,
             SharpTSFunction fn => fn.ToString().Replace("<fn ", "").TrimEnd('>'),
             SharpTSArrowFunction arrow => arrow.ToString().Contains("<fn ")
                 ? arrow.ToString().Replace("<fn ", "").TrimEnd('>')
                 : "",
             BoundFunction bound => bound.Name,
-            BuiltInMethod method => method.ToString().Replace("<built-in ", "").TrimEnd('>'),
             _ => ""
         };
     }

@@ -123,6 +123,13 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.NumberPrototypeField = numberPrototypeField;
+        // Date.prototype — addressable as a value so reflection over it works
+        // (`Object.getOwnPropertyDescriptor(Date.prototype, "getTime")`).
+        // Instance calls are emitted inline by DateEmitter and never read this.
+        runtime.DatePrototypeField = typeBuilder.DefineField(
+            "_datePrototype",
+            _types.DictionaryStringObject,
+            FieldAttributes.Public | FieldAttributes.Static);
         var stringPrototypeField = typeBuilder.DefineField(
             "_stringPrototype",
             _types.DictionaryStringObject,
@@ -361,6 +368,7 @@ public partial class RuntimeEmitter
         DefineStringPrototypePopulateShell(typeBuilder, runtime);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
+        DefineDatePrototypePopulateShell(typeBuilder, runtime);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime);
         DefineFunctionPrototypePopulateShell(typeBuilder, runtime);
@@ -400,6 +408,8 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, stringPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, jsonSingletonField);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        cctorIL.Emit(OpCodes.Stsfld, runtime.DatePrototypeField);
 
         // Array.prototype starts empty; populated lazily by
         // EmitArrayPrototypePopulate-emitted helper on first read.
@@ -525,6 +535,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ErrorPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
@@ -1023,6 +1034,9 @@ public partial class RuntimeEmitter
         // Date methods
         if (_features.UsesDate)
             EmitDateMethods(typeBuilder, runtime);
+        // Date.prototype populate — must come AFTER EmitDateMethods, which is what
+        // assigns the runtime.Date* helper builders the wiring below references.
+        EmitDatePrototypePopulate(typeBuilder, runtime);
         // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the

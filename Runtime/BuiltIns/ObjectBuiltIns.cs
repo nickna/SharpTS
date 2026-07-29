@@ -169,17 +169,15 @@ public static partial class ObjectBuiltIns
         return new SharpTSObject(result);
     }
 
-    private static RuntimeValue HasOwnV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue HasOwnV2(
+        Interpreter interp, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var obj = args[0].ToObject();
-        var key = args[1].AsString() ?? args[1].ToObject()?.ToString() ?? "";
-        return RuntimeValue.FromBoolean(obj switch
-        {
-            SharpTSObject tsObj => tsObj.Fields.ContainsKey(key),
-            SharpTSInstance inst => inst.HasField(key),
-            IDictionary<string, object?> dict => dict.ContainsKey(key),
-            _ => false
-        });
+        // A Symbol key stays a Symbol (ToPropertyKey); anything else stringifies.
+        var key = args[1].ToObject() is SharpTSSymbol sym
+            ? (object)sym
+            : interp.ToPropertyKeyString(args[1].ToObject());
+        return RuntimeValue.FromBoolean(SharpTSObjectUnboundMethod.HasOwn(interp, obj, key));
     }
 
     private static RuntimeValue IsV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -202,8 +200,8 @@ public static partial class ObjectBuiltIns
         // Handle number cases (NaN and -0/+0)
         if (value1.Kind == ValueKind.Number && value2.Kind == ValueKind.Number)
         {
-            var d1 = value1.AsNumber();
-            var d2 = value2.AsNumber();
+            var d1 = Interpreter.ToNumber(value1);
+            var d2 = Interpreter.ToNumber(value2);
             if (double.IsNaN(d1) && double.IsNaN(d2))
                 return RuntimeValue.True;
             if (d1 == 0.0 && d2 == 0.0)
@@ -515,6 +513,11 @@ public static partial class ObjectBuiltIns
                     else if (descriptorHasValue)
                         symArrow.SetBySymbol(symKey, descriptor.Value);
                     return target;
+                // `Object.defineProperty(Error.prototype, Symbol.toStringTag, …)` and friends.
+                case SharpTSClassPrototype symClassProto:
+                    if (descriptorHasValue)
+                        symClassProto.SetBySymbol(symKey, descriptor.Value);
+                    return target;
                 default:
                     break;
             }
@@ -567,6 +570,12 @@ public static partial class ObjectBuiltIns
                 break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSObjectPrototype objectPrototype:
+                success = objectPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSClassPrototype classPrototype:
+                success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
@@ -648,7 +657,28 @@ public static partial class ObjectBuiltIns
         // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
         var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
-        SharpTSPropertyDescriptor? descriptor = target switch
+        var descriptor = OwnPropertyDescriptorOf(interpreter, target, propertyKey);
+
+        if (descriptor == null)
+        {
+            return SharpTSUndefined.Instance;
+        }
+
+        // Return as an object
+        return descriptor.ToObject();
+    }
+
+    /// <summary>
+    /// <c>target.[[GetOwnPropertyDescriptor]](propertyKey)</c> for a string key, as a
+    /// descriptor record rather than the guest-visible object. Split out of
+    /// <c>Object.getOwnPropertyDescriptor</c> so the Annex B accessor lookups
+    /// (<c>__lookupGetter__</c> / <c>__lookupSetter__</c>) can walk a prototype chain
+    /// without round-tripping each level through a guest object.
+    /// </summary>
+    internal static SharpTSPropertyDescriptor? OwnPropertyDescriptorOf(
+        Interpreter interpreter, object target, string propertyKey)
+    {
+        return target switch
         {
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
             SharpTSObjectNamespace objectNamespace
@@ -672,6 +702,10 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSClassPrototype classPrototype => classPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
@@ -680,28 +714,73 @@ public static partial class ObjectBuiltIns
             // data properties. test262's verifyProperty() checks introspect these
             // via getOwnPropertyDescriptor; without this branch the descriptor
             // lookup returns null and the assertion fails.
-            BuiltInMethod method when propertyKey is "name" or "length"
-                && method.HasMetadataProperty(propertyKey)
-                => GetCallableMetaDescriptor(method, propertyKey),
-            StringPrototypeMethodWrapper method when propertyKey is "name" or "length"
-                && method.HasMetadataProperty(propertyKey)
-                => GetCallableMetaDescriptor(method, propertyKey),
-            ISharpTSCallable callable when callable is not BuiltInMethod
-                and not StringPrototypeMethodWrapper
-                && propertyKey is "name" or "length"
+            IBuiltInFunctionMetadata meta when propertyKey is "name" or "length"
+                => meta.HasMetadataProperty(propertyKey)
+                    ? GetCallableMetaDescriptor((ISharpTSCallable)meta, propertyKey)
+                    : null,
+            ISharpTSCallable callable when propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
             SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
             SharpTSArrowFunction arrow => GetFunctionOwnPropertyDescriptor(arrow, propertyKey),
             _ => GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)
         };
+    }
 
-        if (descriptor == null)
+    /// <summary>
+    /// Annex B §B.2.2.2 / §B.2.2.3 — <c>Object.prototype.__defineGetter__</c> and
+    /// <c>__defineSetter__</c>. Installs an enumerable, configurable accessor whose
+    /// [[Get]]/[[Set]] is <paramref name="fn"/>, which must be callable.
+    /// </summary>
+    internal static object? DefineAccessorProperty(
+        Interpreter interpreter, object? target, object? key, object? fn, bool isGetter)
+    {
+        string label = isGetter ? "__defineGetter__" : "__defineSetter__";
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Object.prototype.{label} called on null or undefined"));
+        if (fn is not ISharpTSCallable)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Object.prototype.{label}: callback must be callable"));
+
+        // Step 4 runs ToPropertyKey AFTER the IsCallable check, so a throwing
+        // toString on the key is only observable once the callback is valid.
+        var descriptor = new SharpTSObject([]);
+        descriptor.SetProperty(isGetter ? "get" : "set", fn);
+        descriptor.SetProperty("enumerable", true);
+        descriptor.SetProperty("configurable", true);
+        DefineProperty(interpreter, [target, key, descriptor]);
+        return SharpTSUndefined.Instance;
+    }
+
+    /// <summary>
+    /// Annex B §B.2.2.4 / §B.2.2.5 — <c>Object.prototype.__lookupGetter__</c> and
+    /// <c>__lookupSetter__</c>. Walks the prototype chain and returns the first own
+    /// descriptor found: its [[Get]]/[[Set]] slot when it is an accessor, otherwise
+    /// undefined (a shadowing data property hides an inherited accessor).
+    /// </summary>
+    internal static object? LookupAccessorProperty(
+        Interpreter interpreter, object? target, object? key, bool isGetter)
+    {
+        string label = isGetter ? "__lookupGetter__" : "__lookupSetter__";
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Object.prototype.{label} called on null or undefined"));
+
+        var propertyKey = interpreter.ToPropertyKeyString(key);
+        object? current = target;
+        // Bounded like the interpreter's other prototype walks, so a cyclic
+        // __proto__ can't spin here.
+        for (int i = 0; i < 64 && current is not null and not SharpTSUndefined; i++)
         {
-            return SharpTSUndefined.Instance;
+            var descriptor = OwnPropertyDescriptorOf(interpreter, current, propertyKey);
+            if (descriptor != null)
+            {
+                var accessor = isGetter ? descriptor.Get : descriptor.Set;
+                return accessor ?? (object)SharpTSUndefined.Instance;
+            }
+            current = PrototypeOf(interpreter, current);
         }
-
-        // Return as an object
-        return descriptor.ToObject();
+        return SharpTSUndefined.Instance;
     }
 
     private static SharpTSPropertyDescriptor? GetFunctionOwnPropertyDescriptor(
@@ -1406,21 +1485,50 @@ public static partial class ObjectBuiltIns
         var target = args[0].ToObject()
             ?? throw new Exception("TypeError: Cannot convert null to object");
 
-        var proto = target switch
-        {
-            SharpTSObject obj => obj.Prototype,
-            SharpTSInstance inst => inst.Prototype,
-            SharpTSArray => null,
-            // ECMA-262 §22.2.6: a RegExp instance's [[Prototype]] is the
-            // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
-            // === RegExp.prototype` (the from-regexp-like tests assert this).
-            SharpTSRegExp => interp.GetRegExpPrototype(),
-            Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
-            _ => null
-        };
-
+        var proto = PrototypeOf(interp, target);
         return proto != null ? RuntimeValue.FromObject(proto) : RuntimeValue.Null;
     }
+
+    /// <summary>
+    /// The [[Prototype]] of <paramref name="target"/>, resolved against
+    /// <paramref name="interp"/>'s realm. Shared by <c>Object.getPrototypeOf</c> and
+    /// <c>Object.prototype.isPrototypeOf</c> so the two agree — they used to disagree for
+    /// arrays, which reported a null prototype and made
+    /// <c>Array.prototype.isPrototypeOf([])</c> false.
+    /// </summary>
+    public static object? PrototypeOf(Interpreter? interp, object? target) => target switch
+    {
+        // A plain object literal has no explicit [[Prototype]] link but still inherits
+        // Object.prototype; only Object.create(null) genuinely has none.
+        SharpTSObject { Prototype: null, IsNullPrototype: false } => interp?.GetObjectPrototype(),
+        SharpTSObject obj => obj.Prototype,
+        // A class instance's [[Prototype]] is its constructor's `prototype` object, so
+        // `Object.getPrototypeOf(new C()) === C.prototype`.
+        SharpTSInstance inst => inst.RuntimeClass.Prototype,
+        // Native errors raised from C# carry only their type name; resolve it back to the
+        // same constructor the global `TypeError` identifier yields so the prototypes match.
+        SharpTSError err => SharpTSErrorClass.GetBuiltInClass(err.Name)?.Prototype,
+        // ECMA-262 §23.1.3: ordinary Array exotic objects have Array.prototype as their
+        // [[Prototype]]. Subclass instances keep their class chain instead.
+        SharpTSArraySubclassInstance sub => sub.Klass,
+        SharpTSArray => interp?.GetArrayPrototype(),
+        // ECMA-262 §22.2.6: a RegExp instance's [[Prototype]] is the
+        // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
+        // === RegExp.prototype` (the from-regexp-like tests assert this).
+        SharpTSRegExp => interp?.GetRegExpPrototype(),
+        Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
+        // ECMA-262 §20.2.3: every function object — built-in constructors included —
+        // has Function.prototype as its [[Prototype]], so
+        // `Function.prototype.isPrototypeOf(Array)` holds. Function.prototype itself
+        // bottoms out at Object.prototype.
+        SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        // §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
+        // `Object.getPrototypeOf(RangeError) === Error`. A base class falls back to
+        // Function.prototype like any other function object.
+        SharpTSClass klass => (object?)klass.Superclass ?? interp?.GetFunctionPrototype(),
+        ISharpTSCallable => interp?.GetFunctionPrototype(),
+        _ => null
+    };
 
     /// <summary>
     /// Object.setPrototypeOf(obj, proto) - sets the prototype of an object.
@@ -1439,6 +1547,10 @@ public static partial class ObjectBuiltIns
                 if (!obj.IsExtensible)
                     throw new Exception("TypeError: Object is not extensible");
                 obj.Prototype = proto;
+                // An explicit null prototype is distinct from "never linked": the latter
+                // still inherits Object.prototype. Record which one this is so
+                // Object.getPrototypeOf can tell them apart.
+                obj.IsNullPrototype = proto is null or SharpTSUndefined;
                 // Copy properties from new prototype if non-null
                 if (proto != null)
                     CopyPropertiesFrom(proto, obj);

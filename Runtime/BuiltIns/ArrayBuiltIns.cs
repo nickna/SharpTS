@@ -394,8 +394,8 @@ public static class ArrayBuiltIns
 
     private static RuntimeValue SliceV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        var start = args.Length > 0 ? (int)args[0].AsNumber() : 0;
-        var end = args.Length > 1 ? (int)args[1].AsNumber() : arr.Length;
+        var start = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
+        var end = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : arr.Length;
         if (start < 0) start = Math.Max(0, arr.Length + start);
         if (end < 0) end = Math.Max(0, arr.Length + end);
         if (start > arr.Length) start = arr.Length;
@@ -604,7 +604,7 @@ public static class ArrayBuiltIns
         // ECMA-262 23.1.3.39: produces a dense array with the modified element.
         // Holes in the source become undefined in the output.
         int len = arr.Length;
-        int index = (int)args[0].AsNumber();
+        int index = (int)Interpreter.ToNumber(args[0]);
         int actualIndex = index < 0 ? len + index : index;
         if (actualIndex < 0 || actualIndex >= len)
             throw new Exception("RangeError: Invalid index for with()");
@@ -617,7 +617,7 @@ public static class ArrayBuiltIns
     private static RuntimeValue AtV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         int len = arr.Length;
-        int index = (int)args[0].AsNumber();
+        int index = (int)Interpreter.ToNumber(args[0]);
         int actualIndex = index < 0 ? len + index : index;
         if (actualIndex < 0 || actualIndex >= len)
             return RuntimeValue.Undefined;
@@ -656,13 +656,13 @@ public static class ArrayBuiltIns
         int len = arr.Length;
         if (len == 0) return RuntimeValue.FromObject(arr);
 
-        int relTarget = args.Length > 0 ? (int)args[0].AsNumber() : 0;
+        int relTarget = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
         int to = relTarget < 0 ? Math.Max(len + relTarget, 0) : Math.Min(relTarget, len);
 
-        int relStart = args.Length > 1 ? (int)args[1].AsNumber() : 0;
+        int relStart = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : 0;
         int from = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
 
-        int relEnd = args.Length > 2 ? (int)args[2].AsNumber() : len;
+        int relEnd = args.Length > 2 ? (int)Interpreter.ToNumber(args[2]) : len;
         int final_ = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
 
         int count = Math.Min(final_ - from, len - to);

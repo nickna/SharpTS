@@ -25,7 +25,7 @@ namespace SharpTS.Runtime.BuiltIns;
 /// For Promise.reject(), throw SharpTSPromiseRejectedException instead of
 /// returning a rejected Promise - the catch block will create the rejected Promise.
 /// </remarks>
-public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
+public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly int _minArity;
@@ -34,6 +34,8 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
     private readonly Func<Interpreter, Task<object?>, object?>? _promiseFactory;
     private readonly Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?>? _speciesResolver;
     private readonly bool _refsEventLoopWhileInFlight;
+    private readonly BuiltInFunctionMetadata _metadata;
+    private int _specLength = -1;
     private object? _receiver;
 
     // Cache for bound methods - uses weak references to avoid memory leaks
@@ -85,6 +87,7 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
         _promiseFactory = promiseFactory;
         _refsEventLoopWhileInFlight = refsEventLoopWhileInFlight;
         _speciesResolver = speciesResolver;
+        _metadata = new BuiltInFunctionMetadata();
     }
 
     // Private constructor for creating bound instances
@@ -96,7 +99,9 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
         Func<Interpreter, Task<object?>, object?>? promiseFactory,
         bool refsEventLoopWhileInFlight,
         Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?>? speciesResolver,
-        object? receiver)
+        object? receiver,
+        BuiltInFunctionMetadata metadata,
+        int specLength)
     {
         _name = name;
         _minArity = minArity;
@@ -106,22 +111,45 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
         _refsEventLoopWhileInFlight = refsEventLoopWhileInFlight;
         _speciesResolver = speciesResolver;
         _receiver = receiver;
+        _metadata = metadata;
+        _specLength = specLength;
     }
 
-    public int Arity() => _minArity;
+    /// <summary>
+    /// ECMA-262 §17 `length`. Falls back to the minimum arity, which matches most methods;
+    /// set it explicitly via <see cref="WithSpecLength"/> where the two differ — e.g.
+    /// `Promise.prototype.then` accepts 0 arguments but has spec length 2.
+    /// </summary>
+    public int Arity() => _specLength >= 0 ? _specLength : _minArity;
+
+    /// <summary>
+    /// Returns this same instance with the JS-spec length set. Mutates in place — safe
+    /// because these are constructed per-lookup and immediately handed to one caller.
+    /// </summary>
+    public BuiltInAsyncMethod WithSpecLength(int specLength)
+    {
+        _specLength = specLength;
+        return this;
+    }
+
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
 
     public BuiltInAsyncMethod Bind(object? receiver)
     {
         // Null receivers don't need caching
         if (receiver == null)
         {
-            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, null);
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, null, _metadata, _specLength);
         }
 
         // Value types can't be cached efficiently
         if (receiver.GetType().IsValueType)
         {
-            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver);
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength);
         }
 
         // Initialize cache lazily
@@ -134,7 +162,7 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
         }
 
         // Create new bound method and cache it
-        var bound = new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver);
+        var bound = new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength);
         _boundMethodCache.AddOrUpdate(receiver, bound);
         return bound;
     }

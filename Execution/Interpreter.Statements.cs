@@ -761,9 +761,10 @@ public partial class Interpreter
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
-            SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnEnumerableKeys(),
-            SharpTSArrayPrototype arrayPrototype => arrayPrototype.OwnEnumerableKeys(),
-            SharpTSStringPrototype stringPrototype => stringPrototype.OwnEnumerableKeys(),
+            // Every built-in prototype singleton at once — Object/Array/String/Number/
+            // Boolean/Function.prototype. Naming them individually is how Object.prototype
+            // and Number.prototype came to be missing here ("for...in requires an object").
+            ISharpTSMutableBuiltIn builtInPrototype => builtInPrototype.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,
@@ -1471,6 +1472,11 @@ public partial class Interpreter
             }
         }
 
+        // An unprefixed message is left as a bare string on purpose: generator and
+        // async-generator rejection paths ferry a guest-thrown *value* across a host frame
+        // as an Exception whose Message is that value, so blanket-wrapping here would
+        // re-type `gen.throw("boom")` into `Error: boom`. Built-ins that mean to raise a
+        // JS error prefix the name (or throw ThrowException directly) instead.
         return hadRuntimePrefix
             ? ErrorBuiltIns.CreateError("Error", new List<object?> { body })
             : null;

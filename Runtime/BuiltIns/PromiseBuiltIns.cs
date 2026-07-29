@@ -50,6 +50,37 @@ public static class PromiseBuiltIns
     }
 
     /// <summary>
+    /// The <c>Promise.prototype</c> reaction methods in unbound form — no receiver attached,
+    /// so a read off the prototype object yields the function itself (and a later
+    /// <c>.call(promise, …)</c> or member call supplies <c>this</c>). The receiver-bound
+    /// variants live in <see cref="GetMember"/>.
+    /// </summary>
+    internal static ISharpTSCallable? GetPrototypeMethod(string name) => name switch
+    {
+        "then" => new BuiltInAsyncMethod("then", 0, 2, (interp, recv, args) =>
+            ThenImpl(RequirePromiseReceiver(recv, "then"), args, interp),
+            speciesResolver: SpeciesResolver).WithSpecLength(2),
+        "catch" => new BuiltInAsyncMethod("catch", 0, 1, (interp, recv, args) =>
+            CatchImpl(RequirePromiseReceiver(recv, "catch"), args, interp),
+            speciesResolver: SpeciesResolver).WithSpecLength(1),
+        "finally" => new BuiltInAsyncMethod("finally", 0, 1, (interp, recv, args) =>
+            FinallyImpl(RequirePromiseReceiver(recv, "finally"), args, interp),
+            speciesResolver: SpeciesResolver).WithSpecLength(1),
+        "constructor" => Interpreter.PromiseGlobalValue as ISharpTSCallable,
+        _ => null,
+    };
+
+    /// <summary>
+    /// ECMA-262 §27.2.5.4 step 2: <c>Promise.prototype.then</c> and friends require a receiver
+    /// with a [[PromiseState]] slot, so <c>Promise.prototype.then.call({}, …)</c> is a TypeError
+    /// rather than a host cast failure.
+    /// </summary>
+    private static SharpTSPromise RequirePromiseReceiver(object? receiver, string methodName)
+        => receiver as SharpTSPromise
+            ?? throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                $"Promise.prototype.{methodName} called on a non-Promise receiver"));
+
+    /// <summary>
     /// Gets a static method from the Promise namespace.
     /// </summary>
     public static ISharpTSCallable? GetStaticMethod(string name) => GetStaticMethod(name, null);
@@ -124,8 +155,18 @@ public static class PromiseBuiltIns
     /// call time before the rejected-promise conversion, so a poisoned
     /// <c>constructor</c>/<c>@@species</c> getter throws synchronously (#350).
     /// </summary>
+    /// <remarks>
+    /// Doubles as the §27.2.5.4 step 2 receiver check. It runs synchronously, which is what
+    /// the spec requires: <c>Promise.prototype.then.call({}, …)</c> throws a TypeError out of
+    /// the call rather than returning a rejected promise. (A hard cast here surfaced an
+    /// InvalidCastException, which reached guest <c>catch</c> as a bare string.)
+    /// </remarks>
     private static readonly Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?> SpeciesResolver =
-        static (interp, recv) => ResolveResultPromiseFactory((SharpTSPromise)recv!, interp);
+        static (interp, recv) => ResolveResultPromiseFactory(
+            recv as SharpTSPromise
+                ?? throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                    "Promise.prototype method called on a non-Promise receiver")),
+            interp);
 
     /// <summary>
     /// Computes the result-promise factory for the prototype methods
@@ -518,18 +559,81 @@ public static class PromiseBuiltIns
     #region Static Methods
 
     /// <summary>
+    /// ECMA-262 §27.2.4.1/.2/.3/.7 step 3: <c>GetIterator(iterable)</c> for the Promise
+    /// combinators, with an abrupt completion turned into a *rejection* of the returned
+    /// promise (IfAbruptRejectPromise) rather than a synchronous throw. So
+    /// <c>Promise.all(null)</c> hands back a promise rejected with a TypeError, and any
+    /// iterable — not just an array — is accepted.
+    /// </summary>
+    private static List<object?> IterateCombinatorArgument(
+        List<object?> args, Interpreter interpreter, string methodName)
+    {
+        var iterable = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        if (iterable is SharpTSArray array) return [.. array];
+        try
+        {
+            return DrainIterable(interpreter, iterable, methodName);
+        }
+        catch (SharpTSPromiseRejectedException)
+        {
+            throw;
+        }
+        catch (Runtime.Exceptions.ThrowException)
+        {
+            // A guest throw from a user-supplied Symbol.iterator / next() is itself the
+            // rejection reason; let the surrounding async machinery adopt it.
+            throw;
+        }
+        catch
+        {
+            throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                $"Promise.{methodName}: argument is not iterable"));
+        }
+    }
+
+    /// <summary>
+    /// Maximum number of elements drawn from a non-array iterable by the Promise combinators.
+    /// </summary>
+    /// <remarks>
+    /// KNOWN LIMITATION. The spec interleaves iteration with <c>C.resolve(nextValue)</c> and
+    /// stops at the first abrupt completion (§27.2.4.1 steps 6–8 via PerformPromiseAll), so an
+    /// infinite iterator terminates as soon as resolve throws. This implementation materializes
+    /// the iterable up front, which never terminates for such an iterator — Test262's
+    /// <c>resolve-throws-iterator-return-*</c> / <c>invoke-then-*-close</c> cases build exactly
+    /// that (a <c>next()</c> that always returns <c>{done: false}</c>). The cap converts the
+    /// hang into a prompt rejection. Those tests still do not pass; they fail fast instead of
+    /// burning the per-test timeout. Removing the cap requires making the combinators lazy.
+    /// </remarks>
+    private const int MaxCombinatorElements = 100_000;
+
+    private static List<object?> DrainIterable(
+        Interpreter interpreter, object? iterable, string methodName)
+    {
+        var elements = new List<object?>();
+        foreach (var element in interpreter.GetIterableElements(iterable))
+        {
+            if (elements.Count >= MaxCombinatorElements)
+            {
+                throw new SharpTSPromiseRejectedException(new SharpTSRangeError(
+                    $"Promise.{methodName}: iterable yielded more than "
+                    + $"{MaxCombinatorElements} elements"));
+            }
+            elements.Add(element);
+        }
+        return elements;
+    }
+
+
+    /// <summary>
     /// Implementation of Promise.all(iterable)
     /// Resolves when all promises resolve, rejects on first rejection.
     /// </summary>
     private static async Task<object?> AllImpl(List<object?> args, Interpreter interpreter)
     {
-        if (args.Count == 0 || args[0] is not SharpTSArray array)
-        {
-            throw new Exception("Runtime Error: Promise.all requires an array argument.");
-        }
+        var array = IterateCombinatorArgument(args, interpreter, "all");
 
         // Empty array resolves immediately to empty array
-        if (array.Length == 0)
+        if (array.Count == 0)
         {
             return new SharpTSArray([]);
         }
@@ -560,17 +664,14 @@ public static class PromiseBuiltIns
     /// </summary>
     private static async Task<object?> RaceImpl(List<object?> args, Interpreter interpreter)
     {
-        if (args.Count == 0 || args[0] is not SharpTSArray array)
-        {
-            throw new Exception("Runtime Error: Promise.race requires an array argument.");
-        }
+        var array = IterateCombinatorArgument(args, interpreter, "race");
 
         // Empty array never settles — there are no competitors to race.
         // BuiltInAsyncMethod wraps this method's Task in the promise it hands
         // to the guest, so returning a SharpTSPromise here would settle that
         // outer promise immediately WITH a promise object (#196). Await a task
         // that never completes instead so the outer promise stays pending.
-        if (array.Length == 0)
+        if (array.Count == 0)
         {
             return await new TaskCompletionSource<object?>().Task;
         }
@@ -602,13 +703,10 @@ public static class PromiseBuiltIns
     /// </summary>
     private static async Task<object?> AllSettledImpl(List<object?> args, Interpreter interpreter)
     {
-        if (args.Count == 0 || args[0] is not SharpTSArray array)
-        {
-            throw new Exception("Runtime Error: Promise.allSettled requires an array argument.");
-        }
+        var array = IterateCombinatorArgument(args, interpreter, "allSettled");
 
         // Empty array resolves immediately to empty array
-        if (array.Length == 0)
+        if (array.Count == 0)
         {
             return new SharpTSArray([]);
         }
@@ -670,21 +768,18 @@ public static class PromiseBuiltIns
     /// </summary>
     private static async Task<object?> AnyImpl(List<object?> args, Interpreter interpreter)
     {
-        if (args.Count == 0 || args[0] is not SharpTSArray array)
-        {
-            throw new Exception("Runtime Error: Promise.any requires an array argument.");
-        }
+        var array = IterateCombinatorArgument(args, interpreter, "any");
 
         // Empty array rejects immediately with AggregateError. Must be a real
         // SharpTSAggregateError — the same representation `new AggregateError()`
         // produces — so `e instanceof AggregateError` holds (#232).
-        if (array.Length == 0)
+        if (array.Count == 0)
         {
             throw new SharpTSPromiseRejectedException(
                 new SharpTSAggregateError(new SharpTSArray([])));
         }
 
-        var state = new AnyState { PendingCount = array.Length };
+        var state = new AnyState { PendingCount = array.Count };
 
         foreach (var element in array)
         {

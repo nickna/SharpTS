@@ -57,18 +57,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(protoOkLabel);
 
-        // Locals
         var resultLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var propsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object?>.Enumerator));
-        var currentLocal = il.DeclareLocal(typeof(KeyValuePair<string, object?>));
-        var propKeyLocal = il.DeclareLocal(_types.String);
-        var propDescLocal = il.DeclareLocal(_types.Object);
-
         var noPropsLabel = il.DefineLabel();
-        var loopStartLabel = il.DefineLabel();
-        var loopEndLabel = il.DefineLabel();
-        var returnLabel = il.DefineLabel();
 
         // result = new Dictionary<string, object?>()
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
@@ -89,82 +79,23 @@ public partial class RuntimeEmitter
         // (above) handles inheritance correctly without copying.
 
         // ECMA-262 §20.1.2.2 step 3: only define properties if Properties is
-        // not undefined. Properties === null falls through and is passed to
-        // ObjectDefineProperties → ToObject(null) → TypeError. Test262
-        // 15.2.3.5-4-3 expects this throw.
-        var propsIsUndefLabel = il.DefineLabel();
+        // not undefined. Everything else — including an explicit null, which
+        // must TypeError out of ToObject (test262 15.2.3.5-4-3) — is handed to
+        // ObjectDefineProperties, which IS step 3 (§20.1.2.3.1
+        // ObjectDefineProperties). Delegating rather than re-walking the props
+        // bag here matters: step 4 is `props.[[OwnPropertyKeys]]()` followed by
+        // `Get(props, key)`, so an *accessor* property on the bag must have its
+        // getter invoked. The bespoke loop this replaces read the backing
+        // dictionary entries directly, so a bag built with
+        // `Object.defineProperty(props, k, {get})` silently contributed nothing.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, noPropsLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brtrue, propsIsUndefLabel);
-        // Properties is null → throw TypeError per ToObject step.
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
-        il.MarkLabel(propsIsUndefLabel);
 
-        // Cast propertiesObject to Dictionary<string, object?>
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, propsLocal);
-        il.Emit(OpCodes.Ldloc, propsLocal);
-        il.Emit(OpCodes.Brfalse, noPropsLabel);
-
-        // Get enumerator: enumerator = props.GetEnumerator()
-        il.Emit(OpCodes.Ldloc, propsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator"));
-        il.Emit(OpCodes.Stloc, enumeratorLocal);
-
-        // Loop start
-        il.MarkLabel(loopStartLabel);
-
-        // if (!enumerator.MoveNext()) goto loopEnd
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var moveNextMethod = typeof(Dictionary<string, object?>.Enumerator).GetMethod("MoveNext")!;
-        il.Emit(OpCodes.Call, moveNextMethod);
-        il.Emit(OpCodes.Brfalse, loopEndLabel);
-
-        // current = enumerator.Current
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var currentGetter = typeof(Dictionary<string, object?>.Enumerator).GetProperty("Current")!.GetGetMethod()!;
-        il.Emit(OpCodes.Call, currentGetter);
-        il.Emit(OpCodes.Stloc, currentLocal);
-
-        // propKey = current.Key
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        var keyGetter = typeof(KeyValuePair<string, object?>).GetProperty("Key")!.GetGetMethod()!;
-        il.Emit(OpCodes.Call, keyGetter);
-        il.Emit(OpCodes.Stloc, propKeyLocal);
-
-        // propDesc = current.Value
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        var valueGetter = typeof(KeyValuePair<string, object?>).GetProperty("Value")!.GetGetMethod()!;
-        il.Emit(OpCodes.Call, valueGetter);
-        il.Emit(OpCodes.Stloc, propDescLocal);
-
-        // Skip null descriptors
-        var notNullDescLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, propDescLocal);
-        il.Emit(OpCodes.Brtrue, notNullDescLabel);
-        il.Emit(OpCodes.Br, loopStartLabel);  // Continue to next iteration
-
-        il.MarkLabel(notNullDescLabel);
-
-        // Call ObjectDefineProperty(result, propKey, propDesc) for this property
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, propKeyLocal);
-        il.Emit(OpCodes.Ldloc, propDescLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
-        il.Emit(OpCodes.Pop);  // Discard return value
-
-        // Continue loop
-        il.Emit(OpCodes.Br, loopStartLabel);
-
-        il.MarkLabel(loopEndLabel);
-
-        // Dispose enumerator (it's a struct, but good practice)
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var disposeMethod = typeof(Dictionary<string, object?>.Enumerator).GetMethod("Dispose")!;
-        il.Emit(OpCodes.Call, disposeMethod);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectDefineProperties);
+        il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noPropsLabel);
 

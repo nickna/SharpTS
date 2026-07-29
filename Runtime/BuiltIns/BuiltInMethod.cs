@@ -16,7 +16,7 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 /// <seealso cref="ISharpTSCallable"/>
 /// <seealso cref="MathBuiltIns"/>
-public class BuiltInMethod : ISharpTSCallable
+public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly int _minArity;
@@ -137,6 +137,17 @@ public class BuiltInMethod : ISharpTSCallable
         => new(name, 0, 0, (_, _, _) => value, isConstant: true);
 
     /// <summary>
+    /// The wrapped value of an <see cref="IsConstant"/> method (<c>Number.MAX_VALUE</c>).
+    /// A constant ignores both the interpreter and the receiver, so unwrapping it needs
+    /// neither — which lets a member table materialize the value before handing it out,
+    /// instead of each read path having to remember to.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The method is not a constant.</exception>
+    public object? ConstantValue => IsConstant
+        ? _implementation!(null!, null, [])
+        : throw new InvalidOperationException($"Built-in '{_name}' is not a constant.");
+
+    /// <summary>
     /// Creates a BuiltInMethod with a RuntimeValue-based implementation.
     /// Use <see cref="CreateV2"/> factory method instead for clearer intent.
     /// </summary>
@@ -228,6 +239,9 @@ public class BuiltInMethod : ISharpTSCallable
         IsConstructor = false;
         return this;
     }
+
+    /// <summary>ECMA-262 §17 `name` value — the registered method name.</summary>
+    public string FunctionName => _name;
 
     public bool HasMetadataProperty(string name)
         => name is "name" or "length"

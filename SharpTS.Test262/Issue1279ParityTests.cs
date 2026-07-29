@@ -499,6 +499,297 @@ public sealed class Issue1279ParityTests
     public void Full_interpreted_baseline_regressions_pass(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    // ---- Batch: interpreter property-resolution + built-in-function parity ----
+
+    /// <summary>
+    /// A built-in <c>Object.prototype</c> method stored on an object and then invoked as a
+    /// member call gets <c>this</c> from the call's Reference Record. The Sputnik suite leans
+    /// on this constantly via <c>arr.getClass = Object.prototype.toString</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js")]
+    public void Unbound_prototype_methods_take_receiver_from_member_call(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Built-in prototype objects and constructors inherit <c>Object.prototype</c>, so
+    /// <c>Array.prototype.isPrototypeOf([])</c> and <c>Array.prototype.hasOwnProperty(…)</c>
+    /// resolve rather than reporting <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/S15.4.1_A1.1_T3.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.1_T3.js")]
+    [InlineData("built-ins/Array/S15.4.3_A1.1_T3.js")]
+    public void Built_in_prototypes_inherit_Object_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// ECMA-262 §17: a built-in function's <c>name</c>/<c>length</c> are own, configurable
+    /// data properties — so <c>propertyHelper.js</c> can delete them to prove configurability.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/concat/length.js")]
+    [InlineData("built-ins/Array/prototype/concat/name.js")]
+    [InlineData("built-ins/Array/prototype/map/length.js")]
+    [InlineData("built-ins/Array/prototype/map/name.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/length.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/name.js")]
+    public void Built_in_function_name_and_length_are_configurable_own_properties(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// The primitive prototype objects carry their own primitive data slot
+    /// (<c>Number.prototype</c> is +0, <c>Boolean.prototype</c> is false,
+    /// <c>String.prototype</c> is ""), so their prototype methods work on them directly.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toString/S15.7.4.2_A1_T01.js")]
+    [InlineData("built-ins/Number/prototype/S15.7.3.1_A2_T1.js")]
+    public void Primitive_prototypes_carry_their_own_primitive_value(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Math functions the compiled backend has always emitted but the interpreter reported
+    /// as <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Math/acosh/length.js")]
+    [InlineData("built-ins/Math/clz32/length.js")]
+    [InlineData("built-ins/Math/fround/length.js")]
+    [InlineData("built-ins/Math/imul/length.js")]
+    [InlineData("built-ins/Math/log1p/length.js")]
+    public void Missing_Math_functions_exist_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>Annex B §B.2.2.2–5 accessor helpers on <c>Object.prototype</c>.</summary>
+    [Theory]
+    [InlineData("built-ins/Object/prototype/__defineGetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__defineSetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/length.js")]
+    public void Annex_B_accessor_helpers_exist_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Built-ins run ToNumber on their numeric arguments: strings coerce, Symbols raise a
+    /// guest TypeError. Previously the interpreter hard-failed with a host
+    /// "RuntimeValue has Kind …" message that reached guest <c>catch</c> as a bare string.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toPrecision/return-abrupt-tointeger-precision-symbol.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-symbol.js")]
+    [InlineData("built-ins/Array/prototype/at/index-non-numeric-argument-tointeger-invalid.js")]
+    public void Numeric_built_in_arguments_are_ToNumber_coerced(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>ECMA-262 §25.5.1: malformed JSON text is a guest <c>SyntaxError</c> object.</summary>
+    [Theory]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-1.js")]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-2.js")]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-3.js")]
+    public void JSON_parse_throws_a_SyntaxError_object(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    // ---- Batch: prototype identity, Promise.prototype, iterable combinators ----
+
+    /// <summary>
+    /// The Promise combinators take any iterable (ECMA-262 §27.2.4.1 step 3 GetIterator), and
+    /// an abrupt completion there *rejects* the returned promise rather than throwing
+    /// synchronously (IfAbruptRejectPromise). They previously demanded a literal array.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/all/iter-arg-is-number-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/any/iter-arg-is-null-reject.js")]
+    public void Promise_combinators_reject_on_non_iterable(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// <c>Promise.prototype</c> is a real object carrying the unbound reaction methods; it
+    /// read as <c>undefined</c>, so every access through it threw.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/is-a-function.js")]
+    [InlineData("built-ins/Promise/prototype/catch/length.js")]
+    [InlineData("built-ins/Promise/prototype/then/length.js")]
+    [InlineData("built-ins/Promise/prototype/then/context-check-on-entry.js")]
+    [InlineData("built-ins/Promise/prototype/catch/this-value-non-object.js")]
+    public void Promise_prototype_is_an_object_with_unbound_methods(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A constructor has exactly one <c>prototype</c> object, and an instance's
+    /// [[Prototype]] is that same object — <c>X.prototype === X.prototype</c> and
+    /// <c>Object.getPrototypeOf(new X()) === X.prototype</c>. A plain object literal
+    /// likewise reports Object.prototype, not null.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-1.js")]
+    public void Prototype_objects_are_identity_stable(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
+    /// <c>Object.getPrototypeOf(RangeError) === Error</c>. Interpreted-only: the compiled
+    /// path answers with a raw Dictionary here (a Track B item on #1279).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-13.js")]
+    public void Derived_constructors_inherit_their_base_constructor(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    /// <summary>
+    /// <c>Object.hasOwn</c> is defined as HasOwnProperty (§20.1.2.13), so it must see
+    /// accessor properties — and must NOT see inherited class methods.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/hasOwn/hasown_own_getter.js")]
+    [InlineData("built-ins/Object/hasOwn/hasown_own_getter_and_setter.js")]
+    [InlineData("built-ins/Object/hasOwn/hasown.js")]
+    public void Object_hasOwn_matches_hasOwnProperty(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>ECMA-262 §9.4.2: resolving an unbound name throws a ReferenceError.</summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-4-2.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-4-2.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-4-2.js")]
+    public void Unresolvable_names_throw_ReferenceError(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.1.10: a <c>configurable: false</c> own property of a class instance cannot be
+    /// deleted — the check propertyHelper.js uses to prove non-configurability.
+    /// Interpreted-only: the compiled path still reports this property as writable
+    /// (a Track B item on #1279).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-21.js")]
+    public void Non_configurable_instance_properties_resist_delete(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    // ---- Batch: Track B — compiled-mode deficits ----
+
+    /// <summary>
+    /// <c>Date.prototype</c> is addressable as a value carrying its §21.4.4 method table.
+    /// The compiled backend emitted Date instance calls inline and never materialized the
+    /// prototype object, so it read as <c>undefined</c> and every reflective use of it threw.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-116.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-117.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-130.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-150.js")]
+    public void Date_prototype_is_addressable_as_a_value(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §20.1.2.3.1 ObjectDefineProperties step 4 does <c>Get(props, key)</c>, so an accessor
+    /// property on the descriptor bag has its getter invoked. The compiled <c>Object.create</c>
+    /// walked the backing dictionary directly and silently dropped such entries; it now
+    /// delegates to ObjectDefineProperties, which is that step.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-19.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-22.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-23.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-17.js")]
+    public void Object_create_invokes_getters_on_the_descriptor_bag(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.4.2.1 routes an array-index [[DefineOwnProperty]] through
+    /// OrdinaryDefineOwnProperty, so an index can carry an accessor descriptor. The compiled
+    /// index read went straight to element storage and answered <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-221.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-244.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-245.js")]
+    public void Array_indices_support_accessor_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    // ---- Batch: Object.prototype as an ordinary object ----
+
+    /// <summary>
+    /// ECMA-262 makes every built-in prototype an ordinary object, so guest code can define
+    /// descriptors on it, index into it, delete from it, and enumerate it. Object.prototype
+    /// alone was backed by a value-only dictionary and supported none of that — Test262
+    /// patches it constantly to exercise inherited-property paths.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-2-12.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-2-12.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-2-12.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-7-b-10.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-7-b-10.js")]
+    public void Object_prototype_is_an_ordinary_mutable_object(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// <c>for...in</c> over a built-in prototype singleton yields its own enumerable keys
+    /// rather than throwing "for...in requires an object".
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toFixed/prop-desc.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/prop-desc.js")]
+    [InlineData("built-ins/Number/prototype/constructor.js")]
+    public void For_in_enumerates_built_in_prototypes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A class's <c>prototype</c> accepts descriptor definitions, including Symbol-keyed ones
+    /// (<c>Object.defineProperty(Error.prototype, Symbol.toStringTag, …)</c>).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Error/prototype/no-error-data.js")]
+    public void Class_prototypes_accept_descriptor_definitions(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    // ---- Batch: per-realm constructor objects ----
+
+    /// <summary>
+    /// ECMA-262 makes the <c>Number</c>/<c>String</c>/<c>Boolean</c> constructor objects
+    /// ordinary and extensible, and their statics non-writable. Assigning to a static is a
+    /// silent no-op in sloppy mode — it threw "Index assignment not supported" before.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/MAX_VALUE/S15.7.3.2_A2.js")]
+    [InlineData("built-ins/Number/MIN_VALUE/S15.7.3.3_A2.js")]
+    [InlineData("built-ins/Number/NEGATIVE_INFINITY/S15.7.3.5_A2.js")]
+    [InlineData("built-ins/Number/POSITIVE_INFINITY/S15.7.3.6_A2.js")]
+    public void Constructor_object_statics_are_read_only(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A constructor object read twice yields the same value, and matches the <c>value</c> of
+    /// its own descriptor — routing a static through instance-member dispatch would hand out
+    /// a freshly bound copy per read.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-61.js")]
+    public void Constructor_object_statics_keep_their_identity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// ECMA-262 §17 makes a built-in function's <c>length</c>/<c>name</c> configurable, and
+    /// propertyHelper.js proves that by deleting them. That deletion must not outlive the
+    /// program: these methods used to be handed out as process-wide singletons, so one
+    /// program's delete was visible to the next one sharing the process — making results
+    /// order-dependent.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/prototype/toString/length.js")]
+    [InlineData("built-ins/Object/prototype/toString/name.js")]
+    [InlineData("built-ins/Object/prototype/hasOwnProperty/length.js")]
+    public void Built_in_metadata_deletion_does_not_outlive_the_program(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]

@@ -58,6 +58,16 @@ public class SharpTSClass(
     // Method lookup cache - avoids repeated inheritance chain walks
     // Key: method name, Value: method (null means not found in entire chain)
     private readonly Dictionary<string, ISharpTSCallable?> _methodCache = [];
+
+    private SharpTSClassPrototype? _prototype;
+
+    /// <summary>
+    /// This class's <c>prototype</c> object. ECMA-262 gives every constructor exactly one,
+    /// so it is created on first read and then reused — <c>TypeError.prototype ===
+    /// TypeError.prototype</c> and <c>Object.getPrototypeOf(new TypeError()) ===
+    /// TypeError.prototype</c> both depend on that identity holding.
+    /// </summary>
+    public SharpTSClassPrototype Prototype => _prototype ??= new SharpTSClassPrototype(this);
     private readonly Dictionary<string, ISharpTSCallable?> _staticMethodCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _getterCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];

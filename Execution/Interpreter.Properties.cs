@@ -691,8 +691,39 @@ public partial class Interpreter
                     : SharpTSUndefined.Instance);
         }
 
+        // String/Number/Boolean are the same shape — per-realm constructor objects whose
+        // statics carry no receiver semantics. Going through instance-member dispatch would
+        // hand out a freshly bound copy per read, so `String.fromCharCode` would not equal
+        // the `value` of its own descriptor.
+        if (obj is SharpTSStringNamespace or SharpTSNumberNamespace or SharpTSBooleanNamespace)
+        {
+            var nsMember = obj switch
+            {
+                SharpTSStringNamespace ns => ns.GetMember(get.Name.Lexeme),
+                SharpTSNumberNamespace ns => ns.GetMember(get.Name.Lexeme),
+                _ => ((SharpTSBooleanNamespace)obj).GetMember(get.Name.Lexeme),
+            };
+            if (nsMember != null) return RuntimeValue.FromBoxed(nsMember);
+        }
+
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = get.Name.Lexeme;
+
+        // A primitive's inherited members come from THIS realm's prototype, so `constructor`
+        // must be this realm's constructor object — `("x").constructor === String`. Resolving
+        // it off the process-wide singleton breaks that identity now that the bare globals are
+        // per-realm. Placed here, ahead of category routing, so every primitive shape is
+        // covered regardless of which fallback its category lands in.
+        if (memberName == "constructor" && obj is string or double or int or bool)
+        {
+            object? primitiveCtor = obj switch
+            {
+                string => GetStringPrototype().GetMember(memberName),
+                bool => GetBooleanPrototype().GetMember(memberName),
+                _ => GetNumberPrototype().GetMember(memberName),
+            };
+            if (primitiveCtor != null) return RuntimeValue.FromBoxed(primitiveCtor);
+        }
 
         // Category-based dispatch
         return category switch
@@ -911,7 +942,14 @@ public partial class Interpreter
 
         var member = BuiltInRegistry.Instance.GetMemberByCategory(category, obj, memberName);
         if (member != null)
+        {
+            // Constant-wrapping members (Number.MAX_SAFE_INTEGER, …) must yield their value,
+            // not the wrapper. The namespace static fast-path in EvaluateGet does this, but
+            // a per-realm intrinsic deliberately bypasses that path.
+            if (member is BuiltInMethod { IsConstant: true } constantMember)
+                return RuntimeValue.FromBoxed(constantMember.CallBoxed(this, []));
             return RuntimeValue.FromBoxed(BindBuiltInMember(member, obj));
+        }
 
         // RegExp instances inherit user-set properties from the realm
         // RegExp.prototype (built-in prototype mutability, #801/#474-adjacent).
@@ -1048,15 +1086,15 @@ public partial class Interpreter
 
     private object? EvaluateGetOnClass(SharpTSClass klass, string memberName)
     {
-        // ECMA-262: every built-in class has a `prototype` (an ordinary
-        // object whose props are the instance methods + constructor back-
-        // ref). Without this, `Error.prototype.toString` and friends throw
-        // "Static member 'prototype' does not exist on class 'Error'".
-        // Lazy on-demand wrapper so we don't allocate one per class at
-        // startup; lifetime tied to the class.
+        // ECMA-262: every class has exactly one `prototype` (an ordinary object whose
+        // props are the instance methods + constructor back-ref). Without this,
+        // `Error.prototype.toString` and friends throw "Static member 'prototype' does
+        // not exist on class 'Error'". The object is created lazily and cached on the
+        // class, so repeated reads are reference-equal — `X.prototype === X.prototype`
+        // and `Object.getPrototypeOf(new X()) === X.prototype`.
         if (memberName == "prototype")
         {
-            return new SharpTSClassPrototype(klass);
+            return klass.Prototype;
         }
 
         // Try static auto-accessor first (TypeScript 4.9+)
@@ -1158,6 +1196,60 @@ public partial class Interpreter
     };
 
     /// <summary>
+    /// Supplies <c>this</c> to an *unbound* built-in prototype method reached through a member
+    /// call (<c>obj.m()</c>). <see cref="SharpTSObjectUnboundMethod"/> and
+    /// <see cref="SharpTSArrayUnboundMethod"/> take their receiver as the first argument when
+    /// they have no bound <c>this</c>, so the classic
+    /// <c>arr.getClass = Object.prototype.toString; arr.getClass()</c> idiom (pervasive in
+    /// Test262's Sputnik suite) otherwise throws "requires a receiver". ECMA-262 §13.3.6.1
+    /// builds a Reference Record for a member call, and its base is <c>this</c>.
+    /// <para>
+    /// Deliberately separate from <see cref="TryBindReceiverForMethodAccess"/>: that helper also
+    /// runs on plain property *reads*, where rebinding would break reference identity
+    /// (<c>obj.toString === Object.prototype.toString</c> must hold). This one is call-site only.
+    /// </para>
+    /// </summary>
+    private static ISharpTSCallable? TryBindUnboundBuiltInReceiver(object? callee, object? receiver)
+    {
+        if (receiver is null or SharpTSUndefined) return null;
+        return callee switch
+        {
+            SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
+            SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Applies both receiver-binding passes to a member-call callee
+    /// (<c>obj.m()</c> / <c>obj[k]()</c>). Returns the callee unchanged when neither applies.
+    /// </summary>
+    private static object? BindMemberCallReceiver(object? callee, object? receiver)
+    {
+        if (receiver is null) return callee;
+        callee = TryBindReceiverForMethodAccess(callee, receiver) ?? callee;
+        return TryBindUnboundBuiltInReceiver(callee, receiver) ?? callee;
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="memberName"/> on this realm's <c>Object.prototype</c>, bound to
+    /// <paramref name="receiver"/>. Every built-in object — including the built-in *prototype*
+    /// objects themselves (<c>Array.prototype</c>, <c>Function.prototype</c>, …) and the
+    /// constructors — sits at the bottom of the ordinary-object prototype chain, so
+    /// <c>Array.prototype.hasOwnProperty(…)</c> and <c>Array.prototype.isPrototypeOf(x)</c> must
+    /// resolve. Those arms of the fallback dispatcher return early with their own member table,
+    /// so each one calls this before giving up. Returns null when Object.prototype has no such
+    /// member (caller yields <c>undefined</c>).
+    /// </summary>
+    private object? InheritedObjectPrototypeMember(object receiver, string memberName)
+    {
+        var protoMember = GetObjectPrototype().GetMember(memberName);
+        return protoMember is SharpTSObjectUnboundMethod unbound
+            ? unbound.BindTo(receiver)
+            : protoMember;
+    }
+
+    /// <summary>
     /// Boxed adapter over <see cref="EvaluateGetOnRecordRV"/> — the single implementation of
     /// record property reads. (A previous hand-maintained boxed copy had drifted: it stopped the
     /// __proto__ walk at a <see cref="SharpTSInstance"/> prototype, so field reads through
@@ -1220,6 +1312,26 @@ public partial class Interpreter
                 current = next;
                 continue;
             }
+            // `function Foo(){}; Foo.prototype = new Array(1,2,3)` — an array standing in as a
+            // prototype. Instances must inherit both its own indexed/named data and the
+            // Array.prototype methods, the latter applied to the *original* receiver so
+            // `f.every(cb)` reads `f.length` (ECMA-262 §23.1.3 starts every method with
+            // `O = ToObject(this value)`).
+            if (current is SharpTSArray protoArray)
+            {
+                if (protoArray.HasNamedProperty(memberName))
+                    return RuntimeValue.FromBoxed(protoArray.GetNamedProperty(memberName));
+                if (GetArrayPrototype().HasExtra(memberName))
+                    return RuntimeValue.FromBoxed(GetArrayPrototype().TryGetExtra(memberName));
+                if (GetArrayPrototype().GetMember(memberName) is { } arrayProtoMember)
+                {
+                    return RuntimeValue.FromBoxed(
+                        arrayProtoMember is ArrayPrototypeMethodWrapper wrapper
+                            ? wrapper.Bind(simpleObj)
+                            : arrayProtoMember);
+                }
+                break;
+            }
             if (current is SharpTSInstance protoInst)
             {
                 if (protoInst.HasField(memberName))
@@ -1275,11 +1387,18 @@ public partial class Interpreter
         // receiver so `obj.hasOwnProperty(k)` passes `obj` as the target.
         // A genuine null-prototype object (Object.create(null), groupBy result)
         // inherits nothing, so it is excluded.
-        if (!simpleObj.IsNullPrototype
-            && GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
-            return RuntimeValue.FromObject(protoMethod.BindTo(simpleObj));
-        if (!simpleObj.IsNullPrototype && GetObjectPrototype().HasExtra(memberName))
-            return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+        if (!simpleObj.IsNullPrototype)
+        {
+            // A guest-installed accessor on Object.prototype is inherited like any other:
+            // its getter runs with the *receiver* as `this`, not the prototype.
+            if (GetObjectPrototype().GetExtraGetter(memberName) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, simpleObj)
+                    .CallV2(this, ReadOnlySpan<RuntimeValue>.Empty);
+            if (GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
+                return RuntimeValue.FromObject(protoMethod.BindTo(simpleObj));
+            if (GetObjectPrototype().HasExtra(memberName))
+                return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+        }
 
         return RuntimeValue.Undefined;
     }
@@ -1364,13 +1483,17 @@ public partial class Interpreter
         // Array global constructor: resolves `Array.prototype`, `Array.from`, etc.
         if (obj is SharpTSArrayGlobal arrGlobal)
         {
-            return arrGlobal.GetMember(memberName) ?? SharpTSUndefined.Instance;
+            return arrGlobal.GetMember(memberName)
+                ?? InheritedObjectPrototypeMember(arrGlobal, memberName)
+                ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSArrayPrototype arrProto)
         {
             if (arrProto.GetExtraGetter(memberName) is { } getter)
                 return BindAccessorToObject(getter, arrProto).CallBoxed(this, []);
-            return arrProto.GetMember(memberName) ?? SharpTSUndefined.Instance;
+            return arrProto.GetMember(memberName)
+                ?? InheritedObjectPrototypeMember(arrProto, memberName)
+                ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSArrayUnboundMethod unbound)
         {
@@ -1381,11 +1504,15 @@ public partial class Interpreter
         }
         if (obj is SharpTSFunctionGlobal fnGlobal)
         {
-            return fnGlobal.GetMember(memberName) ?? SharpTSUndefined.Instance;
+            return fnGlobal.GetMember(memberName)
+                ?? InheritedObjectPrototypeMember(fnGlobal, memberName)
+                ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSFunctionPrototype fnProto)
         {
-            return fnProto.GetMember(memberName) ?? SharpTSUndefined.Instance;
+            return fnProto.GetMember(memberName)
+                ?? InheritedObjectPrototypeMember(fnProto, memberName)
+                ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSFunctionProtoToString fnToStr)
         {
@@ -1410,6 +1537,10 @@ public partial class Interpreter
             // process-wide static FrozenDictionary).
             if (memberName == "prototype" && ctor.Name == BuiltInNames.RegExp)
                 return GetRegExpPrototype();
+            // ECMA-262 §27.2.3.1: %Promise%.prototype. Without this, `Promise.prototype`
+            // read as undefined and every Promise/prototype/* access died on it.
+            if (memberName == "prototype" && ctor.Name == BuiltInNames.Promise)
+                return GetPromisePrototype();
             var ctorMember = ctor.GetMember(memberName);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic
@@ -1417,7 +1548,9 @@ public partial class Interpreter
             // BuiltInMethod wrapper and identity with the direct form breaks.
             if (ctorMember is BuiltInMethod { IsConstant: true } ctorConstant)
                 return ctorConstant.CallBoxed(this, []);
-            return ctorMember ?? SharpTSUndefined.Instance;
+            return ctorMember
+                ?? FunctionBuiltIns.GetMember(ctor, memberName)
+                ?? SharpTSUndefined.Instance;
         }
 
         // Handle plain Dictionary<string, object?> objects (e.g., segment items from Intl.Segments)
@@ -1679,37 +1812,13 @@ public partial class Interpreter
             return value;
         }
 
-        // Number/Boolean/String.prototype are ordinary mutable objects per ECMA-262.
-        // Test262 assigns indexed elements and `length` before calling
-        // Array.prototype.* with a primitive as the receiver.
-        if (obj is SharpTSNumberPrototype numProto)
+        // Every built-in prototype singleton is an ordinary mutable object per ECMA-262
+        // (Object/Array/String/Number/Boolean/Function.prototype). Test262 assigns
+        // indexed elements and `length` onto them before calling Array.prototype.* with
+        // a primitive receiver, and patches them to exercise inherited-property paths.
+        if (obj is ISharpTSMutableBuiltIn builtInProto)
         {
-            numProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSBooleanPrototype boolProto)
-        {
-            boolProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSStringPrototype strProto)
-        {
-            strProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSArrayPrototype arrProto)
-        {
-            arrProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSFunctionPrototype fnProto)
-        {
-            fnProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSObjectPrototype objProto)
-        {
-            objProto.SetExtra(set.Name.Lexeme, value);
+            builtInProto.SetExtra(set.Name.Lexeme, value);
             return value;
         }
         if (obj is SharpTSDate date)

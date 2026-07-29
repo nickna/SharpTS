@@ -66,7 +66,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// rebinds the receiver before invoking, so both access paths share one
 /// implementation.
 /// </summary>
-public sealed class SharpTSArrayPrototype
+public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
 {
     // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
     // descriptor-aware storage so defineProperty can install accessors and
@@ -153,10 +153,11 @@ public sealed class SharpTSArrayPrototype
 /// semantics through <c>.call</c>/<c>.apply</c> by delegating Bind/Call to
 /// the inner method.
 /// </summary>
-internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable
+internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly BuiltInMethod _inner;
+    private readonly BuiltInFunctionMetadata _metadata;
     private readonly object? _receiver;
     private readonly bool _hasReceiver;
 
@@ -164,20 +165,31 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable
     {
         _name = name;
         _inner = inner;
+        _metadata = new BuiltInFunctionMetadata();
     }
 
-    private ArrayPrototypeMethodWrapper(string name, BuiltInMethod inner, object? receiver)
+    private ArrayPrototypeMethodWrapper(
+        string name, BuiltInMethod inner, BuiltInFunctionMetadata metadata, object? receiver)
     {
         _name = name;
         _inner = inner;
+        _metadata = metadata;
         _receiver = receiver;
         _hasReceiver = true;
     }
 
     public int Arity() => _inner.SpecLength;
 
+    // Bound copies share the metadata store, so a `delete Array.prototype.map.length`
+    // stays observable through `Array.prototype.map.call(...)` and friends.
     public ArrayPrototypeMethodWrapper Bind(object? receiver)
-        => new(_name, _inner, receiver);
+        => new(_name, _inner, _metadata, receiver);
+
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
 
     public object? Call(Interp interpreter, List<object?> arguments)
     {
@@ -329,7 +341,7 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable
 /// When used via <c>Function.prototype.apply</c>/<c>call</c>, the bound
 /// <c>this</c> becomes the receiver.
 /// </summary>
-public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable
+public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     // ECMA-262 spec lengths (the "length" property visible to user code, NOT
     // the C# function's parameter count). Variadic methods like push/concat/
@@ -346,18 +358,45 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable
 
     private readonly string _name;
     private readonly Func<SharpTSArray, List<object?>, object?> _impl;
+    private readonly BuiltInFunctionMetadata _metadata;
     private readonly object? _boundThis;
     private readonly int _jsLength;
 
-    private SharpTSArrayUnboundMethod(string name, Func<SharpTSArray, List<object?>, object?> impl, int jsLength, object? boundThis = null)
+    private SharpTSArrayUnboundMethod(string name, Func<SharpTSArray, List<object?>, object?> impl, int jsLength)
     {
         _name = name;
         _impl = impl;
         _jsLength = jsLength;
+        _metadata = new BuiltInFunctionMetadata();
+    }
+
+    private SharpTSArrayUnboundMethod(
+        string name,
+        Func<SharpTSArray, List<object?>, object?> impl,
+        int jsLength,
+        BuiltInFunctionMetadata metadata,
+        object? boundThis)
+    {
+        _name = name;
+        _impl = impl;
+        _jsLength = jsLength;
+        _metadata = metadata;
         _boundThis = boundThis;
     }
 
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+
     public int Arity() => _jsLength;
+
+    /// <summary>
+    /// True once <see cref="BindTo"/> has supplied a receiver. Callers use this to avoid
+    /// re-binding an already-bound method.
+    /// </summary>
+    public bool HasBoundThis => _boundThis is not null;
 
     public object? Call(Interp interpreter, List<object?> arguments)
     {
@@ -383,7 +422,8 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable
     /// Produces a bound variant — used by <c>Function.prototype.apply/call</c>
     /// to pre-attach <c>thisArg</c> before invocation.
     /// </summary>
-    public SharpTSArrayUnboundMethod BindTo(object? thisArg) => new(_name, _impl, _jsLength, thisArg);
+    public SharpTSArrayUnboundMethod BindTo(object? thisArg)
+        => new(_name, _impl, _jsLength, _metadata, thisArg);
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
 

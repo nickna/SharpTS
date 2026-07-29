@@ -16,13 +16,13 @@ public static class DateBuiltIns
             .MethodV2("now", 0, (_, _, _) => RuntimeValue.FromNumber(SharpTSDate.Now()))
             // Date.UTC(year, month?, date?, hours?, minutes?, seconds?, ms?) — UTC timestamp (#538)
             .MethodV2("UTC", 1, 7, (_, _, args) => RuntimeValue.FromNumber(SharpTSDate.UTC(
-                args[0].AsNumber(),
-                args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null,
-                args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)args[3].AsNumber() : null,
-                args.Length > 4 && args[4].Kind != ValueKind.Undefined ? (double?)args[4].AsNumber() : null,
-                args.Length > 5 && args[5].Kind != ValueKind.Undefined ? (double?)args[5].AsNumber() : null,
-                args.Length > 6 && args[6].Kind != ValueKind.Undefined ? (double?)args[6].AsNumber() : null)))
+                Interpreter.ToNumber(args[0]),
+                args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null,
+                args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[3]) : null,
+                args.Length > 4 && args[4].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[4]) : null,
+                args.Length > 5 && args[5].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[5]) : null,
+                args.Length > 6 && args[6].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[6]) : null)))
             // Date.parse(s) — timestamp from a date string, or NaN if unparseable (#538)
             .MethodV2("parse", 1, (_, _, args) => RuntimeValue.FromNumber(SharpTSDate.Parse(args[0].AsString())))
             .Build();
@@ -52,64 +52,64 @@ public static class DateBuiltIns
             .MethodV2("getUTCMilliseconds", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetUTCMilliseconds()))
             // Setter Methods
             .MethodV2("setTime", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetTime(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetTime(Interpreter.ToNumber(args[0]))))
             .MethodV2("setFullYear", 1, 3, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetFullYear(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null)))
             .MethodV2("setMonth", 1, 2, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetMonth(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null)))
             .MethodV2("setDate", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetDate(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetDate(Interpreter.ToNumber(args[0]))))
             .MethodV2("setHours", 1, 4, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetHours(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null,
-                    args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)args[3].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null,
+                    args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[3]) : null)))
             .MethodV2("setMinutes", 1, 3, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetMinutes(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null)))
             .MethodV2("setSeconds", 1, 2, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetSeconds(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null)))
             .MethodV2("setMilliseconds", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetMilliseconds(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetMilliseconds(Interpreter.ToNumber(args[0]))))
             // UTC Setter Methods
             .MethodV2("setUTCFullYear", 1, 3, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetUTCFullYear(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null)))
             .MethodV2("setUTCMonth", 1, 2, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetUTCMonth(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null)))
             .MethodV2("setUTCDate", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetUTCDate(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetUTCDate(Interpreter.ToNumber(args[0]))))
             .MethodV2("setUTCHours", 1, 4, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetUTCHours(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null,
-                    args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)args[3].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null,
+                    args.Length > 3 && args[3].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[3]) : null)))
             .MethodV2("setUTCMinutes", 1, 3, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetUTCMinutes(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null,
-                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)args[2].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null,
+                    args.Length > 2 && args[2].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[2]) : null)))
             .MethodV2("setUTCSeconds", 1, 2, (_, date, args) =>
                 RuntimeValue.FromNumber(date.SetUTCSeconds(
-                    args[0].AsNumber(),
-                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)args[1].AsNumber() : null)))
+                    Interpreter.ToNumber(args[0]),
+                    args.Length > 1 && args[1].Kind != ValueKind.Undefined ? (double?)Interpreter.ToNumber(args[1]) : null)))
             .MethodV2("setUTCMilliseconds", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetUTCMilliseconds(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetUTCMilliseconds(Interpreter.ToNumber(args[0]))))
             // Conversion Methods
             .MethodV2("toString", 0, (_, date, _) => RuntimeValue.FromString(date.ToString()!))
             .MethodV2("toISOString", 0, (_, date, _) => RuntimeValue.FromString(date.ToISOString()))
@@ -140,7 +140,7 @@ public static class DateBuiltIns
             // Legacy methods (ECMA-262 Annex B)
             .MethodV2("getYear", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetYear()))
             .MethodV2("setYear", 1, (_, date, args) =>
-                RuntimeValue.FromNumber(date.SetYear(args[0].AsNumber())))
+                RuntimeValue.FromNumber(date.SetYear(Interpreter.ToNumber(args[0]))))
             .Build();
 
     /// <summary>
