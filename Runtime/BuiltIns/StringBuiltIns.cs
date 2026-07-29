@@ -304,7 +304,7 @@ public static class StringBuiltIns
     /// </summary>
     private static double NumArg(Interpreter interpreter, RuntimeValue rv)
         => rv.Kind == ValueKind.Number
-            ? rv.AsNumber()
+            ? Interpreter.ToNumber(rv)
             : interpreter.ToNumberWithPrimitive(rv.ToObject());
 
     private static RuntimeValue FromCodePointV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)

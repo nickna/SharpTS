@@ -202,7 +202,7 @@ public partial class Interpreter
             // reference identity holds. Bind their dynamic receiver only for
             // an actual member call (`obj.method()`), where JavaScript creates
             // the Reference Record that supplies `this`.
-            callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+            callee = BindMemberCallReceiver(callee, receiver);
         }
         else if (call.Callee is Expr.GetIndex memberIndex)
         {
@@ -215,7 +215,7 @@ public partial class Interpreter
             {
                 object? key = (await ctx.EvaluateExprAsync(memberIndex.Index)).ToObject();
                 callee = PerformIndexGet(memberIndex.Object, receiver, key).ToObject();
-                callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+                callee = BindMemberCallReceiver(callee, receiver);
             }
         }
         else
@@ -490,7 +490,7 @@ public partial class Interpreter
         {
             object? receiver = Evaluate(memberGet.Object);
             callee = EvaluateGetOnObject(memberGet, receiver).ToObject();
-            callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+            callee = BindMemberCallReceiver(callee, receiver);
         }
         else if (call.Callee is Expr.GetIndex memberIndex)
         {
@@ -503,7 +503,7 @@ public partial class Interpreter
             {
                 object? key = Evaluate(memberIndex.Index);
                 callee = PerformIndexGet(memberIndex.Object, receiver, key).ToObject();
-                callee = TryBindReceiverForMethodAccess(callee, receiver!) ?? callee;
+                callee = BindMemberCallReceiver(callee, receiver);
             }
         }
         else

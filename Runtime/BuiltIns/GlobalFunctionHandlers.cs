@@ -93,7 +93,7 @@ internal static class GlobalFunctionHandlers
         if (argRV.IsBigInt)
             return argRV;
         if (argRV.IsNumber)
-            return RuntimeValue.FromBigInt(new SharpTSBigInt(argRV.AsNumber()));
+            return RuntimeValue.FromBigInt(new SharpTSBigInt(Interpreter.ToNumber(argRV)));
         if (argRV.IsString)
             return RuntimeValue.FromBigInt(new SharpTSBigInt(argRV.AsString()));
 
@@ -146,7 +146,7 @@ internal static class GlobalFunctionHandlers
         {
             var radixRV = await evaluateArg(arguments[1]);
             if (radixRV.IsNumber)
-                radix = (int)radixRV.AsNumber();
+                radix = (int)Interpreter.ToNumber(radixRV);
         }
         return RuntimeValue.FromNumber(NumberBuiltIns.ParseInt(str, radix));
     }
@@ -172,7 +172,7 @@ internal static class GlobalFunctionHandlers
         if (arguments.Count < 1) return RuntimeValue.True;
 
         var argRV = await evaluateArg(arguments[0]);
-        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsNaN(argRV.AsNumber()));
+        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsNaN(Interpreter.ToNumber(argRV)));
         if (argRV.IsString) return RuntimeValue.FromBoolean(!double.TryParse(argRV.AsString(), out _));
         if (argRV.IsNull) return RuntimeValue.True;
         if (argRV.IsBoolean) return RuntimeValue.False;
@@ -187,7 +187,7 @@ internal static class GlobalFunctionHandlers
         if (arguments.Count < 1) return RuntimeValue.False;
 
         var argRV = await evaluateArg(arguments[0]);
-        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsFinite(argRV.AsNumber()));
+        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsFinite(Interpreter.ToNumber(argRV)));
         if (argRV.IsString && double.TryParse(argRV.AsString(), out double parsed))
             return RuntimeValue.FromBoolean(double.IsFinite(parsed));
         if (argRV.IsNull) return RuntimeValue.True; // null coerces to 0 which is finite
@@ -297,7 +297,7 @@ internal static class GlobalFunctionHandlers
         {
             var delayRV = await evaluateArg(arguments[1]);
             if (delayRV.IsNumber)
-                delayMs = delayRV.AsNumber();
+                delayMs = Interpreter.ToNumber(delayRV);
             else if (!delayRV.IsUndefined && !delayRV.IsNull)
                 throw new Exception($"Runtime Error: {BuiltInNames.SetTimeout}() delay must be a number.");
         }
@@ -342,7 +342,7 @@ internal static class GlobalFunctionHandlers
         {
             var delayRV = await evaluateArg(arguments[1]);
             if (delayRV.IsNumber)
-                delayMs = delayRV.AsNumber();
+                delayMs = Interpreter.ToNumber(delayRV);
             else if (!delayRV.IsUndefined && !delayRV.IsNull)
                 throw new Exception($"Runtime Error: {BuiltInNames.SetInterval}() delay must be a number.");
         }

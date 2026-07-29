@@ -499,6 +499,100 @@ public sealed class Issue1279ParityTests
     public void Full_interpreted_baseline_regressions_pass(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    // ---- Batch: interpreter property-resolution + built-in-function parity ----
+
+    /// <summary>
+    /// A built-in <c>Object.prototype</c> method stored on an object and then invoked as a
+    /// member call gets <c>this</c> from the call's Reference Record. The Sputnik suite leans
+    /// on this constantly via <c>arr.getClass = Object.prototype.toString</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A1.1_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A1.1_T1.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A1_T1.js")]
+    public void Unbound_prototype_methods_take_receiver_from_member_call(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Built-in prototype objects and constructors inherit <c>Object.prototype</c>, so
+    /// <c>Array.prototype.isPrototypeOf([])</c> and <c>Array.prototype.hasOwnProperty(…)</c>
+    /// resolve rather than reporting <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/S15.4.1_A1.1_T3.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.1_T3.js")]
+    [InlineData("built-ins/Array/S15.4.3_A1.1_T3.js")]
+    public void Built_in_prototypes_inherit_Object_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// ECMA-262 §17: a built-in function's <c>name</c>/<c>length</c> are own, configurable
+    /// data properties — so <c>propertyHelper.js</c> can delete them to prove configurability.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/concat/length.js")]
+    [InlineData("built-ins/Array/prototype/concat/name.js")]
+    [InlineData("built-ins/Array/prototype/map/length.js")]
+    [InlineData("built-ins/Array/prototype/map/name.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/length.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/name.js")]
+    public void Built_in_function_name_and_length_are_configurable_own_properties(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// The primitive prototype objects carry their own primitive data slot
+    /// (<c>Number.prototype</c> is +0, <c>Boolean.prototype</c> is false,
+    /// <c>String.prototype</c> is ""), so their prototype methods work on them directly.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toString/S15.7.4.2_A1_T01.js")]
+    [InlineData("built-ins/Number/prototype/S15.7.3.1_A2_T1.js")]
+    public void Primitive_prototypes_carry_their_own_primitive_value(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Math functions the compiled backend has always emitted but the interpreter reported
+    /// as <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Math/acosh/length.js")]
+    [InlineData("built-ins/Math/clz32/length.js")]
+    [InlineData("built-ins/Math/fround/length.js")]
+    [InlineData("built-ins/Math/imul/length.js")]
+    [InlineData("built-ins/Math/log1p/length.js")]
+    public void Missing_Math_functions_exist_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>Annex B §B.2.2.2–5 accessor helpers on <c>Object.prototype</c>.</summary>
+    [Theory]
+    [InlineData("built-ins/Object/prototype/__defineGetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__defineSetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/length.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/length.js")]
+    public void Annex_B_accessor_helpers_exist_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// Built-ins run ToNumber on their numeric arguments: strings coerce, Symbols raise a
+    /// guest TypeError. Previously the interpreter hard-failed with a host
+    /// "RuntimeValue has Kind …" message that reached guest <c>catch</c> as a bare string.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toPrecision/return-abrupt-tointeger-precision-symbol.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-symbol.js")]
+    [InlineData("built-ins/Array/prototype/at/index-non-numeric-argument-tointeger-invalid.js")]
+    public void Numeric_built_in_arguments_are_ToNumber_coerced(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>ECMA-262 §25.5.1: malformed JSON text is a guest <c>SyntaxError</c> object.</summary>
+    [Theory]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-1.js")]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-2.js")]
+    [InlineData("built-ins/JSON/parse/15.12.1.1-0-3.js")]
+    public void JSON_parse_throws_a_SyntaxError_object(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]

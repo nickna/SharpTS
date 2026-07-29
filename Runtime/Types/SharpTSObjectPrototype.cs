@@ -38,6 +38,13 @@ public sealed class SharpTSObjectPrototype
             "valueOf" => SharpTSObjectUnboundMethod.ValueOf,
             "isPrototypeOf" => SharpTSObjectUnboundMethod.IsPrototypeOf,
             "propertyIsEnumerable" => SharpTSObjectUnboundMethod.PropertyIsEnumerable,
+            // Annex B §B.2.2.2–5. The compiled backend has wired these since
+            // RuntimeEmitter.ObjectPrototypePopulate; the interpreter reported them
+            // `undefined`.
+            "__defineGetter__" => SharpTSObjectUnboundMethod.DefineGetter,
+            "__defineSetter__" => SharpTSObjectUnboundMethod.DefineSetter,
+            "__lookupGetter__" => SharpTSObjectUnboundMethod.LookupGetter,
+            "__lookupSetter__" => SharpTSObjectUnboundMethod.LookupSetter,
             _ => null,
         };
     }
@@ -50,37 +57,72 @@ public sealed class SharpTSObjectPrototype
 /// <c>Function.prototype.call/apply</c> with the target object supplied as
 /// <c>this</c>, or directly with the target as the first argument.
 /// </summary>
-public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
+public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunctionMetadata
 {
-    public static readonly SharpTSObjectUnboundMethod HasOwnProperty = new("hasOwnProperty", HasOwnPropertyImpl);
-    public static readonly SharpTSObjectUnboundMethod ToString_ = new("toString", ToStringImpl);
-    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToLocaleStringImpl);
-    public static readonly SharpTSObjectUnboundMethod ValueOf = new("valueOf", ValueOfImpl);
-    public static readonly SharpTSObjectUnboundMethod IsPrototypeOf = new("isPrototypeOf", IsPrototypeOfImpl);
-    public static readonly SharpTSObjectUnboundMethod PropertyIsEnumerable = new("propertyIsEnumerable", PropertyIsEnumerableImpl);
+    // The trailing int is the ECMA-262 §17 `length` — the spec'd named-argument count,
+    // which is what `Object.prototype.<m>.length` must report.
+    public static readonly SharpTSObjectUnboundMethod HasOwnProperty = new("hasOwnProperty", HasOwnPropertyImpl, 1);
+    public static readonly SharpTSObjectUnboundMethod ToString_ = new("toString", ToStringImpl, 0);
+    public static readonly SharpTSObjectUnboundMethod ToLocaleString = new("toLocaleString", ToLocaleStringImpl, 0);
+    public static readonly SharpTSObjectUnboundMethod ValueOf = new("valueOf", ValueOfImpl, 0);
+    public static readonly SharpTSObjectUnboundMethod IsPrototypeOf = new("isPrototypeOf", IsPrototypeOfImpl, 1);
+    public static readonly SharpTSObjectUnboundMethod PropertyIsEnumerable = new("propertyIsEnumerable", PropertyIsEnumerableImpl, 1);
+    public static readonly SharpTSObjectUnboundMethod DefineGetter =
+        new("__defineGetter__", (i, t, a) => DefineAccessorImpl(i, t, a, isGetter: true), 2);
+    public static readonly SharpTSObjectUnboundMethod DefineSetter =
+        new("__defineSetter__", (i, t, a) => DefineAccessorImpl(i, t, a, isGetter: false), 2);
+    public static readonly SharpTSObjectUnboundMethod LookupGetter =
+        new("__lookupGetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: true), 1);
+    public static readonly SharpTSObjectUnboundMethod LookupSetter =
+        new("__lookupSetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: false), 1);
 
     private readonly string _name;
-    private readonly Func<object?, List<object?>, object?> _impl;
+    private readonly Func<Interp?, object?, List<object?>, object?> _impl;
+    private readonly BuiltInFunctionMetadata _metadata;
+    private readonly int _jsLength;
     private readonly object? _boundThis;
     private readonly bool _hasBoundThis;
 
-    private SharpTSObjectUnboundMethod(string name, Func<object?, List<object?>, object?> impl)
+    private SharpTSObjectUnboundMethod(
+        string name, Func<Interp?, object?, List<object?>, object?> impl, int jsLength)
     {
         _name = name;
         _impl = impl;
+        _jsLength = jsLength;
+        _metadata = new BuiltInFunctionMetadata();
         _boundThis = null;
         _hasBoundThis = false;
     }
 
-    private SharpTSObjectUnboundMethod(string name, Func<object?, List<object?>, object?> impl, object? boundThis)
+    private SharpTSObjectUnboundMethod(
+        string name,
+        Func<Interp?, object?, List<object?>, object?> impl,
+        int jsLength,
+        BuiltInFunctionMetadata metadata,
+        object? boundThis)
     {
         _name = name;
         _impl = impl;
+        _jsLength = jsLength;
+        _metadata = metadata;
         _boundThis = boundThis;
         _hasBoundThis = true;
     }
 
-    public int Arity() => 0;
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+
+    public int Arity() => _jsLength;
+
+    /// <summary>
+    /// True once <see cref="BindTo"/> has supplied a receiver. Callers use this to avoid
+    /// re-binding an already-bound method (a member call on the result of
+    /// <c>Object.prototype.toString.bind(x)</c> must keep <c>x</c>).
+    /// </summary>
+    public bool HasBoundThis => _hasBoundThis;
 
     public object? Call(Interp interpreter, List<object?> arguments)
     {
@@ -98,14 +140,15 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             target = arguments[0];
             rest = arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : new List<object?>();
         }
-        return _impl(target, rest);
+        return _impl(interpreter, target, rest);
     }
 
-    public SharpTSObjectUnboundMethod BindTo(object? thisArg) => new(_name, _impl, thisArg);
+    public SharpTSObjectUnboundMethod BindTo(object? thisArg)
+        => new(_name, _impl, _jsLength, _metadata, thisArg);
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
 
-    private static object? HasOwnPropertyImpl(object? target, List<object?> args)
+    private static object? HasOwnPropertyImpl(Interp? interpreter, object? target, List<object?> args)
     {
         if (target == null || args.Count == 0) return false;
         // ECMA-262 §19.1.3.2 ToPropertyKey: symbol args route through the
@@ -141,17 +184,17 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             // per ECMA-262 §17. test262's verifyProperty calls
             // hasOwnProperty(fn, "name") before reading the descriptor — without
             // this branch the assertion fails before we ever see the descriptor.
-            BuiltInMethod method when key is "name" or "length"
-                => method.HasMetadataProperty(key),
-            StringPrototypeMethodWrapper method when key is "name" or "length"
-                => method.HasMetadataProperty(key),
-            ISharpTSCallable when target is not StringPrototypeMethodWrapper
-                && key is "name" or "length" => true,
+            // Wrappers that track deletion answer for themselves, so a preceding
+            // `delete fn.length` (how propertyHelper.js proves configurability)
+            // is observable here.
+            IBuiltInFunctionMetadata meta when key is "name" or "length"
+                => meta.HasMetadataProperty(key),
+            ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };
     }
 
-    private static object? ToStringImpl(object? target, List<object?> args)
+    private static object? ToStringImpl(Interp? interpreter, object? target, List<object?> args)
     {
         // ECMA-262 20.1.3.6: toString uses the @@toStringTag tag of the
         // receiver. Kept conservative — extending this to every built-in tag
@@ -167,6 +210,13 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSMath) return "[object Math]";
         if (target is SharpTSJSON) return "[object JSON]";
+        // The primitive prototype objects each carry the matching internal slot
+        // (§21.1.3 / §22.1.3 / §20.3.3), so their class tag is the wrapped type — not
+        // "[object Object]". Observable once a test deletes the type's own toString.
+        if (target is SharpTSNumberPrototype) return "[object Number]";
+        if (target is SharpTSStringPrototype) return "[object String]";
+        if (target is SharpTSBooleanPrototype) return "[object Boolean]";
+        if (target is SharpTSArrayPrototype) return "[object Array]";
         // Function classification — any value `typeof` reports as "function"
         // must tag "[object Function]" (ECMA-262 20.1.3.6 step 7, IsCallable):
         // lodash's baseGetTag/isFunction classifies built-in constructors held
@@ -179,17 +229,36 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
         return "[object Object]";
     }
 
-    private static object? ToLocaleStringImpl(object? target, List<object?> args)
+    private static object? ToLocaleStringImpl(Interp? interpreter, object? target, List<object?> args)
     {
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot convert undefined or null to object"));
-        return ToStringImpl(target, args);
+        return ToStringImpl(interpreter, target, args);
     }
 
-    private static object? ValueOfImpl(object? target, List<object?> args) => target;
+    private static object? ValueOfImpl(Interp? interpreter, object? target, List<object?> args) => target;
 
-    private static object? IsPrototypeOfImpl(object? target, List<object?> args)
+    private static object? DefineAccessorImpl(
+        Interp? interpreter, object? target, List<object?> args, bool isGetter)
+        => ObjectBuiltIns.DefineAccessorProperty(
+            interpreter ?? throw new InvalidOperationException(
+                "Object.prototype accessor definition requires an interpreter"),
+            target,
+            args.Count > 0 ? args[0] : SharpTSUndefined.Instance,
+            args.Count > 1 ? args[1] : SharpTSUndefined.Instance,
+            isGetter);
+
+    private static object? LookupAccessorImpl(
+        Interp? interpreter, object? target, List<object?> args, bool isGetter)
+        => ObjectBuiltIns.LookupAccessorProperty(
+            interpreter ?? throw new InvalidOperationException(
+                "Object.prototype accessor lookup requires an interpreter"),
+            target,
+            args.Count > 0 ? args[0] : SharpTSUndefined.Instance,
+            isGetter);
+
+    private static object? IsPrototypeOfImpl(Interp? interpreter, object? target, List<object?> args)
     {
         // ECMA-262 §20.1.3.4 Object.prototype.isPrototypeOf(V): walk V's
         // prototype chain and return true if `this` (target) appears in it.
@@ -201,18 +270,21 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             or System.Numerics.BigInteger or SharpTSSymbol)
             return false;
 
-        while (true)
+        // Bounded to keep a cyclic __proto__ chain from spinning; 64 matches the
+        // interpreter's other prototype walks.
+        for (int i = 0; i < 64; i++)
         {
             object? proto;
-            try { proto = ObjectBuiltIns.RuntimeGetPrototypeOf(v); }
+            try { proto = ObjectBuiltIns.PrototypeOf(interpreter, v); }
             catch { return false; }
             if (proto is null or SharpTSUndefined) return false;
             if (ReferenceEquals(proto, target)) return true;
             v = proto;
         }
+        return false;
     }
 
-    private static object? PropertyIsEnumerableImpl(object? target, List<object?> args)
+    private static object? PropertyIsEnumerableImpl(Interp? interpreter, object? target, List<object?> args)
     {
         if (target == null || args.Count == 0) return false;
         var key = args[0]?.ToString() ?? "";

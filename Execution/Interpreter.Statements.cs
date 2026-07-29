@@ -1471,6 +1471,11 @@ public partial class Interpreter
             }
         }
 
+        // An unprefixed message is left as a bare string on purpose: generator and
+        // async-generator rejection paths ferry a guest-thrown *value* across a host frame
+        // as an Exception whose Message is that value, so blanket-wrapping here would
+        // re-type `gen.throw("boom")` into `Error: boom`. Built-ins that mean to raise a
+        // JS error prefix the name (or throw ThrowException directly) instead.
         return hadRuntimePrefix
             ? ErrorBuiltIns.CreateError("Error", new List<object?> { body })
             : null;

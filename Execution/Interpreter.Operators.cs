@@ -494,10 +494,23 @@ public partial class Interpreter
     /// </summary>
     internal static double ToNumber(object? value) => CoerceToNumber(RuntimeValue.FromBoxed(value));
 
+    /// <summary>
+    /// JS ToNumber for an unboxed <see cref="RuntimeValue"/>. Built-ins reading a
+    /// guest-supplied numeric argument must go through this rather than
+    /// <see cref="RuntimeValue.AsNumber"/>, which is a kind *assertion*: it hard-fails on
+    /// the string / boolean / wrapper arguments ECMA-262 requires to be coerced
+    /// (<c>Math.abs("-5")</c> is 5, not a crash).
+    /// </summary>
+    internal static double ToNumber(RuntimeValue value) => CoerceToNumber(value);
+
     private static double CoerceToNumber(RuntimeValue rv)
     {
         if (rv.IsNumber) return rv.AsNumber();
         if (rv.IsBoolean) return rv.AsBoolean() ? 1.0 : 0.0;
+        // ECMA-262 §7.1.4 ToNumber: a Symbol argument is a TypeError, not NaN.
+        if (rv.Kind == ValueKind.Symbol)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert a Symbol value to a number"));
         if (rv.Kind == ValueKind.Null) return 0.0;
         if (rv.Kind == ValueKind.Undefined) return double.NaN;
         if (rv.IsString)
@@ -863,8 +876,8 @@ public partial class Interpreter
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(name),
-            BuiltInMethod method => method.DeleteMetadataProperty(name),
-            StringPrototypeMethodWrapper method => method.DeleteMetadataProperty(name),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.DeleteProperty(name),
+            IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.DeleteProperty(name),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
             Dictionary<string, object?> dict => dict.Remove(name),
@@ -913,8 +926,8 @@ public partial class Interpreter
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(keyStr),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(keyStr),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(keyStr),
-            BuiltInMethod method => method.DeleteMetadataProperty(keyStr),
-            StringPrototypeMethodWrapper method => method.DeleteMetadataProperty(keyStr),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.DeleteProperty(keyStr),
+            IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
             SharpTSFunction function => function.DeleteProperty(keyStr),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),

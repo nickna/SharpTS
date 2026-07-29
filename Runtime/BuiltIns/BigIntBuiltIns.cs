@@ -1,3 +1,4 @@
+using SharpTS.Execution;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -44,7 +45,7 @@ public static class BigIntBuiltIns
                 int radix = 10;
                 if (args.Length > 0 && args[0].Kind == ValueKind.Number)
                 {
-                    radix = (int)args[0].AsNumber();
+                    radix = (int)Interpreter.ToNumber(args[0]);
                     if (radix < 2 || radix > 36)
                         throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
                 }

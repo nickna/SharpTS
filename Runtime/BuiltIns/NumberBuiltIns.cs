@@ -38,19 +38,19 @@ public static class NumberBuiltIns
             .MethodV2("parseInt", 1, 2, ParseIntV2)
             .MethodV2("parseFloat", 1, ParseFloatV2)
             .MethodV2("isNaN", 1, (_, _, args) =>
-                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsNaN(args[0].AsNumber())))
+                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsNaN(Interpreter.ToNumber(args[0]))))
             .MethodV2("isFinite", 1, (_, _, args) =>
-                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsFinite(args[0].AsNumber())))
+                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsFinite(Interpreter.ToNumber(args[0]))))
             .MethodV2("isInteger", 1, (_, _, args) =>
             {
                 if (args[0].Kind != ValueKind.Number) return RuntimeValue.False;
-                double d = args[0].AsNumber();
+                double d = Interpreter.ToNumber(args[0]);
                 return RuntimeValue.FromBoolean(double.IsFinite(d) && Math.Truncate(d) == d);
             })
             .MethodV2("isSafeInteger", 1, (_, _, args) =>
             {
                 if (args[0].Kind != ValueKind.Number) return RuntimeValue.False;
-                double d = args[0].AsNumber();
+                double d = Interpreter.ToNumber(args[0]);
                 return RuntimeValue.FromBoolean(double.IsFinite(d) && Math.Truncate(d) == d && Math.Abs(d) <= MAX_SAFE_INTEGER);
             })
             .Build();
@@ -58,11 +58,14 @@ public static class NumberBuiltIns
     // Instance member lookup for number values
     private static readonly BuiltInTypeMemberLookup<double> _instanceLookup =
         BuiltInTypeBuilder<double>.ForInstanceType()
-            .MethodV2("toFixed", 0, 1, ToFixedV2)
-            .MethodV2("toPrecision", 0, 1, ToPrecisionV2)
-            .MethodV2("toExponential", 0, 1, ToExponentialV2)
-            .MethodV2("toString", 0, 1, ToStringMethodV2)
-            .MethodV2("toLocaleString", 0, 1, ToStringMethodV2)
+            // min-arity 0 (the argument is optional) but ECMA-262 §21.1.3 gives each of
+            // these a spec `length` of 1, so pass it explicitly rather than letting it
+            // default to the min arity.
+            .MethodV2("toFixed", 0, 1, 1, ToFixedV2)
+            .MethodV2("toPrecision", 0, 1, 1, ToPrecisionV2)
+            .MethodV2("toExponential", 0, 1, 1, ToExponentialV2)
+            .MethodV2("toString", 0, 1, 1, ToStringMethodV2)
+            .MethodV2("toLocaleString", 0, 1, 0, ToStringMethodV2)
             // ECMA-262 §21.1.3.7: Number.prototype.valueOf returns thisNumberValue.
             // Needed so `(new Number(5)).valueOf()` and ToPrimitive(number-wrapper)
             // unwrap to the primitive instead of resolving Object.prototype.valueOf.
@@ -101,7 +104,7 @@ public static class NumberBuiltIns
             ? args[0].AsString()
             : args[0].ToObject()?.ToString() ?? "";
         var radix = args.Length > 1 && args[1].Kind == ValueKind.Number
-            ? (int)args[1].AsNumber()
+            ? (int)Interpreter.ToNumber(args[1])
             : 10;
         return RuntimeValue.FromNumber(ParseInt(str, radix));
     }
@@ -117,7 +120,7 @@ public static class NumberBuiltIns
     // Instance method implementations (V2 — no boxing)
     private static RuntimeValue ToFixedV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
     {
-        var digits = args.Length > 0 ? (int)args[0].AsNumber() : 0;
+        var digits = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
         if (digits < 0 || digits > 100)
             throw new Exception("Runtime Error: toFixed() digits argument must be between 0 and 100");
         return RuntimeValue.FromString(value.ToString($"F{digits}", CultureInfo.InvariantCulture));
@@ -127,7 +130,7 @@ public static class NumberBuiltIns
     {
         if (args.Length == 0)
             return RuntimeValue.FromString(value.ToString(CultureInfo.InvariantCulture));
-        var precision = (int)args[0].AsNumber();
+        var precision = (int)Interpreter.ToNumber(args[0]);
         if (precision < 1 || precision > 100)
             throw new Exception("Runtime Error: toPrecision() argument must be between 1 and 100");
         return RuntimeValue.FromString(ToPrecisionImpl(value, precision));
@@ -139,7 +142,7 @@ public static class NumberBuiltIns
         if (double.IsPositiveInfinity(value)) return RuntimeValue.FromString("Infinity");
         if (double.IsNegativeInfinity(value)) return RuntimeValue.FromString("-Infinity");
 
-        var fractionDigits = args.Length > 0 ? (int)args[0].AsNumber() : -1;
+        var fractionDigits = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : -1;
         if (fractionDigits != -1 && (fractionDigits < 0 || fractionDigits > 100))
             throw new Exception("Runtime Error: toExponential() argument must be between 0 and 100");
 
@@ -155,7 +158,7 @@ public static class NumberBuiltIns
     {
         if (args.Length == 0)
             return RuntimeValue.FromString(Compilation.RuntimeTypes.FormatNumber(value));
-        var radix = (int)args[0].AsNumber();
+        var radix = (int)Interpreter.ToNumber(args[0]);
         if (radix < 2 || radix > 36)
             throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
         return RuntimeValue.FromString(ToStringWithRadix(value, radix));

@@ -135,7 +135,7 @@ public sealed class SharpTSStringPrototype
 /// (ToString — the abstract operation, not the method) before binding and
 /// dispatching.
 /// </summary>
-internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
+internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly BuiltInMethod _inner;
@@ -168,13 +168,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
     public StringPrototypeMethodWrapper Bind(object? receiver)
         => new(_name, _inner, _deletedMetadataProperties, receiver);
 
-    internal string FunctionName => _name;
+    public string FunctionName => _name;
 
-    internal bool HasMetadataProperty(string name)
+    public bool HasMetadataProperty(string name)
         => name is "name" or "length"
             && !_deletedMetadataProperties.Contains(name);
 
-    internal bool DeleteMetadataProperty(string name)
+    public bool DeleteMetadataProperty(string name)
     {
         if (name is not ("name" or "length"))
             return true;
@@ -190,7 +190,12 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
                 $"String.prototype.{_name} called on null or undefined"));
         }
 
-        var coerced = interpreter.ToStringForBuiltInArgument(_receiver);
+        // ECMA-262 §22.1.3: String.prototype is itself a String object whose
+        // [[StringData]] is "", so `String.prototype.toString()` is "" rather than
+        // the object's "[object String]" stringification.
+        var coerced = _receiver is SharpTSStringPrototype
+            ? ""
+            : interpreter.ToStringForBuiltInArgument(_receiver);
         return _inner.Bind(coerced).Call(interpreter, arguments);
     }
 
@@ -221,6 +226,11 @@ public class SharpTSNumberNamespace : ISharpTSCallable
         // on a bigint throws a TypeError. The radix-free decimal magnitude maps
         // to the nearest double.
         if (arg is SharpTSBigInt bi) return (double)bi.Value;
+        // §21.1.1.1 step 1 routes through ToNumber, and ToNumber(Symbol) is a
+        // TypeError — Number(Symbol()) must throw rather than yield NaN.
+        if (arg is SharpTSSymbol)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert a Symbol value to a number"));
         if (arg is string s)
         {
             s = s.Trim();
@@ -278,20 +288,49 @@ public sealed class SharpTSNumberPrototype
     internal SharpTSNumberPrototype() { }
 
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    private bool IsBuiltIn(string name)
+        => name == "constructor" || NumberBuiltIns.GetPrototypeMethod(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    /// <summary>
+    /// Number.prototype is an ordinary object, so its built-in methods are configurable
+    /// and `delete Number.prototype.toString` must take — after which the name resolves
+    /// up the chain to Object.prototype.
+    /// </summary>
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
         if (name == "constructor") return SharpTSNumberNamespace.Instance;
         var method = NumberBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
@@ -307,10 +346,11 @@ public sealed class SharpTSNumberPrototype
 /// require <c>thisNumberValue</c>). Accepts boxed Number wrappers produced by
 /// <c>new Number(x)</c> by extracting their <c>__primitiveValue</c>.
 /// </summary>
-internal sealed class NumberPrototypeMethodWrapper : ISharpTSCallable
+internal sealed class NumberPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly BuiltInMethod _inner;
+    private readonly BuiltInFunctionMetadata _metadata;
     private readonly object? _receiver;
     private readonly bool _hasReceiver;
 
@@ -318,20 +358,31 @@ internal sealed class NumberPrototypeMethodWrapper : ISharpTSCallable
     {
         _name = name;
         _inner = inner;
+        _metadata = new BuiltInFunctionMetadata();
     }
 
-    private NumberPrototypeMethodWrapper(string name, BuiltInMethod inner, object? receiver)
+    private NumberPrototypeMethodWrapper(
+        string name, BuiltInMethod inner, BuiltInFunctionMetadata metadata, object? receiver)
     {
         _name = name;
         _inner = inner;
+        _metadata = metadata;
         _receiver = receiver;
         _hasReceiver = true;
     }
 
     public int Arity() => _inner.SpecLength;
 
+    // Bound copies share the metadata store: `delete Number.prototype.toFixed.length`
+    // must stay observable through any later binding of the same method object.
     public NumberPrototypeMethodWrapper Bind(object? receiver)
-        => new(_name, _inner, receiver);
+        => new(_name, _inner, _metadata, receiver);
+
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -340,6 +391,11 @@ internal sealed class NumberPrototypeMethodWrapper : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 $"Number.prototype.{_name} requires that 'this' be a Number"));
         }
+        // ECMA-262 §21.1.3: Number.prototype is itself a Number object whose
+        // [[NumberData]] is +0, so `Number.prototype.toString()` is "0" rather
+        // than a TypeError.
+        if (_receiver is SharpTSNumberPrototype)
+            return _inner.Bind(0.0).Call(interpreter, arguments);
         // Unwrap boxed Number wrapper produced by `new Number(x)`.
         var numValue = _receiver is SharpTSObject obj
             && obj.GetProperty("__primitiveType") is string pt && pt == "Number"
@@ -440,13 +496,14 @@ public sealed class SharpTSBooleanPrototype
 /// boolean receivers per ECMA-262 (<c>thisBooleanValue</c>); returns the JS
 /// string form ("true"/"false") or the primitive otherwise.
 /// </summary>
-internal sealed class BooleanPrototypeMethodWrapper : ISharpTSCallable
+internal sealed class BooleanPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     public static readonly BooleanPrototypeMethodWrapper ToStringInstance = new("toString", isToString: true);
     public static readonly BooleanPrototypeMethodWrapper ValueOfInstance = new("valueOf", isToString: false);
 
     private readonly string _name;
     private readonly bool _isToString;
+    private readonly BuiltInFunctionMetadata _metadata;
     private readonly object? _receiver;
     private readonly bool _hasReceiver;
 
@@ -454,12 +511,15 @@ internal sealed class BooleanPrototypeMethodWrapper : ISharpTSCallable
     {
         _name = name;
         _isToString = isToString;
+        _metadata = new BuiltInFunctionMetadata();
     }
 
-    private BooleanPrototypeMethodWrapper(string name, bool isToString, object? receiver)
+    private BooleanPrototypeMethodWrapper(
+        string name, bool isToString, BuiltInFunctionMetadata metadata, object? receiver)
     {
         _name = name;
         _isToString = isToString;
+        _metadata = metadata;
         _receiver = receiver;
         _hasReceiver = true;
     }
@@ -467,7 +527,13 @@ internal sealed class BooleanPrototypeMethodWrapper : ISharpTSCallable
     public int Arity() => 0;
 
     public BooleanPrototypeMethodWrapper Bind(object? receiver)
-        => new(_name, _isToString, receiver);
+        => new(_name, _isToString, _metadata, receiver);
+
+    public string FunctionName => _name;
+
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -478,7 +544,11 @@ internal sealed class BooleanPrototypeMethodWrapper : ISharpTSCallable
         }
         // Unwrap boxed Boolean wrapper produced by `new Boolean(x)`.
         bool boolValue;
-        if (_receiver is SharpTSObject obj
+        // ECMA-262 §20.3.3: Boolean.prototype is itself a Boolean object whose
+        // [[BooleanData]] is false, so `Boolean.prototype.toString()` is "false".
+        if (_receiver is SharpTSBooleanPrototype)
+            boolValue = false;
+        else if (_receiver is SharpTSObject obj
             && obj.GetProperty("__primitiveType") is string pt && pt == "Boolean"
             && obj.GetProperty("__primitiveValue") is bool wv)
             boolValue = wv;

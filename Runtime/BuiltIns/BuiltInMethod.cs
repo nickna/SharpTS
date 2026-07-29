@@ -16,7 +16,7 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 /// <seealso cref="ISharpTSCallable"/>
 /// <seealso cref="MathBuiltIns"/>
-public class BuiltInMethod : ISharpTSCallable
+public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
 {
     private readonly string _name;
     private readonly int _minArity;
@@ -228,6 +228,9 @@ public class BuiltInMethod : ISharpTSCallable
         IsConstructor = false;
         return this;
     }
+
+    /// <summary>ECMA-262 §17 `name` value — the registered method name.</summary>
+    public string FunctionName => _name;
 
     public bool HasMetadataProperty(string name)
         => name is "name" or "length"

@@ -37,9 +37,13 @@ public static class JSONBuiltIns
         {
             parsed = RuntimeJson.Parse(text);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            throw new Exception("Unexpected token in JSON");
+            // ECMA-262 §25.5.1: a malformed JSON text is a SyntaxError — a real guest
+            // Error object, so `catch (e) { e instanceof SyntaxError }` holds. A host
+            // Exception here would surface to guest code as a bare string.
+            throw new ThrowException(new SharpTSSyntaxError(
+                $"Unexpected token in JSON: {ex.Message}"));
         }
 
         if (reviver != null)
