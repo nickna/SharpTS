@@ -8,10 +8,50 @@ namespace SharpTS.Runtime.Types;
 /// Singleton representing the String namespace/constructor.
 /// Callable as String(value) for type conversion, and provides static methods.
 /// </summary>
-public class SharpTSStringNamespace : ISharpTSCallable
+public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// Process-wide template instance. Retained as the BuiltInRegistry singleton (existence
+    /// checks like <c>"String" in globalThis</c>), but guest reads resolve to a per-realm
+    /// instance (see <c>Interpreter.GetStringNamespace</c>) so expando writes stay
+    /// realm-local rather than leaking between programs sharing a process. Mirrors Math /
+    /// JSON / Object (#101).
+    /// </summary>
     public static readonly SharpTSStringNamespace Instance = new();
-    private SharpTSStringNamespace() { }
+    // internal (not private) so each Interpreter can construct its own realm instance;
+    // the built-in members are stateless, only the _extras overlay differs.
+    internal SharpTSStringNamespace() { }
+
+    // ECMA-262 makes a constructor object ordinary and extensible, so `String.foo = 1`
+    // must take. Descriptor-aware storage keeps defineProperty attributes intact.
+    private readonly SharpTSObject _extras = new([]);
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+
+    /// <summary>
+    /// Assigns an expando. A write targeting one of the built-in statics is dropped: those
+    /// are <c>{ writable: false }</c> data properties per ECMA-262 §21.1.2 / §22.1.2, and
+    /// sloppy-mode assignment to a non-writable property is a silent no-op — not a shadowing
+    /// own property. (<c>Number.MAX_VALUE = 1</c> must leave MAX_VALUE alone.)
+    /// </summary>
+    public void SetExtra(string name, object? value)
+    {
+        if (IsReadOnlyBuiltIn(name)) return;
+        _extras.SetProperty(name, value);
+    }
+
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public bool DeleteProperty(string name) => !IsReadOnlyBuiltIn(name) && _extras.DeleteProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    private static bool IsReadOnlyBuiltIn(string name)
+        => name == "prototype" || StringBuiltIns.GetStaticMember(name) != null;
 
     public int Arity() => 0;
 
@@ -50,8 +90,13 @@ public class SharpTSStringNamespace : ISharpTSCallable
     /// </summary>
     public object? GetMember(string name)
     {
+        if (HasExtra(name)) return TryGetExtra(name);
         if (name == "prototype") return SharpTSStringPrototype.Instance;
-        return StringBuiltIns.GetStaticMember(name);
+        // Materialize constant-wrapping members (MAX_VALUE, EPSILON, …) here rather than
+        // leaving the wrapper for each read path to unwrap — a per-realm intrinsic bypasses
+        // the namespace static fast-path in EvaluateGet that used to do it.
+        var member = StringBuiltIns.GetStaticMember(name);
+        return member is BuiltInMethod { IsConstant: true } constant ? constant.ConstantValue : member;
     }
 
     public override string ToString() => "function String() { [native code] }";
@@ -65,8 +110,16 @@ public class SharpTSStringNamespace : ISharpTSCallable
 /// receiver per ECMA-262 before dispatch. Also accepts arbitrary user-assigned
 /// properties (ECMA-262: String.prototype is an ordinary object).
 /// </summary>
-public sealed class SharpTSStringPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
+    /// Interpreter to its per-realm SharpTSStringNamespace instance so
+    /// <c>String.prototype.constructor === String</c> holds — the bare global resolves
+    /// per-realm, so pointing at the process-wide singleton here would break that identity.
+    /// </summary>
+    internal SharpTSStringNamespace? RealmConstructor { get; set; }
+
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
     /// of <c>String.prototype</c> resolve to a per-realm instance (see
@@ -120,7 +173,7 @@ public sealed class SharpTSStringPrototype : ISharpTSBuiltInPrototype
     {
         if (HasExtra(name)) return TryGetExtra(name);
         if (_deletedBuiltIns.Contains(name)) return null;
-        if (name == "constructor") return SharpTSStringNamespace.Instance;
+        if (name == "constructor") return RealmConstructor ?? (object)SharpTSStringNamespace.Instance;
         var method = StringBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
         return _methodCache.GetOrAdd(name, _ => new StringPrototypeMethodWrapper(name, method));
@@ -206,10 +259,50 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 /// Singleton representing the Number namespace/constructor.
 /// Callable as Number(value) for type conversion, and provides static methods.
 /// </summary>
-public class SharpTSNumberNamespace : ISharpTSCallable
+public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// Process-wide template instance. Retained as the BuiltInRegistry singleton (existence
+    /// checks like <c>"Number" in globalThis</c>), but guest reads resolve to a per-realm
+    /// instance (see <c>Interpreter.GetNumberNamespace</c>) so expando writes stay
+    /// realm-local rather than leaking between programs sharing a process. Mirrors Math /
+    /// JSON / Object (#101).
+    /// </summary>
     public static readonly SharpTSNumberNamespace Instance = new();
-    private SharpTSNumberNamespace() { }
+    // internal (not private) so each Interpreter can construct its own realm instance;
+    // the built-in members are stateless, only the _extras overlay differs.
+    internal SharpTSNumberNamespace() { }
+
+    // ECMA-262 makes a constructor object ordinary and extensible, so `Number.foo = 1`
+    // must take. Descriptor-aware storage keeps defineProperty attributes intact.
+    private readonly SharpTSObject _extras = new([]);
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+
+    /// <summary>
+    /// Assigns an expando. A write targeting one of the built-in statics is dropped: those
+    /// are <c>{ writable: false }</c> data properties per ECMA-262 §21.1.2 / §22.1.2, and
+    /// sloppy-mode assignment to a non-writable property is a silent no-op — not a shadowing
+    /// own property. (<c>Number.MAX_VALUE = 1</c> must leave MAX_VALUE alone.)
+    /// </summary>
+    public void SetExtra(string name, object? value)
+    {
+        if (IsReadOnlyBuiltIn(name)) return;
+        _extras.SetProperty(name, value);
+    }
+
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public bool DeleteProperty(string name) => !IsReadOnlyBuiltIn(name) && _extras.DeleteProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    private static bool IsReadOnlyBuiltIn(string name)
+        => name == "prototype" || NumberBuiltIns.GetStaticMember(name) != null;
 
     public int Arity() => 0;
 
@@ -258,8 +351,13 @@ public class SharpTSNumberNamespace : ISharpTSCallable
     /// </summary>
     public object? GetMember(string name)
     {
+        if (HasExtra(name)) return TryGetExtra(name);
         if (name == "prototype") return SharpTSNumberPrototype.Instance;
-        return NumberBuiltIns.GetStaticMember(name);
+        // Materialize constant-wrapping members (MAX_VALUE, EPSILON, …) here rather than
+        // leaving the wrapper for each read path to unwrap — a per-realm intrinsic bypasses
+        // the namespace static fast-path in EvaluateGet that used to do it.
+        var member = NumberBuiltIns.GetStaticMember(name);
+        return member is BuiltInMethod { IsConstant: true } constant ? constant.ConstantValue : member;
     }
 
     public override string ToString() => "function Number() { [native code] }";
@@ -273,8 +371,16 @@ public class SharpTSNumberNamespace : ISharpTSCallable
 /// an ordinary object — Test262 sets indexed elements and <c>length</c> on it
 /// before invoking Array.prototype.* with a number primitive as the receiver).
 /// </summary>
-public sealed class SharpTSNumberPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
+    /// Interpreter to its per-realm SharpTSNumberNamespace instance so
+    /// <c>Number.prototype.constructor === Number</c> holds — the bare global resolves
+    /// per-realm, so pointing at the process-wide singleton here would break that identity.
+    /// </summary>
+    internal SharpTSNumberNamespace? RealmConstructor { get; set; }
+
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
     /// of <c>Number.prototype</c> resolve to a per-realm instance (see
@@ -333,7 +439,7 @@ public sealed class SharpTSNumberPrototype : ISharpTSBuiltInPrototype
     {
         if (HasExtra(name)) return TryGetExtra(name);
         if (_deletedBuiltIns.Contains(name)) return null;
-        if (name == "constructor") return SharpTSNumberNamespace.Instance;
+        if (name == "constructor") return RealmConstructor ?? (object)SharpTSNumberNamespace.Instance;
         var method = NumberBuiltIns.GetPrototypeMethod(name);
         if (method is null) return null;
         return _methodCache.GetOrAdd(name, _ => new NumberPrototypeMethodWrapper(name, method));
@@ -420,10 +526,34 @@ internal sealed class NumberPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 /// Singleton representing the Boolean namespace/constructor.
 /// Callable as Boolean(value) for type conversion.
 /// </summary>
-public class SharpTSBooleanNamespace : ISharpTSCallable
+public class SharpTSBooleanNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// Process-wide template instance; guest reads resolve to a per-realm instance (see
+    /// <c>Interpreter.GetBooleanNamespace</c>) so expando writes stay realm-local. Mirrors
+    /// Math / JSON / Object (#101).
+    /// </summary>
     public static readonly SharpTSBooleanNamespace Instance = new();
-    private SharpTSBooleanNamespace() { }
+    internal SharpTSBooleanNamespace() { }
+
+    // ECMA-262 §20.3.2 makes Boolean an ordinary, extensible constructor object.
+    private readonly SharpTSObject _extras = new([]);
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value)
+    {
+        if (name == "prototype") return;
+        _extras.SetProperty(name, value);
+    }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public bool DeleteProperty(string name) => name != "prototype" && _extras.DeleteProperty(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     public int Arity() => 0;
 
@@ -440,6 +570,7 @@ public class SharpTSBooleanNamespace : ISharpTSCallable
     /// </summary>
     public object? GetMember(string name)
     {
+        if (HasExtra(name)) return TryGetExtra(name);
         if (name == "prototype") return SharpTSBooleanPrototype.Instance;
         return null;
     }
@@ -454,8 +585,16 @@ public class SharpTSBooleanNamespace : ISharpTSCallable
 /// indexed elements and <c>length</c> before calling Array.prototype.* with a
 /// boolean primitive as the receiver.
 /// </summary>
-public sealed class SharpTSBooleanPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn
 {
+    /// <summary>
+    /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
+    /// Interpreter to its per-realm SharpTSBooleanNamespace instance so
+    /// <c>Boolean.prototype.constructor === Boolean</c> holds — the bare global resolves
+    /// per-realm, so pointing at the process-wide singleton here would break that identity.
+    /// </summary>
+    internal SharpTSBooleanNamespace? RealmConstructor { get; set; }
+
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
     /// of <c>Boolean.prototype</c> resolve to a per-realm instance (see
@@ -484,7 +623,7 @@ public sealed class SharpTSBooleanPrototype : ISharpTSBuiltInPrototype
         if (HasExtra(name)) return TryGetExtra(name);
         return name switch
         {
-            "constructor" => SharpTSBooleanNamespace.Instance,
+            "constructor" => RealmConstructor ?? (object)SharpTSBooleanNamespace.Instance,
             "toString" => BooleanPrototypeMethodWrapper.ToStringInstance,
             "valueOf" => BooleanPrototypeMethodWrapper.ValueOfInstance,
             _ => null,

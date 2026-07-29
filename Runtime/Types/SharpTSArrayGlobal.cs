@@ -66,7 +66,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// rebinds the receiver before invoking, so both access paths share one
 /// implementation.
 /// </summary>
-public sealed class SharpTSArrayPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
 {
     // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
     // descriptor-aware storage so defineProperty can install accessors and

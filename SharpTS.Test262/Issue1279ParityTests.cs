@@ -751,6 +751,45 @@ public sealed class Issue1279ParityTests
     public void Class_prototypes_accept_descriptor_definitions(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    // ---- Batch: per-realm constructor objects ----
+
+    /// <summary>
+    /// ECMA-262 makes the <c>Number</c>/<c>String</c>/<c>Boolean</c> constructor objects
+    /// ordinary and extensible, and their statics non-writable. Assigning to a static is a
+    /// silent no-op in sloppy mode — it threw "Index assignment not supported" before.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/MAX_VALUE/S15.7.3.2_A2.js")]
+    [InlineData("built-ins/Number/MIN_VALUE/S15.7.3.3_A2.js")]
+    [InlineData("built-ins/Number/NEGATIVE_INFINITY/S15.7.3.5_A2.js")]
+    [InlineData("built-ins/Number/POSITIVE_INFINITY/S15.7.3.6_A2.js")]
+    public void Constructor_object_statics_are_read_only(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A constructor object read twice yields the same value, and matches the <c>value</c> of
+    /// its own descriptor — routing a static through instance-member dispatch would hand out
+    /// a freshly bound copy per read.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-61.js")]
+    public void Constructor_object_statics_keep_their_identity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// ECMA-262 §17 makes a built-in function's <c>length</c>/<c>name</c> configurable, and
+    /// propertyHelper.js proves that by deleting them. That deletion must not outlive the
+    /// program: these methods used to be handed out as process-wide singletons, so one
+    /// program's delete was visible to the next one sharing the process — making results
+    /// order-dependent.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/prototype/toString/length.js")]
+    [InlineData("built-ins/Object/prototype/toString/name.js")]
+    [InlineData("built-ins/Object/prototype/hasOwnProperty/length.js")]
+    public void Built_in_metadata_deletion_does_not_outlive_the_program(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]

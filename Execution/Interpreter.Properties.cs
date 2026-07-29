@@ -691,8 +691,39 @@ public partial class Interpreter
                     : SharpTSUndefined.Instance);
         }
 
+        // String/Number/Boolean are the same shape — per-realm constructor objects whose
+        // statics carry no receiver semantics. Going through instance-member dispatch would
+        // hand out a freshly bound copy per read, so `String.fromCharCode` would not equal
+        // the `value` of its own descriptor.
+        if (obj is SharpTSStringNamespace or SharpTSNumberNamespace or SharpTSBooleanNamespace)
+        {
+            var nsMember = obj switch
+            {
+                SharpTSStringNamespace ns => ns.GetMember(get.Name.Lexeme),
+                SharpTSNumberNamespace ns => ns.GetMember(get.Name.Lexeme),
+                _ => ((SharpTSBooleanNamespace)obj).GetMember(get.Name.Lexeme),
+            };
+            if (nsMember != null) return RuntimeValue.FromBoxed(nsMember);
+        }
+
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = get.Name.Lexeme;
+
+        // A primitive's inherited members come from THIS realm's prototype, so `constructor`
+        // must be this realm's constructor object — `("x").constructor === String`. Resolving
+        // it off the process-wide singleton breaks that identity now that the bare globals are
+        // per-realm. Placed here, ahead of category routing, so every primitive shape is
+        // covered regardless of which fallback its category lands in.
+        if (memberName == "constructor" && obj is string or double or int or bool)
+        {
+            object? primitiveCtor = obj switch
+            {
+                string => GetStringPrototype().GetMember(memberName),
+                bool => GetBooleanPrototype().GetMember(memberName),
+                _ => GetNumberPrototype().GetMember(memberName),
+            };
+            if (primitiveCtor != null) return RuntimeValue.FromBoxed(primitiveCtor);
+        }
 
         // Category-based dispatch
         return category switch
@@ -911,7 +942,14 @@ public partial class Interpreter
 
         var member = BuiltInRegistry.Instance.GetMemberByCategory(category, obj, memberName);
         if (member != null)
+        {
+            // Constant-wrapping members (Number.MAX_SAFE_INTEGER, …) must yield their value,
+            // not the wrapper. The namespace static fast-path in EvaluateGet does this, but
+            // a per-realm intrinsic deliberately bypasses that path.
+            if (member is BuiltInMethod { IsConstant: true } constantMember)
+                return RuntimeValue.FromBoxed(constantMember.CallBoxed(this, []));
             return RuntimeValue.FromBoxed(BindBuiltInMember(member, obj));
+        }
 
         // RegExp instances inherit user-set properties from the realm
         // RegExp.prototype (built-in prototype mutability, #801/#474-adjacent).
@@ -1778,7 +1816,7 @@ public partial class Interpreter
         // (Object/Array/String/Number/Boolean/Function.prototype). Test262 assigns
         // indexed elements and `length` onto them before calling Array.prototype.* with
         // a primitive receiver, and patches them to exercise inherited-property paths.
-        if (obj is ISharpTSBuiltInPrototype builtInProto)
+        if (obj is ISharpTSMutableBuiltIn builtInProto)
         {
             builtInProto.SetExtra(set.Name.Lexeme, value);
             return value;

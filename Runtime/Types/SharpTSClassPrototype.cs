@@ -16,7 +16,7 @@ namespace SharpTS.Runtime.Types;
 /// class's own method table stays read-only: an assignment shadows a method for reads without
 /// mutating the class.
 /// </remarks>
-public sealed class SharpTSClassPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSClassPrototype : ISharpTSMutableBuiltIn
 {
     private readonly SharpTSClass _klass;
     private readonly SharpTSObject _extras = new([]);

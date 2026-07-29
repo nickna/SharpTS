@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// (lodash's <c>hasOwnProperty.call(obj, key)</c>, Intl <c>toString</c>
 /// detection, etc.) can resolve these names.
 /// </summary>
-public sealed class SharpTSObjectPrototype : ISharpTSBuiltInPrototype
+public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSObjectPrototype Instance = new();
     internal SharpTSObjectPrototype() { }
@@ -43,7 +43,16 @@ public sealed class SharpTSObjectPrototype : ISharpTSBuiltInPrototype
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
 
-    private static bool IsBuiltIn(string name) => BuiltInMember(name) != null;
+    // Per-realm copies of the unbound methods. The templates below are process-wide statics,
+    // but each carries mutable ECMA-262 §17 metadata (a `delete fn.length` is observable), so
+    // handing the template itself to guest code leaks that deletion into every later program
+    // sharing the process — which showed up as order-dependent Test262 results. This
+    // prototype object is already per-realm, so caching a copy here scopes the metadata to
+    // the realm.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SharpTSObjectUnboundMethod>
+        _methodCache = new(StringComparer.Ordinal);
+
+    private static bool IsBuiltIn(string name) => BuiltInMemberTemplate(name) != null;
 
     public bool HasOwnProperty(string name)
         => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
@@ -63,10 +72,13 @@ public sealed class SharpTSObjectPrototype : ISharpTSBuiltInPrototype
     {
         if (HasExtra(name)) return TryGetExtra(name);
         if (_deletedBuiltIns.Contains(name)) return null;
-        return BuiltInMember(name);
+        var template = BuiltInMemberTemplate(name);
+        return template is SharpTSObjectUnboundMethod unbound
+            ? _methodCache.GetOrAdd(name, _ => unbound.CloneUnbound())
+            : template;
     }
 
-    private static object? BuiltInMember(string name)
+    private static object? BuiltInMemberTemplate(string name)
     {
         return name switch
         {
@@ -184,6 +196,13 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
 
     public SharpTSObjectUnboundMethod BindTo(object? thisArg)
         => new(_name, _impl, _jsLength, _metadata, thisArg);
+
+    /// <summary>
+    /// A receiverless copy with its own §17 metadata. Lets a realm hand guest code an
+    /// instance whose <c>delete fn.length</c> can't leak into another realm's view of the
+    /// same built-in.
+    /// </summary>
+    internal SharpTSObjectUnboundMethod CloneUnbound() => new(_name, _impl, _jsLength);
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
 

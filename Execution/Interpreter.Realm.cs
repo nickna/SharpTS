@@ -310,6 +310,21 @@ public partial class Interpreter
             value = GetJSON();
             return true;
         }
+        if (name == BuiltInNames.String)
+        {
+            value = GetStringNamespace();
+            return true;
+        }
+        if (name == BuiltInNames.Number)
+        {
+            value = GetNumberNamespace();
+            return true;
+        }
+        if (name == BuiltInNames.Boolean)
+        {
+            value = GetBooleanNamespace();
+            return true;
+        }
         value = null;
         return false;
     }
@@ -321,7 +336,8 @@ public partial class Interpreter
     /// member access, <c>globalThis</c>) pointing at the one realm instance so
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
-    internal static bool IsRealmIntrinsicName(string name) => name is "Object" or "Math" or "JSON";
+    internal static bool IsRealmIntrinsicName(string name)
+        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean";
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
     // object carrying a guest-writable _extras bag, so — like Math and
@@ -338,14 +354,29 @@ public partial class Interpreter
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
+    // The String/Number/Boolean constructor objects. Ordinary and extensible per ECMA-262,
+    // so they carry a guest-writable expando bag and — like Math/JSON/Object — are held
+    // per-Interpreter: `Number.foo = 1` in one program must not be visible to the next one
+    // sharing the process.
+    private Runtime.Types.SharpTSStringNamespace? _stringNamespace;
+    private Runtime.Types.SharpTSNumberNamespace? _numberNamespace;
+    private Runtime.Types.SharpTSBooleanNamespace? _booleanNamespace;
     private Runtime.Types.SharpTSPromisePrototype? _promisePrototype;
-    internal Runtime.Types.SharpTSStringPrototype GetStringPrototype() => _stringPrototype ??= new();
-    internal Runtime.Types.SharpTSNumberPrototype GetNumberPrototype() => _numberPrototype ??= new();
-    internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype() => _booleanPrototype ??= new();
+    // Each prototype is linked back to this realm's constructor object on creation, so
+    // `String.prototype.constructor === String` holds — both sides resolve per-realm.
+    internal Runtime.Types.SharpTSStringPrototype GetStringPrototype()
+        => _stringPrototype ??= new() { RealmConstructor = GetStringNamespace() };
+    internal Runtime.Types.SharpTSNumberPrototype GetNumberPrototype()
+        => _numberPrototype ??= new() { RealmConstructor = GetNumberNamespace() };
+    internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype()
+        => _booleanPrototype ??= new() { RealmConstructor = GetBooleanNamespace() };
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype() => _arrayPrototype ??= new();
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
+    internal Runtime.Types.SharpTSStringNamespace GetStringNamespace() => _stringNamespace ??= new();
+    internal Runtime.Types.SharpTSNumberNamespace GetNumberNamespace() => _numberNamespace ??= new();
+    internal Runtime.Types.SharpTSBooleanNamespace GetBooleanNamespace() => _booleanNamespace ??= new();
     internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
 
     // Per-realm globalThis. The global object holds guest-assigned properties

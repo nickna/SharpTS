@@ -34,7 +34,7 @@ public abstract record IndexTarget
     /// ECMA-262 makes these ordinary objects, so the write must land in their own-property
     /// storage and be visible to every object inheriting from them.
     /// </summary>
-    public sealed record BuiltInPrototypeString(ISharpTSBuiltInPrototype Target, string Key) : IndexTarget;
+    public sealed record BuiltInPrototypeString(ISharpTSMutableBuiltIn Target, string Key) : IndexTarget;
     public sealed record HeadersString(SharpTSHeaders Target, string Key) : IndexTarget;
     /// <summary>
     /// Class constructor expando statics — Node allows arbitrary string/symbol-keyed

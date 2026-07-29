@@ -11363,7 +11363,7 @@ test/language/expressions/new/spread-sngl-iter.js RuntimeError
 test/language/expressions/new/spread-sngl-literal.js RuntimeError
 test/language/expressions/new/spread-sngl-obj-ident.js RuntimeError
 test/language/expressions/property-accessors/S11.2.1_A1.1.js Pass
-test/language/expressions/property-accessors/S11.2.1_A1.2.js Fail
+test/language/expressions/property-accessors/S11.2.1_A1.2.js Pass
 test/language/expressions/property-accessors/S11.2.1_A2.js Pass
 test/language/expressions/property-accessors/S11.2.1_A3_T1.js Fail
 test/language/expressions/property-accessors/S11.2.1_A3_T2.js RuntimeError

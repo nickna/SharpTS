@@ -865,7 +865,7 @@ public partial class Interpreter
         (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
-        (ISharpTSBuiltInPrototype builtInPrototype, _) =>
+        (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(
                 builtInPrototype, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSHeaders headers, string headerKey) => new IndexTarget.HeadersString(headers, headerKey),
@@ -1097,7 +1097,7 @@ public partial class Interpreter
     /// extras — including accessors installed via <c>Object.defineProperty</c> — win, then
     /// the type's own built-in member table.
     /// </summary>
-    private object? ReadBuiltInPrototypeIndex(ISharpTSBuiltInPrototype prototype, string key)
+    private object? ReadBuiltInPrototypeIndex(ISharpTSMutableBuiltIn prototype, string key)
     {
         if (prototype is SharpTSObjectPrototype objectPrototype)
         {
