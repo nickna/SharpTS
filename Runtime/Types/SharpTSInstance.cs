@@ -465,11 +465,33 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public bool DeleteField(string name)
     {
-        if (IsFrozen || IsSealed)
+        if (IsFrozen || IsSealed || !IsConfigurableField(name))
         {
             return false;
         }
-        return _fields.Remove(name);
+        return RemoveField(name);
+    }
+
+    /// <summary>
+    /// False when <paramref name="name"/> carries an explicit
+    /// <c>configurable: false</c> descriptor from <c>Object.defineProperty</c>. ECMA-262
+    /// §10.1.10 makes such a property undeletable; without this check
+    /// <c>delete</c> removed it and the property silently reappeared as configurable to
+    /// <c>propertyHelper.js</c>'s delete-based probe.
+    /// </summary>
+    private bool IsConfigurableField(string name)
+        => _descriptors is null
+            || !_descriptors.TryGetValue(name, out var flags)
+            || !flags.HasExplicitDescriptor
+            || flags.Configurable;
+
+    /// <summary>Drops the field plus any descriptor flags and stale resolution-cache entry.</summary>
+    private bool RemoveField(string name)
+    {
+        bool removed = _fields.Remove(name);
+        _descriptors?.Remove(name);
+        _lookupCache.Remove(name);
+        return removed;
     }
 
     /// <summary>
@@ -486,7 +508,15 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             }
             return false;
         }
-        return _fields.Remove(name);
+        if (!IsConfigurableField(name))
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot delete property '{name}'");
+            }
+            return false;
+        }
+        return RemoveField(name);
     }
 
     /// <inheritdoc />

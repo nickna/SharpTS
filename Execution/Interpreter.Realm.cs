@@ -338,6 +338,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
+    private Runtime.Types.SharpTSPromisePrototype? _promisePrototype;
     internal Runtime.Types.SharpTSStringPrototype GetStringPrototype() => _stringPrototype ??= new();
     internal Runtime.Types.SharpTSNumberPrototype GetNumberPrototype() => _numberPrototype ??= new();
     internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype() => _booleanPrototype ??= new();
@@ -345,6 +346,7 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
+    internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
 
     // Per-realm globalThis. The global object holds guest-assigned properties
     // (`globalThis.x = …`), which must stay realm-local and not race across

@@ -593,6 +593,86 @@ public sealed class Issue1279ParityTests
     public void JSON_parse_throws_a_SyntaxError_object(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    // ---- Batch: prototype identity, Promise.prototype, iterable combinators ----
+
+    /// <summary>
+    /// The Promise combinators take any iterable (ECMA-262 §27.2.4.1 step 3 GetIterator), and
+    /// an abrupt completion there *rejects* the returned promise rather than throwing
+    /// synchronously (IfAbruptRejectPromise). They previously demanded a literal array.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/all/iter-arg-is-number-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/iter-arg-is-null-reject.js")]
+    [InlineData("built-ins/Promise/any/iter-arg-is-null-reject.js")]
+    public void Promise_combinators_reject_on_non_iterable(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// <c>Promise.prototype</c> is a real object carrying the unbound reaction methods; it
+    /// read as <c>undefined</c>, so every access through it threw.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/is-a-function.js")]
+    [InlineData("built-ins/Promise/prototype/catch/length.js")]
+    [InlineData("built-ins/Promise/prototype/then/length.js")]
+    [InlineData("built-ins/Promise/prototype/then/context-check-on-entry.js")]
+    [InlineData("built-ins/Promise/prototype/catch/this-value-non-object.js")]
+    public void Promise_prototype_is_an_object_with_unbound_methods(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A constructor has exactly one <c>prototype</c> object, and an instance's
+    /// [[Prototype]] is that same object — <c>X.prototype === X.prototype</c> and
+    /// <c>Object.getPrototypeOf(new X()) === X.prototype</c>. A plain object literal
+    /// likewise reports Object.prototype, not null.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-1.js")]
+    public void Prototype_objects_are_identity_stable(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
+    /// <c>Object.getPrototypeOf(RangeError) === Error</c>. Interpreted-only: the compiled
+    /// path answers with a raw Dictionary here (a Track B item on #1279).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-13.js")]
+    public void Derived_constructors_inherit_their_base_constructor(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    /// <summary>
+    /// <c>Object.hasOwn</c> is defined as HasOwnProperty (§20.1.2.13), so it must see
+    /// accessor properties — and must NOT see inherited class methods.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/hasOwn/hasown_own_getter.js")]
+    [InlineData("built-ins/Object/hasOwn/hasown_own_getter_and_setter.js")]
+    [InlineData("built-ins/Object/hasOwn/hasown.js")]
+    public void Object_hasOwn_matches_hasOwnProperty(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>ECMA-262 §9.4.2: resolving an unbound name throws a ReferenceError.</summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-4-2.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-4-2.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-4-2.js")]
+    public void Unresolvable_names_throw_ReferenceError(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.1.10: a <c>configurable: false</c> own property of a class instance cannot be
+    /// deleted — the check propertyHelper.js uses to prove non-configurability.
+    /// Interpreted-only: the compiled path still reports this property as writable
+    /// (a Track B item on #1279).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-21.js")]
+    public void Non_configurable_instance_properties_resist_delete(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]

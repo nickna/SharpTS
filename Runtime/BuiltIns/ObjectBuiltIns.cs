@@ -169,17 +169,15 @@ public static partial class ObjectBuiltIns
         return new SharpTSObject(result);
     }
 
-    private static RuntimeValue HasOwnV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue HasOwnV2(
+        Interpreter interp, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var obj = args[0].ToObject();
-        var key = args[1].AsString() ?? args[1].ToObject()?.ToString() ?? "";
-        return RuntimeValue.FromBoolean(obj switch
-        {
-            SharpTSObject tsObj => tsObj.Fields.ContainsKey(key),
-            SharpTSInstance inst => inst.HasField(key),
-            IDictionary<string, object?> dict => dict.ContainsKey(key),
-            _ => false
-        });
+        // A Symbol key stays a Symbol (ToPropertyKey); anything else stringifies.
+        var key = args[1].ToObject() is SharpTSSymbol sym
+            ? (object)sym
+            : interp.ToPropertyKeyString(args[1].ToObject());
+        return RuntimeValue.FromBoolean(SharpTSObjectUnboundMethod.HasOwn(interp, obj, key));
     }
 
     private static RuntimeValue IsV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -1485,8 +1483,16 @@ public static partial class ObjectBuiltIns
     /// </summary>
     public static object? PrototypeOf(Interpreter? interp, object? target) => target switch
     {
+        // A plain object literal has no explicit [[Prototype]] link but still inherits
+        // Object.prototype; only Object.create(null) genuinely has none.
+        SharpTSObject { Prototype: null, IsNullPrototype: false } => interp?.GetObjectPrototype(),
         SharpTSObject obj => obj.Prototype,
-        SharpTSInstance inst => inst.Prototype,
+        // A class instance's [[Prototype]] is its constructor's `prototype` object, so
+        // `Object.getPrototypeOf(new C()) === C.prototype`.
+        SharpTSInstance inst => inst.RuntimeClass.Prototype,
+        // Native errors raised from C# carry only their type name; resolve it back to the
+        // same constructor the global `TypeError` identifier yields so the prototypes match.
+        SharpTSError err => SharpTSErrorClass.GetBuiltInClass(err.Name)?.Prototype,
         // ECMA-262 §23.1.3: ordinary Array exotic objects have Array.prototype as their
         // [[Prototype]]. Subclass instances keep their class chain instead.
         SharpTSArraySubclassInstance sub => sub.Klass,
@@ -1501,6 +1507,10 @@ public static partial class ObjectBuiltIns
         // `Function.prototype.isPrototypeOf(Array)` holds. Function.prototype itself
         // bottoms out at Object.prototype.
         SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        // §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
+        // `Object.getPrototypeOf(RangeError) === Error`. A base class falls back to
+        // Function.prototype like any other function object.
+        SharpTSClass klass => (object?)klass.Superclass ?? interp?.GetFunctionPrototype(),
         ISharpTSCallable => interp?.GetFunctionPrototype(),
         _ => null
     };
@@ -1522,6 +1532,10 @@ public static partial class ObjectBuiltIns
                 if (!obj.IsExtensible)
                     throw new Exception("TypeError: Object is not extensible");
                 obj.Prototype = proto;
+                // An explicit null prototype is distinct from "never linked": the latter
+                // still inherits Object.prototype. Record which one this is so
+                // Object.getPrototypeOf can tell them apart.
+                obj.IsNullPrototype = proto is null or SharpTSUndefined;
                 // Copy properties from new prototype if non-null
                 if (proto != null)
                     CopyPropertiesFrom(proto, obj);

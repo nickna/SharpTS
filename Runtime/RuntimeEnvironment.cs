@@ -33,7 +33,9 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 
         if (Enclosing != null) return Enclosing.Get(name);
 
-        throw new Exception($"Runtime Error: Undefined variable '{name.Lexeme}'.");
+        // ECMA-262 §9.4.2: resolving an unbound name is a ReferenceError. The name prefix
+        // is what routes this to a guest ReferenceError at the catch binding.
+        throw new Exception($"Runtime Error: ReferenceError: Undefined variable '{name.Lexeme}'.");
     }
 
     /// <summary>
@@ -70,7 +72,9 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
             return;
         }
 
-        throw new Exception($"Runtime Error: Undefined variable '{name.Lexeme}'.");
+        // ECMA-262 §9.4.2: resolving an unbound name is a ReferenceError. The name prefix
+        // is what routes this to a guest ReferenceError at the catch binding.
+        throw new Exception($"Runtime Error: ReferenceError: Undefined variable '{name.Lexeme}'.");
     }
 
     /// <summary>

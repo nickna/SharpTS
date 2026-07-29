@@ -148,6 +148,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
 
+    /// <summary>
+    /// ECMA-262 §7.3.13 HasOwnProperty, shared with <c>Object.hasOwn</c> (§20.1.2.13 is
+    /// defined as exactly this operation) so the two can't drift — they previously did,
+    /// with <c>Object.hasOwn</c> seeing only data fields and missing accessors entirely.
+    /// </summary>
+    public static bool HasOwn(Interp? interpreter, object? target, object? key)
+        => HasOwnPropertyImpl(interpreter, target, [key]) is true;
+
     private static object? HasOwnPropertyImpl(Interp? interpreter, object? target, List<object?> args)
     {
         if (target == null || args.Count == 0) return false;
@@ -166,7 +174,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         return target switch
         {
             SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
-            SharpTSInstance inst => inst.HasProperty(key),
+            // Own properties only: a class method lives on the prototype, so
+            // `Object.hasOwn(new C(), "someMethod")` is false. HasProperty would resolve
+            // it through the class chain and answer true.
+            SharpTSInstance inst => inst.HasField(key) || inst.GetOwnPropertyDescriptor(key) is not null,
             SharpTSArray array => array.HasOwnProperty(key),
             SharpTSMath math => math.HasExtra(key),
             SharpTSJSON json => json.HasExtra(key),

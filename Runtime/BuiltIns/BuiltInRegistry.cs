@@ -464,6 +464,8 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSPromise), (instance, name) =>
             PromiseBuiltIns.GetMember((SharpTSPromise)instance, name));
+        registry.RegisterInstanceType(typeof(Types.SharpTSPromisePrototype), (instance, name) =>
+            ((Types.SharpTSPromisePrototype)instance).GetMember(name));
     }
 
     private static void RegisterRegExpNamespace(BuiltInRegistry registry)

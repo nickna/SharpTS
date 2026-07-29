@@ -1048,15 +1048,15 @@ public partial class Interpreter
 
     private object? EvaluateGetOnClass(SharpTSClass klass, string memberName)
     {
-        // ECMA-262: every built-in class has a `prototype` (an ordinary
-        // object whose props are the instance methods + constructor back-
-        // ref). Without this, `Error.prototype.toString` and friends throw
-        // "Static member 'prototype' does not exist on class 'Error'".
-        // Lazy on-demand wrapper so we don't allocate one per class at
-        // startup; lifetime tied to the class.
+        // ECMA-262: every class has exactly one `prototype` (an ordinary object whose
+        // props are the instance methods + constructor back-ref). Without this,
+        // `Error.prototype.toString` and friends throw "Static member 'prototype' does
+        // not exist on class 'Error'". The object is created lazily and cached on the
+        // class, so repeated reads are reference-equal — `X.prototype === X.prototype`
+        // and `Object.getPrototypeOf(new X()) === X.prototype`.
         if (memberName == "prototype")
         {
-            return new SharpTSClassPrototype(klass);
+            return klass.Prototype;
         }
 
         // Try static auto-accessor first (TypeScript 4.9+)
@@ -1492,6 +1492,10 @@ public partial class Interpreter
             // process-wide static FrozenDictionary).
             if (memberName == "prototype" && ctor.Name == BuiltInNames.RegExp)
                 return GetRegExpPrototype();
+            // ECMA-262 §27.2.3.1: %Promise%.prototype. Without this, `Promise.prototype`
+            // read as undefined and every Promise/prototype/* access died on it.
+            if (memberName == "prototype" && ctor.Name == BuiltInNames.Promise)
+                return GetPromisePrototype();
             var ctorMember = ctor.GetMember(memberName);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic
