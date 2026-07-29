@@ -10,8 +10,10 @@ namespace SharpTS.Compilation;
 /// </summary>
 /// <remarks>
 /// Uses typeof() directly for fast compilation. The AssemblyReferenceRewriter (from the
-/// NickNa.PEPacker package) is used as a post-processing step when --ref-asm is enabled
-/// to rewrite System.Private.CoreLib references to SDK reference assemblies.
+/// NickNa.PEPacker package) is used as a post-processing step to rewrite System.Private.CoreLib
+/// references to SDK reference assemblies. It runs when --ref-asm is enabled, and also whenever the
+/// emitted assembly references SharpTS regardless of that flag — see the `_useReferenceAssemblies ||
+/// hasSharpTsReference` condition in <see cref="ILCompiler.SaveArtifacts"/>.
 /// </remarks>
 public class TypeProvider
 {

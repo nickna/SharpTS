@@ -1353,8 +1353,9 @@ public partial class ILCompiler
     /// Marks a method whose first emitted parameter is the synthetic <c>__this</c> receiver slot
     /// (a user function expression or <c>this</c>-bearing arrow) with the <c>$ExpectsThis</c>
     /// attribute, so <c>$TSFunction</c> can detect that slot via <c>IsDefined</c> instead of the
-    /// parameter name — which a <c>--ref-asm</c> rewrite strips, otherwise shifting value-call
-    /// arguments by one. No-op when the runtime attribute is unavailable. (#738)
+    /// parameter name. That keeps the check independent of the <c>Param</c> table: a
+    /// <c>--ref-asm</c> rewrite that mis-resolved a method's parameter list would otherwise shift
+    /// value-call arguments by one. No-op when the runtime attribute is unavailable. (#738)
     /// </summary>
     internal void MarkExpectsThis(MethodBuilder method)
     {
