@@ -303,8 +303,11 @@ public class EmittedRuntime
 
     // Marker attribute applied to a user function-expression / `this`-bearing arrow method whose
     // first emitted parameter is the synthetic `__this` receiver slot. $TSFunction reads it back via
-    // IsDefined so it can detect that slot without the parameter name (a --ref-asm rewrite strips
-    // parameter names, breaking the name-based check and shifting value-call arguments). (#738)
+    // IsDefined instead of matching on the parameter name, which keeps the check independent of the
+    // Param table: a --ref-asm rewrite that mis-resolved a method's parameter list would otherwise
+    // break the name-based check and shift value-call arguments by one. (NickNa.PEPacker carries
+    // parameter names across the rewrite as of 1.0.3; the attribute keeps this independent of that.)
+    // (#738)
     public TypeBuilder ExpectsThisAttrType { get; set; } = null!;
     public ConstructorBuilder ExpectsThisAttrCtor { get; set; } = null!;
 
