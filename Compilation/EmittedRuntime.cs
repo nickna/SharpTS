@@ -448,6 +448,15 @@ public class EmittedRuntime
     public FieldBuilder BooleanPrototypeField { get; set; } = null!;
     /// <summary>Number.prototype singleton; mirror of <see cref="BooleanPrototypeField"/> for primitive doubles.</summary>
     public FieldBuilder NumberPrototypeField { get; set; } = null!;
+    /// <summary>
+    /// Date.prototype singleton — a Dictionary&lt;string, object&gt; carrying $TSFunction
+    /// wrappers around the <c>$Runtime.Date*</c> helpers. Instance calls (<c>d.getTime()</c>)
+    /// are emitted inline by DateEmitter and never route through here; this object exists so
+    /// <c>Date.prototype</c> is addressable as a VALUE — reflection over it
+    /// (<c>Object.getOwnPropertyDescriptor(Date.prototype, "getTime")</c>), borrowing a method,
+    /// or monkey-patching. Null-backed when the program never mentions Date.
+    /// </summary>
+    public FieldBuilder DatePrototypeField { get; set; } = null!;
     /// <summary>String.prototype singleton; mirror of <see cref="BooleanPrototypeField"/> for primitive strings.</summary>
     public FieldBuilder StringPrototypeField { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
@@ -507,6 +516,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayProtoToStringHelper { get; set; } = null!;
     /// <summary>Populates <see cref="BooleanPrototypeField"/> with $TSFunction wrappers for toString/valueOf; idempotent.</summary>
     public MethodBuilder BooleanPrototypePopulateMethod { get; set; } = null!;
+    /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>
+    public MethodBuilder DatePrototypePopulateMethod { get; set; } = null!;
     /// <summary>$Runtime.HasOwnPropertyHelper(obj, name) — backs <c>obj.hasOwnProperty(name)</c> for $TSFunction / $Object / Dictionary / List receivers.</summary>
     public MethodBuilder HasOwnPropertyHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.LookupGetterHelper(obj, key) — backs <c>Object.prototype.__lookupGetter__</c> (ECMA-262 §B.2.2.4). Walks prototype chain.</summary>

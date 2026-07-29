@@ -996,6 +996,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Response", new ResponseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Iterator", new IteratorStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("RegExp", new RegExpStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Date", new DateStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("ReadableStream", new ReadableStreamStaticEmitter());
 
         // Built-in module emitters

@@ -673,6 +673,47 @@ public sealed class Issue1279ParityTests
     public void Non_configurable_instance_properties_resist_delete(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    // ---- Batch: Track B — compiled-mode deficits ----
+
+    /// <summary>
+    /// <c>Date.prototype</c> is addressable as a value carrying its §21.4.4 method table.
+    /// The compiled backend emitted Date instance calls inline and never materialized the
+    /// prototype object, so it read as <c>undefined</c> and every reflective use of it threw.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-116.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-117.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-130.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-150.js")]
+    public void Date_prototype_is_addressable_as_a_value(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §20.1.2.3.1 ObjectDefineProperties step 4 does <c>Get(props, key)</c>, so an accessor
+    /// property on the descriptor bag has its getter invoked. The compiled <c>Object.create</c>
+    /// walked the backing dictionary directly and silently dropped such entries; it now
+    /// delegates to ObjectDefineProperties, which is that step.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-19.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-22.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-23.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-17.js")]
+    public void Object_create_invokes_getters_on_the_descriptor_bag(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// §10.4.2.1 routes an array-index [[DefineOwnProperty]] through
+    /// OrdinaryDefineOwnProperty, so an index can carry an accessor descriptor. The compiled
+    /// index read went straight to element storage and answered <c>undefined</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-221.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-244.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-245.js")]
+    public void Array_indices_support_accessor_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]
