@@ -526,10 +526,11 @@ instead, because it runs on every keystroke.
 **Declaration Generation** (`Declaration/`):
 | File | Purpose |
 |------|---------|
-| `DeclarationGenerator.cs` | .d.ts file generation |
+| `DiscoveryGenerator.cs` | CLR reflection metadata discovery for `--gen-decl` |
+| `DiscoveryEmitter.cs` | Discovery report rendering (text / `--json`) |
+| `SourceDeclarationEmitter.cs` | `.d.ts` emission from the checked source AST |
 | `DotNetTypeMapper.cs` | .NET to TypeScript type mapping |
 | `TypeInspector.cs` | Type introspection |
-| `TypeScriptEmitter.cs` | TypeScript syntax emission |
 
 **Language Server Protocol** (`SharpTS.LanguageServer/`):
 

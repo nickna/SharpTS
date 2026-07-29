@@ -12,7 +12,7 @@ public sealed record DeclarationOutput(string SourcePath, string OutputPath, str
 
 /// <summary>
 /// Emits declaration files from the checked source AST. This is intentionally separate from
-/// <see cref="DeclarationGenerator"/>, which describes CLR reflection metadata for interop.
+/// <see cref="DiscoveryGenerator"/>, which describes CLR reflection metadata for interop.
 /// </summary>
 public static class SourceDeclarationEmitter
 {
