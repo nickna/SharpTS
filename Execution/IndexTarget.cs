@@ -29,6 +29,12 @@ public abstract record IndexTarget
     public sealed record InstanceString(SharpTSInstance Target, string Key) : IndexTarget;
     public sealed record InstanceSymbol(SharpTSInstance Target, SharpTSSymbol Key) : IndexTarget;
     public sealed record GlobalThis(SharpTSGlobalThis Target, string Key) : IndexTarget;
+    /// <summary>
+    /// Indexed write onto a built-in prototype singleton (<c>Object.prototype[1] = 1</c>).
+    /// ECMA-262 makes these ordinary objects, so the write must land in their own-property
+    /// storage and be visible to every object inheriting from them.
+    /// </summary>
+    public sealed record BuiltInPrototypeString(ISharpTSBuiltInPrototype Target, string Key) : IndexTarget;
     public sealed record HeadersString(SharpTSHeaders Target, string Key) : IndexTarget;
     /// <summary>
     /// Class constructor expando statics — Node allows arbitrary string/symbol-keyed

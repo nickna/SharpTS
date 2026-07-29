@@ -37,7 +37,7 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 /// the BuiltInMethod rebind path that real-world test262 harness code (e.g.
 /// <c>propertyHelper.js</c>) relies on.
 /// </summary>
-public sealed class SharpTSFunctionPrototype
+public sealed class SharpTSFunctionPrototype : ISharpTSBuiltInPrototype
 {
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];

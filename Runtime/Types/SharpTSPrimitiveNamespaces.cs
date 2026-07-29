@@ -65,7 +65,7 @@ public class SharpTSStringNamespace : ISharpTSCallable
 /// receiver per ECMA-262 before dispatch. Also accepts arbitrary user-assigned
 /// properties (ECMA-262: String.prototype is an ordinary object).
 /// </summary>
-public sealed class SharpTSStringPrototype
+public sealed class SharpTSStringPrototype : ISharpTSBuiltInPrototype
 {
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
@@ -273,7 +273,7 @@ public class SharpTSNumberNamespace : ISharpTSCallable
 /// an ordinary object — Test262 sets indexed elements and <c>length</c> on it
 /// before invoking Array.prototype.* with a number primitive as the receiver).
 /// </summary>
-public sealed class SharpTSNumberPrototype
+public sealed class SharpTSNumberPrototype : ISharpTSBuiltInPrototype
 {
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
@@ -307,6 +307,8 @@ public sealed class SharpTSNumberPrototype
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     private bool IsBuiltIn(string name)
         => name == "constructor" || NumberBuiltIns.GetPrototypeMethod(name) != null;
@@ -452,7 +454,7 @@ public class SharpTSBooleanNamespace : ISharpTSCallable
 /// indexed elements and <c>length</c> before calling Array.prototype.* with a
 /// boolean primitive as the receiver.
 /// </summary>
-public sealed class SharpTSBooleanPrototype
+public sealed class SharpTSBooleanPrototype : ISharpTSBuiltInPrototype
 {
     /// <summary>
     /// Process-wide template instance. Retained as a fallback, but guest reads
@@ -476,6 +478,7 @@ public sealed class SharpTSBooleanPrototype
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);

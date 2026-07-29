@@ -761,9 +761,10 @@ public partial class Interpreter
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
-            SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnEnumerableKeys(),
-            SharpTSArrayPrototype arrayPrototype => arrayPrototype.OwnEnumerableKeys(),
-            SharpTSStringPrototype stringPrototype => stringPrototype.OwnEnumerableKeys(),
+            // Every built-in prototype singleton at once — Object/Array/String/Number/
+            // Boolean/Function.prototype. Naming them individually is how Object.prototype
+            // and Number.prototype came to be missing here ("for...in requires an object").
+            ISharpTSBuiltInPrototype builtInPrototype => builtInPrototype.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,

@@ -714,6 +714,43 @@ public sealed class Issue1279ParityTests
     public void Array_indices_support_accessor_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    // ---- Batch: Object.prototype as an ordinary object ----
+
+    /// <summary>
+    /// ECMA-262 makes every built-in prototype an ordinary object, so guest code can define
+    /// descriptors on it, index into it, delete from it, and enumerate it. Object.prototype
+    /// alone was backed by a value-only dictionary and supported none of that — Test262
+    /// patches it constantly to exercise inherited-property paths.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-2-12.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-2-12.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-2-12.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-7-b-10.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-7-b-10.js")]
+    public void Object_prototype_is_an_ordinary_mutable_object(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// <c>for...in</c> over a built-in prototype singleton yields its own enumerable keys
+    /// rather than throwing "for...in requires an object".
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toFixed/prop-desc.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/prop-desc.js")]
+    [InlineData("built-ins/Number/prototype/constructor.js")]
+    public void For_in_enumerates_built_in_prototypes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    /// <summary>
+    /// A class's <c>prototype</c> accepts descriptor definitions, including Symbol-keyed ones
+    /// (<c>Object.defineProperty(Error.prototype, Symbol.toStringTag, …)</c>).
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Error/prototype/no-error-data.js")]
+    public void Class_prototypes_accept_descriptor_definitions(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]

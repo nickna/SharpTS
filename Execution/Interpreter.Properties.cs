@@ -1349,11 +1349,18 @@ public partial class Interpreter
         // receiver so `obj.hasOwnProperty(k)` passes `obj` as the target.
         // A genuine null-prototype object (Object.create(null), groupBy result)
         // inherits nothing, so it is excluded.
-        if (!simpleObj.IsNullPrototype
-            && GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
-            return RuntimeValue.FromObject(protoMethod.BindTo(simpleObj));
-        if (!simpleObj.IsNullPrototype && GetObjectPrototype().HasExtra(memberName))
-            return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+        if (!simpleObj.IsNullPrototype)
+        {
+            // A guest-installed accessor on Object.prototype is inherited like any other:
+            // its getter runs with the *receiver* as `this`, not the prototype.
+            if (GetObjectPrototype().GetExtraGetter(memberName) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, simpleObj)
+                    .CallV2(this, ReadOnlySpan<RuntimeValue>.Empty);
+            if (GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
+                return RuntimeValue.FromObject(protoMethod.BindTo(simpleObj));
+            if (GetObjectPrototype().HasExtra(memberName))
+                return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+        }
 
         return RuntimeValue.Undefined;
     }
@@ -1767,37 +1774,13 @@ public partial class Interpreter
             return value;
         }
 
-        // Number/Boolean/String.prototype are ordinary mutable objects per ECMA-262.
-        // Test262 assigns indexed elements and `length` before calling
-        // Array.prototype.* with a primitive as the receiver.
-        if (obj is SharpTSNumberPrototype numProto)
+        // Every built-in prototype singleton is an ordinary mutable object per ECMA-262
+        // (Object/Array/String/Number/Boolean/Function.prototype). Test262 assigns
+        // indexed elements and `length` onto them before calling Array.prototype.* with
+        // a primitive receiver, and patches them to exercise inherited-property paths.
+        if (obj is ISharpTSBuiltInPrototype builtInProto)
         {
-            numProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSBooleanPrototype boolProto)
-        {
-            boolProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSStringPrototype strProto)
-        {
-            strProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSArrayPrototype arrProto)
-        {
-            arrProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSFunctionPrototype fnProto)
-        {
-            fnProto.SetExtra(set.Name.Lexeme, value);
-            return value;
-        }
-        if (obj is SharpTSObjectPrototype objProto)
-        {
-            objProto.SetExtra(set.Name.Lexeme, value);
+            builtInProto.SetExtra(set.Name.Lexeme, value);
             return value;
         }
         if (obj is SharpTSDate date)

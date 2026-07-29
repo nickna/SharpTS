@@ -513,6 +513,11 @@ public static partial class ObjectBuiltIns
                     else if (descriptorHasValue)
                         symArrow.SetBySymbol(symKey, descriptor.Value);
                     return target;
+                // `Object.defineProperty(Error.prototype, Symbol.toStringTag, …)` and friends.
+                case SharpTSClassPrototype symClassProto:
+                    if (descriptorHasValue)
+                        symClassProto.SetBySymbol(symKey, descriptor.Value);
+                    return target;
                 default:
                     break;
             }
@@ -565,6 +570,12 @@ public static partial class ObjectBuiltIns
                 break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSObjectPrototype objectPrototype:
+                success = objectPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
+            case SharpTSClassPrototype classPrototype:
+                success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
@@ -690,6 +701,10 @@ public static partial class ObjectBuiltIns
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSClassPrototype classPrototype => classPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),

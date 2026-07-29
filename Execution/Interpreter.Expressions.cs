@@ -865,6 +865,9 @@ public partial class Interpreter
         (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
+        (ISharpTSBuiltInPrototype builtInPrototype, _) =>
+            new IndexTarget.BuiltInPrototypeString(
+                builtInPrototype, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSHeaders headers, string headerKey) => new IndexTarget.HeadersString(headers, headerKey),
         // Class constructors accept expando statics (Node: `C["foo"] = 1`,
         // `C[Symbol.species] = P`). #262.
@@ -1065,7 +1068,11 @@ public partial class Interpreter
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
             IndexTarget.ConstEnumError t => throw new InterpreterException(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
-            IndexTarget.ObjectString t => t.Target.GetProperty(t.Key),
+            // Route through the same implementation the dotted path uses. A bare
+            // GetProperty here skipped getters, the __proto__ walk and the
+            // Object.prototype fallback, so `obj[k]` and `obj.k` disagreed — an
+            // inherited property was visible to one and not the other.
+            IndexTarget.ObjectString t => EvaluateGetOnRecordRV(t.Target, t.Key).ToObject(),
             IndexTarget.ObjectSymbol t => t.Target.GetBySymbol(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.InstanceString t => t.Target.Get(new Token(TokenType.IDENTIFIER, t.Key, null, 0)),
             IndexTarget.InstanceSymbol t => GetInstanceSymbolValue(t.Target, t.Key),
@@ -1075,6 +1082,7 @@ public partial class Interpreter
             IndexTarget.ClassString t => EvaluateGetOnClass(t.Target, t.Key),
             IndexTarget.ClassSymbol t => GetClassSymbolValue(t.Target, t.Key),
             IndexTarget.GlobalThis t => ResolveGlobalThisRead(t.Target, t.Key),
+            IndexTarget.BuiltInPrototypeString t => ReadBuiltInPrototypeIndex(t.Target, t.Key),
             IndexTarget.HeadersString t => (object?)t.Target.Get(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.StringChar t => (t.Index >= 0 && t.Index < t.Target.Length)
                 ? (object)t.Target[t.Index].ToString()
@@ -1082,6 +1090,22 @@ public partial class Interpreter
             IndexTarget.Unsupported => throw new InterpreterException("Index access not supported on this type."),
             _ => throw new InterpreterException("Index access not supported on this type.")
         });
+    }
+
+    /// <summary>
+    /// Indexed read on a built-in prototype singleton (<c>Object.prototype[1]</c>). Own
+    /// extras — including accessors installed via <c>Object.defineProperty</c> — win, then
+    /// the type's own built-in member table.
+    /// </summary>
+    private object? ReadBuiltInPrototypeIndex(ISharpTSBuiltInPrototype prototype, string key)
+    {
+        if (prototype is SharpTSObjectPrototype objectPrototype)
+        {
+            if (objectPrototype.GetExtraGetter(key) is { } getter)
+                return BindAccessorToObject(getter, objectPrototype).CallBoxed(this, []);
+            return objectPrototype.GetMember(key) ?? SharpTSUndefined.Instance;
+        }
+        return EvaluateGetOnFallback(prototype, key);
     }
 
     private RuntimeValue GetArrayIndexValue(SharpTSArray array, long index)
@@ -1427,6 +1451,10 @@ public partial class Interpreter
 
             case IndexTarget.GlobalThis t:
                 t.Target.SetProperty(t.Key, value);
+                break;
+
+            case IndexTarget.BuiltInPrototypeString t:
+                t.Target.SetExtra(t.Key, value);
                 break;
 
             default:

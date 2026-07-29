@@ -11,24 +11,63 @@ namespace SharpTS.Runtime.Types;
 /// (lodash's <c>hasOwnProperty.call(obj, key)</c>, Intl <c>toString</c>
 /// detection, etc.) can resolve these names.
 /// </summary>
-public sealed class SharpTSObjectPrototype
+public sealed class SharpTSObjectPrototype : ISharpTSBuiltInPrototype
 {
     public static readonly SharpTSObjectPrototype Instance = new();
-    private Dictionary<string, object?>? _extras;
     internal SharpTSObjectPrototype() { }
 
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var value) ? value : null;
+    // Object.prototype is an ordinary mutable object. Reuse SharpTSObject's
+    // descriptor-aware storage — as Array/String/Number.prototype already do — so
+    // `Object.defineProperty(Object.prototype, …)` can install accessors, `delete`
+    // takes, and for-in / getOwnPropertyDescriptor see the same keys. The previous
+    // value-only Dictionary supported none of that: every one of those operations
+    // either threw or silently no-oped, and Test262 leans on patching
+    // Object.prototype constantly to exercise inherited-property paths.
+    private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
     }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    private static bool IsBuiltIn(string name) => BuiltInMember(name) != null;
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
+
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+
+    /// <summary>Own enumerable string keys — the for-in / Object.keys surface.</summary>
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
+        return BuiltInMember(name);
+    }
+
+    private static object? BuiltInMember(string name)
+    {
         return name switch
         {
             "constructor" => SharpTSObjectNamespace.Instance,
