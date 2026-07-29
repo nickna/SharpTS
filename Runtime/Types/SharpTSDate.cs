@@ -28,6 +28,8 @@ public class SharpTSDate : ITypeCategorized
         => _extras.GetOwnPropertyDescriptor(name);
     internal bool DeleteExtra(string name) => _extras.DeleteProperty(name);
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    internal void FreezeOwnProperties() => _extras.Freeze();
+    internal void SealOwnProperties() => _extras.Seal();
 
     /// <summary>Unix epoch (January 1, 1970 00:00:00 UTC)</summary>
     private static readonly DateTime UnixEpoch = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);

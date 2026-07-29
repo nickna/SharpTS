@@ -359,6 +359,127 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/isExtensible/15.2.3.13-2-21.js")]
+    [InlineData("built-ins/Object/isFrozen/15.2.3.12-2-a-13.js")]
+    [InlineData("built-ins/Object/isFrozen/15.2.3.12-3-10.js")]
+    [InlineData("built-ins/Object/isSealed/15.2.3.11-4-19.js")]
+    [InlineData("built-ins/Object/seal/object-seal-o-is-a-function-object.js")]
+    public void Built_in_objects_report_integrity_state_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-1.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-3.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-4.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-b-i-1.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-data-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-accessor-property.js")]
+    public void Ordinary_object_integrity_levels_update_property_descriptors_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-7.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-10.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js")]
+    public void Array_like_named_properties_apply_integrity_levels_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-9.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-a-date-object-that-uses-object-s-get-own-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-a-function-object-that-uses-object-s-get-own-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-a-reg-exp-object-that-uses-object-s-get-own-property.js")]
+    public void Exotic_object_expandos_apply_integrity_levels_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/seal/seal-arraybuffer.js")]
+    [InlineData("built-ins/Object/seal/seal-int8array.js")]
+    [InlineData("built-ins/Object/seal/seal-float64array.js")]
+    [InlineData("built-ins/Object/seal/seal-bigint64array.js")]
+    public void Zero_length_buffer_views_can_be_sealed_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/split/call-split-l-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/argument-is-undefined-and-instance-is-string.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-null-instance-is-thisnullisnullanullstringnullobject.js")]
+    [InlineData("built-ins/String/prototype/split/separator-override-tostring-limit-override-valueof.js")]
+    public void String_split_coerces_ordinary_separator_and_limit_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/split/argument-is-new-reg-exp-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/arguments-are-new-reg-exp-and-3-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-new-reg-exp.js")]
+    public void String_split_trims_empty_matches_from_constructed_RegExp_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/split/name.js")]
+    [InlineData("built-ins/String/prototype/split/checking-if-deleting-the-string-prototype-split-length-property-fails.js")]
+    public void String_split_function_metadata_matches_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void String_split_function_metadata_is_isolated_between_realms()
+    {
+        const string relativePath = "built-ins/String/prototype/split/name.js";
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+    }
+
+    [Fact]
+    public void String_split_coerces_separator_before_returning_for_zero_limit()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/split/separator-tostring-error.js");
+
+    [Theory]
+    [InlineData("built-ins/String/S15.5.2.1_A1_T7.js")]
+    [InlineData("built-ins/String/S15.5.2.1_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/split/separator-override-valueof.js")]
+    public void Boxed_string_construction_coerces_objects_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js")]
+    public void Boolean_prototype_accepts_symbol_descriptors_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-number-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-string-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T1.js")]
+    [InlineData("built-ins/String/prototype/search/cstm-search-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A1_T4.js")]
+    public void String_match_and_search_coerce_non_RegExp_arguments_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T6.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T10.js")]
+    public void Unmatched_RegExp_captures_are_undefined_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

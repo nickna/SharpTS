@@ -143,7 +143,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable
             // this branch the assertion fails before we ever see the descriptor.
             BuiltInMethod method when key is "name" or "length"
                 => method.HasMetadataProperty(key),
-            ISharpTSCallable when key is "name" or "length" => true,
+            StringPrototypeMethodWrapper method when key is "name" or "length"
+                => method.HasMetadataProperty(key),
+            ISharpTSCallable when target is not StringPrototypeMethodWrapper
+                && key is "name" or "length" => true,
             _ => false,
         };
     }

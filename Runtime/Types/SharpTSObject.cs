@@ -79,6 +79,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void Freeze()
     {
+        SetOwnPropertyIntegrityLevel(frozen: true);
         IsFrozen = true;
         IsSealed = true; // Frozen implies sealed
         IsExtensible = false; // Frozen implies non-extensible
@@ -89,8 +90,38 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void Seal()
     {
+        SetOwnPropertyIntegrityLevel(frozen: false);
         IsSealed = true;
         IsExtensible = false;
+    }
+
+    /// <summary>
+    /// Applies SetIntegrityLevel's descriptor changes to every own string-keyed
+    /// property. Sealing clears configurability; freezing also clears
+    /// writability for data properties while preserving enumerability.
+    /// </summary>
+    private void SetOwnPropertyIntegrityLevel(bool frozen)
+    {
+        _descriptors ??= [];
+
+        foreach (var name in _fields.Keys)
+        {
+            var current = GetPropertyFlags(name);
+            _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+                writable: frozen ? false : current.Writable,
+                enumerable: current.Enumerable,
+                configurable: false);
+        }
+
+        if (_accessorProperties is null) return;
+        foreach (var name in _accessorProperties)
+        {
+            var current = GetPropertyFlags(name);
+            _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+                writable: current.Writable,
+                enumerable: current.Enumerable,
+                configurable: false);
+        }
     }
 
     /// <summary>

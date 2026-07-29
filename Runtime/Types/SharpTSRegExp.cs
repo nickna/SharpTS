@@ -117,6 +117,8 @@ public class SharpTSRegExp : ITypeCategorized
     internal bool DeleteProperty(string name) => _properties.DeleteProperty(name);
 
     internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
+    internal void FreezeOwnProperties() => _properties.Freeze();
+    internal void SealOwnProperties() => _properties.Seal();
 
     /// <summary>
     /// Registers an accessor pair from <c>Object.defineProperty</c>. Either
@@ -847,6 +849,28 @@ public class SharpTSRegExp : ITypeCategorized
     /// <returns>An array of substrings.</returns>
     internal string[] Split(string input)
     {
-        return _regex.Split(input);
+        var parts = _regex.Split(input);
+
+        // .NET includes synthetic empty entries before and after a zero-width
+        // separator match. ECMAScript split omits those boundary entries, so
+        // "hello".split(new RegExp()) produces the five characters rather
+        // than ["", "h", "e", "l", "l", "o", ""]. Keep this in sync
+        // with the emitted $RegExp.Split implementation.
+        if (!_regex.IsMatch(""))
+            return parts;
+
+        int start = 0;
+        int end = parts.Length;
+        while (start < end && parts[start] == "")
+            start++;
+        while (end > start && parts[end - 1] == "")
+            end--;
+
+        if (start == 0 && end == parts.Length)
+            return parts;
+
+        var result = new string[end - start];
+        Array.Copy(parts, start, result, 0, result.Length);
+        return result;
     }
 }

@@ -100,6 +100,8 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         => _properties.GetOwnPropertyDescriptor(name);
     public bool IsPropertyEnumerable(string name)
         => _properties.GetOwnPropertyDescriptor(name) is { Enumerable: true };
+    internal void FreezeOwnProperties() => _properties.Freeze();
+    internal void SealOwnProperties() => _properties.Seal();
 
     // JS functions are objects — they accept symbol-keyed property
     // assignment too (`fn[Symbol.species] = ...`). Without per-instance
@@ -426,6 +428,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         => _properties.GetOwnPropertyDescriptor(name);
     public bool IsPropertyEnumerable(string name)
         => _properties.GetOwnPropertyDescriptor(name) is { Enumerable: true };
+    internal void FreezeOwnProperties() => _properties.Freeze();
+    internal void SealOwnProperties() => _properties.Seal();
 
     // Symbol-keyed property storage — same rationale as SharpTSFunction
     // above (test262 species-* patterns install Symbol.species on a

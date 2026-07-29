@@ -112,7 +112,7 @@ public static class BuiltInConstructorFactory
         // return boxed SharpTSObjects with __primitiveType / __primitiveValue markers,
         // matching compiled-mode behaviour so typeof is "object" and instanceof works.
         if (name == "Number") return CreateBoxedNumber(args);
-        if (name == "String") return CreateBoxedString(args);
+        if (name == "String") return CreateBoxedString(args, interpreter);
         if (name == "Boolean") return CreateBoxedBoolean(args);
 
         // Check simple constructors first
@@ -402,20 +402,32 @@ public static class BuiltInConstructorFactory
     /// String exotic wrapper with <c>__primitiveType="String"</c>,
     /// <c>__primitiveValue</c>, a <c>length</c> slot, and indexed character slots.
     /// </summary>
-    private static SharpTSObject CreateBoxedString(IReadOnlyList<object?> args)
+    private static SharpTSObject CreateBoxedString(
+        IReadOnlyList<object?> args,
+        Interpreter? interpreter = null)
     {
-        string value = args.Count == 0
-            ? ""
-            : args[0] switch
+        string value;
+        if (args.Count == 0)
         {
-            null => "null",
-            SharpTSUndefined => "undefined",
-            bool b => b ? "true" : "false",
-            double d => RuntimeTypes.Stringify(d),
-            string s => s,
-            SharpTSArray arr => arr.ToString()!,
-            _ => args[0]?.ToString() ?? "",
-        };
+            value = "";
+        }
+        else if (interpreter != null)
+        {
+            value = interpreter.ToStringForBuiltInArgument(args[0]);
+        }
+        else
+        {
+            value = args[0] switch
+            {
+                null => "null",
+                SharpTSUndefined => "undefined",
+                bool b => b ? "true" : "false",
+                double d => RuntimeTypes.Stringify(d),
+                string s => s,
+                SharpTSArray arr => arr.ToString()!,
+                _ => args[0]?.ToString() ?? "",
+            };
+        }
         var dict = new Dictionary<string, object?>
         {
             ["__primitiveType"] = "String",

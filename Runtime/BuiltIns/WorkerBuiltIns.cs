@@ -155,7 +155,12 @@ internal class ArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInTypeConstr
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        if (arguments.Count == 0 || arguments[0] is not double length)
+        // ECMA-262 applies ToIndex(undefined) when length is omitted, yielding
+        // a valid zero-length ArrayBuffer.
+        if (arguments.Count == 0)
+            return new SharpTSArrayBuffer(0);
+
+        if (arguments[0] is not double length)
             throw new Exception("ArrayBuffer constructor requires a length argument");
 
         return new SharpTSArrayBuffer((int)length);
@@ -203,8 +208,10 @@ internal class TypedArrayConstructorImpl<T> : ISharpTSCallable, IBuiltInTypeCons
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
+        // %TypedArray% construction with no arguments creates a zero-length
+        // view rather than requiring an explicit length.
         if (arguments.Count == 0)
-            throw new Exception("TypedArray constructor requires at least one argument");
+            return _createFromLength(0);
 
         // new Int32Array(length)
         if (arguments[0] is double length)

@@ -340,6 +340,22 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 arr.Freeze();
                 return RuntimeValue.FromObject(arr);
+            case SharpTSFunction fn:
+                fn.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(fn);
+                return RuntimeValue.FromObject(fn);
+            case SharpTSArrowFunction arrow:
+                arrow.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(arrow);
+                return RuntimeValue.FromObject(arrow);
+            case SharpTSDate date:
+                date.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(date);
+                return RuntimeValue.FromObject(date);
+            case SharpTSRegExp regex:
+                regex.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(regex);
+                return RuntimeValue.FromObject(regex);
             case Dictionary<string, object?> dict:
                 PropertyDescriptorStore.Freeze(dict);
                 return RuntimeValue.FromObject(dict);
@@ -347,6 +363,8 @@ public static partial class ObjectBuiltIns
                 PropertyDescriptorStore.Freeze(idict);
                 return RuntimeValue.FromObject(idict);
             default:
+                if (args[0].Kind == ValueKind.Object && arg is not null)
+                    PropertyDescriptorStore.Freeze(arg);
                 return args[0];
         }
     }
@@ -365,6 +383,22 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 arr.Seal();
                 return RuntimeValue.FromObject(arr);
+            case SharpTSFunction fn:
+                fn.SealOwnProperties();
+                PropertyDescriptorStore.Seal(fn);
+                return RuntimeValue.FromObject(fn);
+            case SharpTSArrowFunction arrow:
+                arrow.SealOwnProperties();
+                PropertyDescriptorStore.Seal(arrow);
+                return RuntimeValue.FromObject(arrow);
+            case SharpTSDate date:
+                date.SealOwnProperties();
+                PropertyDescriptorStore.Seal(date);
+                return RuntimeValue.FromObject(date);
+            case SharpTSRegExp regex:
+                regex.SealOwnProperties();
+                PropertyDescriptorStore.Seal(regex);
+                return RuntimeValue.FromObject(regex);
             case Dictionary<string, object?> dict:
                 PropertyDescriptorStore.Seal(dict);
                 return RuntimeValue.FromObject(dict);
@@ -372,6 +406,8 @@ public static partial class ObjectBuiltIns
                 PropertyDescriptorStore.Seal(idict);
                 return RuntimeValue.FromObject(idict);
             default:
+                if (args[0].Kind == ValueKind.Object && arg is not null)
+                    PropertyDescriptorStore.Seal(arg);
                 return args[0];
         }
     }
@@ -386,6 +422,8 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.IsFrozen,
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsFrozen(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsFrozen(idict),
+            _ when args[0].Kind == ValueKind.Object && arg is not null
+                => PropertyDescriptorStore.IsFrozen(arg),
             _ => true
         });
     }
@@ -400,6 +438,8 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.IsSealed,
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsSealed(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsSealed(idict),
+            _ when args[0].Kind == ValueKind.Object && arg is not null
+                => PropertyDescriptorStore.IsSealed(arg),
             _ => true
         });
     }
@@ -522,6 +562,9 @@ public static partial class ObjectBuiltIns
             case SharpTSNumberPrototype numberPrototype:
                 success = numberPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSBooleanPrototype booleanPrototype:
+                success = booleanPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -625,6 +668,8 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
@@ -638,7 +683,11 @@ public static partial class ObjectBuiltIns
             BuiltInMethod method when propertyKey is "name" or "length"
                 && method.HasMetadataProperty(propertyKey)
                 => GetCallableMetaDescriptor(method, propertyKey),
+            StringPrototypeMethodWrapper method when propertyKey is "name" or "length"
+                && method.HasMetadataProperty(propertyKey)
+                => GetCallableMetaDescriptor(method, propertyKey),
             ISharpTSCallable callable when callable is not BuiltInMethod
+                and not StringPrototypeMethodWrapper
                 && propertyKey is "name" or "length"
                 => GetCallableMetaDescriptor(callable, propertyKey),
             SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
@@ -1465,10 +1514,31 @@ public static partial class ObjectBuiltIns
         => RuntimeValue.FromBoxed(Create(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue PreventExtensionsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(PreventExtensions(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var arg = args[0].ToObject();
+        var result = PreventExtensions(interp, CallableInterop.ToBoxedList(args));
+        if (args[0].Kind == ValueKind.Object
+            && arg is not null
+            && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray
+                or Dictionary<string, object?> or System.Collections.IDictionary))
+        {
+            PropertyDescriptorStore.PreventExtensions(arg);
+        }
+        return RuntimeValue.FromBoxed(result);
+    }
 
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(IsExtensibleMethod(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var arg = args[0].ToObject();
+        if (args[0].Kind == ValueKind.Object
+            && arg is not null
+            && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray
+                or Dictionary<string, object?> or System.Collections.IDictionary))
+        {
+            return RuntimeValue.FromBoolean(PropertyDescriptorStore.IsExtensible(arg));
+        }
+        return RuntimeValue.FromBoxed(IsExtensibleMethod(interp, CallableInterop.ToBoxedList(args)));
+    }
 
     private static RuntimeValue GetOwnPropertySymbolsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(GetOwnPropertySymbols(interp, CallableInterop.ToBoxedList(args)));

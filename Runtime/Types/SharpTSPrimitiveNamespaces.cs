@@ -139,6 +139,7 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
 {
     private readonly string _name;
     private readonly BuiltInMethod _inner;
+    private readonly HashSet<string> _deletedMetadataProperties;
     private readonly object? _receiver;
     private readonly bool _hasReceiver;
 
@@ -146,12 +147,18 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
     {
         _name = name;
         _inner = inner;
+        _deletedMetadataProperties = [];
     }
 
-    private StringPrototypeMethodWrapper(string name, BuiltInMethod inner, object? receiver)
+    private StringPrototypeMethodWrapper(
+        string name,
+        BuiltInMethod inner,
+        HashSet<string> deletedMetadataProperties,
+        object? receiver)
     {
         _name = name;
         _inner = inner;
+        _deletedMetadataProperties = deletedMetadataProperties;
         _receiver = receiver;
         _hasReceiver = true;
     }
@@ -159,7 +166,21 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable
     public int Arity() => _inner.SpecLength;
 
     public StringPrototypeMethodWrapper Bind(object? receiver)
-        => new(_name, _inner, receiver);
+        => new(_name, _inner, _deletedMetadataProperties, receiver);
+
+    internal string FunctionName => _name;
+
+    internal bool HasMetadataProperty(string name)
+        => name is "name" or "length"
+            && !_deletedMetadataProperties.Contains(name);
+
+    internal bool DeleteMetadataProperty(string name)
+    {
+        if (name is not ("name" or "length"))
+            return true;
+        _deletedMetadataProperties.Add(name);
+        return true;
+    }
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -389,15 +410,16 @@ public sealed class SharpTSBooleanPrototype
     // instance; only the _extras overlay differs between instances.
     internal SharpTSBooleanPrototype() { }
 
-    private Dictionary<string, object?>? _extras;
-    public bool HasExtra(string name) => _extras is not null && _extras.ContainsKey(name);
-    public object? TryGetExtra(string name) =>
-        _extras is not null && _extras.TryGetValue(name, out var v) ? v : null;
-    public void SetExtra(string name, object? value)
-    {
-        _extras ??= new Dictionary<string, object?>();
-        _extras[name] = value;
-    }
+    private readonly SharpTSObject _extras = new([]);
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(name, descriptor);
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);

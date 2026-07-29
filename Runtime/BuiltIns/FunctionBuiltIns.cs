@@ -47,6 +47,12 @@ public static class FunctionBuiltIns
         {
             return null;
         }
+        if (receiver is Types.StringPrototypeMethodWrapper stringMethod
+            && name is "name" or "length"
+            && !stringMethod.HasMetadataProperty(name))
+        {
+            return null;
+        }
 
         switch (name)
         {
@@ -62,7 +68,10 @@ public static class FunctionBuiltIns
                 return receiver is BuiltInMethod bim
                     ? (double)bim.SpecLength
                     : (double)receiver.Arity();
-            case "name": return GetFunctionName(receiver);
+            case "name":
+                return receiver is Types.StringPrototypeMethodWrapper stringWrapper
+                    ? stringWrapper.FunctionName
+                    : GetFunctionName(receiver);
         }
         // Functions inherit Object.prototype — propertyHelper.js's verifyXxx
         // helpers call `fn.hasOwnProperty('length')` directly. Resolve those

@@ -23,10 +23,10 @@ public static class StringBuiltIns
             .MethodV2("toLocaleLowerCase", 0, ToLowerCaseV2)
             .MethodV2("trim", 0, TrimV2)
             .MethodV2("replace", 2, ReplaceV2)
-            .MethodV2("split", 1, 2, specLength: 2, SplitV2)
-            .MethodV2("match", 1, MatchV2)
+            .MethodV2("split", 0, int.MaxValue, specLength: 2, SplitV2)
+            .MethodV2("match", 0, int.MaxValue, specLength: 1, MatchV2)
             .MethodV2("matchAll", 1, MatchAllV2)
-            .MethodV2("search", 1, SearchV2)
+            .MethodV2("search", 0, int.MaxValue, specLength: 1, SearchV2)
             .MethodV2("includes", 0, int.MaxValue, specLength: 1, IncludesV2)
             .MethodV2("startsWith", 0, int.MaxValue, specLength: 1, StartsWithV2)
             .MethodV2("endsWith", 0, int.MaxValue, specLength: 1, EndsWithV2)
@@ -100,20 +100,36 @@ public static class StringBuiltIns
         return RuntimeValue.FromString(str.Substring(0, index) + replacement + str.Substring(index + search.Length));
     }
 
-    private static RuntimeValue SplitV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        int? limit = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumber() : null;
+        uint limit = args.Length < 2 || args[1].IsUndefined
+            ? uint.MaxValue
+            : ToUint32(interpreter.ToNumberWithPrimitive(args[1].ToObject()));
 
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        object? separatorValue = ArgumentOrUndefined(args, 0);
+        if (separatorValue is SharpTSUndefined)
         {
+            return RuntimeValue.FromObject(limit == 0
+                ? new SharpTSArray()
+                : new SharpTSArray([(object?)str]));
+        }
+
+        if (separatorValue is SharpTSRegExp regex)
+        {
+            if (limit == 0)
+                return RuntimeValue.FromObject(new SharpTSArray());
+
             string[] parts = regex.Split(str);
-            IEnumerable<string> resultParts = limit.HasValue && limit.Value >= 0
-                ? parts.Take(limit.Value)
+            IEnumerable<string> resultParts = limit < parts.Length
+                ? parts.Take((int)limit)
                 : parts;
             return RuntimeValue.FromObject(new SharpTSArray(resultParts.Select(p => (object?)p).ToList()));
         }
 
-        var separator = args[0].ToObject()?.ToString() ?? "";
+        var separator = interpreter.ToStringForBuiltInArgument(separatorValue);
+        if (limit == 0)
+            return RuntimeValue.FromObject(new SharpTSArray());
+
         string[] stringParts;
         if (separator == "")
         {
@@ -124,18 +140,32 @@ public static class StringBuiltIns
             stringParts = str.Split(separator);
         }
 
-        if (limit.HasValue && limit.Value >= 0)
+        if (limit < stringParts.Length)
         {
-            stringParts = stringParts.Take(limit.Value).ToArray();
+            stringParts = stringParts.Take((int)limit).ToArray();
         }
 
         var elements = stringParts.Select(p => (object?)p).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(elements));
     }
 
-    private static RuntimeValue MatchV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static uint ToUint32(double number)
     {
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        if (!double.IsFinite(number) || number == 0)
+            return 0;
+
+        const double modulus = 4294967296d;
+        double integer = Math.Truncate(number);
+        double modulo = integer % modulus;
+        if (modulo < 0)
+            modulo += modulus;
+        return (uint)modulo;
+    }
+
+    private static RuntimeValue MatchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        object? pattern = ArgumentOrUndefined(args, 0);
+        if (pattern is SharpTSRegExp regex)
         {
             if (regex.Global)
             {
@@ -145,14 +175,29 @@ public static class StringBuiltIns
             }
             else
             {
-                return RuntimeValue.FromBoxed(regex.Exec(str));
+                var match = regex.Exec(str);
+                if (match != null)
+                {
+                    for (int i = 1; i < match.Length; i++)
+                    {
+                        if (match.Get(i) is null)
+                            match.Set(i, SharpTSUndefined.Instance);
+                    }
+                }
+                return RuntimeValue.FromBoxed(match);
             }
         }
 
-        var search = args[0].ToObject()?.ToString() ?? "";
+        if (pattern is SharpTSUndefined)
+            return RuntimeValue.FromBoxed(new SharpTSRegExp("").Exec(str));
+
+        var search = interpreter.ToStringForBuiltInArgument(pattern);
         var index = str.IndexOf(search);
         if (index < 0) return RuntimeValue.Null;
-        return RuntimeValue.FromObject(new SharpTSArray([(object?)search]));
+        var result = new SharpTSArray([(object?)search]);
+        result.SetNamedProperty("index", (double)index);
+        result.SetNamedProperty("input", str);
+        return RuntimeValue.FromObject(result);
     }
 
     private static RuntimeValue MatchAllV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
@@ -171,14 +216,17 @@ public static class StringBuiltIns
         return RuntimeValue.FromObject(new SharpTSArray(results.Select(m => (object?)m).ToList()));
     }
 
-    private static RuntimeValue SearchV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue SearchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        object? pattern = ArgumentOrUndefined(args, 0);
+        if (pattern is SharpTSRegExp regex)
         {
             return RuntimeValue.FromNumber(regex.Search(str));
         }
 
-        var search = args[0].ToObject()?.ToString() ?? "";
+        var search = pattern is SharpTSUndefined
+            ? ""
+            : interpreter.ToStringForBuiltInArgument(pattern);
         return RuntimeValue.FromNumber(str.IndexOf(search));
     }
 
