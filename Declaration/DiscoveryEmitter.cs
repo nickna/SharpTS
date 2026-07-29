@@ -7,9 +7,8 @@ namespace SharpTS.Declaration;
 
 /// <summary>
 /// Renders a <see cref="DiscoveryReport"/> for human reading (text) or tooling (<c>--json</c>).
-/// This is the discovery-oriented replacement for <c>TypeScriptEmitter</c>'s role in
-/// <c>--gen-decl</c>: it has no obligation to produce syntactically valid TypeScript, so it can
-/// show unsupported members transparently instead of mangling them into invalid syntax.
+/// Being discovery-oriented, it has no obligation to produce syntactically valid TypeScript, so it
+/// can show unsupported members transparently instead of mangling them into invalid syntax.
 /// </summary>
 public static class DiscoveryEmitter
 {
