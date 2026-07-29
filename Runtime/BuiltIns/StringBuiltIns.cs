@@ -175,7 +175,16 @@ public static class StringBuiltIns
             }
             else
             {
-                return RuntimeValue.FromBoxed(regex.Exec(str));
+                var match = regex.Exec(str);
+                if (match != null)
+                {
+                    for (int i = 1; i < match.Length; i++)
+                    {
+                        if (match.Get(i) is null)
+                            match.Set(i, SharpTSUndefined.Instance);
+                    }
+                }
+                return RuntimeValue.FromBoxed(match);
             }
         }
 

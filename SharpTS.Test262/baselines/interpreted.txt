@@ -10385,8 +10385,8 @@ test/built-ins/String/prototype/match/S15.5.4.10_A1_T7.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T8.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T9.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T1.js Pass
-test/built-ins/String/prototype/match/S15.5.4.10_A2_T10.js Fail
-test/built-ins/String/prototype/match/S15.5.4.10_A2_T11.js Fail
+test/built-ins/String/prototype/match/S15.5.4.10_A2_T10.js Pass
+test/built-ins/String/prototype/match/S15.5.4.10_A2_T11.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T12.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T13.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T14.js Pass
@@ -10398,10 +10398,10 @@ test/built-ins/String/prototype/match/S15.5.4.10_A2_T2.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T3.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T4.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T5.js Pass
-test/built-ins/String/prototype/match/S15.5.4.10_A2_T6.js Fail
+test/built-ins/String/prototype/match/S15.5.4.10_A2_T6.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A2_T7.js Pass
-test/built-ins/String/prototype/match/S15.5.4.10_A2_T8.js Fail
-test/built-ins/String/prototype/match/S15.5.4.10_A2_T9.js Fail
+test/built-ins/String/prototype/match/S15.5.4.10_A2_T8.js Pass
+test/built-ins/String/prototype/match/S15.5.4.10_A2_T9.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A6.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A7.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A8.js Pass

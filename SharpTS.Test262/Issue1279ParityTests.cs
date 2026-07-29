@@ -473,6 +473,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T6.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A2_T10.js")]
+    public void Unmatched_RegExp_captures_are_undefined_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
