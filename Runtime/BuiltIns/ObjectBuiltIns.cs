@@ -562,6 +562,9 @@ public static partial class ObjectBuiltIns
             case SharpTSNumberPrototype numberPrototype:
                 success = numberPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSBooleanPrototype booleanPrototype:
+                success = booleanPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -664,6 +667,8 @@ public static partial class ObjectBuiltIns
             SharpTSStringPrototype stringPrototype => stringPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),

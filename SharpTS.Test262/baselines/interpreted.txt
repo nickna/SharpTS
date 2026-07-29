@@ -2941,7 +2941,7 @@ test/built-ins/Array/prototype/toLocaleString/length.js Fail
 test/built-ins/Array/prototype/toLocaleString/name.js Fail
 test/built-ins/Array/prototype/toLocaleString/not-a-constructor.js Pass
 test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js Fail
-test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js RuntimeError
+test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js Fail
 test/built-ins/Array/prototype/toLocaleString/prop-desc.js Pass
 test/built-ins/Array/prototype/toLocaleString/resizable-buffer.js RuntimeError
 test/built-ins/Array/prototype/toLocaleString/user-provided-tolocalestring-grow.js RuntimeError
@@ -5836,7 +5836,7 @@ test/built-ins/Object/defineProperty/15.2.3.6-4-4.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-40.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-402.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-403.js Pass
-test/built-ins/Object/defineProperty/15.2.3.6-4-404.js RuntimeError
+test/built-ins/Object/defineProperty/15.2.3.6-4-404.js Fail
 test/built-ins/Object/defineProperty/15.2.3.6-4-405.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-406.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-407.js RuntimeError
@@ -6058,7 +6058,7 @@ test/built-ins/Object/defineProperty/15.2.3.6-4-577.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-578.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-579.js Fail
 test/built-ins/Object/defineProperty/15.2.3.6-4-58.js Pass
-test/built-ins/Object/defineProperty/15.2.3.6-4-580.js RuntimeError
+test/built-ins/Object/defineProperty/15.2.3.6-4-580.js Fail
 test/built-ins/Object/defineProperty/15.2.3.6-4-581.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-582.js Pass
 test/built-ins/Object/defineProperty/15.2.3.6-4-583.js RuntimeError
@@ -7242,7 +7242,7 @@ test/built-ins/Object/prototype/toLocaleString/S15.2.4.3_A9.js Fail
 test/built-ins/Object/prototype/toLocaleString/name.js Fail
 test/built-ins/Object/prototype/toLocaleString/not-a-constructor.js Pass
 test/built-ins/Object/prototype/toLocaleString/primitive_this_value.js Fail
-test/built-ins/Object/prototype/toLocaleString/primitive_this_value_getter.js RuntimeError
+test/built-ins/Object/prototype/toLocaleString/primitive_this_value_getter.js Fail
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-arguments.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-bigint.js Fail
@@ -10546,7 +10546,7 @@ test/built-ins/String/prototype/replace/cstm-replace-get-err.js Fail
 test/built-ins/String/prototype/replace/cstm-replace-invocation.js Fail
 test/built-ins/String/prototype/replace/cstm-replace-is-null.js Fail
 test/built-ins/String/prototype/replace/cstm-replace-on-bigint-primitive.js RuntimeError
-test/built-ins/String/prototype/replace/cstm-replace-on-boolean-primitive.js RuntimeError
+test/built-ins/String/prototype/replace/cstm-replace-on-boolean-primitive.js Pass
 test/built-ins/String/prototype/replace/cstm-replace-on-number-primitive.js Pass
 test/built-ins/String/prototype/replace/cstm-replace-on-string-primitive.js Pass
 test/built-ins/String/prototype/replace/length.js Pass
@@ -10560,7 +10560,7 @@ test/built-ins/String/prototype/replace/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/replace/tostring-this-throws-symbol.js Pass
 test/built-ins/String/prototype/replace/tostring-this-throws-toprimitive.js Pass
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-bigint-primitive.js RuntimeError
-test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-boolean-primitive.js RuntimeError
+test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-boolean-primitive.js Fail
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-number-primitive.js Pass
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-string-primitive.js Pass
 test/built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x0024.js Fail
@@ -10637,7 +10637,7 @@ test/built-ins/String/prototype/search/cstm-search-get-err.js Fail
 test/built-ins/String/prototype/search/cstm-search-invocation.js Fail
 test/built-ins/String/prototype/search/cstm-search-is-null.js Fail
 test/built-ins/String/prototype/search/cstm-search-on-bigint-primitive.js RuntimeError
-test/built-ins/String/prototype/search/cstm-search-on-boolean-primitive.js RuntimeError
+test/built-ins/String/prototype/search/cstm-search-on-boolean-primitive.js Fail
 test/built-ins/String/prototype/search/cstm-search-on-number-primitive.js Pass
 test/built-ins/String/prototype/search/cstm-search-on-string-primitive.js Pass
 test/built-ins/String/prototype/search/invoke-builtin-search-searcher-undef.js Fail
@@ -10765,7 +10765,7 @@ test/built-ins/String/prototype/split/cstm-split-get-err.js Fail
 test/built-ins/String/prototype/split/cstm-split-invocation.js Fail
 test/built-ins/String/prototype/split/cstm-split-is-null.js Pass
 test/built-ins/String/prototype/split/cstm-split-on-bigint-primitive.js RuntimeError
-test/built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js RuntimeError
+test/built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js Pass
 test/built-ins/String/prototype/split/cstm-split-on-number-primitive.js Pass
 test/built-ins/String/prototype/split/cstm-split-on-string-primitive.js Pass
 test/built-ins/String/prototype/split/instance-is-array-1-2-3-4-5.js Pass

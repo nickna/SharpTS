@@ -453,6 +453,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js")]
+    public void Boolean_prototype_accepts_symbol_descriptors_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
