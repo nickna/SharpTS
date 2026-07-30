@@ -114,9 +114,13 @@ public static class StructuredClone
         {
             interpBuffer.Detach();
         }
-        else if (buffer.GetType().Name == "$ArrayBuffer")
+        else if (ManagedEmittedShapeReflection.IsShape(
+                     buffer.GetType(), ManagedEmittedShape.ArrayBuffer))
         {
-            buffer.GetType().GetMethod("Detach")?.Invoke(buffer, null);
+            ManagedEmittedShapeReflection.GetPublicMethod(
+                    buffer.GetType(), ManagedEmittedShape.ArrayBuffer,
+                    "Detach", Type.EmptyTypes)
+                ?.Invoke(buffer, null);
         }
     }
 
@@ -487,18 +491,21 @@ public static class StructuredClone
         var type = source.GetType();
 
         // Get ByteLength property
-        var byteLengthProp = type.GetProperty("ByteLength");
+        var byteLengthProp = ManagedEmittedShapeReflection.GetPublicProperty(
+            type, ManagedEmittedShape.ArrayBuffer, "ByteLength");
         var byteLength = (int)(byteLengthProp?.GetValue(source) ?? 0);
 
         // Get the backing buffer via GetBuffer() method
-        var getBufferMethod = type.GetMethod("GetBuffer");
+        var getBufferMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+            type, ManagedEmittedShape.ArrayBuffer, "GetBuffer", Type.EmptyTypes);
         var sourceBuffer = (byte[]?)getBufferMethod?.Invoke(source, null);
 
         if (sourceBuffer == null)
             throw new DataCloneError("Cannot clone ArrayBuffer: unable to access backing buffer");
 
         // Create new instance with same length
-        var ctor = type.GetConstructor([typeof(int)]);
+        var ctor = ManagedEmittedShapeReflection.GetPublicConstructor(
+            type, ManagedEmittedShape.ArrayBuffer, [typeof(int)]);
         if (ctor == null)
             throw new DataCloneError("Cannot clone ArrayBuffer: constructor not found");
 

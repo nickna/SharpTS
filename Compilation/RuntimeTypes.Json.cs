@@ -1,21 +1,10 @@
 using System.Text.Json;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
 public static partial class RuntimeTypes
 {
-    /// <summary>
-    /// Converts a PascalCase property name to camelCase for JSON serialization.
-    /// </summary>
-    private static string ToCamelCase(string pascalCase)
-    {
-        if (string.IsNullOrEmpty(pascalCase))
-            return pascalCase;
-        if (char.IsLower(pascalCase[0]))
-            return pascalCase;
-        return char.ToLowerInvariant(pascalCase[0]) + pascalCase[1..];
-    }
-
     #region JSON Methods
 
     public static object? JsonParse(object? text)
@@ -204,11 +193,12 @@ public static partial class RuntimeTypes
             return toJsonMethod.Invoke(value, null);
         }
 
-        // Check for toJSON in _fields dictionary (for objects with callable toJSON property)
-        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (fieldsField?.GetValue(value) is Dictionary<string, object?> fields)
+        // Check for toJSON in the compiler-emitted $IHasFields dictionary
+        // (for objects with a callable toJSON data property).
+        if (ManagedEmittedShapeReflection.TryGetFields(value, out var fields))
         {
-            if (fields.TryGetValue("toJSON", out var toJsonFunc) && toJsonFunc is TSFunction func)
+            if (fields!.TryGetValue("toJSON", out var toJsonFunc) &&
+                toJsonFunc is TSFunction func)
             {
                 return func.Invoke();
             }
@@ -230,9 +220,8 @@ public static partial class RuntimeTypes
                                    type.GetGenericTypeDefinition() == typeof(Dictionary<,>)))
             return false;
 
-        // Check for _fields field (indicates a compiled class instance)
-        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        return fieldsField != null;
+        return ManagedEmittedShapeReflection.IsShape(
+            type, ManagedEmittedShape.HasFields);
     }
 
     /// <summary>
@@ -240,36 +229,18 @@ public static partial class RuntimeTypes
     /// </summary>
     private static string StringifyClassInstance(object value, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
-        var type = value.GetType();
         Dictionary<string, object?> allFields = [];
-        HashSet<string> seenKeys = [];
-
-        // Get values from typed backing fields (fields starting with __)
-        // Property names are stored as PascalCase but JSON output should use camelCase
-        foreach (var backingField in type.GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+        if (!ManagedEmittedShapeReflection.TryGetFields(value, out var fields))
         {
-            if (backingField.Name.StartsWith("__"))
-            {
-                string pascalName = backingField.Name[2..];
-                string camelName = ToCamelCase(pascalName);
-                seenKeys.Add(pascalName);  // Track PascalCase for dedup with _fields
-                if (allowedKeys == null || allowedKeys.Contains(camelName))
-                {
-                    allFields[camelName] = backingField.GetValue(value);
-                }
-            }
+            throw new InvalidOperationException(
+                "StringifyClassInstance requires a compiler-emitted $IHasFields object.");
         }
 
-        // Also get from _fields dictionary (for dynamic properties and generic type fields)
-        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (fieldsField?.GetValue(value) is Dictionary<string, object?> fields)
+        foreach (var kv in fields!)
         {
-            foreach (var kv in fields)
+            if (allowedKeys == null || allowedKeys.Contains(kv.Key))
             {
-                if (!seenKeys.Contains(kv.Key) && (allowedKeys == null || allowedKeys.Contains(kv.Key)))
-                {
-                    allFields[kv.Key] = kv.Value;
-                }
+                allFields[kv.Key] = kv.Value;
             }
         }
 

@@ -32,13 +32,14 @@ internal static class StreamFields
         // managed-emitted-shape boundary. Other CLR objects are not part of
         // this adapter's documented contract.
         var targetType = target.GetType();
-        if (!ManagedEmittedShapeReflection.IsShape(targetType, ManagedEmittedShape.Object))
+        if (!ManagedEmittedShapeReflection.IsShape(
+                targetType, ManagedEmittedShape.HasFields))
         {
             return false;
         }
         var prop = _fieldsPropCache.GetOrAdd(targetType, t =>
             ManagedEmittedShapeReflection.GetPublicProperty(
-                t, ManagedEmittedShape.Object, "Fields"));
+                t, ManagedEmittedShape.HasFields, "Fields"));
         if (prop != null && prop.GetValue(target) is IDictionary<string, object?> reflected)
         {
             return reflected.TryGetValue(name, out value);

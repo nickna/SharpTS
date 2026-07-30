@@ -33,8 +33,23 @@ internal static class ManagedEmittedShapeReflection
             ManagedEmittedShape.Function => type.Name is "$TSFunction" or "$BoundTSFunction",
             ManagedEmittedShape.WritableStream => type.Name == "$WritableStream",
             ManagedEmittedShape.MessagePort => type.Name == "$MessagePort",
+            ManagedEmittedShape.ArrayBuffer => type.Name == "$ArrayBuffer",
+            ManagedEmittedShape.Date => type.Name == "$TSDate",
+            ManagedEmittedShape.PromiseRejectedException =>
+                type.Name == "$PromiseRejectedException",
+            ManagedEmittedShape.HasFields => HasAssemblyLocalFieldsContract(type),
             _ => false
         };
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    private static bool HasAssemblyLocalFieldsContract(Type type)
+    {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return false;
+
+        return type.GetInterfaces().Any(i =>
+            i.Name == "$IHasFields" && i.Assembly == type.Assembly);
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
@@ -68,6 +83,40 @@ internal static class ManagedEmittedShapeReflection
         return type.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    internal static ConstructorInfo? GetPublicConstructor(
+        Type type,
+        ManagedEmittedShape shape,
+        Type[] parameterTypes)
+    {
+        RequireManagedShape(type, shape);
+        return type.GetConstructor(parameterTypes);
+    }
+
+    internal static bool TryGetFields(
+        object value,
+        out Dictionary<string, object?>? fields)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var type = value.GetType();
+        if (!IsShape(type, ManagedEmittedShape.HasFields))
+        {
+            fields = null;
+            return false;
+        }
+
+        var property = GetPublicProperty(type, ManagedEmittedShape.HasFields, "Fields")
+            ?? throw new InvalidOperationException(
+                $"Compiler-emitted type '{type.FullName}' implements $IHasFields " +
+                "without its required Fields property.");
+
+        fields = property.GetValue(value) as Dictionary<string, object?>
+            ?? throw new InvalidOperationException(
+                $"Compiler-emitted type '{type.FullName}' returned an invalid Fields value.");
+        return true;
+    }
+
     private static void RequireManagedShape(Type type, ManagedEmittedShape shape)
     {
         ArgumentNullException.ThrowIfNull(type);
@@ -93,6 +142,10 @@ internal static class ManagedEmittedShapeReflection
         ManagedEmittedShape.Function => "$TSFunction/$BoundTSFunction",
         ManagedEmittedShape.WritableStream => "$WritableStream",
         ManagedEmittedShape.MessagePort => "$MessagePort",
+        ManagedEmittedShape.ArrayBuffer => "$ArrayBuffer",
+        ManagedEmittedShape.Date => "$TSDate",
+        ManagedEmittedShape.PromiseRejectedException => "$PromiseRejectedException",
+        ManagedEmittedShape.HasFields => "$IHasFields object",
         _ => shape.ToString()
     };
 }
@@ -102,5 +155,9 @@ internal enum ManagedEmittedShape
     Object,
     Function,
     WritableStream,
-    MessagePort
+    MessagePort,
+    ArrayBuffer,
+    Date,
+    PromiseRejectedException,
+    HasFields
 }

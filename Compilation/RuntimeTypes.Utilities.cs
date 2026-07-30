@@ -1,3 +1,5 @@
+using SharpTS.Runtime;
+
 namespace SharpTS.Compilation;
 
 public static partial class RuntimeTypes
@@ -46,8 +48,7 @@ public static partial class RuntimeTypes
     /// Creates a TemplateStringsArray-like object with cooked/raw strings and calls the tag function.
     /// </summary>
     /// <remarks>
-    /// Handles both the compiler's TSFunction type and the emitted TSFunction type by using
-    /// reflection to find and invoke the Invoke method.
+    /// Handles the runtime's recognised managed and compiler-emitted callable shapes.
     /// For compiled mode, creates a List&lt;object?&gt; with a "raw" property that compiled code can access.
     /// </remarks>
     public static object? InvokeTaggedTemplate(
@@ -65,29 +66,12 @@ public static partial class RuntimeTypes
         args[0] = stringsArray;
         Array.Copy(expressions, 0, args, 1, expressions.Length);
 
-        // Invoke tag function
-        // Check if it's the compiler's TSFunction type
-        if (tag is TSFunction func)
-        {
-            return func.Invoke(args);
-        }
-
-        // Check if it's a Delegate
+        // Preserve Delegate.DynamicInvoke's params-array behavior for CLR delegates.
         if (tag is Delegate del)
-        {
             return del.DynamicInvoke(args);
-        }
 
-        // Check if it's the emitted TSFunction type (different type, same pattern)
-        // Use reflection to find and invoke the Invoke method
-        if (tag != null)
-        {
-            var invokeMethod = tag.GetType().GetMethod("Invoke", [typeof(object?[])]);
-            if (invokeMethod != null)
-            {
-                return invokeMethod.Invoke(tag, [args]);
-            }
-        }
+        if (RuntimeCallableDispatcher.IsCallable(tag))
+            return RuntimeCallableDispatcher.Invoke(null, tag, args);
 
         throw new Exception("TypeError: Tagged template tag must be a function.");
     }

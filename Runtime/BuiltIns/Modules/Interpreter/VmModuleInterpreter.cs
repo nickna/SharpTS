@@ -529,9 +529,9 @@ public static class VmModuleInterpreter
                 // Preserve other CLR "Fields" shapes for managed .NET interop.
                 var type = options.GetType();
                 var fieldsProp = ManagedEmittedShapeReflection.IsShape(
-                        type, ManagedEmittedShape.Object)
+                        type, ManagedEmittedShape.HasFields)
                     ? ManagedEmittedShapeReflection.GetPublicProperty(
-                        type, ManagedEmittedShape.Object, "Fields")
+                        type, ManagedEmittedShape.HasFields, "Fields")
                     : type.GetProperty("Fields");
                 if (fieldsProp?.GetValue(options) is IEnumerable<KeyValuePair<string, object?>> fields)
                 {

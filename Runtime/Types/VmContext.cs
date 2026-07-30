@@ -71,9 +71,9 @@ public static class VmContext
             // that path remains part of the separate native interop policy.
             var type = contextObject.GetType();
             var fieldsProp = ManagedEmittedShapeReflection.IsShape(
-                    type, ManagedEmittedShape.Object)
+                    type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicProperty(
-                    type, ManagedEmittedShape.Object, "Fields")
+                    type, ManagedEmittedShape.HasFields, "Fields")
                 : type.GetProperty("Fields");
             if (fieldsProp?.GetValue(contextObject) is IEnumerable<KeyValuePair<string, object?>> fields)
             {
@@ -143,9 +143,9 @@ public static class VmContext
             // custom CLR SetProperty shapes as the managed interop fallback.
             var type = contextObject.GetType();
             var setMethod = ManagedEmittedShapeReflection.IsShape(
-                    type, ManagedEmittedShape.Object)
+                    type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
-                    type, ManagedEmittedShape.Object, "SetProperty",
+                    type, ManagedEmittedShape.HasFields, "SetProperty",
                     [typeof(string), typeof(object)])
                 : type.GetMethod("SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)

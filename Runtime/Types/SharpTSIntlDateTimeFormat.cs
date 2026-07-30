@@ -575,10 +575,14 @@ public class SharpTSIntlDateTimeFormat : SharpTSIntlFormatterBase
         if (value is string s && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             return parsed;
 
-        // Handle emitted $TSDate type (compiled mode) via reflection
-        var getTimeMethod = value.GetType().GetMethod("GetTime");
-        if (getTimeMethod != null)
+        // Handle the compiler-emitted $TSDate managed shape.
+        var type = value.GetType();
+        if (ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Date))
         {
+            var getTimeMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+                    type, ManagedEmittedShape.Date, "GetTime", Type.EmptyTypes)
+                ?? throw new InvalidOperationException(
+                    "Compiler-emitted $TSDate has no GetTime method.");
             var result = getTimeMethod.Invoke(value, null);
             if (result is double epochMs)
                 return UnixEpoch.AddMilliseconds(epochMs).ToLocalTime();

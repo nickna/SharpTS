@@ -13,13 +13,21 @@ public static partial class RuntimeTypes
 
     public static object WrapException(Exception ex)
     {
-        // Check for PromiseRejectedException (emitted $PromiseRejectedException or runtime type)
-        // which carries the original rejection reason value (e.g. a raw string from Promise.reject("msg"))
-        var reasonProp = ex.GetType().GetProperty("Reason");
-        if (reasonProp != null)
+        // Promise rejection exceptions carry the original rejection value
+        // (for example, a raw string from Promise.reject("msg")).
+        if (ex is SharpTSPromiseRejectedException runtimeRejection)
         {
-            var reason = reasonProp.GetValue(ex);
-            if (reason != null) return reason;
+            return runtimeRejection.Reason ?? new SharpTSError(ex.Message);
+        }
+
+        var type = ex.GetType();
+        if (ManagedEmittedShapeReflection.IsShape(
+                type, ManagedEmittedShape.PromiseRejectedException))
+        {
+            var reasonProperty = ManagedEmittedShapeReflection.GetPublicProperty(
+                type, ManagedEmittedShape.PromiseRejectedException, "Reason");
+            if (reasonProperty?.GetValue(ex) is { } reason)
+                return reason;
         }
 
         // Wrap a host-originated exception as a real Error so guest `catch` sees a
