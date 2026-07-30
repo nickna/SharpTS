@@ -276,7 +276,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notListLabel);
         il.Emit(OpCodes.Castclass, listType);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("ToArray", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "ToArray", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, doneLabel);
         il.MarkLabel(notListLabel);

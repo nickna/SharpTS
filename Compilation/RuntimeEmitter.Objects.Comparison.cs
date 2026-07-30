@@ -392,7 +392,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, sourceLocal);
             il.Emit(OpCodes.Castclass, listType);
             il.Emit(OpCodes.Stloc, srcListLocal);
-            il.Emit(OpCodes.Newobj, dictType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(dictType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, synthDictLocal);
             il.Emit(OpCodes.Ldloc, srcListLocal);
             il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
@@ -438,7 +438,7 @@ public partial class RuntimeEmitter
 
         // Get enumerator for source dictionary
         il.Emit(OpCodes.Ldloc, sourceDictLocal);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         // Copy loop. Per ECMA-262 §20.1.2.1, only enumerable own keys propagate.

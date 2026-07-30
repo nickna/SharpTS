@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         // Finalize the type
         runtime.StatsType = typeBuilder.CreateType()!;
-        runtime.StatsCtor = runtime.StatsType.GetConstructor([
+        runtime.StatsCtor = _types.GetConstructor(runtime.StatsType, [
             _types.Boolean, _types.Boolean, _types.Boolean,
             _types.Double, _types.Double,
             _types.Double, _types.Double, _types.Double, _types.Double

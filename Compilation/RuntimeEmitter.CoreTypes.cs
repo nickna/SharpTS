@@ -95,7 +95,7 @@ public partial class RuntimeEmitter
 
         // Create and store the interface type
         runtime.IUnionTypeInterface = typeBuilder.CreateType()!;
-        runtime.IUnionTypeValueGetter = runtime.IUnionTypeInterface.GetProperty("Value")!.GetGetMethod()!;
+        runtime.IUnionTypeValueGetter = _types.GetProperty(runtime.IUnionTypeInterface, "Value")!.GetGetMethod()!;
     }
 
     /// <summary>

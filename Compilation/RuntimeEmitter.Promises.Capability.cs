@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilityCaptureMethod);
-        il.Emit(OpCodes.Newobj, funcType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
         il.Emit(OpCodes.Stloc, instanceLocal);

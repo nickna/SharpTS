@@ -453,9 +453,9 @@ public partial class RuntimeEmitter
     private void EmitTlsSanForeach(ILGenerator il, LocalBuilder sanLocal, LocalBuilder partsLocal, MethodInfo listAdd,
         MethodInfo concat2, string prefix, MethodInfo enumerateMethod, Type enumerableType, Type enumeratorType, bool needsToString)
     {
-        var getEnumerator = enumerableType.GetMethod("GetEnumerator", Type.EmptyTypes)!;
+        var getEnumerator = _types.GetMethod(enumerableType, "GetEnumerator", Type.EmptyTypes)!;
         var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
-        var getCurrent = enumeratorType.GetProperty("Current")!.GetGetMethod()!;
+        var getCurrent = _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!;
 
         var enumLocal = il.DeclareLocal(enumeratorType);
         il.Emit(OpCodes.Ldloc, sanLocal);
@@ -797,7 +797,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Brfalse, skipOptions);
 
         var dictType = _types.DictionaryStringObject;
-        var dictTryGet = dictType.GetMethod("TryGetValue")!;
+        var dictTryGet = _types.GetMethod(dictType, "TryGetValue")!;
         var tempLocal = ctorIL.DeclareLocal(_types.Object);
 
         ctorIL.Emit(OpCodes.Ldarg_1);

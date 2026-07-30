@@ -215,7 +215,7 @@ public partial class RuntimeEmitter
 
         // cts.Cancel()
         il.Emit(OpCodes.Ldloc, ctsLocal);
-        il.Emit(OpCodes.Callvirt, ctsType.GetMethod("Cancel", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(ctsType, "Cancel", Type.EmptyTypes)!);
 
         // Fire abort event on signal
         il.Emit(OpCodes.Ldloc, signalLocal);
@@ -673,7 +673,7 @@ public partial class RuntimeEmitter
 
         // cts.Cancel()
         il.Emit(OpCodes.Ldloc, ctsLocal);
-        il.Emit(OpCodes.Callvirt, ctsType.GetMethod("Cancel", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(ctsType, "Cancel", Type.EmptyTypes)!);
 
         // return signal
         il.Emit(OpCodes.Ldloc, signalLocal);

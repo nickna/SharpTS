@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
 
             var il = method.GetILGenerator();
             // Use explicit int cast - find the method that returns int
-            var explicitToIntMethod = bigIntType.GetMethods().First(m =>
+            var explicitToIntMethod = _types.GetMethods(bigIntType).First(m =>
                 m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
                 m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bigIntType);
 
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
         runtime.BigIntToStringRadix = method;
 
         var il = method.GetILGenerator();
-        var explicitToInt = bi.GetMethods().First(m =>
+        var explicitToInt = _types.GetMethods(bi).First(m =>
             m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
             m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bi);
         var divRem = bi.GetMethod("DivRem", [bi, bi, bi.MakeByRefType()])
@@ -533,7 +533,7 @@ public partial class RuntimeEmitter
         }
 
         // Get the explicit to int method once for shift operations
-        var explicitToInt = bigIntType.GetMethods().First(m =>
+        var explicitToInt = _types.GetMethods(bigIntType).First(m =>
             m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
             m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bigIntType);
 

@@ -291,7 +291,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, nonExtensibleObjectsField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, returnFalseLabel); // Found = not extensible
 
@@ -372,7 +372,7 @@ public partial class RuntimeEmitter
 
         // Get enumerator
         var keysCollectionType = keysProperty.ReturnType;
-        var getEnumeratorMethod = keysCollectionType.GetMethod("GetEnumerator")!;
+        var getEnumeratorMethod = _types.GetMethod(keysCollectionType, "GetEnumerator")!;
         il.Emit(OpCodes.Callvirt, getEnumeratorMethod);
         var enumeratorType = getEnumeratorMethod.ReturnType;
         var enumeratorLocal = il.DeclareLocal(enumeratorType);
@@ -384,14 +384,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var moveNextMethod = enumeratorType.GetMethod("MoveNext")!;
+        var moveNextMethod = _types.GetMethod(enumeratorType, "MoveNext")!;
         il.Emit(OpCodes.Call, moveNextMethod);
         il.Emit(OpCodes.Brfalse, loopEnd);
 
         // result.Add(enumerator.Current);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var currentProperty = enumeratorType.GetProperty("Current")!.GetGetMethod()!;
+        var currentProperty = _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!;
         il.Emit(OpCodes.Call, currentProperty);
         var addMethod = _types.GetMethod(_types.ListOfObjectNullable, "Add", [_types.Object])!;
         il.Emit(OpCodes.Callvirt, addMethod);
@@ -467,7 +467,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, prototypeStoreField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, tempLocal);
-        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, foundInLocalLabel);
 
@@ -767,7 +767,7 @@ public partial class RuntimeEmitter
         else
         {
             // Fallback: Remove then Add
-            var removeMethod = _types.ConditionalWeakTable.GetMethod("Remove", [_types.Object]);
+            var removeMethod = _types.GetMethod(_types.ConditionalWeakTable, "Remove", [_types.Object]);
             il.Emit(OpCodes.Pop); // Pop proto
             il.Emit(OpCodes.Pop); // Pop target
             il.Emit(OpCodes.Pop); // Pop table
@@ -778,7 +778,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, prototypeStoreField);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            var addMethod = _types.ConditionalWeakTable.GetMethod("Add");
+            var addMethod = _types.GetMethod(_types.ConditionalWeakTable, "Add");
             il.Emit(OpCodes.Callvirt, addMethod!);
         }
 

@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
         // list.Add(value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [elemType])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [elemType])!);
         // return (double)list.Count
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);

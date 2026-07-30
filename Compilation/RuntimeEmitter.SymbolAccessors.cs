@@ -95,10 +95,10 @@ public partial class RuntimeEmitter
         var inner = SymInnerDictType;
         var field = runtime.SymbolAccessorRegistryField;
 
-        var outerTryGetValue = outer.GetMethod("TryGetValue", [_types.Type, inner.MakeByRefType()])!;
-        var outerSetItem = outer.GetMethod("set_Item", [_types.Type, inner])!;
-        var innerTryGetValue = inner.GetMethod("TryGetValue", [_types.Object, _types.ObjectArray.MakeByRefType()])!;
-        var innerSetItem = inner.GetMethod("set_Item", [_types.Object, _types.ObjectArray])!;
+        var outerTryGetValue = _types.GetMethod(outer, "TryGetValue", [_types.Type, inner.MakeByRefType()])!;
+        var outerSetItem = _types.GetMethod(outer, "set_Item", [_types.Type, inner])!;
+        var innerTryGetValue = _types.GetMethod(inner, "TryGetValue", [_types.Object, _types.ObjectArray.MakeByRefType()])!;
+        var innerSetItem = _types.GetMethod(inner, "set_Item", [_types.Object, _types.ObjectArray])!;
         var getBaseType = _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!;
         var getType = _types.GetMethod(_types.Object, "GetType");
 

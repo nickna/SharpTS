@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
-        var tryGet = dictType.GetMethod("TryGetValue")!;
+        var tryGet = _types.GetMethod(dictType, "TryGetValue")!;
 
         // string h = host as string ?? "";
         var hLocal = il.DeclareLocal(_types.String);

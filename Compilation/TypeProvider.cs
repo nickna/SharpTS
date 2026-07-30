@@ -1272,6 +1272,30 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Gets all public methods from a type.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo[] GetMethods(Type type)
+    {
+        return type.GetMethods();
+    }
+
+    /// <summary>
+    /// Gets all methods from a type using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo[] GetMethods(Type type, BindingFlags bindingFlags)
+    {
+        return type.GetMethods(bindingFlags);
+    }
+
+    /// <summary>
     /// Gets a parameterless method from a type. Safe to use for overloaded methods.
     /// </summary>
     public MethodInfo GetMethodNoParams(Type type, string name)
@@ -1296,6 +1320,21 @@ public class TypeProvider
                 throw new CompileException($"Could not find property {k.Item1.FullName}.{k.Item2}");
             return property;
         });
+    }
+
+    /// <summary>
+    /// Gets a property from a type by name using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public PropertyInfo GetProperty(Type type, string name, BindingFlags bindingFlags)
+    {
+        var property = type.GetProperty(name, bindingFlags);
+        if (property == null)
+            throw new CompileException($"Could not find property {type.FullName}.{name}");
+        return property;
     }
 
     /// <summary>
@@ -1347,6 +1386,18 @@ public class TypeProvider
     public ConstructorInfo GetDefaultConstructor(Type type)
     {
         return GetConstructor(type, Type.EmptyTypes);
+    }
+
+    /// <summary>
+    /// Gets all public constructors from a type.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public ConstructorInfo[] GetConstructors(Type type)
+    {
+        return type.GetConstructors();
     }
 
     /// <summary>

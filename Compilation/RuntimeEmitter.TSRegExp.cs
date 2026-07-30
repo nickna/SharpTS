@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
     {
         var cctor = typeBuilder.DefineTypeInitializer();
         var il = cctor.GetILGenerator();
-        il.Emit(OpCodes.Newobj, cdType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(cdType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stsfld, _tsRegExpCompileCacheField);
         il.Emit(OpCodes.Ret);
     }
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, _tsRegExpCompileCacheField);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloca, cachedLocal);
-        il.Emit(OpCodes.Callvirt, cdType.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cdType, "TryGetValue")!);
         il.Emit(OpCodes.Brtrue, hitLabel);
 
         // var fresh = new Regex(RewriteEcmaScriptShorthands(pattern), options);
@@ -238,7 +238,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, _tsRegExpCompileCacheField);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, freshLocal);
-        il.Emit(OpCodes.Callvirt, cdType.GetMethod("TryAdd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cdType, "TryAdd")!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, freshLocal);
         il.Emit(OpCodes.Ret);
@@ -2380,11 +2380,11 @@ public partial class RuntimeEmitter
         var stringToSpan = typeof(MemoryExtensions).GetMethod("AsSpan", [_types.String])!;
         var enumerateMatches = typeof(Regex).GetMethod("EnumerateMatches", [roSpanChar])!;
         var enumType = enumerateMatches.ReturnType;          // Regex.ValueMatchEnumerator (ref struct)
-        var moveNext = enumType.GetMethod("MoveNext")!;
-        var getCurrent = enumType.GetProperty("Current")!.GetGetMethod()!;
+        var moveNext = _types.GetMethod(enumType, "MoveNext")!;
+        var getCurrent = _types.GetProperty(enumType, "Current")!.GetGetMethod()!;
         var valueMatchType = getCurrent.ReturnType;          // ValueMatch (readonly struct)
-        var getIndex = valueMatchType.GetProperty("Index")!.GetGetMethod()!;
-        var getLength = valueMatchType.GetProperty("Length")!.GetGetMethod()!;
+        var getIndex = _types.GetProperty(valueMatchType, "Index")!.GetGetMethod()!;
+        var getLength = _types.GetProperty(valueMatchType, "Length")!.GetGetMethod()!;
         var substring = _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!;
 
         var il = method.GetILGenerator();

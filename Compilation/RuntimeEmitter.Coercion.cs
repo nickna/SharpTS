@@ -1712,7 +1712,7 @@ public partial class RuntimeEmitter
         // (one per primitive return type). Pick the BigInteger → double one
         // by walking the candidate set explicitly.
         System.Reflection.MethodInfo? explicitToDouble = null;
-        foreach (var m in _types.BigInteger.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+        foreach (var m in _types.GetMethods(_types.BigInteger, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
         {
             if (m.Name != "op_Explicit") continue;
             if (m.ReturnType != _types.Double) continue;

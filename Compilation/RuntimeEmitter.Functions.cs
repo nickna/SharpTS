@@ -588,8 +588,8 @@ public partial class RuntimeEmitter
         // field-access violation from accessing private _method across
         // TypeBuilder boundaries at JIT time).
         var prototypeCacheType = runtime.TSFunctionPrototypeCacheField.FieldType;
-        var tryGetValueM = prototypeCacheType.GetMethod("TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
-        var prototypeCacheGetOrAdd = prototypeCacheType.GetMethods()
+        var tryGetValueM = _types.GetMethod(prototypeCacheType, "TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
+        var prototypeCacheGetOrAdd = _types.GetMethods(prototypeCacheType)
             .First(m => m.Name == "GetOrAdd"
                  && m.GetParameters().Length == 2
                  && m.GetParameters()[1].ParameterType == _types.Object);

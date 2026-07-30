@@ -417,7 +417,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);  // null target for static method
         il.Emit(OpCodes.Ldftn, handleAnyCompletion);  // handleAnyCompletion is actually the shim
         var actionType = _types.ActionTaskOfObjectAndObject;
-        var actionCtor = actionType.GetConstructor([_types.Object, _types.IntPtr])!;
+        var actionCtor = _types.GetConstructor(actionType, [_types.Object, _types.IntPtr])!;
         il.Emit(OpCodes.Newobj, actionCtor);
 
         // Load state (already a reference type, no boxing needed)

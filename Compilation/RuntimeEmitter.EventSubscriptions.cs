@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
 
         // for (int i = 0; i < list.Count; i++) { ... }
         var listCountGetter = _types.GetPropertyGetter(listType, "Count");
-        var listGetItem = listType.GetMethod("get_Item")!;
+        var listGetItem = _types.GetMethod(listType, "get_Item")!;
 
         var loopTop = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4_3); il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stelem_Ref);
 
-        var listAdd = listType.GetMethod("Add", [_types.ObjectArray])!;
+        var listAdd = _types.GetMethod(listType, "Add", [_types.ObjectArray])!;
         il.Emit(OpCodes.Callvirt, listAdd);
 
         il.Emit(OpCodes.Ldc_I4_1);
@@ -215,8 +215,8 @@ public partial class RuntimeEmitter
             typeof(System.Threading.Monitor), "Enter", _types.Object, _types.Boolean.MakeByRefType()));
 
         var listCountGetter = _types.GetPropertyGetter(listType, "Count");
-        var listGetItem = listType.GetMethod("get_Item")!;
-        var listRemoveAt = listType.GetMethod("RemoveAt", [_types.Int32])!;
+        var listGetItem = _types.GetMethod(listType, "get_Item")!;
+        var listRemoveAt = _types.GetMethod(listType, "RemoveAt", [_types.Int32])!;
 
         var retLabel = il.DefineLabel();
         var loopTop = il.DefineLabel();

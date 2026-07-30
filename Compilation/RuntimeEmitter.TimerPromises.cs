@@ -81,7 +81,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "signal");
         il.Emit(OpCodes.Ldloca, signalLocal);
-        var tryGetValue = dictType.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGetValue = _types.GetMethod(dictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, tryGetValue);
         il.Emit(OpCodes.Brfalse, noneLabel);
 

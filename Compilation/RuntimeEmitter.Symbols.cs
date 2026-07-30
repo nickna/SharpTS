@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
         // return _symbolStorage.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, symbolStorageField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, symbolStorageType.GetMethod("GetOrCreateValue", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(symbolStorageType, "GetOrCreateValue", [_types.Object])!);
         il.Emit(OpCodes.Ret);
     }
 

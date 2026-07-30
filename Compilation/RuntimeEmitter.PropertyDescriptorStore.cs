@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
         cctorIl.Emit(OpCodes.Stsfld, frozenSealedField);
 
         // _symbolStorage = new ConditionalWeakTable<...>()
-        cctorIl.Emit(OpCodes.Newobj, cwtSymbols.GetConstructor(Type.EmptyTypes)!);
+        cctorIl.Emit(OpCodes.Newobj, _types.GetConstructor(cwtSymbols, Type.EmptyTypes)!);
         cctorIl.Emit(OpCodes.Stsfld, symbolStorageField);
 
         // _prototypeStore = new ConditionalWeakTable<...>()

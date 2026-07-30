@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, streamsField);
         il.Emit(OpCodes.Ldloc, fdLocal);
         il.Emit(OpCodes.Ldloc, streamLocal);
-        var dictIndexerSet = streamsType.GetMethod("set_Item")!;
+        var dictIndexerSet = _types.GetMethod(streamsType, "set_Item")!;
         il.Emit(OpCodes.Callvirt, dictIndexerSet);
 
         // return fd
@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, streamsField);
         il.Emit(OpCodes.Ldarg_1); // fd
         il.Emit(OpCodes.Ldloca, streamLocal);
-        var tryGetValue = streamsType.GetMethod("TryGetValue")!;
+        var tryGetValue = _types.GetMethod(streamsType, "TryGetValue")!;
         il.Emit(OpCodes.Callvirt, tryGetValue);
         il.Emit(OpCodes.Brtrue, successLabel);
 
@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
         var errnoLocal = il.DeclareLocal(nullableInt);
         il.Emit(OpCodes.Ldloca, errnoLocal);
         il.Emit(OpCodes.Ldc_I4, 9);
-        var nullableCtor = nullableInt.GetConstructor([_types.Int32])!;
+        var nullableCtor = _types.GetConstructor(nullableInt, [_types.Int32])!;
         il.Emit(OpCodes.Call, nullableCtor);
         il.Emit(OpCodes.Ldloc, errnoLocal);
         il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
@@ -235,7 +235,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, streamsField);
         il.Emit(OpCodes.Ldarg_1); // fd
         il.Emit(OpCodes.Ldloca, streamLocal);
-        var tryRemove = streamsType.GetMethod("TryRemove", [typeof(int), typeof(FileStream).MakeByRefType()])!;
+        var tryRemove = _types.GetMethod(streamsType, "TryRemove", [typeof(int), typeof(FileStream).MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, tryRemove);
         il.Emit(OpCodes.Brtrue, successLabel);
 
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         var errnoLocal = il.DeclareLocal(nullableInt);
         il.Emit(OpCodes.Ldloca, errnoLocal);
         il.Emit(OpCodes.Ldc_I4, 9);
-        var nullableCtor = nullableInt.GetConstructor([_types.Int32])!;
+        var nullableCtor = _types.GetConstructor(nullableInt, [_types.Int32])!;
         il.Emit(OpCodes.Call, nullableCtor);
         il.Emit(OpCodes.Ldloc, errnoLocal);
         il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
@@ -285,7 +285,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, streamsField);
         il.Emit(OpCodes.Ldarg_1); // fd
-        var containsKey = streamsType.GetMethod("ContainsKey")!;
+        var containsKey = _types.GetMethod(streamsType, "ContainsKey")!;
         il.Emit(OpCodes.Callvirt, containsKey);
         il.Emit(OpCodes.Ret);
     }

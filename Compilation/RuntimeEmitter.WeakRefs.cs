@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
         // new WeakReference<object>(target)
         var weakRefType = _types.WeakReferenceObject;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, weakRefType.GetConstructor([_types.Object])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(weakRefType, [_types.Object])!);
         il.Emit(OpCodes.Ret);
 
         // null target - throw
@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, weakRefType);
         il.Emit(OpCodes.Ldloca, targetLocal);
-        il.Emit(OpCodes.Callvirt, weakRefType.GetMethod("TryGetTarget")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(weakRefType, "TryGetTarget")!);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         // return target;

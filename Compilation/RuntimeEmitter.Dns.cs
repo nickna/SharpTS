@@ -1468,7 +1468,7 @@ public partial class RuntimeEmitter
 
         // int read = readTask.Result
         il.Emit(OpCodes.Ldloc, readTaskLocal);
-        il.Emit(OpCodes.Callvirt, taskInt.GetProperty("Result")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(taskInt, "Result")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, readLocal);
 
         // if (read == 0) throw
@@ -2526,7 +2526,7 @@ public partial class RuntimeEmitter
         // Task<UdpReceiveResult> task = vt.AsTask()
         var taskLocal = il.DeclareLocal(taskType); // 7
         il.Emit(OpCodes.Ldloca, vtLocal);
-        il.Emit(OpCodes.Call, valueTaskType.GetMethod("AsTask")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(valueTaskType, "AsTask")!);
         il.Emit(OpCodes.Stloc, taskLocal);
 
         // if (!task.Wait(DnsGetTimeoutMs())) { udp.Close(); throw SocketException(TimedOut); }
@@ -2548,7 +2548,7 @@ public partial class RuntimeEmitter
         // UdpReceiveResult udpResult = task.Result
         var udpResultLocal = il.DeclareLocal(udpReceiveResultType); // 8
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Callvirt, taskType.GetProperty("Result")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(taskType, "Result")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, udpResultLocal);
 
         // byte[] response = udpResult.Buffer

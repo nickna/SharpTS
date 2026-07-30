@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
-        var tryGet = dictType.GetMethod("TryGetValue")!;
+        var tryGet = _types.GetMethod(dictType, "TryGetValue")!;
         var setItem = _types.GetMethod(dictType, "set_Item", _types.String, _types.Object);
 
         // var ctx = new Dictionary<string,object?>();

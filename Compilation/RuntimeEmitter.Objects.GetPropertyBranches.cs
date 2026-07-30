@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.CjsModuleType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.CjsModuleType.GetMethod("GetMember", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(runtime.CjsModuleType, "GetMember", [_types.String])!);
         il.Emit(OpCodes.Ret);
     }
 

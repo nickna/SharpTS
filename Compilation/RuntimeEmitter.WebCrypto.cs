@@ -787,7 +787,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, derArgIndex);
         il.Emit(OpCodes.Call, WcSpanFromBytes);
         il.Emit(OpCodes.Ldloca, outLocal);
-        il.Emit(OpCodes.Callvirt, algType.GetMethod("ImportPkcs8PrivateKey", [_types.ReadOnlySpanOfByte, typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(algType, "ImportPkcs8PrivateKey", [_types.ReadOnlySpanOfByte, typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Br, doneLabel);
 
         il.MarkLabel(publicLabel);
@@ -795,7 +795,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, derArgIndex);
         il.Emit(OpCodes.Call, WcSpanFromBytes);
         il.Emit(OpCodes.Ldloca, outLocal);
-        il.Emit(OpCodes.Callvirt, algType.GetMethod("ImportSubjectPublicKeyInfo", [_types.ReadOnlySpanOfByte, typeof(int).MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(algType, "ImportSubjectPublicKeyInfo", [_types.ReadOnlySpanOfByte, typeof(int).MakeByRefType()])!);
 
         il.MarkLabel(doneLabel);
     }

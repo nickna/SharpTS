@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, _asyncFromSyncAwaitContinuation);
         var continuationType = _types.MakeGenericType(
             typeof(Func<,,>), _types.TaskOfObject, _types.Object, _types.Object);
-        il.Emit(OpCodes.Newobj, continuationType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(continuationType, [_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, ResolveAsyncFromSyncContinueWith());
@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
     }
 
     private MethodInfo ResolveAsyncFromSyncContinueWith() => EmitGenerics.MakeGenericMethod(
-        _types.TaskOfObject.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        _types.GetMethods(_types.TaskOfObject, BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "ContinueWith" && m.IsGenericMethodDefinition
                 && m.GetParameters() is { Length: 3 } p
                 && p[0].ParameterType.IsGenericType

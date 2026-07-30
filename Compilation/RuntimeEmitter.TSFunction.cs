@@ -264,10 +264,10 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, instanceCacheField);
         // Prototype cache: ConcurrentDictionary<MethodInfo, object> — generic args
         // are both concrete CLR types, so the constructor resolves directly.
-        cctorIL.Emit(OpCodes.Newobj, prototypeCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(prototypeCacheType, Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, prototypeCacheField);
         // Invoker cache: ConcurrentDictionary<MethodInfo, MethodInvoker>.
-        cctorIL.Emit(OpCodes.Newobj, invokerCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(invokerCacheType, Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, invokerCacheField);
         cctorIL.Emit(OpCodes.Ret);
 
@@ -561,7 +561,7 @@ public partial class RuntimeEmitter
         // faster on hot paths. The Span<object?> wraps the existing
         // adjustedArgs array (no extra allocation).
         var spanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
-        var spanCtorFromArray = spanOfObject.GetConstructor([typeof(object[])])!;
+        var spanCtorFromArray = _types.GetConstructor(spanOfObject, [typeof(object[])])!;
         var invokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, spanOfObject])!;
 
         invokeIL.Emit(OpCodes.Ldarg_0);
@@ -796,7 +796,7 @@ public partial class RuntimeEmitter
 
         // _invoker.Invoke(invokeTarget, new Span<object>(adjustedArgs))
         var iwtSpanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
-        var iwtSpanCtor = iwtSpanOfObject.GetConstructor([typeof(object[])])!;
+        var iwtSpanCtor = _types.GetConstructor(iwtSpanOfObject, [typeof(object[])])!;
         var iwtInvokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, iwtSpanOfObject])!;
         iwt.Emit(OpCodes.Ldarg_0);
         iwt.Emit(OpCodes.Ldfld, invokerField);
@@ -849,7 +849,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
         bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldloca, thisFieldLocal);
-        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryGetValue", [_types.Type, _types.FieldInfo.MakeByRefType()])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(fieldCacheType, "TryGetValue", [_types.Type, _types.FieldInfo.MakeByRefType()])!);
         var cacheHitLabel = bindThisIL.DefineLabel();
         bindThisIL.Emit(OpCodes.Brtrue, cacheHitLabel);
 
@@ -873,7 +873,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
         bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
-        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryAdd", [_types.Type, _types.FieldInfo])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(fieldCacheType, "TryAdd", [_types.Type, _types.FieldInfo])!);
         bindThisIL.Emit(OpCodes.Pop); // discard bool result
 
         bindThisIL.MarkLabel(fieldNullLabel);
@@ -1113,9 +1113,9 @@ public partial class RuntimeEmitter
         // are concrete CLR types, so methods resolve directly off the
         // constructed type (no TypeBuilder.GetMethod wrapping needed; that
         // path only applies when an arg is itself a TypeBuilder).
-        var tryGetValueM = invokerCacheType.GetMethod("TryGetValue",
+        var tryGetValueM = _types.GetMethod(invokerCacheType, "TryGetValue",
             [_types.MethodInfo, _types.MethodInvoker.MakeByRefType()])!;
-        var getOrAddM = invokerCacheType.GetMethod("GetOrAdd",
+        var getOrAddM = _types.GetMethod(invokerCacheType, "GetOrAdd",
             [_types.MethodInfo, _types.MethodInvoker])!;
 
         var foundLabel = il.DefineLabel();
