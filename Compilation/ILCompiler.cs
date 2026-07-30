@@ -1505,13 +1505,19 @@ public partial class ILCompiler
         byte[] image;
         if (rewritingReferences)
         {
-            var refAssemblyPath = _sdkPath ?? SdkResolver.FindReferenceAssembliesPath()
-                ?? throw new CompileException(
-                    "Could not find SDK reference assemblies for post-processing. " +
-                    "Ensure the .NET SDK is installed.");
+            // PE-Packer 1.0.5 ships the complete net10 CoreLib-to-facade map as a compact
+            // embedded index, so the normal path no longer needs an SDK/reference pack on disk.
+            // Preserve --sdk-path as an explicit override for callers intentionally targeting a
+            // particular reference pack.
+            IReferenceAssemblyIndex referenceIndex = _sdkPath is not null
+                ? new DirectoryReferenceAssemblyIndex(_sdkPath)
+                : EmbeddedReferenceAssemblyIndex.Default;
 
             tempStream.Position = 0;
-            using var rewriter = new AssemblyReferenceRewriter(tempStream, refAssemblyPath);
+            using var rewriter = new AssemblyReferenceRewriter(
+                tempStream,
+                referenceIndex,
+                ReferencePolicy.DroppingReferences("SharpTS"));
             rewriter.Rewrite();
 
             using var outMem = new MemoryStream();

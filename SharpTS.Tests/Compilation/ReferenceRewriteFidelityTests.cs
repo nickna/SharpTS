@@ -206,11 +206,11 @@ public class ReferenceRewriteFidelityTests
 
     private static byte[] RewriteReferences(byte[] image)
     {
-        string referenceAssemblies = SdkResolver.FindReferenceAssembliesPath()
-            ?? throw new InvalidOperationException("SDK reference assemblies are required for this test.");
-
         using var source = new MemoryStream(image, writable: false);
-        using var rewriter = new AssemblyReferenceRewriter(source, referenceAssemblies);
+        using var rewriter = new AssemblyReferenceRewriter(
+            source,
+            EmbeddedReferenceAssemblyIndex.Default,
+            ReferencePolicy.RetargetCoreLibOnly);
         rewriter.Rewrite();
 
         using var output = new MemoryStream();
