@@ -247,8 +247,9 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
     with the native SKU would silently lose the interop surface the SDK is
     designed to compile. It would also turn one portable package into six
     large payloads without removing a .NET prerequisite. A separate opt-in
-    native SDK package can be evaluated later if startup measurements justify it; the
-    standalone `sharpts-native-*` release assets remain the native distribution.
+    native SDK package can be evaluated later if startup measurements justify
+    it; the standalone `sharpts-native-*` release assets remain the native
+    distribution.
 12. *Optional:* replace `Packaging/` with ZIP + nuspec + HTTP PUT (~300
     lines); removes the NuGet.* closure.
 
