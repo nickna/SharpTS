@@ -72,12 +72,23 @@ SharpTS supports two execution modes:
 
 ### Prerequisites
 
-- **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** or later (required)
+- **NuGet/tool/MSBuild installs:** [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
+- **GitHub Release binaries:** no .NET installation is required to run SharpTS
 - **Visual Studio 2026 18.0+** or **Visual Studio Code** (optional, for IDE support)
 
 **Note for MSBuild SDK users:** SharpTS.Sdk requires .NET 10 SDK and uses modern C# features for optimal performance.
 
 ### Installation
+
+**Download a no-.NET-required binary from GitHub Releases:**
+
+- `sharpts-<version>-<rid>` is the managed, self-contained SKU. Use it for the
+  full feature set, including third-party DLL/NuGet interop, `@DotNetType`,
+  `dotnet:` imports, `--verify`, and `--gen-decl`.
+- `sharpts-native-<version>-<rid>` is the Native AOT SKU. It starts faster and
+  does not extract a runtime, but has a frozen type universe: use the managed
+  SKU for third-party interop, verification/declaration generation, or compiled
+  `child_process.fork`. Built-in `--target exe` is Windows/Linux-only.
 
 **Install CLI tool from NuGet (recommended):**
 

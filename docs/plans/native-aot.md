@@ -223,14 +223,19 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
    process and full managed runtime closure.
 9. **PE-Packer integration:** 1.0.5 supplies `BundleRequest`,
    `IReferenceAssemblyIndex`, `ReferenceAction`, the embedded CoreLib-surface
-   index, and the `MetadataReader` implementation. Remaining: embed supported
-   Windows/Linux apphost templates (#14). The built-in bundler stays
-   Windows/Linux-only until Mach-O adjustment + ad-hoc signing exist.
-10. **Release matrix:** 6 RIDs (win-x64/arm64, linux-x64/arm64, osx-x64/arm64);
-    budget ~268 billable min/tag on a private repo (macOS ×10). Toolchain
-    gotchas: `vswhere.exe` must be on PATH for ILC's link step on Windows
-    (hit 3/3 probes locally; GitHub images are fine); ILC peak RSS is an OOM
-    risk on 7 GB runners.
+   index, and the `MetadataReader` implementation. Six Windows/Linux apphosts
+   landed upstream in PE-Packer PR #33 after the 1.0.5 tag; SharpTS must consume
+   the next package release before tagging its native matrix. The built-in
+   bundler stays Windows/Linux-only until Mach-O adjustment + ad-hoc signing
+   exist.
+10. **Release matrix: wired.** Tagged releases build six Native AOT assets
+    (win-x64/arm64, linux-x64/arm64, osx-x64/arm64) on matching-architecture
+    GitHub runners. Every artifact runs interpret, managed compile, and embedded
+    runtime extraction smokes before upload. Windows/Linux also create and run a
+    PE-Packer executable with `DOTNET_ROOT` empty; macOS asserts the built-in
+    bundler's named Mach-O/signing refusal. The first tagged run remains the
+    cross-platform acceptance event. ILC peak RSS on the 7 GB macOS arm64
+    runner is the main operational risk.
 11. **SDK payload:** `SharpTS.Sdk/Sdk/Sdk.targets:92` drops the `dotnet`
     prefix; `Sdk.props:28-29` RID-selects the compiler exe; package goes
     RID-specific.
