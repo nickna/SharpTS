@@ -141,9 +141,11 @@ Plan against these numbers, not the originals:
   `BundleRequest`, `ReferencePolicy`, `IReferenceAssemblyIndex`, the
   `MetadataReader` implementation, and the 31.8 KB embedded net10 index are
   shipped. SharpTS now uses that index when `--sdk-path` is absent and passes
-  an explicit compatibility policy. Remaining PE-Packer work is apphost
-  embedding (#14, required only for SDK-free `--target exe`) and the optional
-  `SdkBundler` feature-switch size optimization (#21).
+  an explicit compatibility policy. The six Windows/Linux apphosts landed
+  after 1.0.5 in PR #33. PR #34 adds the optional `SdkBundler` feature switch;
+  SharpTS already sets its application-level trim option for Native AOT. Both
+  changes need the next PE-Packer package before SharpTS can tag its native
+  release.
 
 ### Phase 1 — interpreter correctness and speed (~2–3 weeks; wins on JIT too)
 
@@ -223,17 +225,31 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
    process and full managed runtime closure.
 9. **PE-Packer integration:** 1.0.5 supplies `BundleRequest`,
    `IReferenceAssemblyIndex`, `ReferenceAction`, the embedded CoreLib-surface
-   index, and the `MetadataReader` implementation. Remaining: embed supported
-   Windows/Linux apphost templates (#14). The built-in bundler stays
-   Windows/Linux-only until Mach-O adjustment + ad-hoc signing exist.
-10. **Release matrix:** 6 RIDs (win-x64/arm64, linux-x64/arm64, osx-x64/arm64);
-    budget ~268 billable min/tag on a private repo (macOS ×10). Toolchain
-    gotchas: `vswhere.exe` must be on PATH for ILC's link step on Windows
-    (hit 3/3 probes locally; GitHub images are fine); ILC peak RSS is an OOM
-    risk on 7 GB runners.
-11. **SDK payload:** `SharpTS.Sdk/Sdk/Sdk.targets:92` drops the `dotnet`
-    prefix; `Sdk.props:28-29` RID-selects the compiler exe; package goes
-    RID-specific.
+   index, and the `MetadataReader` implementation. Six Windows/Linux apphosts
+   landed upstream in PE-Packer PR #33 after the 1.0.5 tag; PR #34 makes the
+   reflected SDK bundler removable from Native AOT images. SharpTS sets
+   `PEPacker.EnableSdkBundler=false` as a trim-time application switch and must
+   consume the next package release before tagging its native matrix. The
+   built-in bundler stays Windows/Linux-only until Mach-O adjustment + ad-hoc
+   signing exist.
+10. **Release matrix: wired.** Tagged releases build six Native AOT assets
+    (win-x64/arm64, linux-x64/arm64, osx-x64/arm64) on matching-architecture
+    GitHub runners. Every artifact runs interpret, managed compile, and embedded
+    runtime extraction smokes before upload. Windows/Linux also create and run a
+    PE-Packer executable with `DOTNET_ROOT` empty; macOS asserts the built-in
+    bundler's named Mach-O/signing refusal. The first tagged run remains the
+    cross-platform acceptance event. ILC peak RSS on the 7 GB macOS arm64
+    runner is the main operational risk.
+11. **SDK payload: keep the existing managed, RID-neutral compiler.** The
+    original RID-native proposal is rejected for the default SDK: invoking
+    `SharpTS.Sdk` already means running `dotnet build`, its targets pass the
+    project's full `ReferencePath` through `-r`, and replacing that compiler
+    with the native SKU would silently lose the interop surface the SDK is
+    designed to compile. It would also turn one portable package into six
+    large payloads without removing a .NET prerequisite. A separate opt-in
+    native SDK package can be evaluated later if startup measurements justify
+    it; the standalone `sharpts-native-*` release assets remain the native
+    distribution.
 12. *Optional:* replace `Packaging/` with ZIP + nuspec + HTTP PUT (~300
     lines); removes the NuGet.* closure.
 
@@ -273,8 +289,8 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
 
 | # | Unknown | Status / next step |
 |---|---|---|
-| 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. Add the remaining release RIDs in Phase 3. |
+| 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. The six-RID release matrix is wired; its first tagged run is the remaining acceptance event. |
 | 2 | BCL interop preservation | Targeted roots work for the emit internals; define and test the supported `@DotNetType` surface, including the known dynamic-event edge. |
 | 3 | MLC-types-into-TypeBuilder latent JIT limitation | Conceded for the native SKU; file upstream separately. |
 | 4 | Native-emitted output metadata parity | Executed output and PE-Packer rewriting pass. Add a `MetadataDiffer` fixture if byte/table-level parity becomes release-blocking. |
-| 5 | SDK-free `--target exe` | Reference rewriting is SDK-free in 1.0.5; executable generation still needs an apphost path or PE-Packer #14. |
+| 5 | SDK-free `--target exe` | PE-Packer #14 is merged and the SharpTS release smoke requires an empty `DOTNET_ROOT`; consume the next PE-Packer package before tagging. |

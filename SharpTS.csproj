@@ -33,6 +33,18 @@
   </ItemGroup>
 
   <!--
+    PE-Packer's reflected Microsoft.NET.HostModel SDK path cannot run under
+    Native AOT. Its feature switch is application-level so the managed SKU
+    keeps SDK detection; the native SKU makes it a trim-time false constant
+    and uses PE-Packer's built-in bundler.
+  -->
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <RuntimeHostConfigurationOption Include="PEPacker.EnableSdkBundler"
+                                    Value="false"
+                                    Trim="true" />
+  </ItemGroup>
+
+  <!--
     Native-SKU two-stage build input (#1324): first build the ordinary AnyCPU
     SharpTS.dll, then pass its path to the Native AOT publish as
     -p:SharpTSManagedRuntimePayloadPath=... . A project cannot embed the same
