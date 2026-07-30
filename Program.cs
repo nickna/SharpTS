@@ -866,6 +866,10 @@ static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
 /// copy. <c>--standalone</c> suppresses the copy (the soft-dependent features then throw a clear
 /// "not supported" error at runtime instead).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "The managed assembly location is checked for an empty bundled value; native and single-file builds extract the embedded managed runtime instead.")]
 static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, OutputOptions outputOptions)
 {
     var reasons = compiler.RequiredSharpTSRuntimeReasons;
@@ -960,10 +964,24 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
 /// transitive dependency closure (assets-graph subtree for NuGet packages, AssemblyName walk
 /// for local DLLs). <c>--standalone</c> suppresses the copy but lists what deployment needs.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "Bundled assemblies have an empty location and are explicitly skipped; only external on-disk interop assemblies participate in the deployment copy set.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "Trimming",
+    "IL2026",
+    Justification = "Native AOT rejects third-party reference loading before compilation; this dependency walk is reachable only after a managed host loaded those assemblies.")]
 static void CopyExternalReferencesIfNeeded(ILCompiler compiler, ReferenceSet externalRefs, string outputPath, OutputOptions outputOptions)
 {
     if (externalRefs.IsEmpty)
         return;
+
+    if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+    {
+        RequireManagedBuild(".NET references in compiled output");
+        return;
+    }
 
     // Which reference DLLs did the compilation actually bind types from?
     var used = new List<ResolvedReference>();

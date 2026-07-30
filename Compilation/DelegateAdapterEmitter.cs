@@ -59,7 +59,7 @@ public class DelegateAdapterEmitter
 
     private AdapterHandle Emit(Type delegateType)
     {
-        var invokeMethod = delegateType.GetMethod("Invoke")
+        var invokeMethod = _types.TryGetMethod(delegateType, "Invoke")
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' has no Invoke method.");
 
@@ -71,7 +71,7 @@ public class DelegateAdapterEmitter
         // collide in the module's type namespace.
         var typeName = $"$DelegateAdapter_{SanitizeName(delegateType.Name)}_{_counter++}";
 
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             typeName,
             TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
@@ -100,7 +100,7 @@ public class DelegateAdapterEmitter
 
         // base().ctor()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // this._fn = fn
         il.Emit(OpCodes.Ldarg_0);

@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
 
     private void EmitCryptoKeyType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CryptoKey",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
 
     private void EmitSubtleCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SubtleCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
@@ -234,7 +234,7 @@ public partial class RuntimeEmitter
     private LocalBuilder EmitNewDict(ILGenerator il)
     {
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
         return dictLocal;
     }
@@ -1212,12 +1212,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(verifyLabel);
-            var opImplicit = _types.ReadOnlySpanOfByte.GetMethod("op_Implicit", [typeof(byte[])])!;
+            var opImplicit = _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!;
             il.Emit(OpCodes.Ldloc, computedLocal);
             il.Emit(OpCodes.Call, opImplicit);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Call, opImplicit);
-            il.Emit(OpCodes.Call, _types.CryptographicOperations.GetMethod("FixedTimeEquals",
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.CryptographicOperations, "FixedTimeEquals",
                 [_types.ReadOnlySpanOfByte, _types.ReadOnlySpanOfByte])!);
             il.Emit(OpCodes.Box, _types.Boolean);
             il.Emit(OpCodes.Ret);
@@ -1549,7 +1549,7 @@ public partial class RuntimeEmitter
 
     private void EmitWebCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WebCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);

@@ -33,7 +33,7 @@ public partial class RuntimeEmitter
 
         // new ConditionalWeakTable<object, object>()
         var cwtType = _types.ConditionalWeakTableObjectObject;
-        il.Emit(OpCodes.Newobj, cwtType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(cwtType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -71,7 +71,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, cwtType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, cwtType.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cwtType, "TryGetValue")!);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, cwtType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, cwtType.GetMethod("AddOrUpdate")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cwtType, "AddOrUpdate")!);
 
         // return weakMap;
         il.MarkLabel(returnMapLabel);
@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, cwtType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, dummyLocal);
-        il.Emit(OpCodes.Callvirt, cwtType.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cwtType, "TryGetValue")!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, cwtType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, cwtType.GetMethod("Remove", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(cwtType, "Remove", [_types.Object])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);

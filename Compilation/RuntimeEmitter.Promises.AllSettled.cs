@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
         // GetResult may throw if the task faulted - this is caught by our exception handler
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.AwaiterType, "GetResult")!);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // ========== afterAwaitSetupLabel: Create fulfilled dictionary ==========
@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
 
         // Return point
         il.MarkLabel(returnLabel);
@@ -335,7 +335,7 @@ public partial class RuntimeEmitter
         // GetResult
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.AwaiterType, "GetResult")!);
 
         // Convert object?[] to List<object?>
         var arrayResultLocal = il.DeclareLocal(typeof(object?[]));

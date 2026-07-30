@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSNetServerPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NetServer",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
@@ -220,7 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _netServerIsListeningField);
         il.Emit(OpCodes.Brfalse, notListening);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Server is already listening");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notListening);
@@ -472,12 +472,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netServerHostField);
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, anyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netServerHostField);
         il.Emit(OpCodes.Ldstr, "::");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, anyLabel);
         il.Emit(OpCodes.Br, notAny);
 
@@ -769,13 +769,13 @@ public partial class RuntimeEmitter
 
             wil.Emit(OpCodes.Ldloc, pathLocal);
             wil.Emit(OpCodes.Ldstr, @"\\.\pipe\");
-            wil.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+            wil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
             wil.Emit(OpCodes.Brfalse, notPipePrefix);
 
             // Strip prefix: path.Substring(9)
             wil.Emit(OpCodes.Ldloc, pathLocal);
             wil.Emit(OpCodes.Ldc_I4, 9);
-            wil.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+            wil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
             wil.Emit(OpCodes.Stloc, pipeNameLocal);
             wil.Emit(OpCodes.Br, pipeNameDone);
 
@@ -929,7 +929,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "port");
         il.Emit(OpCodes.Ldloca, valLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, skip);
 
         il.Emit(OpCodes.Ldloc, valLocal);
@@ -1126,12 +1126,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "address");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netServerHostField);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "family");
         il.Emit(OpCodes.Ldstr, "IPv4");
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "port");
@@ -1139,7 +1139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _netServerPortField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1173,7 +1173,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);

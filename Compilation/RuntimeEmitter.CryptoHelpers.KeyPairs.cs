@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(createObjectLabel);
 
         // Create Dictionary<string, object?> for $Object
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
@@ -82,14 +82,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "publicKey");
         il.Emit(OpCodes.Ldloca, tupleLocal);
         il.Emit(OpCodes.Ldfld, typeof((string, string)).GetField("Item1")!);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // dict["privateKey"] = tuple.Item2
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "privateKey");
         il.Emit(OpCodes.Ldloca, tupleLocal);
         il.Emit(OpCodes.Ldfld, typeof((string, string)).GetField("Item2")!);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // return new $Object(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
         // using var rsa = RSA.Create(modulusLength)
         var rsaLocal = il.DeclareLocal(_types.RSA);
         il.Emit(OpCodes.Ldloc, modulusLengthLocal);
-        il.Emit(OpCodes.Call, _types.RSA.GetMethod("Create", [typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RSA, "Create", [typeof(int)])!);
         il.Emit(OpCodes.Stloc, rsaLocal);
 
         il.BeginExceptionBlock();
@@ -320,13 +320,13 @@ public partial class RuntimeEmitter
         // var publicKey = rsa.ExportSubjectPublicKeyInfoPem()
         var publicKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, rsaLocal);
-        il.Emit(OpCodes.Callvirt, _types.RSA.GetMethod("ExportSubjectPublicKeyInfoPem", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.RSA, "ExportSubjectPublicKeyInfoPem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, publicKeyLocal);
 
         // var privateKey = rsa.ExportPkcs8PrivateKeyPem()
         var privateKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, rsaLocal);
-        il.Emit(OpCodes.Callvirt, _types.RSA.GetMethod("ExportPkcs8PrivateKeyPem", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.RSA, "ExportPkcs8PrivateKeyPem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, privateKeyLocal);
 
         il.BeginFinallyBlock();
@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(createKeyLabel);
         var ecdsaLocal = il.DeclareLocal(typeof(ECDsa));
         il.Emit(OpCodes.Ldloc, curveLocal);
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", [typeof(ECCurve)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stloc, ecdsaLocal);
 
         il.BeginExceptionBlock();

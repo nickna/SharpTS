@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitMapTransformCallbackClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MapTransformCallback",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFilterTransformCallbackClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FilterTransformCallback",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

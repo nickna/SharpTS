@@ -99,43 +99,43 @@ public partial class RuntimeEmitter
         // Check for "TypeError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "TypeError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, typeErrorLabel);
 
         // Check for "RangeError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "RangeError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, rangeErrorLabel);
 
         // Check for "ReferenceError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "ReferenceError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, referenceErrorLabel);
 
         // Check for "SyntaxError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "SyntaxError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, syntaxErrorLabel);
 
         // Check for "URIError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "URIError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, uriErrorLabel);
 
         // Check for "EvalError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "EvalError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, evalErrorLabel);
 
         // Check for "AggregateError"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "AggregateError");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, aggregateErrorLabel);
 
         // Default: create base Error
@@ -234,7 +234,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Br, afterAggMessageLabel);
         il.MarkLabel(aggArgNotNull);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Br, afterAggMessageLabel);
 
         il.MarkLabel(noAggMessageArgLabel);
@@ -316,7 +316,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "cause");
         il.Emit(OpCodes.Ldloca, causeLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue")!);
         il.Emit(OpCodes.Brtrue, setCauseLabel);
         il.Emit(OpCodes.Br, skipLabel);
 
@@ -563,7 +563,7 @@ public partial class RuntimeEmitter
         // Call ToString()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

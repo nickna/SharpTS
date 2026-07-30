@@ -49,17 +49,17 @@ public partial class RuntimeEmitter
         // Emit controller and writer first as forward type declarations so the
         // stream constructor can reference their ctors. Phase 2 fills in their
         // method bodies after $WritableStream is fully defined.
-        var controllerBuilder = moduleBuilder.DefineType(
+        var controllerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WritableStreamDefaultController",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var writerBuilder = moduleBuilder.DefineType(
+        var writerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WritableStreamDefaultWriter",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var streamBuilder = moduleBuilder.DefineType(
+        var streamBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WritableStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);

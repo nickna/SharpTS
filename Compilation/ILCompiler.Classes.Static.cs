@@ -108,7 +108,7 @@ public partial class ILCompiler
         {
             // __privateFields = new ConditionalWeakTable<object, Dictionary<string, object?>>()
             var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
-            il.Emit(OpCodes.Newobj, cwtType.GetConstructor([])!);
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(cwtType));
             il.Emit(OpCodes.Stsfld, privateFieldStorage);
         }
 

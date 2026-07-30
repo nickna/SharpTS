@@ -467,7 +467,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         // 5. Check IsCompleted
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldflda, _builder.AwaiterField);
-        var isCompletedGetter = _types.TaskAwaiterOfObject.GetProperty("IsCompleted")!.GetGetMethod()!;
+        var isCompletedGetter = _types.GetProperty(_types.TaskAwaiterOfObject, "IsCompleted")!.GetGetMethod()!;
         _il.Emit(OpCodes.Call, isCompletedGetter);
         _il.Emit(OpCodes.Brtrue, continueLabel);
 
@@ -512,7 +512,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.MarkLabel(continueLabel);
 
         // 9. Get result: awaiter.GetResult(). A rejected awaited task throws here.
-        var getResultMethod = _types.TaskAwaiterOfObject.GetMethod("GetResult")!;
+        var getResultMethod = _types.GetMethod(_types.TaskAwaiterOfObject, "GetResult")!;
         if (_currentTryExceptionLocal != null)
         {
             // Inside a flag-based try: capture the rejection into the try's exception flag (as a sync

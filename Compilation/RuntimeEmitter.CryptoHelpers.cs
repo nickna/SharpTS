@@ -601,18 +601,18 @@ public partial class RuntimeEmitter
 
         // String path
         il.MarkLabel(isStringLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Br, endLabel);
 
         // Fallback - convert to string and then UTF-8
         il.MarkLabel(convertLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
 
         il.MarkLabel(endLabel);
     }

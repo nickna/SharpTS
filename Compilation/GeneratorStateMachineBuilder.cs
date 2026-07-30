@@ -151,7 +151,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
         // Define the state machine class (using class for reference semantics with IEnumerable)
         // Name follows C# compiler convention: <MethodName>d__N
-        _stateMachineType = _moduleBuilder.DefineType(
+        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<{methodName}>d__{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,

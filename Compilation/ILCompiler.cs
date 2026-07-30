@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using PEPacker;
 using SharpTS.Compilation.Symbols;
 using SharpTS.Compilation.Emitters;
@@ -443,7 +444,7 @@ public partial class ILCompiler
         // dynamic assembly with no save support, ~150x faster end-to-end on small
         // tests. See the perf-probe in .perf-probe/Program.cs.
         _assemblyBuilder = _inMemoryOnly
-            ? AssemblyBuilder.DefineDynamicAssembly(asmName, AssemblyBuilderAccess.Run)
+            ? CreateInMemoryAssembly(asmName)
             : new PersistedAssemblyBuilder(asmName, _types.CoreAssembly);
 
         // Apply assembly-level attributes if metadata is provided
@@ -457,6 +458,21 @@ public partial class ILCompiler
 
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
         _typeMapper = new TypeMapper(_moduleBuilder, _types);
+    }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "The in-memory compiler is a managed-host-only fast path and rejects Native AOT before creating a runtime dynamic assembly.")]
+    private static AssemblyBuilder CreateInMemoryAssembly(AssemblyName assemblyName)
+    {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+        {
+            throw new PlatformNotSupportedException(
+                "In-memory compilation is not available in a native SharpTS build — use persisted compilation.");
+        }
+
+        return AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
     }
 
     /// <summary>
@@ -829,7 +845,7 @@ public partial class ILCompiler
         {
             if (_closures.ObjectShapes.ByKey.ContainsKey(shape.CanonicalKey)) continue;
 
-            var structType = _moduleBuilder.DefineType(
+            var structType = EmitTypeDefinitions.DefineType(_moduleBuilder,
                 $"$Shape_{_closures.ObjectShapes.Counter++}",
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
                 _types.ValueType);
@@ -1978,7 +1994,7 @@ public partial class ILCompiler
             return _closures.EntryPointDisplayClass;
         }
 
-        var displayClass = _moduleBuilder.DefineType(
+        var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
             "<>c__EntryPointDisplayClass",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

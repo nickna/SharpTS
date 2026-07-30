@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
 
             var il = method.GetILGenerator();
             // Use explicit int cast - find the method that returns int
-            var explicitToIntMethod = bigIntType.GetMethods().First(m =>
+            var explicitToIntMethod = _types.GetMethods(bigIntType).First(m =>
                 m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
                 m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bigIntType);
 
@@ -224,10 +224,10 @@ public partial class RuntimeEmitter
         runtime.BigIntToStringRadix = method;
 
         var il = method.GetILGenerator();
-        var explicitToInt = bi.GetMethods().First(m =>
+        var explicitToInt = _types.GetMethods(bi).First(m =>
             m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
             m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bi);
-        var divRem = bi.GetMethod("DivRem", [bi, bi, bi.MakeByRefType()])
+        var divRem = _types.TryGetMethod(bi, "DivRem", bi, bi, bi.MakeByRefType())
             ?? throw new InvalidOperationException("BigInteger.DivRem(BigInteger, BigInteger, out BigInteger) not found");
         var sbInsertChar = _types.GetMethod(_types.StringBuilder, "Insert", _types.Int32, _types.Char);
         var getChars = _types.GetMethod(_types.String, "get_Chars", _types.Int32);
@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notEmpty);
         // BigInteger.TryParse(s, out parsed) ? bi == parsed : false
         var parsedLocal = il.DeclareLocal(bi);
-        var tryParse = bi.GetMethod("TryParse", [_types.String, bi.MakeByRefType()])
+        var tryParse = _types.TryGetMethod(bi, "TryParse", _types.String, bi.MakeByRefType())
             ?? throw new InvalidOperationException("BigInteger.TryParse(string, out BigInteger) not found");
         il.Emit(OpCodes.Ldloc, sLocal);
         il.Emit(OpCodes.Ldloca, parsedLocal);
@@ -533,7 +533,7 @@ public partial class RuntimeEmitter
         }
 
         // Get the explicit to int method once for shift operations
-        var explicitToInt = bigIntType.GetMethods().First(m =>
+        var explicitToInt = _types.GetMethods(bigIntType).First(m =>
             m.Name == "op_Explicit" && m.ReturnType == _types.Int32 &&
             m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == bigIntType);
 

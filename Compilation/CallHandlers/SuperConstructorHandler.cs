@@ -108,13 +108,13 @@ public class SuperConstructorHandler : ICallHandler
 
         // Find the single-param (string? message) constructor on the error base type
         var ctorParams = new[] { typeof(string) };
-        var baseCtor = baseType.GetConstructor(ctorParams);
+        var baseCtor = ctx.Types.TryGetConstructor(baseType, ctorParams);
 
         if (baseCtor == null)
         {
             // Fallback: try the (string name, string? message) constructor on $Error
             ctorParams = [typeof(string), typeof(string)];
-            baseCtor = baseType.GetConstructor(ctorParams);
+            baseCtor = ctx.Types.TryGetConstructor(baseType, ctorParams);
         }
 
         if (baseCtor == null)

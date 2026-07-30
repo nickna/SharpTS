@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
         // looks like a writable's underlying sink.
         EmitTransformSinkHolderClass(moduleBuilder, runtime);
 
-        var streamBuilder = moduleBuilder.DefineType(
+        var streamBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TransformStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
 
     private void EmitTransformSinkHolderClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var holder = moduleBuilder.DefineType(
+        var holder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TransformSinkHolder",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);

@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
     /// </remarks>
     internal void EmitArgumentsTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Arguments",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject

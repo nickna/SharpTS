@@ -990,7 +990,7 @@ public partial class ILEmitter
 
             // Get MoveNext and Current methods
             var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
-            var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
+            var current = _ctx.Types.GetProperty(_ctx.Types.IEnumerator, "Current")!.GetGetMethod()!;
 
             builder.MarkLabel(iterStartLabel);
             EmitCancellationCheck();
@@ -1224,7 +1224,7 @@ public partial class ILEmitter
         // Use IEnumerable.GetEnumerator()/MoveNext()/Current pattern for generators
         var getEnumerator = _ctx.Types.GetMethod(_ctx.Types.IEnumerable, "GetEnumerator");
         var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
-        var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
+        var current = _ctx.Types.GetProperty(_ctx.Types.IEnumerator, "Current")!.GetGetMethod()!;
 
         // Stack has the iterable (generator)
         IL.Emit(OpCodes.Castclass, _ctx.Types.IEnumerable);
@@ -1269,7 +1269,7 @@ public partial class ILEmitter
     {
         var builder = _ctx.ILBuilder;
         var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
-        var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
+        var current = _ctx.Types.GetProperty(_ctx.Types.IEnumerator, "Current")!.GetGetMethod()!;
 
         // Stack has the iterator source — normalize to IEnumerator<object>
         EmitBoxIfNeeded(f.Iterable);

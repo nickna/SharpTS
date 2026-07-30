@@ -103,14 +103,11 @@ public class SharpTSError : ITypeCategorized
         var sb = new System.Text.StringBuilder();
         foreach (var frame in frames)
         {
-            var method = frame.GetMethod();
-            if (method == null) continue;
-
             var fileName = frame.GetFileName();
             var lineNumber = frame.GetFileLineNumber();
 
-            var methodName = method.Name;
-            var typeName = method.DeclaringType?.Name ?? "";
+            if (StackFrameDisplay.GetMethodName(frame) is not { } displayName) continue;
+            var (typeName, methodName) = displayName;
 
             if (!string.IsNullOrEmpty(typeName))
             {

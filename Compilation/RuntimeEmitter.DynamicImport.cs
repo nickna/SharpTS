@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, alreadyInitialized);
 
         // _moduleRegistry = new Dictionary<string, Func<object?>>();
-        il.Emit(OpCodes.Newobj, dictType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(dictType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stsfld, registryField);
 
         il.MarkLabel(alreadyInitialized);
@@ -107,7 +107,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, registryField);
         il.Emit(OpCodes.Ldarg_0); // path
         il.Emit(OpCodes.Ldarg_1); // factory
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item")!);
 
         il.Emit(OpCodes.Ret);
     }

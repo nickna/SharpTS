@@ -61,7 +61,7 @@ public partial class ILCompiler
                     if (constraintType.IsInterface)
                         classGenericParams[i].SetInterfaceConstraints(constraintType);
                     else
-                        classGenericParams[i].SetBaseTypeConstraint(constraintType);
+                        EmitTypeDefinitions.SetBaseTypeConstraint(classGenericParams[i], constraintType);
                 }
             }
 
@@ -126,12 +126,12 @@ public partial class ILCompiler
         // Set the parent type
         if (baseType != null)
         {
-            typeBuilder.SetParent(baseType);
+            EmitTypeDefinitions.SetParent(typeBuilder, baseType);
         }
 
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
-        typeBuilder.AddInterfaceImplementation(_runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.IHasFieldsInterface);
 
         // Initialize tracking dictionaries for this class expression
         _classExprs.BackingFields[classExpr] = [];
@@ -647,7 +647,7 @@ public partial class ILCompiler
             else
             {
                 Type baseType = typeBuilder.BaseType ?? typeof(object);
-                var fallbackCtor = baseType.GetConstructor([]) ?? _types.ObjectDefaultCtor;
+                var fallbackCtor = _types.TryGetConstructor(baseType) ?? _types.ObjectDefaultCtor;
                 il.Emit(OpCodes.Call, fallbackCtor);
             }
         }

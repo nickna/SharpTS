@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using SharpTS.Compilation;
 
@@ -43,7 +44,9 @@ public static class AssemblyAttributeBuilder
     /// <summary>
     /// Builds an attribute with a single string constructor parameter.
     /// </summary>
-    private static EncodedCustomAttribute BuildStringAttribute<TAttribute>(string value)
+    private static EncodedCustomAttribute BuildStringAttribute<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TAttribute>(
+        string value)
         where TAttribute : Attribute
     {
         var ctor = typeof(TAttribute).GetConstructor([typeof(string)])

@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
 
         // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create();
         il.Emit(OpCodes.Ldloca, smLocal);
-        var createMethod = sm.BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
+        var createMethod = _types.GetMethod(sm.BuilderType, "Create", BindingFlags.Public | BindingFlags.Static)!;
         il.Emit(OpCodes.Call, createMethod);
         il.Emit(OpCodes.Stfld, sm.BuilderField);
 
@@ -113,14 +113,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = EmitGenerics.MakeGenericMethod(sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        var startMethod = EmitGenerics.MakeGenericMethod(_types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "Start" && m.IsGenericMethod), sm.Type);
         il.Emit(OpCodes.Call, startMethod);
 
         // return sm.<>t__builder.Task;
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        var taskGetter = sm.BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+        var taskGetter = _types.GetProperty(sm.BuilderType, "Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
         il.Emit(OpCodes.Call, taskGetter);
         il.Emit(OpCodes.Ret);
     }
@@ -192,7 +192,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = EmitGenerics.MakeGenericMethod(sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        var awaitMethod = EmitGenerics.MakeGenericMethod(_types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod), awaiterType, sm.Type);
         il.Emit(OpCodes.Call, awaitMethod);
         il.Emit(OpCodes.Leave, returnLabel);
@@ -332,7 +332,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, fulfillExceptionLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
         il.Emit(OpCodes.Leave, returnLabel);
         il.EndExceptionBlock();
 
@@ -354,7 +354,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
         il.Emit(OpCodes.Leave, returnLabel);
 
         // ========== Exception handler ==========
@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, handlerExceptionLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
         il.Emit(OpCodes.Leave, returnLabel);
 
         il.MarkLabel(handlerOkLabel);
@@ -435,7 +435,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
         il.Emit(OpCodes.Leave, returnLabel);
 
         // noRejectCallbackLabel: no onRejected, propagate exception
@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
         il.Emit(OpCodes.Leave, returnLabel);
 
         il.EndExceptionBlock();

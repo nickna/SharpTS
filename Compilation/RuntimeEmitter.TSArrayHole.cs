@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     private void EmitArrayHoleClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // public sealed class $ArrayHole
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ArrayHole",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

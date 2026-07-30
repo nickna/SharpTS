@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
         il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.MarkLabel(hasExistingLabel);
 

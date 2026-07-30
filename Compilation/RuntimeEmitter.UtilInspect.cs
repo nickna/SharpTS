@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
         // Default case: value.ToString() ?? "undefined"
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notNullLabel);
@@ -178,7 +178,7 @@ public partial class RuntimeEmitter
         // var count = list.Count
         var countLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObjectNullable, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
 
         // int i = 0
@@ -205,7 +205,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "get_Item", [typeof(int)])!);
         il.Emit(OpCodes.Ldarg_1); // depth
         il.Emit(OpCodes.Ldarg_2); // currentDepth
         il.Emit(OpCodes.Ldc_I4_1);
@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         // var keys = new List<string>(dict.Keys)
         var keysLocal = il.DeclareLocal(typeof(List<string>));
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Keys")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys")!.GetGetMethod()!);
         il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keysLocal);
 
@@ -326,7 +326,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("get_Item", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", [typeof(string)])!);
         il.Emit(OpCodes.Ldarg_1); // depth
         il.Emit(OpCodes.Ldarg_2); // currentDepth
         il.Emit(OpCodes.Ldc_I4_1);

@@ -2725,7 +2725,7 @@ public partial class ILEmitter
         for (int i = 0; i < parts.Count; i++)
             paramTypes[i] = _ctx.Types.String;
 
-        var concatMethod = _ctx.Types.String.GetMethod("Concat", paramTypes);
+        var concatMethod = _ctx.Types.GetMethod(_ctx.Types.String, "Concat", paramTypes);
 
         // If we can't find the specific overload (e.g., for 4 args), use array version
         if (concatMethod == null)
@@ -2787,7 +2787,7 @@ public partial class ILEmitter
         }
 
         // Call String.Concat(string[])
-        var concatMethod = _ctx.Types.String.GetMethod("Concat", [_ctx.Types.StringArray]);
+        var concatMethod = _ctx.Types.GetMethod(_ctx.Types.String, "Concat", [_ctx.Types.StringArray]);
         IL.Emit(OpCodes.Call, concatMethod!);
     }
 

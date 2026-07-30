@@ -123,7 +123,7 @@ public partial class ILCompiler
 
         // Create a new dictionary from _fields (copy constructor), then add backing fields
         var iDictType = _types.MakeGenericType(typeof(IDictionary<,>), typeof(string), typeof(object));
-        var copyCtor = _types.DictionaryStringObject.GetConstructor([iDictType])!;
+        var copyCtor = _types.GetConstructor(_types.DictionaryStringObject, [iDictType])!;
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item");
 
         // var result = new Dictionary<string, object?>(this._fields);
@@ -182,7 +182,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fieldsField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnTrueLabel);
@@ -289,7 +289,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldfld, fieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, tryMethodsLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
@@ -526,7 +526,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldfld, fieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -642,7 +642,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldfld, fieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, tryMethodsLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
@@ -913,7 +913,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldfld, fieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Ret);
     }
 }

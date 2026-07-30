@@ -228,7 +228,7 @@ public partial class RuntimeEmitter
         // c = s[i]
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, cLocal);
 
         // if (afterEscape) { afterEscape = false; goto advance; }

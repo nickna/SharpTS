@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFinRegEntryTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FinRegEntry",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
         var ctorIL = ctor.GetILGenerator();
         // base()
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         // _heldValue = heldValue
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
@@ -93,7 +93,7 @@ public partial class RuntimeEmitter
         fil.Emit(OpCodes.Ldfld, _finRegEntryQueueField);
         fil.Emit(OpCodes.Ldarg_0);
         fil.Emit(OpCodes.Ldfld, _finRegEntryHeldValueField);
-        var enqueueMethod = _types.ConcurrentQueueOfObject.GetMethod("Enqueue")!;
+        var enqueueMethod = _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue")!;
         fil.Emit(OpCodes.Callvirt, enqueueMethod);
 
         fil.MarkLabel(skipEnqueue);
@@ -102,7 +102,7 @@ public partial class RuntimeEmitter
 
         // base.Finalize()
         fil.Emit(OpCodes.Ldarg_0);
-        fil.Emit(OpCodes.Call, _types.Object.GetMethod("Finalize",
+        fil.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Finalize",
             BindingFlags.NonPublic | BindingFlags.Instance)!);
 
         fil.EndExceptionBlock();
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
     internal void EmitFinRegPokeTableInit(ILGenerator il, EmittedRuntime runtime)
     {
         // _finRegPokeTable = new ConditionalWeakTable<object, object>()
-        il.Emit(OpCodes.Newobj, _types.ConditionalWeakTableObjectObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ConditionalWeakTableObjectObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stsfld, runtime.FinRegPokeTableField);
     }
 
@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
         // [1] = new ConcurrentQueue<object?>()
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, _types.ConcurrentQueueOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ConcurrentQueueOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stelem_Ref);
 
         // [2] = new List<object?[]>() — use List<object?> since object?[] IS object
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
         // [3] = new object()
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Newobj, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Ret);
@@ -290,7 +290,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.FinRegPokeTableField);
         il.Emit(OpCodes.Ldarg_1); // target
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, _types.ConditionalWeakTableObjectObject.GetMethod("AddOrUpdate")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTableObjectObject, "AddOrUpdate")!);
 
         // Monitor.Enter(lockObj, ref lockTaken)
         var lockTakenLocal = il.DeclareLocal(_types.Boolean);
@@ -322,7 +322,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
 
         // Call Add on List<object?> — entries are stored as object (the object[] array)
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "Add")!);
 
         il.BeginFinallyBlock();
 
@@ -401,7 +401,7 @@ public partial class RuntimeEmitter
         // int i = entries.Count - 1
         var iLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, entriesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObjectNullable, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -417,7 +417,7 @@ public partial class RuntimeEmitter
         var entryArrLocal = il.DeclareLocal(typeof(object?[]));
         il.Emit(OpCodes.Ldloc, entriesLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObjectNullable, "Item")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, typeof(object?[]));
         il.Emit(OpCodes.Stloc, entryArrLocal);
 
@@ -445,7 +445,7 @@ public partial class RuntimeEmitter
         // entries.RemoveAt(i)
         il.Emit(OpCodes.Ldloc, entriesLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetMethod("RemoveAt")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "RemoveAt")!);
 
         // removed = true
         il.Emit(OpCodes.Ldc_I4_1);

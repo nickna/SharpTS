@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldfld, serverField);
                 il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
                 il.Emit(OpCodes.Ldloc, iLocal);
-                il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
                 il.Emit(OpCodes.Isinst, _netSocketTypeBuilder);
                 il.Emit(OpCodes.Stloc, sockLocal);
                 il.Emit(OpCodes.Ldloc, sockLocal);
@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldfld, serverField);
                 il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
                 il.Emit(OpCodes.Ldloc, iLocal);
-                il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("RemoveAt")!);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "RemoveAt")!);
 
                 il.MarkLabel(nextIter);
                 il.Emit(OpCodes.Ldloc, iLocal);
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, serverField);
             il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
             // if (_server._connectionListener != null) invoke with [socket]
             var noListener = il.DefineLabel();
@@ -342,7 +342,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, serverField);
             il.Emit(OpCodes.Ldfld, _netServerConnectionsField);
             il.Emit(OpCodes.Ldloc, socketLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
             // socket.StartReading() — must start BEFORE callbacks so reader is pending
             il.Emit(OpCodes.Ldloc, socketLocal);
@@ -448,8 +448,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, prefix + "Address");
             il.Emit(OpCodes.Ldloc, epLocal);
             il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty("Address")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item")!);
 
             // dict[prefix + "Port"] = (double)ep.Port
             il.Emit(OpCodes.Ldloc, dictLocal);
@@ -458,7 +458,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty("Port")!.GetGetMethod()!);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item")!);
 
             // dict[prefix + "Family"] = ep.AddressFamily == InterNetworkV6 ? "IPv6" : "IPv4"
             var isV4 = il.DefineLabel();
@@ -474,7 +474,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(isV4);
             il.Emit(OpCodes.Ldstr, "IPv4");
             il.MarkLabel(famDone);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item")!);
 
             il.MarkLabel(skip);
         }

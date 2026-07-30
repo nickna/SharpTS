@@ -9,6 +9,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public sealed class AssemblyReferenceLoader : IDisposable
 {
+    private const string MetadataLoadContextJustification =
+        "The reflected assembly is a MetadataLoadContext input loaded from an external file, not code linked into the native host. Only its metadata is inspected.";
+
     private readonly MetadataLoadContext _mlc;
     private readonly List<Assembly> _loadedAssemblies = [];
     private readonly ConcurrentDictionary<string, Type?> _typeCache = new();
@@ -19,6 +22,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
     /// </summary>
     /// <param name="assemblyPaths">Paths to referenced assemblies.</param>
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "Assembly.Location is only a managed-build fallback after SDK reference resolution; an empty single-file location is explicitly ignored.")]
     public AssemblyReferenceLoader(IEnumerable<string> assemblyPaths, string? sdkPath = null)
     {
         var paths = assemblyPaths.ToList();
@@ -74,6 +81,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
         return _typeCache.GetOrAdd(fullName, ResolveCore);
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = MetadataLoadContextJustification)]
     private Type? ResolveCore(string fullName)
     {
         // Search user references first
@@ -112,6 +123,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
     /// <summary>
     /// Gets all public types from loaded reference assemblies.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = MetadataLoadContextJustification)]
     public IEnumerable<Type> GetAllPublicTypes()
     {
         foreach (var asm in _loadedAssemblies)

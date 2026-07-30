@@ -83,7 +83,7 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // Defaults
         il.Emit(OpCodes.Ldarg_0);
@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "family");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noFamily);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, _types.String);
@@ -116,13 +116,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Castclass, _types.String);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
             il.Emit(OpCodes.Stfld, _socketAddressFamilyField);
             // if (_family == "ipv6") _address = "::"
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _socketAddressFamilyField);
             il.Emit(OpCodes.Ldstr, "ipv6");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
             il.Emit(OpCodes.Brfalse, notV6);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "::");
@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "address");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noAddress);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, _types.String);
@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "port");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noPort);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "flowlabel");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noFlow);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
@@ -268,7 +268,7 @@ public partial class RuntimeEmitter
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
             il.Emit(OpCodes.Stfld, _blockListRulesField);
@@ -449,7 +449,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("TryParse", [_types.String, typeof(IPAddress).MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, asIs);
         il.Emit(OpCodes.Ldloc, ipLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(asIs);
         il.Emit(OpCodes.Ldarg_0);
@@ -521,7 +521,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _socketAddressTypeBuilder);
         il.Emit(OpCodes.Ldfld, _socketAddressFamilyField);
         il.Emit(OpCodes.Ldstr, "ipv6");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notSa);
@@ -530,9 +530,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notString);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ldstr, "ipv6");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notString);
@@ -683,7 +683,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _blockListRulesField);
         il.Emit(OpCodes.Ldloc, ruleLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -716,7 +716,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _blockListRulesField);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Castclass, typeof(object[]));
         il.Emit(OpCodes.Stloc, ruleLocal);
 
@@ -817,11 +817,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldstr, "Address: ");
         EmitBlockListFamilyString(il, isV6Local);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldloc, addrLocal);
         il.Emit(OpCodes.Call, _blockListCanonAddrMethod);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Call, _blockListAddRuleMethod);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -911,15 +911,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, endBytesLocal);
         il.Emit(OpCodes.Ldstr, "Range: ");
         EmitBlockListFamilyString(il, isV6Local);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldloc, startAddrLocal);
         il.Emit(OpCodes.Call, _blockListCanonAddrMethod);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "-");
         il.Emit(OpCodes.Ldloc, endAddrLocal);
         il.Emit(OpCodes.Call, _blockListCanonAddrMethod);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Call, _blockListAddRuleMethod);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -1021,15 +1021,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, endLocal);
         il.Emit(OpCodes.Ldstr, "Subnet: ");
         EmitBlockListFamilyString(il, isV6Local);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldloc, addrLocal);
         il.Emit(OpCodes.Call, _blockListCanonAddrMethod);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "/");
         il.Emit(OpCodes.Ldloca, prefixLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Call, _blockListAddRuleMethod);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -1207,11 +1207,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _blockListRulesField);
             il.Emit(OpCodes.Ldloc, iLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
             il.Emit(OpCodes.Castclass, typeof(object[]));
             il.Emit(OpCodes.Ldc_I4_3);
             il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
             il.Emit(OpCodes.Ldloc, iLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);

@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var dictType = _types.DictionaryStringObject;
-        var tryGet = dictType.GetMethod("TryGetValue")!;
+        var tryGet = _types.GetMethod(dictType, "TryGetValue")!;
 
         // string h = host as string ?? "";
         var hLocal = il.DeclareLocal(_types.String);
@@ -147,10 +147,10 @@ public partial class RuntimeEmitter
         _tlsHostMatchesMethod = method;
         var il = method.GetILGenerator();
 
-        var startsWith = _types.String.GetMethod("StartsWith", [_types.String, typeof(StringComparison)])!;
-        var indexOfChar = _types.String.GetMethod("IndexOf", [_types.Char])!;
-        var substringI = _types.String.GetMethod("Substring", [_types.Int32])!;
-        var equalsCmp = _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!;
+        var startsWith = _types.GetMethod(_types.String, "StartsWith", [_types.String, typeof(StringComparison)])!;
+        var indexOfChar = _types.GetMethod(_types.String, "IndexOf", [_types.Char])!;
+        var substringI = _types.GetMethod(_types.String, "Substring", [_types.Int32])!;
+        var equalsCmp = _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!;
 
         // if (name.StartsWith("*.", Ordinal))
         var notWild = il.DefineLabel();
@@ -206,11 +206,11 @@ public partial class RuntimeEmitter
         _tlsExtractCnMethod = method;
         var il = method.GetILGenerator();
 
-        var indexOfStrCmp = _types.String.GetMethod("IndexOf", [_types.String, typeof(StringComparison)])!;
-        var indexOfCharFrom = _types.String.GetMethod("IndexOf", [_types.Char, _types.Int32])!;
-        var substringI = _types.String.GetMethod("Substring", [_types.Int32])!;
-        var substringII = _types.String.GetMethod("Substring", [_types.Int32, _types.Int32])!;
-        var trim = _types.String.GetMethod("Trim", Type.EmptyTypes)!;
+        var indexOfStrCmp = _types.GetMethod(_types.String, "IndexOf", [_types.String, typeof(StringComparison)])!;
+        var indexOfCharFrom = _types.GetMethod(_types.String, "IndexOf", [_types.Char, _types.Int32])!;
+        var substringI = _types.GetMethod(_types.String, "Substring", [_types.Int32])!;
+        var substringII = _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!;
+        var trim = _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!;
 
         // int i = dn.IndexOf("CN=", OrdinalIgnoreCase)
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -282,13 +282,13 @@ public partial class RuntimeEmitter
         var listAdd = listType.GetMethod("Add")!;
         var listCount = listType.GetProperty("Count")!.GetGetMethod()!;
         var listGetItem = listType.GetMethod("get_Item", [_types.Int32])!;
-        var isNullOrEmpty = _types.String.GetMethod("IsNullOrEmpty", [_types.String])!;
-        var splitChar = _types.String.GetMethod("Split", [_types.Char, typeof(StringSplitOptions)])!;
-        var trim = _types.String.GetMethod("Trim", Type.EmptyTypes)!;
-        var startsWith = _types.String.GetMethod("StartsWith", [_types.String, typeof(StringComparison)])!;
-        var substringI = _types.String.GetMethod("Substring", [_types.Int32])!;
-        var joinEnum = _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!;
-        var concat4 = _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String, _types.String])!;
+        var isNullOrEmpty = _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!;
+        var splitChar = _types.GetMethod(_types.String, "Split", [_types.Char, typeof(StringSplitOptions)])!;
+        var trim = _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!;
+        var startsWith = _types.GetMethod(_types.String, "StartsWith", [_types.String, typeof(StringComparison)])!;
+        var substringI = _types.GetMethod(_types.String, "Substring", [_types.Int32])!;
+        var joinEnum = _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!;
+        var concat4 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String, _types.String])!;
 
         var namesLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);

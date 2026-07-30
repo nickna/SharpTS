@@ -119,7 +119,7 @@ public partial class ILCompiler
                     if (constraintType.IsInterface)
                         classGenericParams[i].SetInterfaceConstraints(constraintType);
                     else
-                        classGenericParams[i].SetBaseTypeConstraint(constraintType);
+                        EmitTypeDefinitions.SetBaseTypeConstraint(classGenericParams[i], constraintType);
                 }
             }
 
@@ -217,13 +217,13 @@ public partial class ILCompiler
         // Set the parent type (defaults to Object if baseType is null)
         if (baseType != null)
         {
-            typeBuilder.SetParent(baseType);
+            EmitTypeDefinitions.SetParent(typeBuilder, baseType);
         }
 
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
         // Each class emits its own GetProperty/SetProperty methods that access its _fields
-        typeBuilder.AddInterfaceImplementation(_runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.IHasFieldsInterface);
 
         string className = qualifiedClassName;
 
@@ -578,6 +578,25 @@ public partial class ILCompiler
             // Fall through to broader lookup below.
         }
 
+        // The remaining lookup exists for managed embedders whose host assembly owns
+        // the requested type. Native compilation supports the TypeProvider/BCL path
+        // above but cannot consume arbitrary executable assemblies.
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+            return null;
+
+        return TryResolveManagedHostType(clrTypeName);
+    }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Only managed embedders reach this fallback; Native AOT returns after the supported TypeProvider/BCL lookup.")]
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = "Only managed embedders reach this fallback; Native AOT returns after the supported TypeProvider/BCL lookup.")]
+    private static Type? TryResolveManagedHostType(string clrTypeName)
+    {
         // Type.GetType only searches the executing assembly + mscorlib by default.
         // Search all currently loaded assemblies too, so types in referencing projects
         // (e.g., a host app with its own .NET domain model) are resolvable just like in
@@ -688,7 +707,7 @@ public partial class ILCompiler
         {
             var elementTypeArg = typeArg[..^2];
             var elementType = ResolveTypeArgument(elementTypeArg, classGenericParams, classTypeParams);
-            return elementType.MakeArrayType();
+            return _types.MakeArrayType(elementType);
         }
 
         // 6. Check for nested generics (e.g., "Map<string, number>")

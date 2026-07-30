@@ -229,7 +229,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "highWaterMark");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noHwm);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
@@ -247,7 +247,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "blockList");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noBlockList);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, _blockListTypeBuilder);
@@ -263,7 +263,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "allowHalfOpen");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noAho);
             il.Emit(OpCodes.Ldloc, valLocal);
             il.Emit(OpCodes.Isinst, typeof(bool));

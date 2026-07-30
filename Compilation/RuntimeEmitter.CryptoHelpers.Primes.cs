@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, primeLoc);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, biType.GetMethod("ToByteArray", [typeof(bool), typeof(bool)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(biType, "ToByteArray", [typeof(bool), typeof(bool)])!);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
     }
@@ -121,10 +121,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSBufferType);
         il.Emit(OpCodes.Call, runtime.TSBufferGetData);
         // byte[] → ReadOnlySpan<byte> (implicit), then BigInteger(ROS<byte>, isUnsigned:true, isBigEndian:true)
-        il.Emit(OpCodes.Call, _types.ReadOnlySpanOfByte.GetMethod("op_Implicit", [typeof(byte[])])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, biType.GetConstructor([_types.ReadOnlySpanOfByte, typeof(bool), typeof(bool)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(biType, [_types.ReadOnlySpanOfByte, typeof(bool), typeof(bool)])!);
         il.Emit(OpCodes.Stloc, candLoc);
         il.Emit(OpCodes.Br, haveCandLabel);
 
@@ -201,9 +201,9 @@ public partial class RuntimeEmitter
         var opDiv = BIOp("op_Division", biType, biType);
         var opSub = BIOp("op_Subtraction", biType, biType);
         var opAdd = BIOp("op_Addition", biType, biType);
-        var opImplicitInt = biType.GetMethod("op_Implicit", [typeof(int)])!;
+        var opImplicitInt = _types.GetMethod(biType, "op_Implicit", [typeof(int)])!;
         var modPow = BI("ModPow", biType, biType, biType);
-        var isEven = biType.GetProperty("IsEven")!.GetGetMethod()!;
+        var isEven = _types.GetProperty(biType, "IsEven")!.GetGetMethod()!;
 
         // n = arg0
         il.Emit(OpCodes.Ldarg_0);
@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
         // byteLen = n.GetByteCount(false)
         il.Emit(OpCodes.Ldloca, nLoc);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, biType.GetMethod("GetByteCount", [typeof(bool)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(biType, "GetByteCount", [typeof(bool)])!);
         il.Emit(OpCodes.Stloc, byteLenLoc);
 
         // for (i = 0; i < checks; i++)
@@ -319,7 +319,7 @@ public partial class RuntimeEmitter
 
         // a = new BigInteger(bytes) % (n - 3) + 2
         il.Emit(OpCodes.Ldloc, tmpBytesLoc);
-        il.Emit(OpCodes.Newobj, biType.GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(biType, [typeof(byte[])])!);
         il.Emit(OpCodes.Ldloc, nLoc);
         il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Call, opImplicitInt);
@@ -422,7 +422,7 @@ public partial class RuntimeEmitter
 
         var opSub = BIOp("op_Subtraction", biType, biType);
         var opDiv = BIOp("op_Division", biType, biType);
-        var opImplicitInt = biType.GetMethod("op_Implicit", [typeof(int)])!;
+        var opImplicitInt = _types.GetMethod(biType, "op_Implicit", [typeof(int)])!;
 
         // if (bits < 2) throw
         var okLabel = il.DefineLabel();
@@ -523,7 +523,7 @@ public partial class RuntimeEmitter
 
         // cand = new BigInteger(bytes)
         il.Emit(OpCodes.Ldloc, bytesLoc);
-        il.Emit(OpCodes.Newobj, biType.GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(biType, [typeof(byte[])])!);
         il.Emit(OpCodes.Stloc, candLoc);
 
         // if (!CryptoIsProbablyPrime(cand, 20)) goto loop

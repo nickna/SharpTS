@@ -26,7 +26,8 @@ public partial class RuntimeEmitter
     /// <summary>$FsAsyncOp { MethodInfo _m; object[] _args; object Worker() }</summary>
     private void EmitFsAsyncOpClosure(TypeBuilder typeBuilder)
     {
-        var t = ((ModuleBuilder)typeBuilder.Module).DefineType(
+        var t = EmitTypeDefinitions.DefineType(
+            (ModuleBuilder)typeBuilder.Module,
             "$FsAsyncOp",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
@@ -37,7 +38,7 @@ public partial class RuntimeEmitter
             [typeof(MethodInfo), typeof(object[])]);
         {
             var il = ctor.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stfld, mField);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stfld, argsField);
             il.Emit(OpCodes.Ret);

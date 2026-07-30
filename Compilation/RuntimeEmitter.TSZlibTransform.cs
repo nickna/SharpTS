@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSZlibTransformClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ZlibTransform",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSTransformType

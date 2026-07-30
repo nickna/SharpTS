@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
     /// <summary>Phase 1: define $BoundTypedArrayMethod, its fields, ctor, and Invoke signature.</summary>
     internal void EmitBoundTypedArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundTypedArrayMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

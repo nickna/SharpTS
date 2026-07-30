@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitArgumentsContextClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ArgumentsContext",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
     private void EmitTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TSFunction
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TSFunction",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -264,10 +264,10 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, instanceCacheField);
         // Prototype cache: ConcurrentDictionary<MethodInfo, object> — generic args
         // are both concrete CLR types, so the constructor resolves directly.
-        cctorIL.Emit(OpCodes.Newobj, prototypeCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(prototypeCacheType, Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, prototypeCacheField);
         // Invoker cache: ConcurrentDictionary<MethodInfo, MethodInvoker>.
-        cctorIL.Emit(OpCodes.Newobj, invokerCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(invokerCacheType, Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, invokerCacheField);
         cctorIL.Emit(OpCodes.Ret);
 
@@ -462,7 +462,7 @@ public partial class RuntimeEmitter
 
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("IsStatic")!.GetGetMethod()!);
+        invokeIL.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsStatic")!.GetGetMethod()!);
         invokeIL.Emit(OpCodes.Brfalse, notStaticWithTarget);
 
         invokeIL.Emit(OpCodes.Ldarg_0);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldlen);
         invokeIL.Emit(OpCodes.Conv_I4);  // length
-        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        invokeIL.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
 
         invokeIL.Emit(OpCodes.Ldnull);
         invokeIL.Emit(OpCodes.Stloc, invokeTargetLocal);
@@ -561,8 +561,8 @@ public partial class RuntimeEmitter
         // faster on hot paths. The Span<object?> wraps the existing
         // adjustedArgs array (no extra allocation).
         var spanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
-        var spanCtorFromArray = spanOfObject.GetConstructor([typeof(object[])])!;
-        var invokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, spanOfObject])!;
+        var spanCtorFromArray = _types.GetConstructor(spanOfObject, [typeof(object[])])!;
+        var invokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, spanOfObject])!;
 
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, invokerField);
@@ -692,7 +692,7 @@ public partial class RuntimeEmitter
         // Only the static-helper case considers _target as the JS this.
         iwt.Emit(OpCodes.Ldarg_0);
         iwt.Emit(OpCodes.Ldfld, methodField);
-        iwt.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("IsStatic")!.GetGetMethod()!);
+        iwt.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsStatic")!.GetGetMethod()!);
         iwt.Emit(OpCodes.Brfalse, useThisArgDirectLabelDecl(out var useThisArgDirectLabel));
 
         // Static method: probe thisArg → _target chain.
@@ -739,7 +739,7 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Ldarg_2);
         iwt.Emit(OpCodes.Ldlen);
         iwt.Emit(OpCodes.Conv_I4);  // length
-        iwt.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        iwt.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
 
         // adjustedArgs = this.AdjustArgs(effectiveArgs)
         var iwtAdjustedArgsLocal = iwt.DeclareLocal(_types.ObjectArray);
@@ -781,7 +781,7 @@ public partial class RuntimeEmitter
         var iwtAfterTargetLabel = iwt.DefineLabel();
         iwt.Emit(OpCodes.Ldarg_0);
         iwt.Emit(OpCodes.Ldfld, methodField);
-        iwt.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("IsStatic")!.GetGetMethod()!);
+        iwt.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsStatic")!.GetGetMethod()!);
         iwt.Emit(OpCodes.Brfalse, iwtIsInstanceLabel);
         // Static: invokeTarget = null
         iwt.Emit(OpCodes.Ldnull);
@@ -796,8 +796,8 @@ public partial class RuntimeEmitter
 
         // _invoker.Invoke(invokeTarget, new Span<object>(adjustedArgs))
         var iwtSpanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
-        var iwtSpanCtor = iwtSpanOfObject.GetConstructor([typeof(object[])])!;
-        var iwtInvokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, iwtSpanOfObject])!;
+        var iwtSpanCtor = _types.GetConstructor(iwtSpanOfObject, [typeof(object[])])!;
+        var iwtInvokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, iwtSpanOfObject])!;
         iwt.Emit(OpCodes.Ldarg_0);
         iwt.Emit(OpCodes.Ldfld, invokerField);
         iwt.Emit(OpCodes.Ldloc, iwtInvokeTargetLocal);
@@ -841,7 +841,7 @@ public partial class RuntimeEmitter
         // targetType = _target.GetType();
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
-        bindThisIL.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
         bindThisIL.Emit(OpCodes.Stloc, targetTypeLocal);
 
         // Try get from cache
@@ -849,7 +849,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
         bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldloca, thisFieldLocal);
-        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryGetValue", [_types.Type, _types.FieldInfo.MakeByRefType()])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(fieldCacheType, "TryGetValue", [_types.Type, _types.FieldInfo.MakeByRefType()])!);
         var cacheHitLabel = bindThisIL.DefineLabel();
         bindThisIL.Emit(OpCodes.Brtrue, cacheHitLabel);
 
@@ -858,7 +858,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldstr, "this");
         bindThisIL.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Instance));
-        bindThisIL.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", [_types.String, _types.BindingFlags])!);
         bindThisIL.Emit(OpCodes.Stloc, thisFieldLocal);
 
         // Store in cache (even if null, but ConcurrentDictionary doesn't allow null values if we used that, but here we can just skip if null)
@@ -873,7 +873,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
         bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
-        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryAdd", [_types.Type, _types.FieldInfo])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(fieldCacheType, "TryAdd", [_types.Type, _types.FieldInfo])!);
         bindThisIL.Emit(OpCodes.Pop); // discard bool result
 
         bindThisIL.MarkLabel(fieldNullLabel);
@@ -888,7 +888,7 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
         bindThisIL.Emit(OpCodes.Ldarg_1);
-        bindThisIL.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("SetValue", [_types.Object, _types.Object])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "SetValue", [_types.Object, _types.Object])!);
         bindThisIL.Emit(OpCodes.Br, endLabel);
 
         bindThisIL.MarkLabel(noTargetLabel);
@@ -942,7 +942,7 @@ public partial class RuntimeEmitter
         // params = _method.GetParameters()
         lengthIL.Emit(OpCodes.Ldarg_0);
         lengthIL.Emit(OpCodes.Ldfld, methodField);
-        lengthIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         lengthIL.Emit(OpCodes.Stloc, paramsLocalLength);
 
         // Check if params is null - if so, return 0
@@ -974,15 +974,15 @@ public partial class RuntimeEmitter
 
         // Skip if param.IsOptional (has default value or is optional)
         lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
-        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("IsOptional")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "IsOptional")!.GetGetMethod()!);
         lengthIL.Emit(OpCodes.Brtrue, skipParam);
 
         // Skip if param type is List<object> (rest parameter)
         lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
-        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         lengthIL.Emit(OpCodes.Ldtoken, _types.ListOfObject);
-        lengthIL.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-        lengthIL.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        lengthIL.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        lengthIL.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         lengthIL.Emit(OpCodes.Brtrue, skipParam);
 
         // Skip if param name starts with "__" (internal parameters like __this).
@@ -992,7 +992,7 @@ public partial class RuntimeEmitter
         // "regular parameter, count it".
         var nameLocal = lengthIL.DeclareLocal(_types.String);
         lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
-        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("Name")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
         lengthIL.Emit(OpCodes.Stloc, nameLocal);
         lengthIL.Emit(OpCodes.Ldloc, nameLocal);
         var nameNotNullLabel = lengthIL.DefineLabel();
@@ -1001,7 +1001,7 @@ public partial class RuntimeEmitter
         lengthIL.MarkLabel(nameNotNullLabel);
         lengthIL.Emit(OpCodes.Ldloc, nameLocal);
         lengthIL.Emit(OpCodes.Ldstr, "__");
-        lengthIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        lengthIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
         lengthIL.Emit(OpCodes.Brtrue, skipParam);
         lengthIL.MarkLabel(incrementCount);
 
@@ -1075,7 +1075,7 @@ public partial class RuntimeEmitter
         // return _method.Name
         nameIL.Emit(OpCodes.Ldarg_0);
         nameIL.Emit(OpCodes.Ldfld, methodField);
-        nameIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("Name")!.GetGetMethod()!);
+        nameIL.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "Name")!.GetGetMethod()!);
         nameIL.Emit(OpCodes.Ret);
 
         // Return "" if _method was null
@@ -1113,9 +1113,9 @@ public partial class RuntimeEmitter
         // are concrete CLR types, so methods resolve directly off the
         // constructed type (no TypeBuilder.GetMethod wrapping needed; that
         // path only applies when an arg is itself a TypeBuilder).
-        var tryGetValueM = invokerCacheType.GetMethod("TryGetValue",
+        var tryGetValueM = _types.GetMethod(invokerCacheType, "TryGetValue",
             [_types.MethodInfo, _types.MethodInvoker.MakeByRefType()])!;
-        var getOrAddM = invokerCacheType.GetMethod("GetOrAdd",
+        var getOrAddM = _types.GetMethod(invokerCacheType, "GetOrAdd",
             [_types.MethodInfo, _types.MethodInvoker])!;
 
         var foundLabel = il.DefineLabel();
@@ -1130,7 +1130,7 @@ public partial class RuntimeEmitter
         // Not in cache: create + GetOrAdd (handles race; either our or another
         // thread's invoker wins, both work the same)
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Call, _types.MethodInvoker.GetMethod("Create", [_types.MethodBase])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodInvoker, "Create", [_types.MethodBase])!);
         il.Emit(OpCodes.Stloc, newInvokerLocal);
 
         il.Emit(OpCodes.Ldsfld, invokerCacheField);
@@ -1161,7 +1161,7 @@ public partial class RuntimeEmitter
 
         // var ps = method.GetParameters();
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // var paramCount = ps.Length;  this._paramCount = paramCount;
@@ -1188,23 +1188,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lastTypeLocal);
 
         // this._hasListRest = (lastType == typeof(List<object>))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, lastTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Stfld, hasListRestField);
 
         // this._hasArrayRest = (lastType == typeof(object[]))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, lastTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.ObjectArray);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Stfld, hasArrayRestField);
 
         il.MarkLabel(doneLabel);
@@ -1233,7 +1233,7 @@ public partial class RuntimeEmitter
 
         // ps = method.GetParameters()
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // i = 0
@@ -1246,7 +1246,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, paramTypeLocal);
 
         // Check coerce-target types: string, double, int32, List<object>
@@ -1257,10 +1257,10 @@ public partial class RuntimeEmitter
 
         // Check Union_* value type
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsValueType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsValueType")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notValueType);
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "Union_");
         il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("StartsWith", [typeof(string)])!);
         il.Emit(OpCodes.Brtrue, setTrueLabel);
@@ -1303,8 +1303,8 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
         il.Emit(OpCodes.Ldtoken, targetType);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brtrue, matchLabel);
     }
 
@@ -1325,7 +1325,7 @@ public partial class RuntimeEmitter
 
         // params = method.GetParameters()
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // nameMatch = params.Length > 0 && params[0].Name == "__this"
@@ -1337,9 +1337,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__this");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -1405,7 +1405,7 @@ public partial class RuntimeEmitter
 
         // ps = method.GetParameters(); n = ps.Length; mask = 0; i = 0;
         il.Emit(OpCodes.Ldarg, methodArgIndex);
-        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldlen);
@@ -1427,10 +1427,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, nextIter);
         // mask |= (1 << i);
         il.Emit(OpCodes.Ldloc, maskLocal);
@@ -1535,7 +1535,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramCountLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, copyCountLocal);
 
         // if (copyCount > 0) Array.Copy(args, result, copyCount)
@@ -1546,7 +1546,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // source
         il.Emit(OpCodes.Ldloc, resultLocal); // dest
         il.Emit(OpCodes.Ldloc, copyCountLocal); // length
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         il.MarkLabel(skipCopy);
 
         // restList = new List<object>()
@@ -1571,7 +1571,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         // i++
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -1622,7 +1622,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, skipRegularCopy);
         il.Emit(OpCodes.Ldloc, argsLengthLocal);
         il.Emit(OpCodes.Ldloc, regularCount);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, copyCountLocal);
         il.Emit(OpCodes.Ldloc, copyCountLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1630,7 +1630,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, arrayRestResult);
         il.Emit(OpCodes.Ldloc, copyCountLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         il.MarkLabel(skipRegularCopy);
 
         // restCount = max(0, argsLength - regularCount)
@@ -1639,7 +1639,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, regularCount);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Max", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, restCountLocal);
 
         // restArray = new object[restCount]
@@ -1658,7 +1658,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, restArrayLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, restCountLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(skipRestCopy);
 
         // result[paramCount - 1] = restArray
@@ -1696,7 +1696,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, argsLengthLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
 
         // Pad value for the missing trailing slots, per the cached _padUndefinedMask.
         //
@@ -1764,7 +1764,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, paramCountLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
 
@@ -1831,12 +1831,12 @@ public partial class RuntimeEmitter
 
         // if (!paramType.IsValueType) continue
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsValueType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsValueType")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, continueLabel);
 
         // if (!paramType.Name.StartsWith("Union_")) continue
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "Union_");
         il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("StartsWith", [typeof(string)])!);
         il.Emit(OpCodes.Brfalse, continueLabel);
@@ -1851,7 +1851,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
         il.Emit(OpCodes.Stloc, argTypeLocal);
 
         // if (argType == paramType) continue
@@ -1869,7 +1869,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, argTypeLocal);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetMethod", [typeof(string), typeof(Type[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", [typeof(string), typeof(Type[])])!);
         il.Emit(OpCodes.Stloc, implicitOpLocal);
 
         // if (implicitOp == null) continue
@@ -1968,7 +1968,7 @@ public partial class RuntimeEmitter
 
         // params = method.GetParameters()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "GetParameters")!);
         il.Emit(OpCodes.Stloc, paramsLocal);
 
         // count = Math.Min(args.Length, params.Length)
@@ -1978,22 +1978,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, countLocal);
 
         // stringType = typeof(string), doubleType = typeof(double),
         // listType = typeof(List<object>).
         il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Stloc, stringTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Stloc, doubleTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Stloc, listTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.Int32);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Stloc, int32TypeLocal);
 
         // Local helper: resolve a $Runtime static method by name into a cache field.
@@ -2006,12 +2006,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, localOut);
             il.Emit(OpCodes.Brtrue, have);
             il.Emit(OpCodes.Ldtoken, typeBuilder);
-            il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
-            il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Assembly")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Assembly")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldstr, "$Runtime");
-            il.Emit(OpCodes.Callvirt, _types.Assembly.GetMethod("GetType", [_types.String])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Assembly, "GetType", [_types.String])!);
             il.Emit(OpCodes.Ldstr, methodName);
-            il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetMethod", [_types.String])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", [_types.String])!);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Stsfld, cacheField);
             il.Emit(OpCodes.Stloc, localOut);
@@ -2066,15 +2066,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, stringTypeLocal);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
         // Check params[0].Name == "__this".
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__this");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipNullishThisCheckLabel);
@@ -2103,7 +2103,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, requireObjectCoercibleThisLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
         il.Emit(OpCodes.Pop);
         il.BeginCatchBlock(_types.TargetInvocationException);
         // Rethrow inner exception so JS catch sees the original error shape.
@@ -2127,7 +2127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, paramsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, paramTypeLocal);
 
         // Branch on paramType: string → ToJsString; double → ToNumber;
@@ -2138,19 +2138,19 @@ public partial class RuntimeEmitter
         var listBranch = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
         il.Emit(OpCodes.Ldloc, stringTypeLocal);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brtrue, stringBranch);
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
         il.Emit(OpCodes.Ldloc, doubleTypeLocal);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brtrue, doubleBranch);
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
         il.Emit(OpCodes.Ldloc, int32TypeLocal);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brtrue, int32Branch);
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
         il.Emit(OpCodes.Ldloc, listTypeLocal);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brtrue, listBranch);
         il.Emit(OpCodes.Br, continueLbl);
 
@@ -2188,7 +2188,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, toJsStringLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Br, continueLbl);
 
@@ -2234,7 +2234,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, toNumberLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Br, continueLbl);
 
@@ -2281,7 +2281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, toNumberLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Box, _types.Int32);
@@ -2325,7 +2325,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, arrayLikeMaterializeLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, oneArgLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", [_types.Object, _types.ObjectArray])!);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.MarkLabel(continueLbl);

@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
 
     private void EmitCryptoPrimitivesClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CryptoPrimitives",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
         var lowerLocal = il.DeclareLocal(_types.String);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
         foreach (var (name, impl, guarded, _) in _hashTable)
@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, nextLabel);
 
             if (guarded)
@@ -85,7 +85,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Call, impl.GetProperty("IsSupported")!.GetGetMethod()!);
                 il.Emit(OpCodes.Brtrue, supportedLabel);
                 il.Emit(OpCodes.Ldstr, $"Unsupported hash algorithm: {name} (not supported on this platform)");
-                il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
                 il.Emit(OpCodes.Throw);
                 il.MarkLabel(supportedLabel);
             }
@@ -98,8 +98,8 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "Unsupported hash algorithm: ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -129,7 +129,7 @@ public partial class RuntimeEmitter
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, nextLabel);
 
             if (xofDefault > 0)
@@ -161,8 +161,8 @@ public partial class RuntimeEmitter
         // Unreachable (validate already threw), but the verifier needs a terminator.
         il.Emit(OpCodes.Ldstr, "Unsupported hash algorithm: ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -183,7 +183,7 @@ public partial class RuntimeEmitter
         var lowerLocal = il.DeclareLocal(_types.String);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
         // Strip "rsa-" / "ecdsa-" prefixes
@@ -192,11 +192,11 @@ public partial class RuntimeEmitter
             var noPrefixLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldstr, prefix);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
             il.Emit(OpCodes.Brfalse, noPrefixLabel);
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldc_I4, len);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
             il.Emit(OpCodes.Stloc, lowerLocal);
             il.MarkLabel(noPrefixLabel);
         }
@@ -211,17 +211,17 @@ public partial class RuntimeEmitter
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, nextLabel);
-            il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty(prop)!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, prop)!.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(nextLabel);
         }
 
         il.Emit(OpCodes.Ldstr, "Unsupported signing algorithm: ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -249,14 +249,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, bufferLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
         foreach (var (name, label) in new[] { ("hex", hexLabel), ("base64", base64Label), ("base64url", base64UrlLabel) })
         {
             il.Emit(OpCodes.Ldloc, lowerLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brtrue, label);
         }
         il.Emit(OpCodes.Br, bufferLabel);
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(base64Label);
@@ -282,13 +282,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4, (int)'=');
         il.Emit(OpCodes.Stelem_I2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimEnd", [typeof(char[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", [typeof(char[])])!);
         il.Emit(OpCodes.Ldc_I4, (int)'+');
         il.Emit(OpCodes.Ldc_I4, (int)'-');
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(char), typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [typeof(char), typeof(char)])!);
         il.Emit(OpCodes.Ldc_I4, (int)'/');
         il.Emit(OpCodes.Ldc_I4, (int)'_');
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(char), typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [typeof(char), typeof(char)])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(bufferLabel);
@@ -319,10 +319,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStringLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Ret);
 
         // if (data is $Buffer) return buffer.GetData()
@@ -346,10 +346,10 @@ public partial class RuntimeEmitter
 
         // fallback: UTF8.GetBytes(data.ToString())
         il.MarkLabel(notArrayLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Ret);
     }
 }

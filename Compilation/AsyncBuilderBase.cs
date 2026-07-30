@@ -27,13 +27,13 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     /// <summary>Gets the IsCompleted property getter for the awaiter.</summary>
     public MethodInfo GetAwaiterIsCompletedGetter()
     {
-        return AwaiterType.GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+        return Types.GetProperty(AwaiterType, "IsCompleted", BindingFlags.Public | BindingFlags.Instance).GetGetMethod()!;
     }
 
     /// <summary>Gets the GetResult method for the awaiter.</summary>
     public MethodInfo GetAwaiterGetResultMethod()
     {
-        return AwaiterType.GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance)!;
+        return Types.GetMethod(AwaiterType, "GetResult", BindingFlags.Public | BindingFlags.Instance);
     }
 
     /// <summary>Gets the GetAwaiter method for <c>Task&lt;object&gt;</c>.</summary>
@@ -45,19 +45,19 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     /// <summary>Gets the static Create method for the specific builder type.</summary>
     public MethodInfo GetBuilderCreateMethod()
     {
-        return BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
+        return Types.GetMethod(BuilderType, "Create", BindingFlags.Public | BindingFlags.Static);
     }
 
     /// <summary>Gets the Task property getter for the specific builder type.</summary>
     public MethodInfo GetBuilderTaskGetter()
     {
-        return BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+        return Types.GetProperty(BuilderType, "Task", BindingFlags.Public | BindingFlags.Instance).GetGetMethod()!;
     }
 
     /// <summary>Gets Start&lt;TStateMachine&gt;(ref TStateMachine) instantiated for this state machine.</summary>
     public MethodInfo GetBuilderStartMethod()
     {
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var methods = Types.GetMethods(BuilderType, BindingFlags.Public | BindingFlags.Instance);
         var startMethod = methods.First(m => m.Name == "Start" && m.IsGenericMethod);
         return EmitGenerics.MakeGenericMethod(startMethod, StateMachineType);
     }
@@ -65,7 +65,7 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     /// <summary>Gets the SetException method for the specific builder type.</summary>
     public MethodInfo GetBuilderSetExceptionMethod()
     {
-        return BuilderType.GetMethod("SetException", BindingFlags.Public | BindingFlags.Instance)!;
+        return Types.GetMethod(BuilderType, "SetException", BindingFlags.Public | BindingFlags.Instance);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     /// </summary>
     public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethod()
     {
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var methods = Types.GetMethods(BuilderType, BindingFlags.Public | BindingFlags.Instance);
         var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
         return EmitGenerics.MakeGenericMethod(awaitMethod, AwaiterType, StateMachineType);
     }

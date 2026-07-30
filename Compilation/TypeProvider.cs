@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation;
@@ -17,11 +19,98 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public class TypeProvider
 {
+    private const string EmitMetadataLookupJustification =
+        "TypeProvider resolves required framework metadata for serialization into emitted IL; the native host does not invoke these members through reflection. Complete type metadata is generated for the compiler, and native compile smoke tests exercise this lookup seam.";
+
     private readonly Assembly _coreAssembly;
     private readonly ConcurrentDictionary<string, Type> _typeCache = new();
     private readonly ConcurrentDictionary<(Type, string, Type[]), MethodInfo> _methodCache = new(new MethodCacheKeyComparer());
     private readonly ConcurrentDictionary<(Type, string), PropertyInfo> _propertyCache = new();
     private readonly ConcurrentDictionary<(Type, Type[]), ConstructorInfo> _ctorCache = new(new CtorCacheKeyComparer());
+    private readonly ConditionalWeakTable<Type, EmittedTypeMetadataCache> _emittedTypeCaches = new();
+
+    private sealed class EmittedTypeMetadataCache
+    {
+        internal ConcurrentDictionary<(string, Type[]), MethodInfo> Methods { get; } =
+            new(new MethodSignatureComparer());
+
+        internal ConcurrentDictionary<string, PropertyInfo> Properties { get; } = new();
+
+        internal ConcurrentDictionary<Type[], ConstructorInfo> Constructors { get; } =
+            new(new TypeArrayComparer());
+    }
+
+    /// <summary>
+    /// Returns whether metadata involving <paramref name="type"/> is safe to retain in the
+    /// process-wide provider caches. Emitted types belong to a single compilation; caching a
+    /// lookup that mentions one would root its dynamic assembly for the rest of the process.
+    /// </summary>
+    private static bool IsCacheableMetadataType(Type type)
+    {
+        if (type is TypeBuilder or GenericTypeParameterBuilder)
+            return false;
+
+        if (type.HasElementType)
+            return IsCacheableMetadataType(type.GetElementType()!);
+
+        if (type.IsGenericType &&
+            type.GetGenericArguments().Any(argument => !IsCacheableMetadataType(argument)))
+        {
+            return false;
+        }
+
+        return !type.Assembly.IsDynamic;
+    }
+
+    private sealed class MethodSignatureComparer : IEqualityComparer<(string, Type[])>
+    {
+        public bool Equals((string, Type[]) x, (string, Type[]) y)
+        {
+            return x.Item1 == y.Item1 && TypeArrayComparer.Instance.Equals(x.Item2, y.Item2);
+        }
+
+        public int GetHashCode((string, Type[]) obj)
+        {
+            var hash = new HashCode();
+            hash.Add(obj.Item1);
+            TypeArrayComparer.AddToHash(ref hash, obj.Item2);
+            return hash.ToHashCode();
+        }
+    }
+
+    private sealed class TypeArrayComparer : IEqualityComparer<Type[]>
+    {
+        internal static TypeArrayComparer Instance { get; } = new();
+
+        public bool Equals(Type[]? x, Type[]? y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+            if (x == null || y == null || x.Length != y.Length)
+                return false;
+
+            for (var i = 0; i < x.Length; i++)
+            {
+                if (x[i] != y[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        public int GetHashCode(Type[] obj)
+        {
+            var hash = new HashCode();
+            AddToHash(ref hash, obj);
+            return hash.ToHashCode();
+        }
+
+        internal static void AddToHash(ref HashCode hash, Type[] types)
+        {
+            foreach (var type in types)
+                hash.Add(type);
+        }
+    }
 
     /// <summary>
     /// Comparer for method cache keys with Type[] array comparison.
@@ -90,7 +179,11 @@ public class TypeProvider
     #region Core Types
 
     public Type Object => Resolve("System.Object");
-    public Type String => Resolve("System.String");
+    [DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.PublicConstructors)]
+    public Type String => typeof(string);
     public Type Double => Resolve("System.Double");
     public Type Boolean => Resolve("System.Boolean");
     public Type Int32 => Resolve("System.Int32");
@@ -193,7 +286,7 @@ public class TypeProvider
     public Type IListOfObject => MakeGenericType(IListOpen, Object);
     public Type ICollectionOfObject => MakeGenericType(ICollectionOpen, Object);
     public Type KeyValuePairStringObject => MakeGenericType(KeyValuePairOpen, String, Object);
-    public Type DictionaryStringObjectEnumerator => DictionaryStringObject.GetMethod("GetEnumerator")!.ReturnType;
+    public Type DictionaryStringObjectEnumerator => GetMethodNoParams(DictionaryStringObject, "GetEnumerator").ReturnType;
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);
     public Type HashSetOfObject => MakeGenericType(HashSetOpen, Object);
     public Type ConditionalWeakTableObjectObject => MakeGenericType(ConditionalWeakTableOpen, Object, Object);
@@ -210,10 +303,10 @@ public class TypeProvider
 
     /// <summary>The <c>StrongBox&lt;object&gt;(object value)</c> constructor.</summary>
     public ConstructorInfo StrongBoxOfObjectCtor =>
-        StrongBoxOfObject.GetConstructors().Single(c => c.GetParameters().Length == 1);
+        GetConstructors(StrongBoxOfObject).Single(c => c.GetParameters().Length == 1);
 
     /// <summary>The public <c>StrongBox&lt;object&gt;.Value</c> field.</summary>
-    public FieldInfo StrongBoxOfObjectValueField => StrongBoxOfObject.GetField("Value")!;
+    public FieldInfo StrongBoxOfObjectValueField => GetField(StrongBoxOfObject, "Value");
 
     #endregion
 
@@ -280,7 +373,7 @@ public class TypeProvider
 
     public Type PropertyInfo => Resolve("System.Reflection.PropertyInfo");
     public Type FieldInfo => Resolve("System.Reflection.FieldInfo");
-    public Type FieldInfoArray => FieldInfo.MakeArrayType();
+    public Type FieldInfoArray => MakeArrayType(FieldInfo);
     public Type ConstructorInfo => Resolve("System.Reflection.ConstructorInfo");
     public Type ParameterInfo => Resolve("System.Reflection.ParameterInfo");
     public Type Assembly => Resolve("System.Reflection.Assembly");
@@ -451,6 +544,14 @@ public class TypeProvider
         return _typeCache.GetOrAdd(fullName, ResolveCore);
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = EmitMetadataLookupJustification)]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = EmitMetadataLookupJustification)]
     private Type ResolveCore(string fullName)
     {
         var type = Type.GetType(fullName, throwOnError: false);
@@ -497,6 +598,10 @@ public class TypeProvider
     /// <summary>
     /// Creates an array type for the specified element type.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = EmitMetadataLookupJustification)]
     public Type MakeArrayType(Type elementType)
     {
         return elementType.MakeArrayType();
@@ -801,7 +906,7 @@ public class TypeProvider
     /// Used to convert object[] to List&lt;object?&gt; for BuiltInMethod.Call dispatch.
     /// </summary>
     public ConstructorInfo ListObjectNullableCtor_IEnumerable =>
-        _listObjectNullableCtor_IEnumerable ??= ListOfObjectNullable.GetConstructor([typeof(IEnumerable<object>)])!;
+        _listObjectNullableCtor_IEnumerable ??= GetConstructor(ListOfObjectNullable, typeof(IEnumerable<object>));
 
     #endregion
 
@@ -869,8 +974,11 @@ public class TypeProvider
     /// Gets the Dictionary&lt;string, object?&gt;.TryGetValue(string, out object?) method.
     /// </summary>
     public MethodInfo DictionaryStringObjectNullableTryGetValue =>
-        _dictionaryStringObjectNullableTryGetValue ??= MakeGenericType(DictionaryOpen, String, Object)
-            .GetMethod("TryGetValue", [String, Object.MakeByRefType()])!;
+        _dictionaryStringObjectNullableTryGetValue ??= GetMethod(
+            MakeGenericType(DictionaryOpen, String, Object),
+            "TryGetValue",
+            String,
+            Object.MakeByRefType());
 
     /// <summary>
     /// Gets the Dictionary&lt;string, object?&gt;.set_Item(string, object?) method.
@@ -1136,7 +1244,11 @@ public class TypeProvider
     /// Gets the Dictionary&lt;object, object&gt;.TryGetValue method.
     /// </summary>
     public MethodInfo DictionaryObjectObjectTryGetValue =>
-        _dictionaryObjectObjectTryGetValue ??= DictionaryObjectObject.GetMethod("TryGetValue", [Object, Object.MakeByRefType()])!;
+        _dictionaryObjectObjectTryGetValue ??= GetMethod(
+            DictionaryObjectObject,
+            "TryGetValue",
+            Object,
+            Object.MakeByRefType());
 
     /// <summary>
     /// Gets the Dictionary&lt;object, object&gt;.set_Item method.
@@ -1196,16 +1308,45 @@ public class TypeProvider
     /// <summary>
     /// Gets a method from a type with the specified parameter types.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public MethodInfo GetMethod(Type type, string name, params Type[] parameterTypes)
     {
-        var key = (type, name, parameterTypes);
-        return _methodCache.GetOrAdd(key, k =>
+        if (!IsCacheableMetadataType(type))
         {
-            var method = k.Item1.GetMethod(k.Item2, k.Item3);
-            if (method == null)
-                throw new CompileException($"Could not find method {k.Item1.FullName}.{k.Item2}({string.Join(", ", k.Item3.Select(t => t.FullName))})");
-            return method;
-        });
+            var emittedCache = _emittedTypeCaches.GetValue(
+                type,
+                static _ => new EmittedTypeMetadataCache());
+            return emittedCache.Methods.GetOrAdd(
+                (name, parameterTypes),
+                static (key, emittedType) =>
+                    GetRequiredMethod(emittedType, key.Item1, key.Item2),
+                type);
+        }
+
+        if (parameterTypes.Any(parameterType => !IsCacheableMetadataType(parameterType)))
+        {
+            return GetRequiredMethod(type, name, parameterTypes);
+        }
+
+        var key = (type, name, parameterTypes);
+        return _methodCache.GetOrAdd(
+            key,
+            static k => GetRequiredMethod(k.Item1, k.Item2, k.Item3));
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    private static MethodInfo GetRequiredMethod(Type type, string name, Type[] parameterTypes)
+    {
+        var method = type.GetMethod(name, parameterTypes);
+        if (method == null)
+            throw new CompileException($"Could not find method {type.FullName}.{name}({string.Join(", ", parameterTypes.Select(t => t.FullName))})");
+        return method;
     }
 
     /// <summary>
@@ -1213,12 +1354,100 @@ public class TypeProvider
     /// WARNING: This will throw AmbiguousMatchException for overloaded methods.
     /// Use GetMethodNoParams() for parameterless methods that have overloads.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
     public MethodInfo GetMethod(Type type, string name)
     {
         var method = type.GetMethod(name);
         if (method == null)
             throw new CompileException($"Could not find method {type.FullName}.{name}");
         return method;
+    }
+
+    /// <summary>
+    /// Attempts to get a method from a type by name only.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo? TryGetMethod(Type type, string name)
+    {
+        return type.GetMethod(name);
+    }
+
+    /// <summary>
+    /// Attempts to get a method from a type with the specified parameter types.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo? TryGetMethod(Type type, string name, params Type[] parameterTypes)
+    {
+        return type.GetMethod(name, parameterTypes);
+    }
+
+    /// <summary>
+    /// Gets a method from a type by name using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo GetMethod(Type type, string name, BindingFlags bindingFlags)
+    {
+        var method = type.GetMethod(name, bindingFlags);
+        if (method == null)
+            throw new CompileException($"Could not find method {type.FullName}.{name}");
+        return method;
+    }
+
+    /// <summary>
+    /// Gets a method from a type by name, binding flags, and parameter types.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo GetMethod(
+        Type type,
+        string name,
+        BindingFlags bindingFlags,
+        params Type[] parameterTypes)
+    {
+        var method = type.GetMethod(name, bindingFlags, parameterTypes);
+        if (method == null)
+            throw new CompileException($"Could not find method {type.FullName}.{name}({string.Join(", ", parameterTypes.Select(t => t.FullName))})");
+        return method;
+    }
+
+    /// <summary>
+    /// Gets all public methods from a type.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo[] GetMethods(Type type)
+    {
+        return type.GetMethods();
+    }
+
+    /// <summary>
+    /// Gets all methods from a type using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo[] GetMethods(Type type, BindingFlags bindingFlags)
+    {
+        return type.GetMethods(bindingFlags);
     }
 
     /// <summary>
@@ -1232,16 +1461,67 @@ public class TypeProvider
     /// <summary>
     /// Gets a property from a type by name.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public PropertyInfo GetProperty(Type type, string name)
     {
-        var key = (type, name);
-        return _propertyCache.GetOrAdd(key, k =>
+        if (!IsCacheableMetadataType(type))
         {
-            var property = k.Item1.GetProperty(k.Item2);
-            if (property == null)
-                throw new CompileException($"Could not find property {k.Item1.FullName}.{k.Item2}");
-            return property;
-        });
+            var emittedCache = _emittedTypeCaches.GetValue(
+                type,
+                static _ => new EmittedTypeMetadataCache());
+            return emittedCache.Properties.GetOrAdd(
+                name,
+                static (propertyName, emittedType) => GetRequiredProperty(emittedType, propertyName),
+                type);
+        }
+
+        var key = (type, name);
+        return _propertyCache.GetOrAdd(
+            key,
+            static k => GetRequiredProperty(k.Item1, k.Item2));
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    private static PropertyInfo GetRequiredProperty(Type type, string name)
+    {
+        var property = type.GetProperty(name);
+        if (property == null)
+            throw new CompileException($"Could not find property {type.FullName}.{name}");
+        return property;
+    }
+
+    /// <summary>
+    /// Attempts to get a property from a type by name.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public PropertyInfo? TryGetProperty(Type type, string name)
+    {
+        return type.GetProperty(name);
+    }
+
+    /// <summary>
+    /// Gets a property from a type by name using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public PropertyInfo GetProperty(Type type, string name, BindingFlags bindingFlags)
+    {
+        var property = type.GetProperty(name, bindingFlags);
+        if (property == null)
+            throw new CompileException($"Could not find property {type.FullName}.{name}");
+        return property;
     }
 
     /// <summary>
@@ -1271,16 +1551,57 @@ public class TypeProvider
     /// <summary>
     /// Gets a constructor from a type with the specified parameter types.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public ConstructorInfo GetConstructor(Type type, params Type[] parameterTypes)
     {
-        var key = (type, parameterTypes);
-        return _ctorCache.GetOrAdd(key, k =>
+        if (!IsCacheableMetadataType(type))
         {
-            var ctor = k.Item1.GetConstructor(k.Item2);
-            if (ctor == null)
-                throw new CompileException($"Could not find constructor {k.Item1.FullName}({string.Join(", ", k.Item2.Select(t => t.FullName))})");
-            return ctor;
-        });
+            var emittedCache = _emittedTypeCaches.GetValue(
+                type,
+                static _ => new EmittedTypeMetadataCache());
+            return emittedCache.Constructors.GetOrAdd(
+                parameterTypes,
+                static (parameters, emittedType) => GetRequiredConstructor(emittedType, parameters),
+                type);
+        }
+
+        if (parameterTypes.Any(parameterType => !IsCacheableMetadataType(parameterType)))
+        {
+            return GetRequiredConstructor(type, parameterTypes);
+        }
+
+        var key = (type, parameterTypes);
+        return _ctorCache.GetOrAdd(
+            key,
+            static k => GetRequiredConstructor(k.Item1, k.Item2));
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    private static ConstructorInfo GetRequiredConstructor(Type type, Type[] parameterTypes)
+    {
+        var constructor = type.GetConstructor(parameterTypes);
+        if (constructor == null)
+            throw new CompileException($"Could not find constructor {type.FullName}({string.Join(", ", parameterTypes.Select(t => t.FullName))})");
+        return constructor;
+    }
+
+    /// <summary>
+    /// Attempts to get a constructor from a type with the specified parameter types.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public ConstructorInfo? TryGetConstructor(Type type, params Type[] parameterTypes)
+    {
+        return type.GetConstructor(parameterTypes);
     }
 
     /// <summary>
@@ -1292,8 +1613,24 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Gets all public constructors from a type.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public ConstructorInfo[] GetConstructors(Type type)
+    {
+        return type.GetConstructors();
+    }
+
+    /// <summary>
     /// Gets a field from a type by name.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
     public FieldInfo GetField(Type type, string name)
     {
         var field = type.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance);

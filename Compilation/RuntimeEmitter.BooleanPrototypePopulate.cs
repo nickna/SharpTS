@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primValLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, notBoxedLabel);
         il.Emit(OpCodes.Ldloc, primValLocal);
@@ -184,7 +184,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Ldloca, primValLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, notBoxedLabel);
         il.Emit(OpCodes.Ldloc, primValLocal);

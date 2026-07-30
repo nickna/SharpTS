@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
     private void EmitBoundTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $BoundTSFunction
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundTSFunction",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldloc, combinedArgsLocal);
         invokeIL.Emit(OpCodes.Ldc_I4_0);
         invokeIL.Emit(OpCodes.Ldloc, boundLenLocal);
-        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        invokeIL.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         invokeIL.MarkLabel(skipBoundCopyLabel);
 
         // if (argsLen > 0) Array.Copy(args, 0, combinedArgs, boundLen, argsLen)
@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldloc, combinedArgsLocal);
         invokeIL.Emit(OpCodes.Ldloc, boundLenLocal);
         invokeIL.Emit(OpCodes.Ldloc, argsLenLocal);
-        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        invokeIL.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         invokeIL.MarkLabel(skipArgsCopyLabel);
 
         // return _target.InvokeWithThis(_thisArg, combinedArgs)
@@ -193,7 +193,7 @@ public partial class RuntimeEmitter
     /// </remarks>
     private void EmitBoundAnyFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundAnyFunction",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, combinedLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, boundLenLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(skipBoundCopyLabel);
 
         // if (argsLen > 0) Array.Copy(args, 0, combined, boundLen, argsLen)
@@ -299,7 +299,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, combinedLocal);
         il.Emit(OpCodes.Ldloc, boundLenLocal);
         il.Emit(OpCodes.Ldloc, argsLenLocal);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(skipArgsCopyLabel);
 
         // Dispatch chain: isinst target against known callables, Callvirt each one's Invoke
@@ -588,8 +588,8 @@ public partial class RuntimeEmitter
         // field-access violation from accessing private _method across
         // TypeBuilder boundaries at JIT time).
         var prototypeCacheType = runtime.TSFunctionPrototypeCacheField.FieldType;
-        var tryGetValueM = prototypeCacheType.GetMethod("TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
-        var prototypeCacheGetOrAdd = prototypeCacheType.GetMethods()
+        var tryGetValueM = _types.GetMethod(prototypeCacheType, "TryGetValue", [_types.MethodInfo, _types.Object.MakeByRefType()])!;
+        var prototypeCacheGetOrAdd = _types.GetMethods(prototypeCacheType)
             .First(m => m.Name == "GetOrAdd"
                  && m.GetParameters().Length == 2
                  && m.GetParameters()[1].ParameterType == _types.Object);
@@ -792,7 +792,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFunctionBindWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionBindWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -885,7 +885,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Br, afterBoundArgsLabel);
 
         il.MarkLabel(noBoundArgsLabel);
@@ -945,7 +945,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFunctionCallWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionCallWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -1036,7 +1036,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Br, afterCallArgsLabel);
 
         il.MarkLabel(noCallArgsLabel);
@@ -1110,7 +1110,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFunctionApplyWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FunctionApplyWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -1232,7 +1232,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isListLabel);
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObjectNullable);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "ToArray")!);
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
 
@@ -1246,7 +1246,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObjectNullable.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "ToArray")!);
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
 

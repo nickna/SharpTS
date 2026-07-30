@@ -101,7 +101,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         // key = idx.ToString()
         il.Emit(OpCodes.Ldloca, idxLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         // value = str[idx].ToString() (single-char string)
         var charLocal = il.DeclareLocal(_types.Char);
         il.Emit(OpCodes.Ldloc, strLocal);

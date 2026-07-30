@@ -954,7 +954,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Brfalse, skipAutoDestroyLabel);
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldc_I4_1);
-                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableType.GetMethod("SetAutoDestroy")!);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSWritableType, "SetAutoDestroy"));
                 IL.MarkLabel(skipAutoDestroyLabel);
             }
 
@@ -974,7 +974,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, instanceLocal);
                 IL.Emit(OpCodes.Ldloc, hwmValLocal);
                 IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-                IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSWritableType.GetMethod("SetHighWaterMark")!);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSWritableType, "SetHighWaterMark"));
                 IL.MarkLabel(skipHwmLabel);
             }
 
@@ -1065,7 +1065,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brfalse, afterTransformLabel);
             IL.Emit(OpCodes.Ldloc, instanceLocal);
             IL.Emit(OpCodes.Ldloc, transformCallbackLocal);
-            IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSTransformType.GetMethod("SetTransformCallback")!);
+            IL.Emit(OpCodes.Callvirt, Types.GetMethod(Ctx.Runtime!.TSTransformType, "SetTransformCallback"));
             IL.MarkLabel(afterTransformLabel);
 
             // Get 'flush' callback

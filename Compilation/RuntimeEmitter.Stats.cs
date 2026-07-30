@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
     private void EmitStatsClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $Stats
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Stats",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         // Finalize the type
         runtime.StatsType = typeBuilder.CreateType()!;
-        runtime.StatsCtor = runtime.StatsType.GetConstructor([
+        runtime.StatsCtor = _types.GetConstructor(runtime.StatsType, [
             _types.Boolean, _types.Boolean, _types.Boolean,
             _types.Double, _types.Double,
             _types.Double, _types.Double, _types.Double, _types.Double
@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // this._isFile = isFile
         il.Emit(OpCodes.Ldarg_0);

@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
         var asyncLocalSetValue = asyncLocalType.GetProperty("Value")!.GetSetMethod()!;
 
         // Define class: public sealed class $AsyncLocalStorage
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncLocalStorage",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

@@ -1023,7 +1023,7 @@ public partial class RuntimeEmitter
 
         // Get enumerator
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         // ECMA-262 25.5.2.4 step 5: when PropertyList is provided, iterate
@@ -1069,10 +1069,10 @@ public partial class RuntimeEmitter
         // Source-dict enumeration path
         il.MarkLabel(sourcePathLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DictionaryStringObjectEnumerator, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DictionaryStringObjectEnumerator, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);

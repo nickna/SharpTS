@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
         EmitTSPromiseRejectedException(moduleBuilder, runtime);
 
         // Define class: public class $Promise
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Promise",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -69,7 +69,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // _task = task
         il.Emit(OpCodes.Ldarg_0);
@@ -129,7 +129,7 @@ public partial class RuntimeEmitter
         // Otherwise, create new Promise from Task.FromResult(value)
         il.MarkLabel(notPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.Task.GetMethod("FromResult")!, _types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(_types.Task, "FromResult")!, _types.Object));
         il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
         il.Emit(OpCodes.Ret);
     }
@@ -209,7 +209,7 @@ public partial class RuntimeEmitter
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
-        il.Emit(OpCodes.Callvirt, _types.Task.GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
@@ -232,12 +232,12 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
-        il.Emit(OpCodes.Callvirt, _types.Task.GetProperty("IsCompletedSuccessfully")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompletedSuccessfully")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, completedLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsPromiseTaskField);
-        il.Emit(OpCodes.Callvirt, _types.Task.GetProperty("IsFaulted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsFaulted")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, faultedLabel);
 
         // Pending
@@ -258,7 +258,7 @@ public partial class RuntimeEmitter
     private void EmitTSPromiseRejectedException(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $PromiseRejectedException : Exception
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseRejectedException",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Exception
@@ -293,9 +293,9 @@ public partial class RuntimeEmitter
         var afterReasonLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterReasonLabel);
         il.MarkLabel(hasReasonLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.MarkLabel(afterReasonLabel);
-        il.Emit(OpCodes.Call, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Exception, [_types.String])!);
 
         // _reason = reason
         il.Emit(OpCodes.Ldarg_0);

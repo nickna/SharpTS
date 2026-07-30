@@ -2122,7 +2122,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, portLocal);
         il.Emit(OpCodes.Ldfld, _messagePortPendingField);
         il.Emit(OpCodes.Ldloca, msgLocal);
-        il.Emit(OpCodes.Callvirt, _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, undefinedLabel);
 
         // value = msg; if (msg == _cloneError) value = undefined  (a queued clone-failure

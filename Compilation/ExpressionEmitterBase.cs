@@ -504,7 +504,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         {
             EmitExpression(gi.Index);
             EnsureBoxed();
-            IL.Emit(OpCodes.Callvirt, Types.Object.GetMethod("ToString")!);
+            IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisGetProperty);
             SetStackUnknown();
             return;
@@ -572,7 +572,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Stloc, valueTemp);
             EmitExpression(si.Index);
             EnsureBoxed();
-            IL.Emit(OpCodes.Callvirt, Types.Object.GetMethod("ToString")!);
+            IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisSetProperty);
             IL.Emit(OpCodes.Ldloc, valueTemp);
@@ -843,7 +843,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             EmitExpression(gp.Object);
             EnsureBoxed();
             IL.Emit(OpCodes.Ldloca, dictLocal);
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
             IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             var successLabel = IL.DefineLabel();
@@ -915,7 +915,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             EmitExpression(sp.Object);
             EnsureBoxed();
             IL.Emit(OpCodes.Ldloca, dictLocal);
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
             IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             var successLabel = IL.DefineLabel();
@@ -1003,7 +1003,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Ldsfld, storageField);
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Ldloca, dictLocal);
-                var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+                var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
                 IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
                 var validLabel = IL.DefineLabel();

@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.CjsModuleType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.CjsModuleType.GetMethod("GetMember", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(runtime.CjsModuleType, "GetMember", [_types.String])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -607,7 +607,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, tsObjProtoFallbackLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, tsObjProtoFallbackMissLabel);
         il.Emit(OpCodes.Ldloc, tsObjProtoFallbackLocal);
@@ -1052,7 +1052,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, objProtoFallbackLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, protoFallbackMissLabel);
         il.Emit(OpCodes.Ldloc, objProtoFallbackLocal);

@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Declaration;
@@ -903,7 +903,7 @@ public static class SourceDeclarationEmitter
             _ => "string",
         };
 
-        private static string Quote(string text) => JsonSerializer.Serialize(text);
+        private static string Quote(string text) => JsonStringEscaper.Quote(text);
 
         private void WriteLine(string line)
         {

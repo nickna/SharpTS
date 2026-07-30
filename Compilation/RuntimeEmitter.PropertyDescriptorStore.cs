@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFrozenSealedStateClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FrozenSealedState",
             TypeAttributes.NotPublic | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -49,7 +49,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldc_I4_1); // true
         ctorIl.Emit(OpCodes.Stfld, isExtensibleField);
@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPrototypeInfoClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PrototypeInfo",
             TypeAttributes.NotPublic | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ret);
 
         // Property: Prototype
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCompiledPropertyDescriptorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CompiledPropertyDescriptor",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         // Writable = true
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldc_I4_1);
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPropertyDescriptorStoreClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PropertyDescriptorStore",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
         cctorIl.Emit(OpCodes.Stsfld, frozenSealedField);
 
         // _symbolStorage = new ConditionalWeakTable<...>()
-        cctorIl.Emit(OpCodes.Newobj, cwtSymbols.GetConstructor(Type.EmptyTypes)!);
+        cctorIl.Emit(OpCodes.Newobj, _types.GetConstructor(cwtSymbols, Type.EmptyTypes)!);
         cctorIl.Emit(OpCodes.Stsfld, symbolStorageField);
 
         // _prototypeStore = new ConditionalWeakTable<...>()
@@ -1185,7 +1185,7 @@ public partial class RuntimeEmitter
         // result.Add(currentKey)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
@@ -1272,7 +1272,7 @@ public partial class RuntimeEmitter
         // No Enumerable filter — return all PDS keys.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);

@@ -148,7 +148,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         {
             // Missing arguments - throw at runtime
             il.Emit(OpCodes.Ldstr, "crypto.createHmac requires algorithm and key arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -175,18 +175,18 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Brtrue, isStringLabel);
 
         // Not a string - convert via ToString() and then UTF-8
-        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, ctx.Types.GetProperty(ctx.Types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Encoding, "GetBytes", [ctx.Types.String])!);
         il.Emit(OpCodes.Br, endLabel);
 
         // String - convert via UTF-8
         il.MarkLabel(isStringLabel);
-        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, ctx.Types.GetProperty(ctx.Types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Castclass, ctx.Types.String);
-        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Encoding, "GetBytes", [ctx.Types.String])!);
 
         il.MarkLabel(endLabel);
 
@@ -204,7 +204,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         {
             // Missing arguments - throw at runtime
             il.Emit(OpCodes.Ldstr, "crypto.createCipheriv requires algorithm, key, and iv arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -238,7 +238,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         {
             // Missing arguments - throw at runtime
             il.Emit(OpCodes.Ldstr, "crypto.createDecipheriv requires algorithm, key, and iv arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -290,18 +290,18 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Brtrue, isBufferLabel);
 
         // Not a string or buffer - convert via ToString() and then UTF-8
-        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, ctx.Types.GetProperty(ctx.Types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Encoding, "GetBytes", [ctx.Types.String])!);
         il.Emit(OpCodes.Br, endLabel);
 
         // String - convert via UTF-8
         il.MarkLabel(isStringLabel);
-        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, ctx.Types.GetProperty(ctx.Types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Castclass, ctx.Types.String);
-        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Encoding, "GetBytes", [ctx.Types.String])!);
         il.Emit(OpCodes.Br, endLabel);
 
         // Buffer - get data
@@ -342,7 +342,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         {
             // Error - requires at least a buffer
             il.Emit(OpCodes.Ldstr, "crypto.randomFillSync requires a Buffer argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -442,7 +442,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 5)
         {
             il.Emit(OpCodes.Ldstr, "crypto.pbkdf2Sync requires password, salt, iterations, keylen, and digest arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -483,7 +483,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 3)
         {
             il.Emit(OpCodes.Ldstr, "crypto.scryptSync requires password, salt, and keylen arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -526,7 +526,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "crypto.timingSafeEqual requires two arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -618,7 +618,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.generateKeyPairSync requires a key type argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -652,7 +652,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.createDiffieHellman requires at least one argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -685,7 +685,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.getDiffieHellman requires a group name");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -708,7 +708,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.createECDH requires a curve name");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -733,7 +733,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "crypto.publicEncrypt requires key and buffer arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -760,7 +760,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "crypto.privateDecrypt requires key and buffer arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -787,7 +787,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "crypto.privateEncrypt requires key and buffer arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -814,7 +814,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 2)
         {
             il.Emit(OpCodes.Ldstr, "crypto.publicDecrypt requires key and buffer arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -845,7 +845,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count < 5)
         {
             il.Emit(OpCodes.Ldstr, "crypto.hkdfSync requires digest, ikm, salt, info, and keylen arguments");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -891,7 +891,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.createSecretKey requires a key argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -924,7 +924,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.createPublicKey requires a key argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }
@@ -946,7 +946,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "crypto.createPrivateKey requires a key argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             return true;
         }

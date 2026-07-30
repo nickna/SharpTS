@@ -23,27 +23,27 @@ public partial class RuntimeEmitter
 
         // BCL tokens (all standalone-safe — System.* only).
         var ci = typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!;
-        var dblIsNaN = _types.Double.GetMethod("IsNaN", [_types.Double])!;
-        var dblIsPosInf = _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!;
-        var dblIsNegInf = _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!;
-        var mathFloor = _types.Math.GetMethod("Floor", [_types.Double])!;
-        var mathAbsD = _types.Math.GetMethod("Abs", [_types.Double])!;
-        var mathAbsI = _types.Math.GetMethod("Abs", [_types.Int32])!;
-        var longToString = _types.Int64.GetMethod("ToString", [typeof(IFormatProvider)])!;
-        var intToString = _types.Int32.GetMethod("ToString", [typeof(IFormatProvider)])!;
-        var intParse = _types.Int32.GetMethod("Parse", [_types.String, typeof(IFormatProvider)])!;
-        var dblToStr = _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!;
-        var strIndexOf = _types.String.GetMethod("IndexOf", [typeof(char)])!;
-        var strSub1 = _types.String.GetMethod("Substring", [_types.Int32])!;
-        var strSub2 = _types.String.GetMethod("Substring", [_types.Int32, _types.Int32])!;
-        var strRemove = _types.String.GetMethod("Remove", [_types.Int32, _types.Int32])!;
-        var strTrimEnd = _types.String.GetMethod("TrimEnd", [typeof(char[])])!;
-        var strLen = _types.String.GetProperty("Length")!.GetGetMethod()!;
-        var strChars = _types.String.GetMethod("get_Chars", [_types.Int32])!;
-        var strConcat3 = _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!;
-        var strConcat4 = _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String, _types.String])!;
-        var strConcatArr = _types.String.GetMethod("Concat", [typeof(string[])])!;
-        var newStr = _types.String.GetConstructor([typeof(char), _types.Int32])!;
+        var dblIsNaN = _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!;
+        var dblIsPosInf = _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!;
+        var dblIsNegInf = _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!;
+        var mathFloor = _types.GetMethod(_types.Math, "Floor", [_types.Double])!;
+        var mathAbsD = _types.GetMethod(_types.Math, "Abs", [_types.Double])!;
+        var mathAbsI = _types.GetMethod(_types.Math, "Abs", [_types.Int32])!;
+        var longToString = _types.GetMethod(_types.Int64, "ToString", [typeof(IFormatProvider)])!;
+        var intToString = _types.GetMethod(_types.Int32, "ToString", [typeof(IFormatProvider)])!;
+        var intParse = _types.GetMethod(_types.Int32, "Parse", [_types.String, typeof(IFormatProvider)])!;
+        var dblToStr = _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!;
+        var strIndexOf = _types.GetMethod(_types.String, "IndexOf", [typeof(char)])!;
+        var strSub1 = _types.GetMethod(_types.String, "Substring", [_types.Int32])!;
+        var strSub2 = _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!;
+        var strRemove = _types.GetMethod(_types.String, "Remove", [_types.Int32, _types.Int32])!;
+        var strTrimEnd = _types.GetMethod(_types.String, "TrimEnd", [typeof(char[])])!;
+        var strLen = _types.GetProperty(_types.String, "Length")!.GetGetMethod()!;
+        var strChars = _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!;
+        var strConcat3 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!;
+        var strConcat4 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String, _types.String])!;
+        var strConcatArr = _types.GetMethod(_types.String, "Concat", [typeof(string[])])!;
+        var newStr = _types.GetConstructor(_types.String, [typeof(char), _types.Int32])!;
 
         // locals
         var signL = il.DeclareLocal(_types.String);

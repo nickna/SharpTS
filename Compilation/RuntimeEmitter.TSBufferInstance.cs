@@ -44,7 +44,7 @@ public partial class RuntimeEmitter
         // Lowercase the encoding
         il.MarkLabel(hasEncodingLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
         il.MarkLabel(afterEncodingLabel);
 
@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // Default to UTF-8
@@ -119,15 +119,15 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldstr, oldStr);
         il.Emit(OpCodes.Ldstr, newStr);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
     }
 
     private void EmitEncodingGetString(ILGenerator il, string encodingProperty)
     {
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty(encodingProperty)!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, encodingProperty)!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.MakeArrayType(_types.Byte)])!);
     }
 
     /// <summary>
@@ -642,10 +642,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, defaultFillLabel);
 
         // fillBytes = Encoding.UTF8.GetBytes(s) (simplified - always use UTF8)
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, fillBytesLocal);
 
         // if fillBytes.Length == 0 return this
@@ -738,9 +738,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, thisLenLocal);
 
         // Encode string to bytes (always UTF8 for simplicity)
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, encodedLocal);
 
         // maxWrite = thisLen - offset
@@ -942,7 +942,7 @@ public partial class RuntimeEmitter
 
         // var dataList = new List<object?>(len)
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor([_types.Int32])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [_types.Int32])!);
         il.Emit(OpCodes.Stloc, dataListLocal);
 
         // Loop: for (int i = 0; i < len; i++)
@@ -977,20 +977,20 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
 
         // var resultDict = new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultDictLocal);
 
         // resultDict["type"] = "Buffer"
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "type");
         il.Emit(OpCodes.Ldstr, "Buffer");
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // resultDict["data"] = dataList
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "data");
         il.Emit(OpCodes.Ldloc, dataListLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // return resultDict
         il.Emit(OpCodes.Ldloc, resultDictLocal);

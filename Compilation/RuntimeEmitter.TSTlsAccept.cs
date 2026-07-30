@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsAcceptClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsConnectOkClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectOkClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsConnectErrClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectErrClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         EmitTlsConnectOkClosureClass(moduleBuilder, runtime);
         EmitTlsConnectErrClosureClass(moduleBuilder, runtime);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -419,7 +419,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Newobj, _tlsConnectErrClosureCtor);
         il.Emit(OpCodes.Ldftn, _tlsConnectErrClosureRun);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);

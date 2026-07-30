@@ -94,19 +94,19 @@ public partial class RuntimeEmitter
 
         var encodingLowerLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLowerLocal);
 
         // Check for "hex"
         il.Emit(OpCodes.Ldloc, encodingLowerLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         // Check for "base64"
         il.Emit(OpCodes.Ldloc, encodingLowerLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         // Default to UTF8

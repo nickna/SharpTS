@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         _bcInnerDictType = typeof(ConcurrentDictionary<long, object>);
         _bcRegistryDictType = typeof(ConcurrentDictionary<string, object>);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BroadcastChannel",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
             // _registry = new ConcurrentDictionary<string, object>(StringComparer.Ordinal)
             var ordinal = typeof(StringComparer).GetProperty("Ordinal")!.GetGetMethod()!;
             il.Emit(OpCodes.Call, ordinal);
-            var bcRegistryCtor = _bcRegistryDictType.GetConstructor([typeof(IEqualityComparer<string>)])!;
+            var bcRegistryCtor = _types.GetConstructor(_bcRegistryDictType, [typeof(IEqualityComparer<string>)])!;
             il.Emit(OpCodes.Newobj, bcRegistryCtor);
             il.Emit(OpCodes.Stsfld, _broadcastChannelRegistryField);
             // _cloneError = new object()
@@ -170,7 +170,7 @@ public partial class RuntimeEmitter
 
         // _pending = new ConcurrentQueue<object>()
         il.Emit(OpCodes.Ldarg_0);
-        var queueCtor = _types.ConcurrentQueueOfObject.GetConstructor(Type.EmptyTypes)!;
+        var queueCtor = _types.GetConstructor(_types.ConcurrentQueueOfObject, Type.EmptyTypes)!;
         il.Emit(OpCodes.Newobj, queueCtor);
         il.Emit(OpCodes.Stfld, _broadcastChannelPendingField);
 
@@ -185,9 +185,9 @@ public partial class RuntimeEmitter
         var bucketLocal = il.DeclareLocal(_bcInnerDictType);
         il.Emit(OpCodes.Ldsfld, _broadcastChannelRegistryField);
         il.Emit(OpCodes.Ldarg_1);  // name
-        var innerCtor = _bcInnerDictType.GetConstructor(Type.EmptyTypes)!;
+        var innerCtor = _types.GetConstructor(_bcInnerDictType, Type.EmptyTypes)!;
         il.Emit(OpCodes.Newobj, innerCtor);
-        var getOrAddValue = _bcRegistryDictType.GetMethod("GetOrAdd", [_types.String, _types.Object])!;
+        var getOrAddValue = _types.GetMethod(_bcRegistryDictType, "GetOrAdd", [_types.String, _types.Object])!;
         il.Emit(OpCodes.Callvirt, getOrAddValue);
         il.Emit(OpCodes.Castclass, _bcInnerDictType);
         il.Emit(OpCodes.Stloc, bucketLocal);
@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bucketLocal);
         il.Emit(OpCodes.Ldloc, idLocal);
         il.Emit(OpCodes.Ldarg_0);
-        var setItem = _bcInnerDictType.GetProperty("Item")!.GetSetMethod()!;
+        var setItem = _types.GetProperty(_bcInnerDictType, "Item")!.GetSetMethod()!;
         il.Emit(OpCodes.Callvirt, setItem);
 
         // $EventLoop.GetInstance().Ref()
@@ -237,7 +237,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _broadcastChannelPendingField);
         il.Emit(OpCodes.Ldloca, msgLocal);
-        var tryDequeue = _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!;
+        var tryDequeue = _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, tryDequeue);
         il.Emit(OpCodes.Brfalse, exitLabel);
 
@@ -277,10 +277,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(notCloneErrorLabel);
 
         // eventData = new Dictionary<string, object>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, eventDataLocal);
 
-        var setItemDict = _types.DictionaryStringObject.GetProperty("Item")!.GetSetMethod()!;
+        var setItemDict = _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetSetMethod()!;
         // eventData["data"] = msg
         il.Emit(OpCodes.Ldloc, eventDataLocal);
         il.Emit(OpCodes.Ldstr, "data");
@@ -373,7 +373,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _broadcastChannelNameField);
         il.Emit(OpCodes.Ldloca, bucketObjLocal);
-        var registryTryGet = _bcRegistryDictType.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var registryTryGet = _types.GetMethod(_bcRegistryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, registryTryGet);
         il.Emit(OpCodes.Brfalse, exitLabel);
 
@@ -384,11 +384,11 @@ public partial class RuntimeEmitter
         // Snapshot subscribers: object[] snapshot = bucket.Values.ToArray()? — ConcurrentDictionary<long,object>.Values
         // Use Linq's ToArray? Not available without linq. Manually iterate via GetEnumerator.
         // Simpler: copy to a List<object> via the Values collection, then iterate.
-        var valuesCollection = _bcInnerDictType.GetProperty("Values")!.GetGetMethod()!; // ICollection<object>
+        var valuesCollection = _types.GetProperty(_bcInnerDictType, "Values")!.GetGetMethod()!; // ICollection<object>
         var snapshotLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldloc, bucketLocal);
         il.Emit(OpCodes.Callvirt, valuesCollection);
-        var listCtorFromEnumerable = _types.ListOfObject.GetConstructor([_types.IEnumerableOfObject])!;
+        var listCtorFromEnumerable = _types.GetConstructor(_types.ListOfObject, [_types.IEnumerableOfObject])!;
         il.Emit(OpCodes.Newobj, listCtorFromEnumerable);
         il.Emit(OpCodes.Stloc, snapshotLocal);
 
@@ -401,14 +401,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopTop);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, snapshotLocal);
-        var listCount = _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!;
+        var listCount = _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, listCount);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // sub = (BroadcastChannel)snapshot[i]
         il.Emit(OpCodes.Ldloc, snapshotLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        var listGetItem = _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!;
+        var listGetItem = _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!;
         il.Emit(OpCodes.Callvirt, listGetItem);
         il.Emit(OpCodes.Castclass, _broadcastChannelType);
         il.Emit(OpCodes.Stloc, subLocal);
@@ -452,7 +452,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, subLocal);
         il.Emit(OpCodes.Ldfld, _broadcastChannelPendingField);
         il.Emit(OpCodes.Ldloc, clonedLocal);
-        var enqueue = _types.ConcurrentQueueOfObject.GetMethod("Enqueue", [_types.Object])!;
+        var enqueue = _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue", [_types.Object])!;
         il.Emit(OpCodes.Callvirt, enqueue);
 
         // $EventLoop.GetInstance().Schedule(new Action(sub.Drain))
@@ -510,7 +510,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _broadcastChannelNameField);
         il.Emit(OpCodes.Ldloca, bucketObjLocal);
-        var registryTryGet = _bcRegistryDictType.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var registryTryGet = _types.GetMethod(_bcRegistryDictType, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, registryTryGet);
         il.Emit(OpCodes.Brfalse, noBucketLabel);
 
@@ -522,7 +522,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _broadcastChannelIdField);
         il.Emit(OpCodes.Ldloca, dummyOutLocal);
-        var innerTryRemove = _bcInnerDictType.GetMethod("TryRemove", [_types.Int64, _types.Object.MakeByRefType()])!;
+        var innerTryRemove = _types.GetMethod(_bcInnerDictType, "TryRemove", [_types.Int64, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Callvirt, innerTryRemove);
         il.Emit(OpCodes.Pop);
 

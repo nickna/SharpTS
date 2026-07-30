@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
 
         // new HashSet<object>($ReferenceEqualityComparer.Instance)
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
 
         il.Emit(OpCodes.Ldsfld, runtime.ReferenceEqualityComparerInstance);
         il.Emit(OpCodes.Newobj, ctorWithComparer);
@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
 
         // Local variables
         var setLocal = il.DeclareLocal(setType);
@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
         // set.Add(item);
         il.Emit(OpCodes.Ldloc, setLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop); // Discard bool return value
 
         // index++; goto loopStart;
@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, setType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop); // Discard bool return value
 
         // return set;
@@ -232,7 +232,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, setType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Ret);
 
         // return false;
@@ -269,7 +269,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, setType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Remove")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Remove")!);
         il.Emit(OpCodes.Ret);
 
         // return false;
@@ -301,7 +301,7 @@ public partial class RuntimeEmitter
         // hashSet.Clear();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, setType);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Clear")!);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -360,36 +360,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnEmptyLabel);
 
         // var result = new List<object?>();
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // var enumerator = hashSet.GetEnumerator();
         il.Emit(OpCodes.Ldloc, setLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         // while (enumerator.MoveNext())
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         // var current = enumerator.Current;
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // result.Add(current);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         // Dispose enumerator
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return result;
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -397,7 +397,7 @@ public partial class RuntimeEmitter
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -433,48 +433,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnEmptyLabel);
 
         // var result = new List<object?>();
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // var enumerator = hashSet.GetEnumerator();
         il.Emit(OpCodes.Ldloc, setLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         // while (enumerator.MoveNext())
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         // var current = enumerator.Current;
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // var pair = new List<object?> { current, current }; (for Set entries, both are the value)
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, pairLocal);
 
         il.Emit(OpCodes.Ldloc, pairLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Ldloc, pairLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         // result.Add(pair);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pairLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         // Dispose enumerator
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return result;
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -482,7 +482,7 @@ public partial class RuntimeEmitter
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -522,18 +522,18 @@ public partial class RuntimeEmitter
 
         // var enumerator = hashSet.GetEnumerator();
         il.Emit(OpCodes.Ldloc, setLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         // while (enumerator.MoveNext())
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         // var current = enumerator.Current;
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // InvokeValue(callback, [current, current, set]); - Per JS spec, callback receives (value, value, set)
@@ -570,7 +570,7 @@ public partial class RuntimeEmitter
         // Dispose enumerator
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
@@ -590,7 +590,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
         var resultLocal = il.DeclareLocal(setType);
@@ -618,7 +618,7 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet1) result.Add(value);
         il.Emit(OpCodes.Ldloc, set1Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
         EmitSetUnionLoop(il, resultLocal, enumeratorLocal, enumeratorType, setType, loop1EndLabel);
 
@@ -633,7 +633,7 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet2) result.Add(value);
         il.Emit(OpCodes.Ldloc, set2Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
         EmitSetUnionLoop(il, resultLocal, enumeratorLocal, enumeratorType, setType, loop2EndLabel);
 
@@ -651,21 +651,21 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         // result.Add(enumerator.Current);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
     }
 
     private void EmitSetIntersection(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -680,7 +680,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
         var resultLocal = il.DeclareLocal(setType);
@@ -715,27 +715,27 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet1)
         il.Emit(OpCodes.Ldloc, set1Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (hashSet2.Contains(value)) result.Add(value);
         il.Emit(OpCodes.Ldloc, set2Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brfalse, skipAddLabel);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipAddLabel);
@@ -743,7 +743,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         il.MarkLabel(returnEmptyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -762,7 +762,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
         var resultLocal = il.DeclareLocal(setType);
@@ -796,16 +796,16 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet1)
         il.Emit(OpCodes.Ldloc, set1Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (hashSet2 == null || !hashSet2.Contains(value)) result.Add(value);
@@ -814,13 +814,13 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, set2Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brtrue, skipAddLabel); // set2 contains value, skip
 
         il.MarkLabel(set2NullLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipAddLabel);
@@ -828,7 +828,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         il.MarkLabel(returnEmptyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -847,7 +847,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var setType = _types.HashSetOfObject;
-        var ctorWithComparer = setType.GetConstructor([_types.IEqualityComparerOfObject])!;
+        var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
         var resultLocal = il.DeclareLocal(setType);
@@ -887,16 +887,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipSet1Label);
 
         il.Emit(OpCodes.Ldloc, set1Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loop1StartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loop1EndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (hashSet2 == null || !hashSet2.Contains(value)) result.Add(value);
@@ -904,13 +904,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, add1Label);
         il.Emit(OpCodes.Ldloc, set2Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brtrue, skip1AddLabel);
 
         il.MarkLabel(add1Label);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skip1AddLabel);
@@ -918,7 +918,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loop1EndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         il.MarkLabel(skipSet1Label);
 
@@ -927,16 +927,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipSet2Label);
 
         il.Emit(OpCodes.Ldloc, set2Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loop2StartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loop2EndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (hashSet1 == null || !hashSet1.Contains(value)) result.Add(value);
@@ -944,13 +944,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, add2Label);
         il.Emit(OpCodes.Ldloc, set1Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brtrue, skip2AddLabel);
 
         il.MarkLabel(add2Label);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Add")!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skip2AddLabel);
@@ -958,7 +958,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loop2EndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         il.MarkLabel(skipSet2Label);
 
@@ -1008,29 +1008,29 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet1)
         il.Emit(OpCodes.Ldloc, set1Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (!hashSet2.Contains(value)) return false;
         il.Emit(OpCodes.Ldloc, set2Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return true;
         il.MarkLabel(returnTrueLabel);
@@ -1048,7 +1048,7 @@ public partial class RuntimeEmitter
         // return false;
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
@@ -1094,29 +1094,29 @@ public partial class RuntimeEmitter
 
         // foreach (var value in hashSet2)
         il.Emit(OpCodes.Ldloc, set2Local);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (!hashSet1.Contains(value)) return false;
         il.Emit(OpCodes.Ldloc, set1Local);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brfalse, returnFalseLabel);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return true;
         il.MarkLabel(returnTrueLabel);
@@ -1134,7 +1134,7 @@ public partial class RuntimeEmitter
         // return false;
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
@@ -1207,29 +1207,29 @@ public partial class RuntimeEmitter
 
         // foreach (var value in smaller)
         il.Emit(OpCodes.Ldloc, smallerLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStartLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEndLabel);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // if (larger.Contains(value)) return false;
         il.Emit(OpCodes.Ldloc, largerLocal);
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Callvirt, setType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(setType, "Contains")!);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
 
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return true;
         il.MarkLabel(returnTrueLabel);
@@ -1239,7 +1239,7 @@ public partial class RuntimeEmitter
         // return false;
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
@@ -1255,7 +1255,7 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitBoundSetMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundSetMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

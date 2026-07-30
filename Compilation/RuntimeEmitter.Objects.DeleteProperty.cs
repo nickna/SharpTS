@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
             var notNumberTypeForDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Double);
-            il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notNumberTypeForDelLabel);
             void EmitNumberConstNameCheck(string n)
             {
@@ -190,7 +190,7 @@ public partial class RuntimeEmitter
             var objTypeDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Object);
-            il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, objTypeDelLabel);
             void EmitObjectMethodDelCheck(string n)
             {

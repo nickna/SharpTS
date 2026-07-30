@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         // GetResult
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.AwaiterType, "GetResult")!);
 
         // Convert object?[] to List<object?> using constructor
         var arrayResultLocal = il.DeclareLocal(typeof(object?[]));

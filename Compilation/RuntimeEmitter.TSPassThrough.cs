@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
     private void EmitTSPassThroughClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $PassThrough : $Transform
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PassThrough",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSTransformType  // Extends $Transform

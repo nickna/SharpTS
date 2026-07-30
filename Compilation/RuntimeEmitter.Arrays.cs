@@ -40,8 +40,8 @@ public partial class RuntimeEmitter
         var loopBodyLabel = il.DefineLabel();
 
         var countGetter = _types.GetProperty(listType, "Count").GetGetMethod()!;
-        var addMethod = listType.GetMethod("Add", [elemType])!;
-        var setItemMethod = listType.GetMethod("set_Item", [_types.Int32, elemType])!;
+        var addMethod = _types.GetMethod(listType, "Add", [elemType])!;
+        var setItemMethod = _types.GetMethod(listType, "set_Item", [_types.Int32, elemType])!;
 
         // if (index < list.Count) goto setExisting
         il.Emit(OpCodes.Ldarg_1); // index
@@ -311,7 +311,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStrKeysLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         {
             var strLenLocal = il.DeclareLocal(_types.Int32);
@@ -331,7 +331,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloca, strIdxLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
             il.Emit(OpCodes.Ldloc, strIdxLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         // Object.keys AND for-in (see StatementEmitterBase.EmitForIn → GetKeys).
         // Without this, RegExp.prototype's built-in methods that carry
         // PDS-installed non-enumerable descriptors still surface in Object.keys.
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Use KeyCollection and iterate
@@ -366,7 +366,7 @@ public partial class RuntimeEmitter
         var keysType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection).GetGenericTypeDefinition(), _types.String, _types.Object);
         var keysEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection.Enumerator).GetGenericTypeDefinition(), _types.String, _types.Object);
         var keysEnumeratorLocal = il.DeclareLocal(keysEnumeratorType);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, keysEnumeratorLocal);
         var currentKeyLocal = il.DeclareLocal(_types.String);
         var keyDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
@@ -376,12 +376,12 @@ public partial class RuntimeEmitter
         var keysLoopSkip = il.DefineLabel();
         il.MarkLabel(keysLoopStart);
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, keysLoopEnd);
 
         // current = enumerator.Current
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentKeyLocal);
 
         // descriptor = PDSGetPropertyDescriptor(dict, current)
@@ -400,12 +400,12 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, keysLoopStart);
 
         il.MarkLabel(keysLoopEnd);
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose")!);
 
         // ECMA-262 §10.1.11.1 OrdinaryOwnPropertyKeys: also include accessor-only
         // own properties (created via Object.defineProperty without writing to
@@ -419,7 +419,7 @@ public partial class RuntimeEmitter
         // Append each element to resultLocal: resultLocal.AddRange(pdsKeysList).
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pdsKeysList);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
@@ -433,7 +433,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, reflectionLabel);
 
         // Return indices as strings: Enumerable.Range(0, list.Count).Select(i => (object?)i.ToString()).ToList()
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -453,14 +453,14 @@ public partial class RuntimeEmitter
         // `delete arr[2]` would yield "2" in `for (k in arr)`.
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, indexLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.MarkLabel(listLoopSkip);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -483,7 +483,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, pdsArrayKeysList);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pdsArrayKeysList);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
@@ -501,7 +501,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFnForKeysLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
@@ -510,12 +510,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, fnPdsKeysLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, fnPdsKeysLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForKeysLabel);
 
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         // if (!(obj is $IHasFields)) return empty list
         il.Emit(OpCodes.Ldarg_0);
@@ -533,7 +533,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
         var keysEnumeratorLocal2 = il.DeclareLocal(keysEnumeratorType);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, keysEnumeratorLocal2);
 
         var fieldsKeysLoopStart = il.DefineLabel();
@@ -542,11 +542,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(fieldsKeysLoopStart);
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal2);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, fieldsKeysLoopEnd);
 
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal2);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // Skip if already in result (avoid duplicates) OR if a PDS descriptor
@@ -569,7 +569,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, skipKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains")!);
         il.Emit(OpCodes.Brtrue, skipKeyLabel);
 
         // PDS descriptor lookup; if present AND non-enumerable, skip.
@@ -588,14 +588,14 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.MarkLabel(skipKeyLabel);
         il.Emit(OpCodes.Br, fieldsKeysLoopStart);
 
         il.MarkLabel(fieldsKeysLoopEnd);
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal2);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose")!);
 
         // $TSObject literal accessors: iterate _getters / _setters maps too.
         // Object literal `{get bar(){...}}` stores accessor functions in
@@ -618,22 +618,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsoGettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
         var gettersEnumLocal = il.DeclareLocal(keysEnumeratorType);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, gettersEnumLocal);
         var gettersLoopStart = il.DefineLabel();
         var gettersLoopEnd = il.DefineLabel();
         var gettersKeyLocal = il.DeclareLocal(_types.String);
         il.MarkLabel(gettersLoopStart);
         il.Emit(OpCodes.Ldloca, gettersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, gettersLoopEnd);
         il.Emit(OpCodes.Ldloca, gettersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, gettersKeyLocal);
         // Skip if already in result.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, gettersKeyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains")!);
         il.Emit(OpCodes.Brtrue, gettersLoopStart);
         // PDS descriptor: skip if Enumerable=false.
         var gettersDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
@@ -650,11 +650,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(gettersAddLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, gettersKeyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, gettersLoopStart);
         il.MarkLabel(gettersLoopEnd);
         il.Emit(OpCodes.Ldloca, gettersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose")!);
         il.MarkLabel(skipGettersIter);
 
         // Symmetric iteration of _setters for setter-only literal accessors.
@@ -669,22 +669,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsoSettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
         var settersEnumLocal = il.DeclareLocal(keysEnumeratorType);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, settersEnumLocal);
         var settersLoopStart = il.DefineLabel();
         var settersLoopEnd = il.DefineLabel();
         var settersKeyLocal = il.DeclareLocal(_types.String);
         il.MarkLabel(settersLoopStart);
         il.Emit(OpCodes.Ldloca, settersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, settersLoopEnd);
         il.Emit(OpCodes.Ldloca, settersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, settersKeyLocal);
         // Skip if already in result (avoid duplicates with paired getter).
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, settersKeyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains")!);
         il.Emit(OpCodes.Brtrue, settersLoopStart);
         // PDS descriptor: skip if Enumerable=false.
         var settersDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
@@ -701,11 +701,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(settersAddLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, settersKeyLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, settersLoopStart);
         il.MarkLabel(settersLoopEnd);
         il.Emit(OpCodes.Ldloca, settersEnumLocal);
-        il.Emit(OpCodes.Call, keysEnumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose")!);
         il.MarkLabel(skipSettersIter);
         il.MarkLabel(notTSObjectForGetters);
 
@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, pdsKeysListIH);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, pdsKeysListIH);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.MarkLabel(returnResultLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -727,7 +727,7 @@ public partial class RuntimeEmitter
 
         // Return empty list
         il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -850,7 +850,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, pdsExtraNamesLocal);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldloc, pdsExtraNamesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
 
@@ -875,7 +875,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
@@ -915,7 +915,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, listPdsNamesLocal);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldloc, listPdsNamesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
@@ -932,9 +932,9 @@ public partial class RuntimeEmitter
         var notObjectTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notObjectTypeLabel);
-        var addToList = _types.ListOfObject.GetMethod("Add", [_types.Object])!;
+        var addToList = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
         void AddName(string name)
         {
             il.Emit(OpCodes.Ldloc, namesLocal);
@@ -975,7 +975,7 @@ public partial class RuntimeEmitter
         var notArrayTypeForNamesLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notArrayTypeForNamesLabel);
         AddName("length");
         AddName("name");
@@ -992,7 +992,7 @@ public partial class RuntimeEmitter
         var notNumberTypeForNamesLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notNumberTypeForNamesLabel);
         AddName("length");
         AddName("name");
@@ -1086,7 +1086,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, objPdsExtraNamesLocal);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldloc, objPdsExtraNamesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -1243,7 +1243,7 @@ public partial class RuntimeEmitter
     internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $BoundArrayMethod
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundArrayMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

@@ -511,7 +511,7 @@ public partial class RuntimeEmitter
         var countLocal = il.DeclareLocal(_types.Int32); // local 3
         var idxLocal = il.DeclareLocal(_types.Int32); // local 4
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -529,7 +529,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop); // Push returns bool
 

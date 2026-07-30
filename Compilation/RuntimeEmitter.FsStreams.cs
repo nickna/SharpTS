@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
 
     private void DefineFsReadStreamType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _fsReadStreamType = moduleBuilder.DefineType(
+        _fsReadStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsReadStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSReadableType  // Extends $Readable instead of object
@@ -147,8 +147,8 @@ public partial class RuntimeEmitter
         var method = _fsReadStreamType.DefineMethod("OnListenerAdded",
             MethodAttributes.Public | MethodAttributes.Virtual, _types.Void, [_types.String]);
         var il = method.GetILGenerator();
-        var strEquals = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
-        var baseOLA = runtime.TSReadableType.GetMethod("OnListenerAdded", [_types.String])!;
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
+        var baseOLA = _types.GetMethod(runtime.TSReadableType, "OnListenerAdded", [_types.String])!;
 
         // base.OnListenerAdded(name)
         il.Emit(OpCodes.Ldarg_0);
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
     {
         // Reparent onto $EventEmitter so it's a real emitter (on/once/emit) with
         // open/ready/finish/close events (#980).
-        _fsWriteStreamType = moduleBuilder.DefineType(
+        _fsWriteStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWriteStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
@@ -681,7 +681,7 @@ public partial class RuntimeEmitter
 
         // stream = new $FsReadStream(path, whole, emitClose, fdNum, (double)total)
         var streamLocal = il.DeclareLocal(_fsReadStreamType);
-        var rsCtor = _fsReadStreamType.GetConstructors()[0];
+        var rsCtor = _types.GetConstructors(_fsReadStreamType)[0];
         il.Emit(OpCodes.Ldloc, pathStrLocal); il.Emit(OpCodes.Ldloc, wholeLocal); il.Emit(OpCodes.Ldloc, emitCloseLocal); il.Emit(OpCodes.Ldloc, fdNumLocal); il.Emit(OpCodes.Ldloc, totalLocal); il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Newobj, rsCtor); il.Emit(OpCodes.Stloc, streamLocal);
 
@@ -785,7 +785,7 @@ public partial class RuntimeEmitter
         var startLocal = NumOpt(RawOpt("start"), 0.0);
 
         // return new $FsWriteStream(path, flags, autoClose, emitClose, fd, start)
-        var wsCtor = _fsWriteStreamType.GetConstructors()[0];
+        var wsCtor = _types.GetConstructors(_fsWriteStreamType)[0];
         il.Emit(OpCodes.Ldloc, pathStrLocal);
         il.Emit(OpCodes.Ldloc, flagsLocal);
         il.Emit(OpCodes.Ldloc, autoCloseLocal);

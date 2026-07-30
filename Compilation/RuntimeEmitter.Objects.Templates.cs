@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
     internal void EmitTemplateStringsListClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TemplateStringsList : List<object>
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TemplateStringsList",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject

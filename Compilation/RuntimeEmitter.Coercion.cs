@@ -448,7 +448,7 @@ public partial class RuntimeEmitter
         // length = (int)Math.Min(d, 1<<24) — guard against runaway alloc.
         il.Emit(OpCodes.Ldloc, lenDouble);
         il.Emit(OpCodes.Ldc_R8, (double)(1 << 24));
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Min", [_types.Double, _types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", [_types.Double, _types.Double])!);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, lengthLocal);
 
@@ -494,7 +494,7 @@ public partial class RuntimeEmitter
         // object path: ToJsString(GetProperty(raw, i.ToString()))
         il.Emit(OpCodes.Ldloc, rawListLocal);
         il.Emit(OpCodes.Ldloca, iLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, segmentLocal);
@@ -1318,14 +1318,14 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'0');
         il.Emit(OpCodes.Bne_Un, notHexLabel);
 
         // second char == 'x' or 'X': compare with OR'd check. Use (ch | 0x20) == 'x'.
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, 0x20);
         il.Emit(OpCodes.Or);
         il.Emit(OpCodes.Ldc_I4, (int)'x');
@@ -1335,7 +1335,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)System.Globalization.NumberStyles.HexNumber);
         // CultureInfo.InvariantCulture — property getter, not a static field. Use Call.
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
@@ -1368,14 +1368,14 @@ public partial class RuntimeEmitter
         // Trim and check
         var trimmedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Trim", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, trimmedLocal);
 
         // "Infinity" → +Inf
         var notPlainInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldstr, "Infinity");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brfalse, notPlainInf);
         il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
         il.Emit(OpCodes.Ret);
@@ -1385,7 +1385,7 @@ public partial class RuntimeEmitter
         var notPlusInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldstr, "+Infinity");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brfalse, notPlusInf);
         il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
         il.Emit(OpCodes.Ret);
@@ -1395,7 +1395,7 @@ public partial class RuntimeEmitter
         var notMinusInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldstr, "-Infinity");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brfalse, notMinusInf);
         il.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
         il.Emit(OpCodes.Ret);
@@ -1450,14 +1450,14 @@ public partial class RuntimeEmitter
         // strLocal[0] == '0'?
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'0');
         il.Emit(OpCodes.Bne_Un, skipLabel);
 
         // (strLocal[1] | 0x20) == prefix?
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, 0x20);
         il.Emit(OpCodes.Or);
         il.Emit(OpCodes.Ldc_I4, (int)prefix);
@@ -1467,7 +1467,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, radix);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.String, _types.Int32));
         il.Emit(OpCodes.Conv_R8);
@@ -1712,7 +1712,7 @@ public partial class RuntimeEmitter
         // (one per primitive return type). Pick the BigInteger → double one
         // by walking the candidate set explicitly.
         System.Reflection.MethodInfo? explicitToDouble = null;
-        foreach (var m in _types.BigInteger.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+        foreach (var m in _types.GetMethods(_types.BigInteger, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
         {
             if (m.Name != "op_Explicit") continue;
             if (m.ReturnType != _types.Double) continue;
@@ -1807,7 +1807,7 @@ public partial class RuntimeEmitter
         // if (trimmed.Length == 0) return 0.0
         var nonEmptyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, trimmedLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, nonEmptyLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Ret);
@@ -1822,12 +1822,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, notHexInConvLabel);
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'0');
         il.Emit(OpCodes.Bne_Un, notHexInConvLabel);
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, 0x20);
         il.Emit(OpCodes.Or);
         il.Emit(OpCodes.Ldc_I4, (int)'x');
@@ -1835,7 +1835,7 @@ public partial class RuntimeEmitter
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)System.Globalization.NumberStyles.HexNumber);
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, typeof(long).GetMethod("Parse", [typeof(string), typeof(System.Globalization.NumberStyles), typeof(IFormatProvider)])!);
@@ -1890,7 +1890,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, trimmedLocal);
         il.Emit(OpCodes.Ldstr, "infinity");
         il.Emit(OpCodes.Ldc_I4_5); // StringComparison.OrdinalIgnoreCase
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notCiInfLabel);
         // Case-insensitive but not exact → NaN.
         il.Emit(OpCodes.Ldc_R8, double.NaN);

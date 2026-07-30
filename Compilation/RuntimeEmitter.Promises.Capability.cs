@@ -75,7 +75,7 @@ public partial class RuntimeEmitter
         // var tcs = new TaskCompletionSource<object?>(); var lockObj = new object();
         il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tcsLocal);
-        il.Emit(OpCodes.Newobj, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, lockLocal);
 
         // try { InvokeMethodValue(value, then,
@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromiseCapabilityType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseCapability",
             TypeAttributes.Public | TypeAttributes.Sealed,
             _types.Object);
@@ -151,7 +151,7 @@ public partial class RuntimeEmitter
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ret);
         }
 
@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilityCaptureMethod);
-        il.Emit(OpCodes.Newobj, funcType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
         il.Emit(OpCodes.Stloc, instanceLocal);
@@ -344,7 +344,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilitySettleMethod);
         il.Emit(OpCodes.Newobj, actionType.GetConstructor([_types.Object, typeof(IntPtr)])!);
         il.Emit(OpCodes.Ldloc, schedulerLocal);
-        il.Emit(OpCodes.Callvirt, _types.TaskOfObject.GetMethod("ContinueWith", [actionType, schedulerType])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskOfObject, "ContinueWith", [actionType, schedulerType])!);
         il.Emit(OpCodes.Pop);
 
         // return instance;

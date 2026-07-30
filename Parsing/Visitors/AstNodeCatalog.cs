@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace SharpTS.Parsing.Visitors;
@@ -33,7 +34,8 @@ public static class AstNodeCatalog
     /// <summary>Every concrete <see cref="Stmt"/> node type, in reflection order.</summary>
     public static readonly IReadOnlyList<Type> StmtTypes = CollectConcreteNodes(typeof(Stmt));
 
-    private static IReadOnlyList<Type> CollectConcreteNodes(Type baseType) =>
+    private static IReadOnlyList<Type> CollectConcreteNodes(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicNestedTypes)] Type baseType) =>
         baseType.GetNestedTypes(BindingFlags.Public)
             .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && t != baseType)
             .ToArray();

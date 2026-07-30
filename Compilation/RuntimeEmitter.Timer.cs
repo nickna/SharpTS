@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
     private void EmitTimeoutClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TimeoutClosure
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TimeoutClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
@@ -101,7 +101,7 @@ public partial class RuntimeEmitter
     private void EmitTSTimeoutClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TSTimeout
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TSTimeout",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
@@ -456,7 +456,7 @@ public partial class RuntimeEmitter
     private void EmitIntervalClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $IntervalClosure
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$IntervalClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
@@ -706,7 +706,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue_S, hasQueueLabel);
 
         // _microtaskQueue = new Queue<$TSFunction>();
-        var queueOpenCtor = _types.QueueOpen.GetConstructor(Type.EmptyTypes)!;
+        var queueOpenCtor = _types.GetConstructor(_types.QueueOpen, Type.EmptyTypes)!;
         var queueCtor = EmitterTypeHelpers.ResolveConstructor(queueType, queueOpenCtor);
         il.Emit(OpCodes.Newobj, queueCtor);
         il.Emit(OpCodes.Stsfld, microtaskQueueField);
@@ -714,7 +714,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasQueueLabel);
 
         // _microtaskQueue.Enqueue(callback);
-        var queueOpenEnqueue = _types.QueueOpen.GetMethod("Enqueue")!;
+        var queueOpenEnqueue = _types.GetMethod(_types.QueueOpen, "Enqueue")!;
         var enqueueMethod = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenEnqueue);
         il.Emit(OpCodes.Ldsfld, microtaskQueueField);
         il.Emit(OpCodes.Ldarg_0); // callback
@@ -746,9 +746,9 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         // Get generic methods for Queue<$TSFunction>
-        var queueOpenCountGetter = _types.QueueOpen.GetProperty("Count")!.GetGetMethod()!;
+        var queueOpenCountGetter = _types.GetProperty(_types.QueueOpen, "Count")!.GetGetMethod()!;
         var countGetter = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenCountGetter);
-        var queueOpenDequeue = _types.QueueOpen.GetMethod("Dequeue")!;
+        var queueOpenDequeue = _types.GetMethod(_types.QueueOpen, "Dequeue")!;
         var dequeueMethod = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenDequeue);
 
         var callbackLocal = il.DeclareLocal(runtime.TSFunctionType);

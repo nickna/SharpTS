@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -15,6 +16,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 internal static class EmitGenerics
 {
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "The result is a Reflection.Emit metadata shape, not a runtime generic instantiation. Native AOT falls back to the rooted TypeBuilderInstantiation factory and the native compile smoke executes both paths.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2055",
+        Justification = "The result is serialized into emitted IL rather than instantiated by the native host; the Native AOT fallback is rooted and exercised by the compile smoke.")]
     internal static Type MakeGenericType(Type genericDefinition, params Type[] typeArguments)
     {
         try
@@ -31,6 +40,14 @@ internal static class EmitGenerics
         }
     }
 
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "The result is a Reflection.Emit metadata shape, not a runtime generic instantiation. Native AOT falls back to the rooted MethodBuilderInstantiation factory and the native compile smoke executes both paths.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2060",
+        Justification = "The result is serialized into emitted IL rather than invoked by the native host; the Native AOT fallback is rooted and exercised by the compile smoke.")]
     internal static MethodInfo MakeGenericMethod(MethodInfo genericDefinition, params Type[] typeArguments)
     {
         try

@@ -249,7 +249,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noSymbolsLabel);
 
         // AddRange
-        var addRangeMethod = _types.ListOfObject.GetMethod("AddRange");
+        var addRangeMethod = _types.GetMethod(_types.ListOfObject, "AddRange");
         if (addRangeMethod != null)
         {
             il.Emit(OpCodes.Ldloc, resultLocal);
@@ -342,7 +342,7 @@ public partial class RuntimeEmitter
         // Is a list - call ToArray()
         il.MarkLabel(isListLabel);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
         il.Emit(OpCodes.Stloc, argsLocal);
 
         il.MarkLabel(gotArgsLabel);
@@ -602,7 +602,7 @@ public partial class RuntimeEmitter
         // Is a list - call ToArray()
         il.MarkLabel(isListLabel);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
         il.Emit(OpCodes.Stloc, argsLocal);
 
         il.MarkLabel(gotArgsLabel);

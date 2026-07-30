@@ -709,7 +709,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, ilistLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Callvirt, ilistType.GetMethod("get_Item", [typeof(int)])!); // returns boxed object
-        il.Emit(OpCodes.Callvirt, ctx.Types.ListOfObject.GetMethod("Add", [ctx.Types.Object])!);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "Add", [ctx.Types.Object])!);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);

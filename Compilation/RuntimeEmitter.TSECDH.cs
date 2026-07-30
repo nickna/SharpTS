@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
     private void EmitTSECDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $ECDH
-        _tsECDHTypeBuilder = moduleBuilder.DefineType(
+        _tsECDHTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ECDH",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -92,7 +92,7 @@ public partial class RuntimeEmitter
         // Get normalized curve name
         var normalizedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, normalizedLocal);
 
         // Local for ECCurve
@@ -108,35 +108,35 @@ public partial class RuntimeEmitter
         // Check "prime256v1" or "secp256r1" or "p-256"
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "prime256v1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p256Label);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "secp256r1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p256Label);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "p-256");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p256Label);
 
         // Check "secp384r1" or "p-384"
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "secp384r1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p384Label);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "p-384");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p384Label);
 
         // Check "secp521r1" or "p-521"
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "secp521r1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p521Label);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "p-521");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, p521Label);
 
         // Default - throw
@@ -173,15 +173,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldstr, "Unsupported curve: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Create ECDH with curve
         il.MarkLabel(createLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, curveLocal);
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", [typeof(ECCurve)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stfld, _tsECDHEcdhField);
 
         il.Emit(OpCodes.Ret);
@@ -249,7 +249,7 @@ public partial class RuntimeEmitter
 
         // Create an ECDiffieHellman for the other party
         var otherEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
         // Call helper to compute the shared secret (handles raw points + SPKI, DeriveRawSecretAgreement)
@@ -404,31 +404,31 @@ public partial class RuntimeEmitter
         // Check "generateKeys"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "generateKeys");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, generateKeysLabel);
 
         // Check "computeSecret"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "computeSecret");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, computeSecretLabel);
 
         // Check "getPublicKey"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "getPublicKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, getPublicKeyLabel);
 
         // Check "getPrivateKey"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "getPrivateKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, getPrivateKeyLabel);
 
         // Check "setPrivateKey"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "setPrivateKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, setPrivateKeyLabel);
 
         // Default - return null
@@ -514,7 +514,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var otherEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
         var rawPointLabel = il.DefineLabel();
@@ -553,7 +553,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);          // 1 + fieldLen
         il.Emit(OpCodes.Bne_Un, notCompressedLabel);
         il.Emit(OpCodes.Ldstr, "ECDH.computeSecret: compressed-point input is not supported in compiled mode (interpreter only)");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
         il.MarkLabel(notCompressedLabel);
 
@@ -663,19 +663,19 @@ public partial class RuntimeEmitter
         // Normalize encoding
         var encodingLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check "hex"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         // Check "base64"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         // Default to buffer
@@ -685,7 +685,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // base64: Convert.ToBase64String(bytes)
@@ -760,19 +760,19 @@ public partial class RuntimeEmitter
 
         var encodingLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check "hex"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         // Check "base64"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         // Default to UTF8
@@ -800,7 +800,7 @@ public partial class RuntimeEmitter
         // Throw
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Input must be a Buffer, byte array, or string");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -815,7 +815,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBoundECDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _boundECDHMethodTypeBuilder = moduleBuilder.DefineType(
+        _boundECDHMethodTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundECDHMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -888,31 +888,31 @@ public partial class RuntimeEmitter
         // Check "GenerateKeys"
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, "GenerateKeys");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, generateKeysLabel);
 
         // Check "ComputeSecret"
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, "ComputeSecret");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, computeSecretLabel);
 
         // Check "GetPublicKey"
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, "GetPublicKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, getPublicKeyLabel);
 
         // Check "GetPrivateKey"
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, "GetPrivateKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, getPrivateKeyLabel);
 
         // Check "SetPrivateKey"
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, "SetPrivateKey");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, setPrivateKeyLabel);
 
         // Default - return null

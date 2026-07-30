@@ -28,7 +28,7 @@ public partial class ILEmitter
         if (af.Name != null) return false;
         if (!_ctx.ArrowMethods.TryGetValue(af, out var method)) return false;
 
-        var delegateCtor = delegateType.GetConstructor([typeof(object), typeof(IntPtr)]);
+        var delegateCtor = Types.TryGetConstructor(delegateType, typeof(object), typeof(IntPtr));
         if (delegateCtor == null) return false;
 
         if (_ctx.DisplayClasses.TryGetValue(af, out var displayClass))

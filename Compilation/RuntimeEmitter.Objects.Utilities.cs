@@ -190,9 +190,9 @@ public partial class RuntimeEmitter
             // target.SetProperty(key, value)
             il.Emit(OpCodes.Ldarg_0); // target
             il.Emit(OpCodes.Ldloca, kvpLocal);
-            il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloca, kvpLocal);
-            il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
             il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
 
             il.Emit(OpCodes.Br, loopStart);
@@ -268,17 +268,17 @@ public partial class RuntimeEmitter
         var fieldsEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(), _types.String, _types.Object);
         var fieldsEnumLocal = il.DeclareLocal(fieldsEnumeratorType);
         il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, fieldsEnumLocal);
         var fieldsLoopStart = il.DefineLabel();
         var fieldsLoopEnd = il.DefineLabel();
         il.MarkLabel(fieldsLoopStart);
         il.Emit(OpCodes.Ldloca, fieldsEnumLocal);
-        il.Emit(OpCodes.Call, fieldsEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(fieldsEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, fieldsLoopEnd);
         var fkvLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
         il.Emit(OpCodes.Ldloca, fieldsEnumLocal);
-        il.Emit(OpCodes.Call, fieldsEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(fieldsEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, fkvLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, fkvLocal);
@@ -308,17 +308,17 @@ public partial class RuntimeEmitter
 
         var gettersEnumLocal = il.DeclareLocal(fieldsEnumeratorType);
         il.Emit(OpCodes.Ldloc, gettersLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, gettersEnumLocal);
         var gLoopStart = il.DefineLabel();
         var gLoopEnd = il.DefineLabel();
         il.MarkLabel(gLoopStart);
         il.Emit(OpCodes.Ldloca, gettersEnumLocal);
-        il.Emit(OpCodes.Call, fieldsEnumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(fieldsEnumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, gLoopEnd);
         var gkvLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
         il.Emit(OpCodes.Ldloca, gettersEnumLocal);
-        il.Emit(OpCodes.Call, fieldsEnumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(fieldsEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, gkvLocal);
         // result[key] = InvokeMethodValue(obj, getter, [])
         il.Emit(OpCodes.Ldloc, resultLocal);

@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     private void EmitUndefinedClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $Undefined
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Undefined",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -95,7 +95,7 @@ public partial class RuntimeEmitter
 
         // Create and store the interface type
         runtime.IUnionTypeInterface = typeBuilder.CreateType()!;
-        runtime.IUnionTypeValueGetter = runtime.IUnionTypeInterface.GetProperty("Value")!.GetGetMethod()!;
+        runtime.IUnionTypeValueGetter = _types.GetProperty(runtime.IUnionTypeInterface, "Value")!.GetGetMethod()!;
     }
 
     /// <summary>

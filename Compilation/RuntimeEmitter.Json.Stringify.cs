@@ -911,16 +911,16 @@ public partial class RuntimeEmitter
 
         // Get enumerator
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DictionaryStringObjectEnumerator, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEnd);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DictionaryStringObjectEnumerator, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // strResult = StringifyValue(currentValue, indent, depth + 1, currentKey)

@@ -15,19 +15,21 @@ public static class DiscoveryEmitter
     private const string UsableMarker = "[usable]     ";
     private const string UnsupportedMarker = "[unsupported]";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        // Keep generic-argument angle brackets and quotes readable in signatures rather than
-        // <-escaping them — this output is a dev tool, not HTML.
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
+    private static readonly DiscoveryJsonSerializerContext JsonContext = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter<DiscoveryKind>(JsonNamingPolicy.CamelCase) },
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            // Keep generic-argument angle brackets and quotes readable in signatures rather than
+            // <-escaping them — this output is a dev tool, not HTML.
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
 
     /// <summary>Serializes the report as indented JSON for editor/tooling consumption.</summary>
-    public static string EmitJson(DiscoveryReport report) => JsonSerializer.Serialize(report, JsonOptions);
+    public static string EmitJson(DiscoveryReport report) =>
+        JsonSerializer.Serialize(report, JsonContext.DiscoveryReport);
 
     /// <summary>Renders the report as human-readable text.</summary>
     public static string EmitText(DiscoveryReport report) => report.Kind switch

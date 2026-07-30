@@ -71,8 +71,8 @@ public partial class RuntimeEmitter
         }
         else
         {
-            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
-                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            var setItem = _types.TryGetMethod(_types.ConditionalWeakTable, "set_Item")
+                ?? _types.TryGetProperty(_types.ConditionalWeakTable, "Item")?.GetSetMethod();
             if (setItem != null)
             {
                 il.Emit(OpCodes.Callvirt, setItem);
@@ -96,8 +96,8 @@ public partial class RuntimeEmitter
         }
         else
         {
-            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
-                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            var setItem = _types.TryGetMethod(_types.ConditionalWeakTable, "set_Item")
+                ?? _types.TryGetProperty(_types.ConditionalWeakTable, "Item")?.GetSetMethod();
             if (setItem != null)
             {
                 il.Emit(OpCodes.Callvirt, setItem);
@@ -177,8 +177,8 @@ public partial class RuntimeEmitter
         }
         else
         {
-            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
-                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            var setItem = _types.TryGetMethod(_types.ConditionalWeakTable, "set_Item")
+                ?? _types.TryGetProperty(_types.ConditionalWeakTable, "Item")?.GetSetMethod();
             if (setItem != null)
             {
                 il.Emit(OpCodes.Callvirt, setItem);
@@ -253,7 +253,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, frozenObjectsField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Ret);
     }
@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, sealedObjectsField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Ret);
     }

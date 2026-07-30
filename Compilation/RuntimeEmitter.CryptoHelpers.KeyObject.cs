@@ -36,14 +36,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         var useDefaultEncodingLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, useDefaultEncodingLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         var encodingSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, encodingSetLabel);
         il.MarkLabel(useDefaultEncodingLabel);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, "utf8");
         il.MarkLabel(encodingSetLabel);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Convert string to bytes based on encoding
@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "crypto.createSecretKey: unsupported encoding '");
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "'");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([_types.String])!);
         il.Emit(OpCodes.Throw);
 
@@ -219,7 +219,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "key");
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, pemLocal);
         il.Emit(OpCodes.Br, createKeyObjectLabel);

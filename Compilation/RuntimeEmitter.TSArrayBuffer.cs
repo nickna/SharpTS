@@ -11,7 +11,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitArrayBufferType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$ArrayBuffer",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSharedArrayBufferType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$SharedArrayBuffer",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object

@@ -173,7 +173,7 @@ public partial class ILEmitter
                     var clampDoneLabel = IL.DefineLabel();
                     var notInfLabel = IL.DefineLabel();
                     IL.Emit(OpCodes.Ldloc, limitDouble);
-                    IL.Emit(OpCodes.Call, _ctx.Types.Double.GetMethod("IsFinite", [_ctx.Types.Double])!);
+                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Double, "IsFinite", [_ctx.Types.Double])!);
                     IL.Emit(OpCodes.Brtrue, notInfLabel);
                     IL.Emit(OpCodes.Ldc_I4, int.MaxValue);
                     IL.Emit(OpCodes.Stloc, limitLocal);
@@ -191,7 +191,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldloc, listLocal);
                     IL.Emit(OpCodes.Ldc_I4_0);
                     IL.Emit(OpCodes.Ldloc, limitLocal);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Types.ListOfObject.GetMethod("GetRange", [_ctx.Types.Int32, _ctx.Types.Int32])!);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "GetRange", [_ctx.Types.Int32, _ctx.Types.Int32])!);
                     IL.Emit(OpCodes.Stloc, listLocal);
                     IL.MarkLabel(skipTrimLabel);
                     IL.Emit(OpCodes.Ldloc, listLocal);

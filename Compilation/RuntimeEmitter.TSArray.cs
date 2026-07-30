@@ -76,15 +76,15 @@ public partial class RuntimeEmitter
 
     private void InitTSArrayMethodCache()
     {
-        _tsArraySparseTryGetValue = _tsArraySparseType.GetMethod("TryGetValue", [_types.UInt32, _types.Object.MakeByRefType()])!;
+        _tsArraySparseTryGetValue = _types.GetMethod(_tsArraySparseType, "TryGetValue", [_types.UInt32, _types.Object.MakeByRefType()])!;
         _tsArraySparseCountGetter = _types.GetProperty(_tsArraySparseType, "Count").GetGetMethod()!;
-        _tsArraySparseRemove = _tsArraySparseType.GetMethod("Remove", [_types.UInt32])!;
-        _tsArraySparseSetItem = _tsArraySparseType.GetMethod("set_Item", [_types.UInt32, _types.Object])!;
+        _tsArraySparseRemove = _types.GetMethod(_tsArraySparseType, "Remove", [_types.UInt32])!;
+        _tsArraySparseSetItem = _types.GetMethod(_tsArraySparseType, "set_Item", [_types.UInt32, _types.Object])!;
         _tsArrayListCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
-        _tsArrayListAdd = _types.ListOfObject.GetMethod("Add", [_types.Object])!;
-        _tsArrayListRemoveAt = _types.ListOfObject.GetMethod("RemoveAt", [_types.Int32])!;
-        _tsArrayListGetItem = _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!;
-        _tsArrayListSetItem = _types.ListOfObject.GetMethod("set_Item", [_types.Int32, _types.Object])!;
+        _tsArrayListAdd = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
+        _tsArrayListRemoveAt = _types.GetMethod(_types.ListOfObject, "RemoveAt", [_types.Int32])!;
+        _tsArrayListGetItem = _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!;
+        _tsArrayListSetItem = _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object])!;
     }
 
     private void EmitTSArrayClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
         // base Count may diverge from _length once sparse writes occur; built-
         // in emitters that care use the explicit getters (Length / LongLength /
         // HasIndex) rather than falling through to base Count.
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Array",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject
@@ -858,7 +858,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Index out of bounds.");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -895,7 +895,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Index out of bounds.");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
     // -----------------------------------------------------------------------
@@ -1300,7 +1300,7 @@ public partial class RuntimeEmitter
         // _sparse = new Dictionary<uint,object?> { [(uint)index] = value };
         // _length = index + 1;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _tsArraySparseType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_tsArraySparseType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsArraySparseField);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -1384,7 +1384,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsArraySparseField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_U4);
-        il.Emit(OpCodes.Callvirt, _tsArraySparseType.GetMethod("ContainsKey", [_types.UInt32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_tsArraySparseType, "ContainsKey", [_types.UInt32])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnFalseLabel);
@@ -1690,11 +1690,11 @@ public partial class RuntimeEmitter
         // Snapshot keys into a List<uint> (can't remove while iterating Dictionary.Keys),
         // then index it with a plain for-loop to avoid struct-enumerator complexity.
         var keysEnumerableType = _types.MakeGenericType(_types.IEnumerableOpen, _types.UInt32);
-        var keysCollectionGetter = _tsArraySparseType.GetProperty("Keys")!.GetGetMethod()!;
+        var keysCollectionGetter = _types.GetProperty(_tsArraySparseType, "Keys")!.GetGetMethod()!;
         var listUIntType = _types.MakeGenericType(_types.ListOpen, _types.UInt32);
-        var listUIntCtorFromEnum = listUIntType.GetConstructor([keysEnumerableType])!;
-        var listUIntGetCount = listUIntType.GetProperty("Count")!.GetGetMethod()!;
-        var listUIntGetItem = listUIntType.GetMethod("get_Item", [_types.Int32])!;
+        var listUIntCtorFromEnum = _types.GetConstructor(listUIntType, [keysEnumerableType])!;
+        var listUIntGetCount = _types.GetProperty(listUIntType, "Count")!.GetGetMethod()!;
+        var listUIntGetItem = _types.GetMethod(listUIntType, "get_Item", [_types.Int32])!;
 
         var keysListLocal = il.DeclareLocal(listUIntType);
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -1833,7 +1833,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, hasSparseLabel);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _tsArraySparseType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_tsArraySparseType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsArraySparseField);
 
         il.MarkLabel(hasSparseLabel);
@@ -1973,7 +1973,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ",");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ListOfObject, "ToArray"));
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, _types.ObjectArray])!);
         il.Emit(OpCodes.Ret);
     }
 

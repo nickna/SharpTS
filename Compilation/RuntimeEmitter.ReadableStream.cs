@@ -53,17 +53,17 @@ public partial class RuntimeEmitter
         _pendingReadsTcsType = typeof(TaskCompletionSource<object>);
         _pendingReadsQueueType = typeof(Queue<TaskCompletionSource<object>>);
 
-        var streamBuilder = moduleBuilder.DefineType(
+        var streamBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var controllerBuilder = moduleBuilder.DefineType(
+        var controllerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStreamDefaultController",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var readerBuilder = moduleBuilder.DefineType(
+        var readerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStreamDefaultReader",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
@@ -177,12 +177,12 @@ public partial class RuntimeEmitter
 
         // _queue = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _listOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_listOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _readableStreamQueueField);
 
         // _pendingReads = new Queue<TaskCompletionSource<object>>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _pendingReadsQueueType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_pendingReadsQueueType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _readableStreamPendingReadsField);
 
         // _highWaterMark = ExtractHighWaterMark(strategy) — defaults to 1 if no strategy
@@ -321,7 +321,7 @@ public partial class RuntimeEmitter
         // if (_pendingReads.Count > 0) { resolve one pending read; return; }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, appendToQueueLabel);
 
@@ -329,13 +329,13 @@ public partial class RuntimeEmitter
         var tcsLocal = il.DeclareLocal(_pendingReadsTcsType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
         il.Emit(OpCodes.Stloc, tcsLocal);
 
         // tcs.TrySetResult({ value: chunk, done: false })
         il.Emit(OpCodes.Ldloc, tcsLocal);
         // Build the result dict inline (shared with Read())
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -349,7 +349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _pendingReadsTcsType.GetMethod("TrySetResult", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetResult", [typeof(object)])!);
         il.Emit(OpCodes.Pop); // discard bool result
         il.Emit(OpCodes.Ret);
 
@@ -358,7 +358,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamQueueField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetMethod("Add", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Add", [typeof(object)])!);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -418,7 +418,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Callvirt, enqueueMethod);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopCond);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_listOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Blt, loopBody);
 
         // stream.CloseStream(); return stream;
@@ -505,7 +505,7 @@ public partial class RuntimeEmitter
         // Clear queue
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamQueueField);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetMethod("Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Clear")!);
 
         // Reject any parked readers with the stored error.
         EmitDrainPendingReadsWithError(il);
@@ -525,16 +525,16 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
 
         // Build done result dict inline
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -548,7 +548,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _pendingReadsTcsType.GetMethod("TrySetResult", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetResult", [typeof(object)])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -566,13 +566,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsQueueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Dequeue")!);
 
         // new Exception(_storedError?.ToString() ?? "stream errored")
         il.Emit(OpCodes.Ldarg_0);
@@ -589,7 +589,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(msgDoneLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
 
-        il.Emit(OpCodes.Callvirt, _pendingReadsTcsType.GetMethod("TrySetException", [typeof(Exception)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsTcsType, "TrySetException", [typeof(Exception)])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -752,14 +752,14 @@ public partial class RuntimeEmitter
         // Park path: create a TCS, enqueue into _pendingReads, return its Task.
         il.MarkLabel(parkLabel);
         var parkedTcsLocal = il.DeclareLocal(_pendingReadsTcsType);
-        il.Emit(OpCodes.Newobj, _pendingReadsTcsType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_pendingReadsTcsType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, parkedTcsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamPendingReadsField);
         il.Emit(OpCodes.Ldloc, parkedTcsLocal);
-        il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetMethod("Enqueue", [_pendingReadsTcsType])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_pendingReadsQueueType, "Enqueue", [_pendingReadsTcsType])!);
         il.Emit(OpCodes.Ldloc, parkedTcsLocal);
-        il.Emit(OpCodes.Callvirt, _pendingReadsTcsType.GetProperty("Task")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_pendingReadsTcsType, "Task")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
 
         // Dequeue path
@@ -774,7 +774,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamQueueField);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetMethod("RemoveAt")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "RemoveAt")!);
 
         // Build result dict { value: chunk, done: false } and wrap in Task.FromResult
         EmitMakeReadResultAsTask(il, chunkLocal, doneFlag: false, runtime);
@@ -807,7 +807,7 @@ public partial class RuntimeEmitter
     private void EmitMakeReadResultAsTask(ILGenerator il, LocalBuilder? chunkLocal, bool doneFlag, EmittedRuntime runtime)
     {
         // new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
@@ -926,7 +926,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, _readableStreamStateField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _readableStreamQueueField);
-        il.Emit(OpCodes.Callvirt, _listOfObject.GetMethod("Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_listOfObject, "Clear")!);
 
         // If cancel callback present, call it (sync) and return Task.FromResult
         var noCbLabel = il.DefineLabel();

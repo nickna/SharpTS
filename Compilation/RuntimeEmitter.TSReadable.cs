@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
     private void EmitTSReadableTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Readable : $EventEmitter
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Readable",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType  // Extends $EventEmitter
@@ -140,12 +140,12 @@ public partial class RuntimeEmitter
 
         // _readBuffer = new Queue<object?>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, queueType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(queueType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsReadableBufferField);
 
         // _pipeDestinations = new List<object>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsReadablePipeDestinationsField);
 
         // _ended = false
@@ -206,7 +206,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsReadableDestroyedField);
         il.Emit(OpCodes.Brtrue, returnNullLabel);
 
-        var countGetter = queueType.GetProperty("Count")!.GetGetMethod()!;
+        var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Callvirt, countGetter);
@@ -226,7 +226,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notObjectModeLabel);
 
         // Object mode: return _readBuffer.Dequeue()
-        var dequeueMethod = queueType.GetMethod("Dequeue")!;
+        var dequeueMethod = _types.GetMethod(queueType, "Dequeue")!;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Callvirt, dequeueMethod);
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         // var result = new StringBuilder()
-        il.Emit(OpCodes.Newobj, _types.StringBuilder.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(loopStart);
@@ -271,7 +271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(afterToStringLabel);
 
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, idxLocal);
@@ -366,7 +366,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Stloc, destLocal);
 
         var tryWritable = il.DefineLabel();
@@ -472,7 +472,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, eofCountLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, eofIdxLocal);
@@ -486,7 +486,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
             il.Emit(OpCodes.Ldloc, eofIdxLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
             il.Emit(OpCodes.Stloc, eofDestLocal);
 
             var eofTryWritable = il.DefineLabel();
@@ -569,7 +569,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Ldarg_1);
-        var enqueueMethod = queueType.GetMethod("Enqueue")!;
+        var enqueueMethod = _types.GetMethod(queueType, "Enqueue")!;
         il.Emit(OpCodes.Callvirt, enqueueMethod);
 
         // Also flush to pipe destinations in non-flowing mode (matches interpreter)
@@ -594,7 +594,7 @@ public partial class RuntimeEmitter
             // object[] items = _readBuffer.ToArray()
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-            il.Emit(OpCodes.Callvirt, queueType.GetMethod("ToArray")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "ToArray")!);
             il.Emit(OpCodes.Stloc, arrLocal);
 
             il.Emit(OpCodes.Ldloc, arrLocal);
@@ -673,8 +673,8 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         // Drain buffer to destination
-        var countGetter = queueType.GetProperty("Count")!.GetGetMethod()!;
-        var dequeueMethod = queueType.GetMethod("Dequeue")!;
+        var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
+        var dequeueMethod = _types.GetMethod(queueType, "Dequeue")!;
 
         il.MarkLabel(loopStart);
         // while (_readBuffer.Count > 0)
@@ -788,7 +788,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         // Set _flowing = 1 (flowing mode) after pipe setup
         il.Emit(OpCodes.Ldarg_0);
@@ -842,7 +842,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
 
         il.MarkLabel(afterSetLabel);
         il.Emit(OpCodes.Stfld, _tsReadableEncodingField);
@@ -881,7 +881,7 @@ public partial class RuntimeEmitter
         // _readBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        var clearMethod = queueType.GetMethod("Clear")!;
+        var clearMethod = _types.GetMethod(queueType, "Clear")!;
         il.Emit(OpCodes.Callvirt, clearMethod);
 
         // if (error != null) { _errored = true; _error = error; fault any parked pull; emit 'error'; }
@@ -940,7 +940,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
         il.Emit(OpCodes.Ldarg_1);
-        var enqueueMethod = queueType.GetMethod("Enqueue")!;
+        var enqueueMethod = _types.GetMethod(queueType, "Enqueue")!;
         il.Emit(OpCodes.Callvirt, enqueueMethod);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -1082,7 +1082,7 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var strEquals = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
         var retLabel = il.DefineLabel();
         var checkEndLabel = il.DefineLabel();
 
@@ -1217,7 +1217,7 @@ public partial class RuntimeEmitter
         il = getReadableLength.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        var countGetter = queueType.GetProperty("Count")!.GetGetMethod()!;
+        var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
@@ -1338,7 +1338,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        il.Emit(OpCodes.Callvirt, queueType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(queueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, doneLabel);
 
@@ -1346,7 +1346,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        il.Emit(OpCodes.Callvirt, queueType.GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "Dequeue")!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -1383,7 +1383,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        il.Emit(OpCodes.Callvirt, queueType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(queueType, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, doneLabel);
 
@@ -1395,7 +1395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadableBufferField);
-        il.Emit(OpCodes.Callvirt, queueType.GetMethod("Dequeue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(queueType, "Dequeue")!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
         il.Emit(OpCodes.Pop);

@@ -229,10 +229,10 @@ public partial class RuntimeEmitter
         // "Input buffers must have the same byte length. Received {aLen} and {bLen}"
         il.Emit(OpCodes.Ldstr, "crypto.timingSafeEqual: Input buffers must have the same byte length. Received ");
         il.Emit(OpCodes.Ldloca, aLenLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, " and ");
         il.Emit(OpCodes.Ldloca, bLenLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string), typeof(string)])!);
         il.Emit(OpCodes.Newobj, _types.ArgumentExceptionCtorString);
         il.Emit(OpCodes.Throw);
@@ -241,8 +241,8 @@ public partial class RuntimeEmitter
 
         // Convert byte[] to ReadOnlySpan<byte> and call CryptographicOperations.FixedTimeEquals
         // The implicit conversion from byte[] to ReadOnlySpan<byte> is done via op_Implicit
-        var opImplicit = _types.ReadOnlySpanOfByte.GetMethod("op_Implicit", [typeof(byte[])])!;
-        var fixedTimeEquals = _types.CryptographicOperations.GetMethod("FixedTimeEquals",
+        var opImplicit = _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!;
+        var fixedTimeEquals = _types.GetMethod(_types.CryptographicOperations, "FixedTimeEquals",
             [_types.ReadOnlySpanOfByte, _types.ReadOnlySpanOfByte])!;
 
         // Convert first byte[] to ReadOnlySpan<byte>
@@ -317,7 +317,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // new List<object?>()
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
             }
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldstr, hash);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
             il.MarkLabel(skipLabel);
         }
 
@@ -362,7 +362,7 @@ public partial class RuntimeEmitter
         string[] ciphers = ["aes-128-cbc", "aes-192-cbc", "aes-256-cbc", "aes-128-gcm", "aes-192-gcm", "aes-256-gcm"];
 
         // new List<object?>()
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
@@ -371,7 +371,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldstr, cipher);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         }
 
         // return new $Array(list)

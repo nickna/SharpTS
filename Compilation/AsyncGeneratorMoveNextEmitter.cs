@@ -186,7 +186,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // Create ValueTask<bool> from result using constructor
         // new ValueTask<bool>(result)
         _il.Emit(result ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        var vtCtor = _types.ValueTaskOfBool.GetConstructor([_types.Boolean])!;
+        var vtCtor = _types.GetConstructor(_types.ValueTaskOfBool, [_types.Boolean])!;
         _il.Emit(OpCodes.Newobj, vtCtor);
         _il.Emit(OpCodes.Ret);
     }

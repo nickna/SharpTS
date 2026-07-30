@@ -15,7 +15,7 @@ public partial class RuntimeEmitter
 {
     private void EmitTSDataCloneErrorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DataCloneError",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Exception
@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "DataCloneError: ");
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.StringConcat2);
-        il.Emit(OpCodes.Call, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();

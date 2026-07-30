@@ -87,10 +87,10 @@ public partial class RuntimeEmitter
 
         // String path: UTF8.GetBytes(str)
         il.MarkLabel(isStringLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Br, endLabel);
 
         // Buffer path: call GetData() method
@@ -971,7 +971,7 @@ public partial class RuntimeEmitter
         var zoptsCtor = zoptsType.GetConstructor(Type.EmptyTypes)!;
         var setLevel = zoptsType.GetProperty("CompressionLevel")!.GetSetMethod()!;
         var setStrategy = zoptsType.GetProperty("CompressionStrategy")!.GetSetMethod()!;
-        var streamCtor = streamType.GetConstructor([typeof(Stream), zoptsType, typeof(bool)])!;
+        var streamCtor = _types.GetConstructor(streamType, [typeof(Stream), zoptsType, typeof(bool)])!;
 
         // Get input bytes
         il.Emit(OpCodes.Ldarg_0);
@@ -1128,7 +1128,7 @@ public partial class RuntimeEmitter
 
         // Create decompression stream
         // Constructor: (Stream stream, CompressionMode mode)
-        var streamCtor = streamType.GetConstructor([typeof(Stream), typeof(CompressionMode)])!;
+        var streamCtor = _types.GetConstructor(streamType, [typeof(Stream), typeof(CompressionMode)])!;
         il.Emit(OpCodes.Ldloc, inputStreamLocal);
         il.Emit(OpCodes.Ldc_I4_0); // CompressionMode.Decompress = 0
         il.Emit(OpCodes.Newobj, streamCtor);

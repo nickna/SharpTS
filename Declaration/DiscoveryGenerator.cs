@@ -12,6 +12,9 @@ namespace SharpTS.Declaration;
 /// </summary>
 public class DiscoveryGenerator
 {
+    private const string ManagedBuildRequiredMessage =
+        "Declaration discovery is not available in the native SharpTS build — use the managed build.";
+
     private readonly TypeInspector _inspector = new();
 
     /// <summary>
@@ -20,6 +23,8 @@ public class DiscoveryGenerator
     /// </summary>
     public DiscoveryReport Generate(string input)
     {
+        EnsureManagedBuild();
+
         // Assembly file path → table of contents for the whole assembly.
         if (input.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
             input.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
@@ -49,14 +54,22 @@ public class DiscoveryGenerator
     /// <summary>Builds a full detail report for a single resolved type.</summary>
     public DiscoveryReport GenerateForType(Type type)
     {
+        EnsureManagedBuild();
+
         var metadata = _inspector.Inspect(type);
         var typeReport = BuildTypeReport(metadata, type);
         return new DiscoveryReport(DiscoveryKind.TypeDetail, type.FullName ?? type.Name, Type: typeReport);
     }
 
     /// <summary>Builds a table-of-contents report for every public type in an assembly file.</summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Declaration discovery rejects Native AOT before loading or enumerating runtime assemblies.")]
     public DiscoveryReport GenerateForAssembly(string assemblyPath)
     {
+        EnsureManagedBuild();
+
         if (!File.Exists(assemblyPath))
         {
             throw new FileNotFoundException($"Assembly not found: {assemblyPath}");
@@ -89,8 +102,14 @@ public class DiscoveryGenerator
     /// Builds a table-of-contents report for a namespace by scanning all loaded assemblies, or
     /// null if no loaded type lives in that namespace.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Declaration discovery rejects Native AOT before enumerating runtime assemblies.")]
     public DiscoveryReport? GenerateForNamespace(string ns)
     {
+        EnsureManagedBuild();
+
         var entries = new List<TocEntry>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -293,6 +312,10 @@ public class DiscoveryGenerator
     /// Resolves a type name the same way the runtime interop does (<see cref="Runtime.DotNet.DotNetTypeRegistry"/>),
     /// falling back to a handful of common BCL assembly qualifiers for convenience.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = "Declaration discovery rejects Native AOT before resolving user-supplied runtime type names.")]
     private static Type? ResolveType(string typeName)
     {
         Type? type = Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeName);
@@ -320,5 +343,11 @@ public class DiscoveryGenerator
         }
 
         return null;
+    }
+
+    private static void EnsureManagedBuild()
+    {
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+            throw new PlatformNotSupportedException(ManagedBuildRequiredMessage);
     }
 }

@@ -91,13 +91,13 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notNullStrLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Trim", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
 
         // Check for empty string
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         var notEmptyLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmptyLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
         // Check for sign
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'-');
         var notMinusLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notMinusLabel);
@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notMinusLabel);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'+');
         var notPlusLabel = il.DefineLabel();
         il.Emit(OpCodes.Bne_Un, notPlusLabel);
@@ -175,7 +175,7 @@ public partial class RuntimeEmitter
 
         // radix is 0, check for 0x
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Add);
@@ -185,7 +185,7 @@ public partial class RuntimeEmitter
         // Check if str[startIndex] == '0' && (str[startIndex+1] == 'x' || str[startIndex+1] == 'X')
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Ldc_I4, (int)'0');
         il.Emit(OpCodes.Bne_Un, noRoomForHexLabel);
 
@@ -193,7 +193,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, startIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         var charLocal = il.DeclareLocal(_types.Char);
         il.Emit(OpCodes.Stloc, charLocal);
         il.Emit(OpCodes.Ldloc, charLocal);
@@ -252,14 +252,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(parseLoopLabel);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, endLoopLabel);
 
         // Get digit value
         var digitLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Call, runtime.GetDigitValue); // Helper to get digit value
         il.Emit(OpCodes.Stloc, digitLocal);
 
@@ -397,7 +397,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, tryParseLabel); // null -> empty string
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
         il.Emit(OpCodes.Br, notNullLabel);
 
@@ -409,12 +409,12 @@ public partial class RuntimeEmitter
 
         // Trim the string
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Trim", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
 
         // Check for empty string
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         var notEmptyLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmptyLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -429,7 +429,7 @@ public partial class RuntimeEmitter
 
         // Check if valid part is empty
         il.Emit(OpCodes.Ldloc, validPartLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         var hasValidPartLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, hasValidPartLabel);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -442,7 +442,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)NumberStyles.Float);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
         il.Emit(OpCodes.Brtrue, parseSuccessLabel);
 
         // Parse failed - return NaN
@@ -480,7 +480,7 @@ public partial class RuntimeEmitter
 
         // length = str.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lengthLocal);
 
         // i = 0
@@ -503,7 +503,7 @@ public partial class RuntimeEmitter
         // c = str[i]
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, charLocal);
 
         // if (i == 0 && (c == '+' || c == '-')) { result.Append(c); continue; }
@@ -575,7 +575,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         var nextCharLocal = il.DeclareLocal(_types.Char);
         il.Emit(OpCodes.Stloc, nextCharLocal);
 
@@ -650,7 +650,7 @@ public partial class RuntimeEmitter
         // return double.IsNaN((double)value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notDoubleLabel);
@@ -680,7 +680,7 @@ public partial class RuntimeEmitter
         // return double.IsFinite((double)value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notDoubleLabel);
@@ -715,12 +715,12 @@ public partial class RuntimeEmitter
 
         // if (!double.IsFinite(d)) return false
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
         // return Math.Truncate(d) == d
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Truncate", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", [_types.Double])!);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ret);
@@ -759,19 +759,19 @@ public partial class RuntimeEmitter
 
         // if (!double.IsFinite(d)) return false
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
         // if (Math.Truncate(d) != d) return false
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Truncate", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", [_types.Double])!);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
         // return Math.Abs(d) <= MAX_SAFE_INTEGER
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Abs", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
         il.Emit(OpCodes.Ldc_R8, MAX_SAFE_INTEGER);
         il.Emit(OpCodes.Cgt);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -808,7 +808,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Ret);
 
         // if (value is string s) return !double.TryParse(s, ...)
@@ -822,7 +822,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)NumberStyles.Float);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, parsedLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ceq); // NOT the result
         il.Emit(OpCodes.Ret);
@@ -874,7 +874,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Ret);
 
         // if (value is string s && double.TryParse(s, ...)) return double.IsFinite(parsed)
@@ -888,14 +888,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)NumberStyles.Float);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, parsedLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "TryParse", [_types.String, typeof(NumberStyles), typeof(IFormatProvider), _types.Double.MakeByRefType()])!);
         il.Emit(OpCodes.Brtrue, tryParseSuccessLabel);
         il.Emit(OpCodes.Ldc_I4_0); // TryParse failed, return false
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(tryParseSuccessLabel);
         il.Emit(OpCodes.Ldloc, parsedLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Ret);
 
         // if (value is null) return true (null coerces to 0 which is finite)
@@ -1022,9 +1022,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "F");
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1112,7 +1112,7 @@ public partial class RuntimeEmitter
         // precision is null/undefined - return value.ToString(CultureInfo.InvariantCulture)
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
 
         // ECMA-262 21.1.3.5: precision = ToIntegerOrInfinity(precision). Coerces
@@ -1130,7 +1130,7 @@ public partial class RuntimeEmitter
         // returns "Infinity" instead of throwing.
         // if (double.IsNaN(value)) return "NaN"
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNaNLabel);
         il.Emit(OpCodes.Ldstr, "NaN");
         il.Emit(OpCodes.Ret);
@@ -1138,7 +1138,7 @@ public partial class RuntimeEmitter
         // if (double.IsPositiveInfinity(value)) return "Infinity"
         il.MarkLabel(notNaNLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInfLabel);
         il.Emit(OpCodes.Ldstr, "Infinity");
         il.Emit(OpCodes.Ret);
@@ -1146,7 +1146,7 @@ public partial class RuntimeEmitter
         // if (double.IsNegativeInfinity(value)) return "-Infinity"
         il.MarkLabel(notPosInfLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, validatePrecisionLabel);
         il.Emit(OpCodes.Ldstr, "-Infinity");
         il.Emit(OpCodes.Ret);
@@ -1216,8 +1216,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, precisionLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Newobj, _types.String.GetConstructor([typeof(char), _types.Int32])!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [typeof(char), _types.Int32])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nonZeroPLabel);
@@ -1266,9 +1266,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "F");
         il.Emit(OpCodes.Ldloc, decLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         // After fixed-point formatting, rounding may have shifted to next decade
         // (e.g., 9.95.toPrecision(2) → "10.0" via F1, but result has too many digits).
         // For the common cases this is fine; F format handles rounding correctly.
@@ -1282,13 +1282,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         // Replace "E" with "e".
         il.Emit(OpCodes.Ldstr, "E");
         il.Emit(OpCodes.Ldstr, "e");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
         // Strip leading zeros from exponent (e.g., "1.0e+002" → "1.0e+2").
         il.Emit(OpCodes.Ldstr, @"e([+-])0+(?=\d)");
         il.Emit(OpCodes.Ldstr, "e$1");
@@ -1301,7 +1301,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notP1Label);
         il.Emit(OpCodes.Ldstr, ".0e");
         il.Emit(OpCodes.Ldstr, "e");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
         il.MarkLabel(notP1Label);
         il.Emit(OpCodes.Ret);
     }
@@ -1419,7 +1419,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipPreCoerceLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInfLabel);
         il.Emit(OpCodes.Ldstr, "NaN");
         il.Emit(OpCodes.Ret);
@@ -1427,7 +1427,7 @@ public partial class RuntimeEmitter
         // if (double.IsPositiveInfinity(value)) return "Infinity"
         il.MarkLabel(notPosInfLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNegInfLabel);
         il.Emit(OpCodes.Ldstr, "Infinity");
         il.Emit(OpCodes.Ret);
@@ -1435,7 +1435,7 @@ public partial class RuntimeEmitter
         // if (double.IsNegativeInfinity(value)) return "-Infinity"
         il.MarkLabel(notNegInfLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, hasDigitsLabel);
         il.Emit(OpCodes.Ldstr, "-Infinity");
         il.Emit(OpCodes.Ret);
@@ -1480,7 +1480,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Ldstr, "G17");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         // Result might be "123.456" or "1.23456E+02" depending on magnitude.
         // We need to ensure exponential form. If no 'E' or 'e', convert via
         // log10. Simplification: use E15 then strip — gives spec-compliant
@@ -1489,7 +1489,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Ldstr, "G17");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         // For the actually-exponential case, .NET's G17 gives "1.23456E+02".
         // Convert to JS spec: replace E→e, strip leading zeros, ensure sign.
         // For values that emit without 'E' (like 123.456 → "123.456"), insert
@@ -1503,7 +1503,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Ldstr, "e15");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         // Trim trailing zeros from mantissa (between '.' and 'e').
         // Pattern: \.([0-9]+?)0+e → .$1e (drop trailing zeros while keeping at least one digit after dot)
         // Simpler: use \.?0+e → e if all decimals are zero (e.g. "1.000000e+02" → "1e+02"); else \.([1-9])0+e → .$1e
@@ -1672,9 +1672,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "F");
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
@@ -1715,9 +1715,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "e");
         il.Emit(OpCodes.Ldloc, digitsLocal);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ldstr, @"e([+-])0+(?=\d)");
         il.Emit(OpCodes.Ldstr, "e$1");
         il.Emit(OpCodes.Call, typeof(System.Text.RegularExpressions.Regex).GetMethod("Replace", [_types.String, _types.String, _types.String])!);
@@ -1838,7 +1838,7 @@ public partial class RuntimeEmitter
 
         // if (double.IsNaN(value)) return "NaN"
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNaNLabel);
         il.Emit(OpCodes.Ldstr, "NaN");
         il.Emit(OpCodes.Ret);
@@ -1846,7 +1846,7 @@ public partial class RuntimeEmitter
         // if (double.IsPositiveInfinity(value)) return "Infinity"
         il.MarkLabel(notNaNLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInfLabel);
         il.Emit(OpCodes.Ldstr, "Infinity");
         il.Emit(OpCodes.Ret);
@@ -1854,7 +1854,7 @@ public partial class RuntimeEmitter
         // if (double.IsNegativeInfinity(value)) return "-Infinity"
         il.MarkLabel(notPosInfLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, convertLabel);
         il.Emit(OpCodes.Ldstr, "-Infinity");
         il.Emit(OpCodes.Ret);
@@ -1891,13 +1891,13 @@ public partial class RuntimeEmitter
 
         // value = Math.Abs(value)
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Abs", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // long intPart = (long)Math.Truncate(value)
         var intPartLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.Math.GetMethod("Truncate", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", [_types.Double])!);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Stloc, intPartLocal);
 
@@ -1915,7 +1915,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "-");
         il.Emit(OpCodes.Ldloc, intStrLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnPositiveLabel);
@@ -1971,7 +1971,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Rem);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, digitLocal);
 
         // result.Insert(0, digit) - proper order: this, index, value

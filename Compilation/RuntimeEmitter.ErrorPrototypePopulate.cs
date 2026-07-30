@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameStrLocal);
         il.Emit(OpCodes.Ldstr, ": ");
         il.Emit(OpCodes.Ldloc, msgStrLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         return method;

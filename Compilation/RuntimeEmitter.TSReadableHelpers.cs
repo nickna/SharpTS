@@ -38,8 +38,8 @@ public partial class RuntimeEmitter
         _tsReadableDrainToList = method;
 
         var il = method.GetILGenerator();
-        var countGetter = queueType.GetProperty("Count")!.GetGetMethod()!;
-        var dequeue = queueType.GetMethod("Dequeue")!;
+        var countGetter = _types.GetProperty(queueType, "Count")!.GetGetMethod()!;
+        var dequeue = _types.GetMethod(queueType, "Dequeue")!;
         var listAdd = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var loop = il.DefineLabel();

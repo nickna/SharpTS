@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitMapIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MapIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, sourceField);
@@ -151,7 +151,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFilterIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FilterIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
@@ -171,7 +171,7 @@ public partial class RuntimeEmitter
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, sourceField);
@@ -197,7 +197,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTakeIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TakeIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, sourceField);
@@ -282,7 +282,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDropIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DropIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
@@ -303,7 +303,7 @@ public partial class RuntimeEmitter
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, sourceField);
@@ -381,7 +381,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFlatMapIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FlatMapIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
@@ -402,7 +402,7 @@ public partial class RuntimeEmitter
 
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, sourceField);
@@ -634,7 +634,7 @@ public partial class RuntimeEmitter
         il2.Emit(OpCodes.Ldarg_0);
         il2.Emit(OpCodes.Ldfld, currentField);
         il2.Emit(OpCodes.Ret);
-        typeBuilder.DefineMethodOverride(ienumeratorCurrentGetter, _types.IEnumerator.GetProperty("Current")!.GetGetMethod()!);
+        typeBuilder.DefineMethodOverride(ienumeratorCurrentGetter, _types.GetProperty(_types.IEnumerator, "Current")!.GetGetMethod()!);
     }
 
     private void EmitResetThrows(TypeBuilder typeBuilder)
@@ -678,7 +678,7 @@ public partial class RuntimeEmitter
         il2.Emit(OpCodes.Ldarg_0);
         il2.Emit(OpCodes.Ret);
         typeBuilder.DefineMethodOverride(getEnumNonGeneric,
-            _types.IEnumerable.GetMethod("GetEnumerator")!);
+            _types.GetMethod(_types.IEnumerable, "GetEnumerator")!);
     }
 
     #endregion
@@ -882,7 +882,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, enumLocal);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumeratorOfObject, "Current"));
-        var addMethod = _types.ListOfObject.GetMethod("Add", [_types.Object])!;
+        var addMethod = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
         il.Emit(OpCodes.Callvirt, addMethod);
         il.Emit(OpCodes.Br, loopLabel);
 

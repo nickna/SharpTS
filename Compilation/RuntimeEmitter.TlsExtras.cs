@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
-        var listAdd = listType.GetMethod("Add")!;
+        var listAdd = _types.GetMethod(listType, "Add")!;
 
         var listLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(listType));
@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
-        var listAdd = listType.GetMethod("Add")!;
+        var listAdd = _types.GetMethod(listType, "Add")!;
 
         var listLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(listType));

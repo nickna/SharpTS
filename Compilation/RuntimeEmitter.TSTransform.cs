@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
     {
         // Define class: public sealed class $TransformDoneCallback
         // Standalone class with Invoke method matching the calling convention
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TransformDoneCallback",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object  // Standalone class, not extending $TSFunction
@@ -136,7 +136,7 @@ public partial class RuntimeEmitter
         // First emit the helper callback class
         EmitTSTransformDoneCallbackClass(moduleBuilder, runtime);
         // Define class: public class $Transform : $Duplex
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Transform",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSDuplexType  // Extends $Duplex

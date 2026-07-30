@@ -513,7 +513,10 @@ public partial class ILEmitter
         }
 
         // ctor = type.GetConstructors()[0]
-        var getConstructorsMethod = typeof(Type).GetMethod("GetConstructors", Type.EmptyTypes)!;
+        var getConstructorsMethod = _ctx.Types.GetMethod(
+            typeof(Type),
+            "GetConstructors",
+            Type.EmptyTypes);
         IL.Emit(OpCodes.Ldloc, typeLocal);
         IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
         IL.Emit(OpCodes.Ldc_I4_0);
@@ -601,8 +604,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            var makeGenericTypeMethod = typeof(Type).GetMethod("MakeGenericType", [typeof(Type[])]);
-            IL.Emit(OpCodes.Callvirt, makeGenericTypeMethod!);
+            var makeGenericTypeMethod = _ctx.Types.GetMethod(
+                _ctx.Types.Type,
+                "MakeGenericType",
+                _ctx.Types.MakeArrayType(_ctx.Types.Type));
+            IL.Emit(OpCodes.Callvirt, makeGenericTypeMethod);
         }
 
         IL.Emit(OpCodes.Ldc_I4, arguments.Count);

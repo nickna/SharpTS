@@ -95,10 +95,10 @@ public partial class RuntimeEmitter
         var inner = SymInnerDictType;
         var field = runtime.SymbolAccessorRegistryField;
 
-        var outerTryGetValue = outer.GetMethod("TryGetValue", [_types.Type, inner.MakeByRefType()])!;
-        var outerSetItem = outer.GetMethod("set_Item", [_types.Type, inner])!;
-        var innerTryGetValue = inner.GetMethod("TryGetValue", [_types.Object, _types.ObjectArray.MakeByRefType()])!;
-        var innerSetItem = inner.GetMethod("set_Item", [_types.Object, _types.ObjectArray])!;
+        var outerTryGetValue = _types.GetMethod(outer, "TryGetValue", [_types.Type, inner.MakeByRefType()])!;
+        var outerSetItem = _types.GetMethod(outer, "set_Item", [_types.Type, inner])!;
+        var innerTryGetValue = _types.GetMethod(inner, "TryGetValue", [_types.Object, _types.ObjectArray.MakeByRefType()])!;
+        var innerSetItem = _types.GetMethod(inner, "set_Item", [_types.Object, _types.ObjectArray])!;
         var getBaseType = _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!;
         var getType = _types.GetMethod(_types.Object, "GetType");
 
@@ -199,8 +199,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSymbolGenericHelperBodies(EmittedRuntime runtime)
     {
-        var isConstructedGeneric = _types.Type.GetProperty("IsConstructedGenericType")!.GetGetMethod()!;
-        var isGenericTypeDef = _types.Type.GetProperty("IsGenericTypeDefinition")!.GetGetMethod()!;
+        var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
+        var isGenericTypeDef = _types.GetProperty(_types.Type, "IsGenericTypeDefinition")!.GetGetMethod()!;
         var getGenericTypeDef = _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition");
         var getGenericArgs = _types.GetMethodNoParams(_types.Type, "GetGenericArguments");
         var makeGenericType = _types.GetMethod(_types.Type, "MakeGenericType", _types.MakeArrayType(_types.Type));
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
         var getTypeHandle = _types.GetProperty(_types.Type, "TypeHandle").GetGetMethod()!;
         var getMethodHandle = _types.GetProperty(_types.MethodBase, "MethodHandle").GetGetMethod()!;
         var getDeclaringType = _types.GetProperty(typeof(System.Reflection.MemberInfo), "DeclaringType").GetGetMethod()!;
-        var containsGenericParams = _types.Type.GetProperty("ContainsGenericParameters")!.GetGetMethod()!;
+        var containsGenericParams = _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!;
         var getMethodFromHandle = _types.MethodBaseGetMethodFromHandleWithType;
 
         // ---- SymbolRegistryKey(Type owner) ----
@@ -461,8 +461,7 @@ public partial class RuntimeEmitter
         var loopTop = il.DefineLabel();
         var nextBase = il.DefineLabel();
         var retIt = il.DefineLabel();
-        var runClassCtor = typeof(System.Runtime.CompilerServices.RuntimeHelpers)
-            .GetMethod("RunClassConstructor", [typeof(RuntimeTypeHandle)])!;
+        var runClassCtor = _types.RuntimeHelpersRunClassConstructor;
         var getTypeHandle = _types.GetProperty(_types.Type, "TypeHandle").GetGetMethod()!;
 
         il.MarkLabel(loopTop);

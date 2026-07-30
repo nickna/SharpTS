@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Declaration;
@@ -34,7 +34,7 @@ internal static class TypeInfoDeclarationRenderer
             TypeInfo.UniqueSymbol => ("unique symbol", primaryPrecedence),
             TypeInfo.BigInt => ("bigint", primaryPrecedence),
             TypeInfo.Object => ("object", primaryPrecedence),
-            TypeInfo.StringLiteral s => (JsonSerializer.Serialize(s.Value), primaryPrecedence),
+            TypeInfo.StringLiteral s => (JsonStringEscaper.Quote(s.Value), primaryPrecedence),
             TypeInfo.NumberLiteral n => (n.Value.ToString("R", CultureInfo.InvariantCulture), primaryPrecedence),
             TypeInfo.BooleanLiteral b => (b.Value ? "true" : "false", primaryPrecedence),
             TypeInfo.BigIntLiteral b => ($"{b.Value.ToString(CultureInfo.InvariantCulture)}n", primaryPrecedence),
@@ -305,7 +305,7 @@ internal static class TypeInfoDeclarationRenderer
     };
 
     private static string QuoteProperty(string name) =>
-        IsIdentifier(name) ? name : JsonSerializer.Serialize(name);
+        IsIdentifier(name) ? name : JsonStringEscaper.Quote(name);
 
     private static bool IsIdentifier(string name) =>
         name.Length > 0 &&

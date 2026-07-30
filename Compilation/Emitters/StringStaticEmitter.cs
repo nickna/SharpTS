@@ -78,7 +78,7 @@ public sealed class StringStaticEmitter : IStaticTypeEmitterStrategy
                         il.Emit(OpCodes.Ldloc, subsLocal);
                         emitter.EmitExpression(arguments[i]);
                         emitter.EmitBoxIfNeeded(arguments[i]);
-                        il.Emit(OpCodes.Callvirt, ctx.Types.ListOfObject.GetMethod("Add", [ctx.Types.Object])!);
+                        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "Add", [ctx.Types.Object])!);
                     }
                     il.Emit(OpCodes.Ldloc, subsLocal);
                     il.Emit(OpCodes.Call, ctx.Runtime!.StringRaw);
