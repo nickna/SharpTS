@@ -72,7 +72,7 @@ internal static class EmitterTypeHelpers
     public static FieldInfo SelfFieldReference(FieldInfo field)
     {
         if (field.DeclaringType is TypeBuilder tb && tb.IsGenericTypeDefinition)
-            return TypeBuilder.GetField(tb.MakeGenericType(tb.GetGenericArguments()), field);
+            return TypeBuilder.GetField(EmitGenerics.MakeGenericType(tb, tb.GetGenericArguments()), field);
         return field;
     }
 
@@ -85,7 +85,7 @@ internal static class EmitterTypeHelpers
     public static MethodInfo SelfMethodReference(MethodInfo method)
     {
         if (method.DeclaringType is TypeBuilder tb && tb.IsGenericTypeDefinition)
-            return TypeBuilder.GetMethod(tb.MakeGenericType(tb.GetGenericArguments()), method);
+            return TypeBuilder.GetMethod(EmitGenerics.MakeGenericType(tb, tb.GetGenericArguments()), method);
         return method;
     }
 
@@ -118,7 +118,7 @@ internal static class EmitterTypeHelpers
             // Stack<!T> is only meaningful inside Stack<T>'s own method bodies.
             if (!ReferenceEquals(emittingType, receiverClass))
                 return false;
-            castType = receiverClass.MakeGenericType(receiverClass.GetGenericArguments());
+            castType = EmitGenerics.MakeGenericType(receiverClass, receiverClass.GetGenericArguments());
         }
 
         // Methods declared on a generic (possibly base) class need a member reference

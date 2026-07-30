@@ -107,13 +107,17 @@ public partial class ILCompiler
         if (ctx.DebugScope is not { IsLibrary: true }) return;
         if (!_nonUserCodeMethods.Add(ctx.CurrentMethod!)) return;
 
-        var attribute = new CustomAttributeBuilder(
-            typeof(System.Diagnostics.DebuggerNonUserCodeAttribute).GetConstructor(Type.EmptyTypes)!, []);
+        var nonUserCodeCtor =
+            typeof(System.Diagnostics.DebuggerNonUserCodeAttribute).GetConstructor(Type.EmptyTypes)!;
 
         switch (ctx.CurrentMethod)
         {
-            case MethodBuilder method: method.SetCustomAttribute(attribute); break;
-            case ConstructorBuilder constructor: constructor.SetCustomAttribute(attribute); break;
+            case MethodBuilder method:
+                method.SetCustomAttribute(nonUserCodeCtor, CustomAttributeEncoder.EmptyBlob);
+                break;
+            case ConstructorBuilder constructor:
+                constructor.SetCustomAttribute(nonUserCodeCtor, CustomAttributeEncoder.EmptyBlob);
+                break;
         }
     }
 

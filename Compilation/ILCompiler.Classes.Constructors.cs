@@ -400,8 +400,7 @@ public partial class ILCompiler
         }
 
         // __privateFields.Add(this, __fields)
-        var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-            .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+        var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
         var addMethod = cwtType.GetMethod("Add", [typeof(object), typeof(Dictionary<string, object?>)])!;
 
         il.Emit(OpCodes.Ldsfld, storageField);       // __privateFields

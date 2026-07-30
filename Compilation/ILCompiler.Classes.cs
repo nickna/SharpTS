@@ -137,7 +137,7 @@ public partial class ILCompiler
                     classStmt.SuperclassTypeArgs,
                     classGenericParams,
                     classStmt.TypeParams);
-                baseType = superBuilder.MakeGenericType(typeArgs);
+                baseType = _types.MakeGenericType(superBuilder, typeArgs);
             }
             else
             {
@@ -404,8 +404,7 @@ public partial class ILCompiler
         if (instancePrivateFields.Count > 0)
         {
             // Define: private static readonly ConditionalWeakTable<object, Dictionary<string, object?>> __privateFields
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
 
             // Use Assembly (internal) visibility so nested async/generator state machines can access this field
             var storageField = typeBuilder.DefineField(
@@ -751,7 +750,7 @@ public partial class ILCompiler
             .Select(ta => ResolveTypeArgument(ta.Trim(), classGenericParams, classTypeParams))
             .ToArray();
 
-        return baseType.MakeGenericType(resolvedArgs);
+        return _types.MakeGenericType(baseType, resolvedArgs);
     }
 
     /// <summary>

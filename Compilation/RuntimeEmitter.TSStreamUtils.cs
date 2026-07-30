@@ -577,7 +577,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.StreamPipeline);
         // Pipeline returns an object (the last stream), wrap in Task
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object));
         il.Emit(OpCodes.Ret);
     }
 
@@ -602,7 +602,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // Finished returns null, discard
 
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object));
         il.Emit(OpCodes.Ret);
     }
 

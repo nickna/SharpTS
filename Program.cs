@@ -610,6 +610,9 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
     catch (Exception ex)
     {
+        // PROBE (gate, #1324): full stack for diagnosing native-AOT compile walls.
+        if (Environment.GetEnvironmentVariable("SHARPTS_DEBUG_STACK") == "1")
+            Console.Error.WriteLine(ex);
         if (outputOptions.MsBuildErrors)
         {
             // MSBuild error format: file(line,col): error CODE: message
@@ -755,7 +758,18 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             // Bundle into single-file EXE
             try
             {
-                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(tempDllPath, outputPath, assemblyName, bundlerMode);
+                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(
+                    new BundleRequest
+                    {
+                        EntryAssemblyPath = tempDllPath,
+                        OutputPath = outputPath,
+                        AssemblyName = assemblyName,
+                        // SharpTS targets net10.0. Do not let a Native AOT host's
+                        // Environment.Version (the ILC runtime-pack version) leak into the
+                        // generated application's runtimeconfig.
+                        FrameworkVersion = new Version(10, 0)
+                    },
+                    bundlerMode);
 
                 if (!outputOptions.QuietMode)
                 {

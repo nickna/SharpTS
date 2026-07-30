@@ -119,7 +119,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAsyncGeneratorBuildResultMethod(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var builderType = typeof(System.Runtime.CompilerServices.AsyncTaskMethodBuilder<>).MakeGenericType(_types.Object);
+        var builderType = _types.MakeGenericType(typeof(System.Runtime.CompilerServices.AsyncTaskMethodBuilder<>), _types.Object);
         var valueTaskAwaiterType = _types.ValueTaskAwaiterOfBool;
 
         // --- State machine type ---
@@ -181,8 +181,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, smLocal);
             il.Emit(OpCodes.Ldflda, builderField);
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Call, builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .First(m => m.Name == "Start" && m.IsGenericMethod).MakeGenericMethod(smType));
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .First(m => m.Name == "Start" && m.IsGenericMethod), smType));
             // return sm.<>t__builder.Task
             il.Emit(OpCodes.Ldloca, smLocal);
             il.Emit(OpCodes.Ldflda, builderField);
@@ -222,9 +222,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldflda, awaiterField);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
-                .MakeGenericMethod(valueTaskAwaiterType, smType));
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod), valueTaskAwaiterType, smType));
             il.Emit(OpCodes.Leave, returnLabel);
 
             // state 0 resume:
@@ -381,9 +380,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "Start" && m.IsGenericMethod)
-            .MakeGenericMethod(sm.Type);
+        var startMethod = EmitGenerics.MakeGenericMethod(sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .First(m => m.Name == "Start" && m.IsGenericMethod), sm.Type);
         il.Emit(OpCodes.Call, startMethod);
 
         // return sm.<>t__builder.Task
@@ -455,9 +453,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.TaskAwaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
-            .MakeGenericMethod(typeof(TaskAwaiter<object>), sm.Type);
+        var awaitMethod = EmitGenerics.MakeGenericMethod(sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod), typeof(TaskAwaiter<object>), sm.Type);
         il.Emit(OpCodes.Call, awaitMethod);
         il.Emit(OpCodes.Leave, returnLabel);
 
@@ -512,9 +509,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.ValueTaskAwaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod2 = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
-            .MakeGenericMethod(typeof(ValueTaskAwaiter<bool>), sm.Type);
+        var awaitMethod2 = EmitGenerics.MakeGenericMethod(sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod), typeof(ValueTaskAwaiter<bool>), sm.Type);
         il.Emit(OpCodes.Call, awaitMethod2);
         il.Emit(OpCodes.Leave, returnLabel);
 

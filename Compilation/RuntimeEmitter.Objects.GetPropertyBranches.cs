@@ -671,7 +671,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, dataDescLabel);
             il.Emit(OpCodes.Ldloc, regexpFnLocal);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.GetMethod(typeof(System.Array), "Empty").MakeGenericMethod(_types.Object));
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
             il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(dataDescLabel);

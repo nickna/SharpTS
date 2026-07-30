@@ -151,7 +151,7 @@ public abstract partial class ExpressionEmitterBase
                     if (c.TypeArgs != null && c.TypeArgs.Count > 0)
                     {
                         Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
-                        targetMethod = methodBuilder.MakeGenericMethod(typeArgs);
+                        targetMethod = EmitGenerics.MakeGenericMethod(methodBuilder, typeArgs);
                     }
                     else
                     {
@@ -164,7 +164,7 @@ public abstract partial class ExpressionEmitterBase
                                 ? baseConstraint
                                 : Types.Object;
                         }
-                        targetMethod = methodBuilder.MakeGenericMethod(inferredArgs);
+                        targetMethod = EmitGenerics.MakeGenericMethod(methodBuilder, inferredArgs);
                     }
                 }
 
@@ -1926,7 +1926,7 @@ public abstract partial class ExpressionEmitterBase
         if (classBuilder.IsGenericTypeDefinition)
         {
             var typeArgs = classBuilder.GetGenericArguments().Select(_ => typeof(object)).ToArray();
-            ctorToCall = TypeBuilder.GetConstructor(classBuilder.MakeGenericType(typeArgs), subclassCtor);
+            ctorToCall = TypeBuilder.GetConstructor(EmitGenerics.MakeGenericType(classBuilder, typeArgs), subclassCtor);
         }
 
         for (int i = 1; i < ctorParams.Length; i++)

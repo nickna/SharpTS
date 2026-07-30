@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        currentArrayLikeReceiverField.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        currentArrayLikeReceiverField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentArrayLikeReceiverField = currentArrayLikeReceiverField;
         // Reuse `_currentArrayLikeReceiver` for the lazy iteration signal too.
         // (Historically forced by the layout-sensitive .NET 10 tier-0 JIT bug
@@ -82,7 +82,7 @@ public partial class RuntimeEmitter
             "_currentCallbackThisArg",
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
-        currentCallbackThisArgField.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        currentCallbackThisArgField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentCallbackThisArgField = currentCallbackThisArgField;
 
         // Math singleton — a shared Dictionary<string, object> that user code

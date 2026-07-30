@@ -126,7 +126,7 @@ public partial class RuntimeEmitter
         // wrap: return Task.FromResult(value);
         il.MarkLabel(wrapLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object));
         il.Emit(OpCodes.Ret);
     }
 

@@ -30,12 +30,13 @@ public static class AttributeMapper
     };
 
     /// <summary>
-    /// Attempts to map a TypeScript decorator to a .NET CustomAttributeBuilder.
+    /// Attempts to map a TypeScript decorator to an encoded .NET attribute (raw ECMA-335
+    /// blob; CustomAttributeBuilder is unavailable under Native AOT, #1324).
     /// Returns null if the decorator cannot be mapped to a .NET attribute.
     /// </summary>
     /// <param name="decorator">The decorator to map</param>
-    /// <returns>A CustomAttributeBuilder if mappable, null otherwise</returns>
-    public static CustomAttributeBuilder? MapToAttribute(Decorator decorator)
+    /// <returns>An EncodedCustomAttribute if mappable, null otherwise</returns>
+    public static EncodedCustomAttribute? MapToAttribute(Decorator decorator)
     {
         string? decoratorName = GetDecoratorName(decorator.Expression);
         if (decoratorName == null)
@@ -79,9 +80,9 @@ public static class AttributeMapper
     }
 
     /// <summary>
-    /// Creates a CustomAttributeBuilder for the given attribute type and decorator.
+    /// Creates an encoded attribute for the given attribute type and decorator.
     /// </summary>
-    private static CustomAttributeBuilder CreateAttributeBuilder(Type attributeType, Decorator decorator)
+    private static EncodedCustomAttribute? CreateAttributeBuilder(Type attributeType, Decorator decorator)
     {
         // Get constructor arguments from decorator call
         var args = GetDecoratorArguments(decorator);
@@ -93,7 +94,7 @@ public static class AttributeMapper
         var defaultCtor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
         if (defaultCtor != null && args.Length == 0)
         {
-            return new CustomAttributeBuilder(defaultCtor, []);
+            return new EncodedCustomAttribute(defaultCtor, CustomAttributeEncoder.EmptyBlob);
         }
 
         // Try constructor with string parameter (common for Obsolete)
@@ -123,18 +124,18 @@ public static class AttributeMapper
                         : GetDefaultValue(ctorParams[i].ParameterType);
                 }
 
-                return new CustomAttributeBuilder(stringCtor, ctorArgs!);
+                return new EncodedCustomAttribute(stringCtor, CustomAttributeEncoder.Encode(stringCtor, ctorArgs!));
             }
         }
 
         // Fall back to parameterless constructor if available
         if (defaultCtor != null)
         {
-            return new CustomAttributeBuilder(defaultCtor, []);
+            return new EncodedCustomAttribute(defaultCtor, CustomAttributeEncoder.EmptyBlob);
         }
 
         // Can't create attribute - return null
-        return null!;
+        return null;
     }
 
     /// <summary>

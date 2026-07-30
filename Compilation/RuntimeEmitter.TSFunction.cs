@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
             _types.ObjectArray,
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        field.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        field.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentArgumentsField = field;
         typeBuilder.CreateType();
     }
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        currentThisField.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        currentThisField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentFunctionThisField = currentThisField;
 
         // Note: the thread-static `_currentArguments` slot used for JS `arguments` is
@@ -560,7 +560,7 @@ public partial class RuntimeEmitter
         // overload skips reflection-Invoke's per-call setup and is ~10×
         // faster on hot paths. The Span<object?> wraps the existing
         // adjustedArgs array (no extra allocation).
-        var spanOfObject = typeof(Span<>).MakeGenericType(typeof(object));
+        var spanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
         var spanCtorFromArray = spanOfObject.GetConstructor([typeof(object[])])!;
         var invokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, spanOfObject])!;
 
@@ -795,7 +795,7 @@ public partial class RuntimeEmitter
         iwt.MarkLabel(iwtAfterTargetLabel);
 
         // _invoker.Invoke(invokeTarget, new Span<object>(adjustedArgs))
-        var iwtSpanOfObject = typeof(Span<>).MakeGenericType(typeof(object));
+        var iwtSpanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
         var iwtSpanCtor = iwtSpanOfObject.GetConstructor([typeof(object[])])!;
         var iwtInvokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, iwtSpanOfObject])!;
         iwt.Emit(OpCodes.Ldarg_0);

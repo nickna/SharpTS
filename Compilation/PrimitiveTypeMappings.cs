@@ -85,6 +85,6 @@ public static class PrimitiveTypeMappings
         if (Nullable.GetUnderlyingType(valueType) != null)
             return valueType; // Already nullable
 
-        return typeof(Nullable<>).MakeGenericType(valueType);
+        return EmitGenerics.MakeGenericType(typeof(Nullable<>), valueType);
     }
 }

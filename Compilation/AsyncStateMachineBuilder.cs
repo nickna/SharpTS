@@ -314,7 +314,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     {
         var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
         var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
-        return awaitMethod.MakeGenericMethod(typeof(TaskAwaiter), _stateMachineType);
+        return EmitGenerics.MakeGenericMethod(awaitMethod, typeof(TaskAwaiter), _stateMachineType);
     }
 
     /// <summary>

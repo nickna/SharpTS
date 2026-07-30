@@ -339,7 +339,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(keylenZeroLabel);
         // Return new $Buffer(Array.Empty<byte>())
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Empty")!.MakeGenericMethod(_types.Byte));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Array).GetMethod("Empty")!, _types.Byte));
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
 

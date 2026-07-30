@@ -122,7 +122,7 @@ public partial class ILCompiler
         }
 
         // Create a new dictionary from _fields (copy constructor), then add backing fields
-        var iDictType = typeof(IDictionary<,>).MakeGenericType(typeof(string), typeof(object));
+        var iDictType = _types.MakeGenericType(typeof(IDictionary<,>), typeof(string), typeof(object));
         var copyCtor = _types.DictionaryStringObject.GetConstructor([iDictType])!;
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item");
 

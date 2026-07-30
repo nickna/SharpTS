@@ -278,7 +278,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSArrayNumericAccessors(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var arrayResize = typeof(System.Array).GetMethod("Resize")!.MakeGenericMethod(_types.Double);
+        var arrayResize = EmitGenerics.MakeGenericMethod(typeof(System.Array).GetMethod("Resize")!, _types.Double);
 
         // EnsureBoxed's builder was defined early (so base-list methods can guard
         // on it); we only emit its body here. The other three are defined now.

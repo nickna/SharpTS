@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
                 && x.GetParameters().Length == 1
                 && x.GetParameters()[0].ParameterType.IsGenericType
                 && x.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(Func<>));
-        var taskRun = taskRunOpen.MakeGenericMethod(_types.Object);
+        var taskRun = EmitGenerics.MakeGenericMethod(taskRunOpen, _types.Object);
 
         var m = typeBuilder.DefineMethod("FsRunAsync",
             MethodAttributes.Public | MethodAttributes.Static, _types.TaskOfObject,

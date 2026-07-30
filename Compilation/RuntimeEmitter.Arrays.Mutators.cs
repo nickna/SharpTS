@@ -318,7 +318,7 @@ public partial class RuntimeEmitter
         );
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
-            .SetCustomAttribute(new CustomAttributeBuilder(paramArrayCtor, []));
+            .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayPushProto = method;
 
         var il = method.GetILGenerator();
@@ -379,7 +379,7 @@ public partial class RuntimeEmitter
         );
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
-            .SetCustomAttribute(new CustomAttributeBuilder(paramArrayCtor, []));
+            .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayUnshiftProto = method;
 
         var il = method.GetILGenerator();

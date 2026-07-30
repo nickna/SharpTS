@@ -145,8 +145,7 @@ public partial class AsyncMoveNextEmitter
         var storageField = _ctx!.ClassRegistry!.GetPrivateFieldStorage(className);
         if (storageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
             var dictLocal = _il.DeclareLocal(dictType);
 
@@ -218,8 +217,7 @@ public partial class AsyncMoveNextEmitter
         var storageField = _ctx!.ClassRegistry!.GetPrivateFieldStorage(className);
         if (storageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
             var dictLocal = _il.DeclareLocal(dictType);
             var valueLocal = _il.DeclareLocal(typeof(object));
@@ -305,8 +303,7 @@ public partial class AsyncMoveNextEmitter
             var storageField = _ctx!.ClassRegistry!.GetPrivateFieldStorage(className);
             if (storageField != null)
             {
-                var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                    .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+                var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
                 var dictType = typeof(Dictionary<string, object?>);
                 var objLocal = _il.DeclareLocal(typeof(object));
                 var dictLocal = _il.DeclareLocal(dictType);

@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictHasUserToString);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldloc, castDictLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, userToStringResult);
 

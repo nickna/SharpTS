@@ -136,16 +136,14 @@ Plan against these numbers, not the originals:
   `child_process.fork` from a compiled soft-dep program still shells
   `dotnet exec SharpTS.dll`, so it needs .NET installed regardless of SKU
   (Phase 1 item 3 / Phase 3 item 8 territory).
-- **PE-Packer Phase A** (independent value; defect 1 is a live JIT bug):
-  runtimeconfig version from the caller + `rollForward: latestMinor` instead
-  of `Environment.Version` patch-pinning (`ManualBundler.cs:216-223`,
-  `SdkBundler.cs:418-425`); AOT-aware `--bundler sdk` diagnostic; wrap the
-  rewriter-constructor MLC failure in a `PEPackerException`; `TryGetValue` +
-  named error at `AssemblyReferenceRewriter.Types.cs:36`; feature-switch the
-  SDK bundler; suppress the two MLC false-positive warnings with
-  justification; then `<IsAotCompatible>true</IsAotCompatible>` ratcheted in
-  CI. **First reconcile the version skew** — the local checkout is 1.0.0 while
-  SharpTS pins 1.0.3.
+- **PE-Packer Phases A/B + embedded reference index: done and released in
+  1.0.5.** The package is AOT-analyzer-clean and has its own native smoke job;
+  `BundleRequest`, `ReferencePolicy`, `IReferenceAssemblyIndex`, the
+  `MetadataReader` implementation, and the 31.8 KB embedded net10 index are
+  shipped. SharpTS now uses that index when `--sdk-path` is absent and passes
+  an explicit compatibility policy. Remaining PE-Packer work is apphost
+  embedding (#14, required only for SDK-free `--target exe`) and the optional
+  `SdkBundler` feature-switch size optimization (#21).
 
 ### Phase 1 — interpreter correctness and speed (~2–3 weeks; wins on JIT too)
 
@@ -170,36 +168,32 @@ Plan against these numbers, not the originals:
 
 **Exit criterion:** native exe runs the `Examples/` corpus at ≥ JIT speed.
 
-### The gate — before committing to Phase 2 (~4–5 days, throwaway branch)
+### The gate — passed
 
-Prerequisite: add `-SharpTSExe` to `Examples/test-examples.ps1`.
+`-SharpTSExe` was added to `Examples/test-examples.ps1` in Phase 1.
 
-Answer three questions with one probe:
+Results from the win-arm64 native probe, now preserved by the
+`native-aot-compile-smoke` linux-x64 CI job:
 
-1. **Do `--compile` phases 2–9 (and the 12-phase module path) hide another
-   month?** Apply the CA-blob encoder, the `MakeGenericType` fallback, and the
-   trim flags; publish native; run `--compile` over `Examples/` **including a
-   multi-module program**; run every output under JIT and diff stdout.
-2. **Does a multi-assembly bundle work with a zeroed deps.json?**
-   (`ManualBundler.cs:126-153` embeds exactly one assembly today.) Decides
-   whether `--target exe` can ever ship SharpTS.dll alongside compiled
-   output — gates the 14 soft-dep features for exe targets. ~Half a day.
-3. **Does PE-Packer stay green inside SharpTS's trim closure**
-   (`TrimMode=partial -p:IlcTrimMetadata=false`)? Its own probe was clean at
-   defaults only.
+1. **Both compiler pipelines pass.** A native SharpTS host compiles and runs
+   single-file input plus a two-file module graph. The focused fixture covers
+   accessors, generators and async generators, producing `2 2 33`.
+2. **No deps.json is required** for root-flat additional assemblies. Measured
+   and recorded in PE-Packer issue #18.
+3. **PE-Packer passes inside SharpTS's partial-trim closure.** Native SharpTS
+   rewrites with an empty `DOTNET_ROOT`, proving the embedded reference index
+   is used, and its built-in bundler produces a working executable.
 
-### Phase 2 — unblock `--compile` (~2–3 weeks, only if the gate passes)
+### Phase 2 — unblock `--compile` (implementation complete; hardening in progress)
 
-4. **CA blobs:** one `EncodeCA(ConstructorInfo, object?[])` over
-   `BlobEncoder.CustomAttributeSignature`; replace the 21 verified
-   `new CustomAttributeBuilder(` sites in 11 files (list in the assessment;
-   `ILCompiler.Functions.cs` third site is :1364; don't miss the target-typed
-   `new` at `DebuggerMetadata.cs:59`).
-5. **`MakeGenericType`:** redirect the 60 bypass sites through
-   `TypeProvider.MakeGenericType`, add the
-   `catch (PlatformNotSupportedException)` →
-   `TypeBuilderInstantiation.MakeGenericType` fallback there, plus a
-   `TrimmerRootDescriptor` for `TypeBuilderInstantiation` as insurance.
+4. **CA blobs: done.** `CustomAttributeEncoder` writes the positional
+   ECMA-335 blob consumed by the supported `SetCustomAttribute(ConstructorInfo,
+   byte[])` overloads; every `CustomAttributeBuilder` emit site is converted.
+5. **Generic emit seams: done.** Every emit-path `MakeGenericType` and
+   `MakeGenericMethod` routes through `EmitGenerics`. Native AOT falls back to
+   the targeted, rooted `TypeBuilderInstantiation` and
+   `MethodBuilderInstantiation` factories; the native smoke fixture exercises
+   both on every CI run.
 6. **Build config:** `-p:TrimMode=partial -p:IlcTrimMetadata=false
    -p:IlcGenerateCompleteTypeMetadata=true` (mandatory — TypeProvider's name
    lookups return null otherwise), plus `[DynamicDependency]` keep-alives for
@@ -212,11 +206,9 @@ DLL loads and runs under JIT with correct stdout.
 
 ### Phase 3 — distribution (~1–2 weeks)
 
-**Ordering constraint:** PE-Packer Phase B's `ReferenceAction` policy must land
-**before** item 8 below. `AssemblyReferenceRewriter.Assembly.cs:121` hardcodes
-dropping the `SharpTS` AssemblyRef, and a program that genuinely references
-SharpTS types currently dies with a bare `KeyNotFoundException` — embedding
-SharpTS.dll makes that latent bug live.
+**Ordering constraint satisfied:** PE-Packer 1.0.5 ships `ReferenceAction` and
+SharpTS passes an explicit compatibility policy. Item 8 can choose
+`RetargetCoreLibOnly` when it begins deploying a genuine SharpTS reference.
 
 8. **Embed SharpTS.dll** as a resource; rewrite `Program.cs:838`
    (`CopySharpTSRuntimeIfNeeded`) to extract to `AppContext.BaseDirectory`.
@@ -225,13 +217,11 @@ SharpTS.dll makes that latent bug live.
    `EmitReflectionCall` (`RuntimeEmitter.ReflectionHelpers.cs:79`) so failures
    are messages, not NREs. Keep `CopySharpTSRuntimeIfNeeded`. Drop
    `child_process.fork` from the native SKU.
-9. **PE-Packer Phases B/C** (its repo): `BundleRequest`,
-   `IReferenceAssemblyIndex` (directory + embedded CoreLib-surface index),
-   `ReferenceAction` policy, embedded per-RID apphost templates (~700 KB for
-   six RIDs, opt-out property), drop the `System.Reflection.MetadataLoadContext`
-   9.0.0 dependency (version-mismatched on net10.0; replaceable with ~40–60
-   lines of `MetadataReader`). Built-in bundler stays Windows/Linux-only until
-   Mach-O + ad-hoc signing exist.
+9. **PE-Packer integration:** 1.0.5 supplies `BundleRequest`,
+   `IReferenceAssemblyIndex`, `ReferenceAction`, the embedded CoreLib-surface
+   index, and the `MetadataReader` implementation. Remaining: embed supported
+   Windows/Linux apphost templates (#14). The built-in bundler stays
+   Windows/Linux-only until Mach-O adjustment + ad-hoc signing exist.
 10. **Release matrix:** 6 RIDs (win-x64/arm64, linux-x64/arm64, osx-x64/arm64);
     budget ~268 billable min/tag on a private repo (macOS ×10). Toolchain
     gotchas: `vswhere.exe` must be on PATH for ILC's link step on Windows
@@ -275,17 +265,12 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
   `RuntimeEnvironment.GetRuntimeDirectory()`, which under AOT silently returns
   the publish dir — the one usage pattern that is actively wrong.
 
-## Open questions (merged, current)
+## Remaining questions
 
-| # | Unknown | Risk | Experiment |
-|---|---|---|---|
-| 1 | `--compile` phases 2–9 + 12-phase module path unexplored | **highest** | the gate probe |
-| 2 | Multi-assembly bundle with zeroed deps.json | **highest for exe-target parity** | gate probe item 2 (~half day) |
-| 3 | Only win-arm64 probed; linux/macOS untested | medium | re-run probes `-r linux-x64`, `-r osx-arm64` (~1 h each) |
-| 4 | Binary size once the NodeRegistry generator re-enables default trimming | low | measure after Phase 1 item 1 |
-| 5 | `preserve="all"` TrimmerRootDescriptor on CoreLib fails to link (`RhIsGCBridgeActive`, ILC 10.0.9) | medium — caps `@DotNetType` salvage | retry on GA toolchain; else per-member descriptors |
-| 6 | MLC-types-into-TypeBuilder (latent JIT bug) | low for AOT (conceded) | file upstream issue |
-| 7 | Native-emitted output byte-identical to JIT-emitted? | low | PE-Packer `MetadataDiffer` over a native fixture (~2 h) |
-| 8 | Embedded resources under single-file (managed SKU) | medium | 30-min test before Track 0 ship |
-| 9 | Full suites never ran against a native binary | medium | smoke job; manual `Examples/` run first |
-| 10 | True per-callsite warning counts inside rollups | low — PE-Packer's is now measured: 13, reducible to 0 | `-p:TrimmerSingleWarn=false` build once |
+| # | Unknown | Status / next step |
+|---|---|---|
+| 1 | Cross-platform native compiler | win-arm64 passes locally; linux-x64 is a required CI smoke. Add the remaining release RIDs in Phase 3. |
+| 2 | BCL interop preservation | Targeted roots work for the emit internals; define and test the supported `@DotNetType` surface, including the known dynamic-event edge. |
+| 3 | MLC-types-into-TypeBuilder latent JIT limitation | Conceded for the native SKU; file upstream separately. |
+| 4 | Native-emitted output metadata parity | Executed output and PE-Packer rewriting pass. Add a `MetadataDiffer` fixture if byte/table-level parity becomes release-blocking. |
+| 5 | SDK-free `--target exe` | Reference rewriting is SDK-free in 1.0.5; executable generation still needs an apphost path or PE-Packer #14. |

@@ -965,9 +965,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Call, typeof(StringComparer).GetProperty("OrdinalIgnoreCase")!.GetGetMethod()!);
-        var containsWithComparer = typeof(System.Linq.Enumerable).GetMethods()
-            .Single(m => m.Name == "Contains" && m.GetParameters().Length == 3)
-            .MakeGenericMethod(_types.String);
+        var containsWithComparer = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethods()
+            .Single(m => m.Name == "Contains" && m.GetParameters().Length == 3), _types.String);
         il.Emit(OpCodes.Call, containsWithComparer);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, end);

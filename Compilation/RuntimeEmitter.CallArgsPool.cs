@@ -41,13 +41,11 @@ public partial class RuntimeEmitter
         );
 
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        var threadStaticAttr = new CustomAttributeBuilder(threadStaticCtor, []);
-
         FieldBuilder DefineField(string name)
         {
             var f = typeBuilder.DefineField(name, _types.ObjectArray,
                 FieldAttributes.Private | FieldAttributes.Static);
-            f.SetCustomAttribute(threadStaticAttr);
+            f.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
             return f;
         }
 

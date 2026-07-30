@@ -837,7 +837,7 @@ public partial class RuntimeEmitter
 
         // Task.FromResult<object>(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
     }
 
     private void EmitErroredTaskFromStoredError(ILGenerator il)
@@ -948,7 +948,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noCbLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -1247,7 +1247,7 @@ public partial class RuntimeEmitter
 
         // return Task.FromResult($Undefined.Instance)
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -1844,7 +1844,7 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);

@@ -37,7 +37,7 @@ public partial class ILCompiler
             var attribute = AttributeMapper.MapToAttribute(decorator);
             if (attribute != null)
             {
-                typeBuilder.SetCustomAttribute(attribute);
+                typeBuilder.SetCustomAttribute(attribute.Value.Ctor, attribute.Value.Blob);
             }
         }
     }
@@ -56,7 +56,7 @@ public partial class ILCompiler
             var attribute = AttributeMapper.MapToAttribute(decorator);
             if (attribute != null)
             {
-                methodBuilder.SetCustomAttribute(attribute);
+                methodBuilder.SetCustomAttribute(attribute.Value.Ctor, attribute.Value.Blob);
             }
         }
     }
@@ -75,7 +75,7 @@ public partial class ILCompiler
             var attribute = AttributeMapper.MapToAttribute(decorator);
             if (attribute != null)
             {
-                fieldBuilder.SetCustomAttribute(attribute);
+                fieldBuilder.SetCustomAttribute(attribute.Value.Ctor, attribute.Value.Blob);
             }
         }
     }
@@ -94,7 +94,7 @@ public partial class ILCompiler
             var attribute = AttributeMapper.MapToAttribute(decorator);
             if (attribute != null)
             {
-                methodBuilder.SetCustomAttribute(attribute);
+                methodBuilder.SetCustomAttribute(attribute.Value.Ctor, attribute.Value.Blob);
             }
         }
     }

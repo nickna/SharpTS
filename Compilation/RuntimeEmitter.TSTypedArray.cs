@@ -899,7 +899,7 @@ public partial class RuntimeEmitter
         var methods = typeof(System.Runtime.CompilerServices.Unsafe).GetMethods();
         var open = Array.Find(methods, m => m.Name == "WriteUnaligned"
             && m.GetParameters()[0].ParameterType == typeof(byte).MakeByRefType())!;
-        return open.MakeGenericMethod(elementType);
+        return EmitGenerics.MakeGenericMethod(open, elementType);
     }
 
     private static MethodInfo UnsafeReadUnaligned(Type elementType)
@@ -907,6 +907,6 @@ public partial class RuntimeEmitter
         var methods = typeof(System.Runtime.CompilerServices.Unsafe).GetMethods();
         var open = Array.Find(methods, m => m.Name == "ReadUnaligned"
             && m.GetParameters()[0].ParameterType == typeof(byte).MakeByRefType())!;
-        return open.MakeGenericMethod(elementType);
+        return EmitGenerics.MakeGenericMethod(open, elementType);
     }
 }

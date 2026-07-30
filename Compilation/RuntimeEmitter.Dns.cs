@@ -1429,7 +1429,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var taskInt = typeof(Task<>).MakeGenericType(_types.Int32);
+        var taskInt = _types.MakeGenericType(typeof(Task<>), _types.Int32);
 
         var readLocal = il.DeclareLocal(_types.Int32);       // 0: read count
         var readTaskLocal = il.DeclareLocal(taskInt);         // 1: Task<int>
@@ -2510,8 +2510,8 @@ public partial class RuntimeEmitter
         // (dotnet/runtime#81378, #64551).
 
         var udpReceiveResultType = typeof(UdpReceiveResult);
-        var valueTaskType = typeof(ValueTask<>).MakeGenericType(udpReceiveResultType);
-        var taskType = typeof(Task<>).MakeGenericType(udpReceiveResultType);
+        var valueTaskType = _types.MakeGenericType(typeof(ValueTask<>), udpReceiveResultType);
+        var taskType = _types.MakeGenericType(typeof(Task<>), udpReceiveResultType);
 
         // ValueTask<UdpReceiveResult> vt = udp.ReceiveAsync(CancellationToken.None)
         var vtLocal = il.DeclareLocal(valueTaskType); // 5

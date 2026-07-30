@@ -1457,7 +1457,7 @@ public partial class RuntimeEmitter
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);
         fetchIL.Emit(OpCodes.Ldftn, _fetchDisplayInvoke);
         fetchIL.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        fetchIL.Emit(OpCodes.Call, typeof(Task).GetMethod("Run", 1, [typeof(Func<>).MakeGenericType(Type.MakeGenericMethodParameter(0))])!.MakeGenericMethod(typeof(object)));
+        fetchIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise(task) — returns pending $Promise
         fetchIL.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);

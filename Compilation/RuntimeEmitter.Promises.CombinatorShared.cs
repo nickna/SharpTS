@@ -117,9 +117,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, builderField);
         il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "Start" && m.IsGenericMethod)
-            .MakeGenericMethod(smType);
+        var startMethod = EmitGenerics.MakeGenericMethod(builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .First(m => m.Name == "Start" && m.IsGenericMethod), smType);
         il.Emit(OpCodes.Call, startMethod);
 
         // return sm.<>t__builder.Task;
@@ -212,7 +211,7 @@ public partial class RuntimeEmitter
         // Not a task - wrap in Task.FromResult
         il.Emit(OpCodes.Ldloc, tasksLocal);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Callvirt, taskListType.GetMethod("Add")!);
         il.Emit(OpCodes.Br, afterAddLabel);
 
@@ -273,9 +272,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, awaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
-            .MakeGenericMethod(awaiterType, smType);
+        var awaitMethod = EmitGenerics.MakeGenericMethod(builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod), awaiterType, smType);
         il.Emit(OpCodes.Call, awaitMethod);
         il.Emit(OpCodes.Leave, returnLabel);
     }

@@ -180,16 +180,16 @@ public partial class RuntimeEmitter
         );
 
         // Get ConditionalWeakTable types
-        var cwtDescriptors = typeof(ConditionalWeakTable<,>).MakeGenericType(
+        var cwtDescriptors = _types.MakeGenericType(typeof(ConditionalWeakTable<,>),
             _types.Object,
-            typeof(Dictionary<,>).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType)
+            _types.MakeGenericType(typeof(Dictionary<,>), _types.String, runtime.CompiledPropertyDescriptorType)
         );
-        var cwtFrozenSealed = typeof(ConditionalWeakTable<,>).MakeGenericType(_types.Object, runtime.FrozenSealedStateType);
-        var cwtSymbols = typeof(ConditionalWeakTable<,>).MakeGenericType(
+        var cwtFrozenSealed = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, runtime.FrozenSealedStateType);
+        var cwtSymbols = _types.MakeGenericType(typeof(ConditionalWeakTable<,>),
             _types.Object,
-            typeof(Dictionary<,>).MakeGenericType(_types.Object, _types.Object)
+            _types.MakeGenericType(typeof(Dictionary<,>), _types.Object, _types.Object)
         );
-        var cwtPrototype = typeof(ConditionalWeakTable<,>).MakeGenericType(_types.Object, runtime.PrototypeInfoType);
+        var cwtPrototype = _types.MakeGenericType(typeof(ConditionalWeakTable<,>), _types.Object, runtime.PrototypeInfoType);
 
         // Static fields
         var descriptorsField = typeBuilder.DefineField(
@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
 
         // Get Dictionary<string, CompiledPropertyDescriptor> type and methods
         // Must use TypeBuilder.GetMethod since CompiledPropertyDescriptorType is TypeBuilder-created
-        var descriptorsDictType = typeof(Dictionary<,>).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType);
+        var descriptorsDictType = _types.MakeGenericType(typeof(Dictionary<,>), _types.String, runtime.CompiledPropertyDescriptorType);
         var dictOpenType = typeof(Dictionary<,>);
         var dictOpenContainsKey = dictOpenType.GetMethod("ContainsKey")!;
         var dictOpenTryGetValue = dictOpenType.GetMethod("TryGetValue")!;
@@ -1127,8 +1127,8 @@ public partial class RuntimeEmitter
         // Use the dict's GetEnumerator → MoveNext → Current pattern via the
         // ResolveMethod-resolved methods (descriptorsDictType is a TypeBuilder
         // generic instantiation; direct GetMethod doesn't work).
-        var kvpType = typeof(KeyValuePair<,>).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType);
-        var enumeratorType = typeof(Dictionary<,>.Enumerator).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType);
+        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
 
         var dictOpenType = typeof(Dictionary<,>);
         var dictOpenGetEnumerator = dictOpenType.GetMethod("GetEnumerator")!;
@@ -1230,8 +1230,8 @@ public partial class RuntimeEmitter
         var returnResultLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, returnResultLabel);
 
-        var kvpType = typeof(KeyValuePair<,>).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType);
-        var enumeratorType = typeof(Dictionary<,>.Enumerator).MakeGenericType(_types.String, runtime.CompiledPropertyDescriptorType);
+        var kvpType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
         var dictOpenType = typeof(Dictionary<,>);
         var descriptorsDictGetEnumerator = EmitterTypeHelpers.ResolveMethod(descriptorsDictType, dictOpenType.GetMethod("GetEnumerator")!);
         var enumOpenType = typeof(Dictionary<,>.Enumerator);

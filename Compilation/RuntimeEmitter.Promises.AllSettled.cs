@@ -313,11 +313,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
 
         // Call Task.WhenAll<object?>(tasks.ToArray())
-        var whenAllMethod = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
+        var whenAllMethod = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "WhenAll" && m.IsGenericMethod &&
                    m.GetParameters().Length == 1 &&
-                   m.GetParameters()[0].ParameterType.IsArray)
-            .MakeGenericMethod(typeof(object));
+                   m.GetParameters()[0].ParameterType.IsArray), typeof(object));
         il.Emit(OpCodes.Ldloc, tasksLocal);
         il.Emit(OpCodes.Callvirt, taskListType.GetMethod("ToArray")!);
         il.Emit(OpCodes.Call, whenAllMethod);

@@ -317,7 +317,7 @@ public sealed class ClassRegistry
         var typeArgs = new Type[gps.Length];
         for (int i = 0; i < gps.Length; i++)
             typeArgs[i] = typeof(object);
-        return declaringBuilder.MakeGenericType(typeArgs);
+        return EmitGenerics.MakeGenericType(declaringBuilder, typeArgs);
     }
 
     /// <summary>

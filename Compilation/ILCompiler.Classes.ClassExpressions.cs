@@ -114,7 +114,7 @@ public partial class ILCompiler
                         classExpr.SuperclassTypeArgs,
                         classGenericParams,
                         classExpr.TypeParams);
-                    baseType = superTypeBuilder.MakeGenericType(typeArgs);
+                    baseType = _types.MakeGenericType(superTypeBuilder, typeArgs);
                 }
                 else
                 {

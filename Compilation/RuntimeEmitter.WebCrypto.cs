@@ -471,8 +471,8 @@ public partial class RuntimeEmitter
         _wcResolved = WcDefine(tb, "WcResolved", _types.Object, [_types.Object]);
         var il = _wcResolved.GetILGenerator();
 
-        var fromResult = typeof(System.Threading.Tasks.Task)
-            .GetMethod("FromResult")!.MakeGenericMethod(_types.Object);
+        var fromResult = EmitGenerics.MakeGenericMethod(typeof(System.Threading.Tasks.Task)
+            .GetMethod("FromResult")!, _types.Object);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, fromResult);
@@ -484,8 +484,8 @@ public partial class RuntimeEmitter
         // try/catch-around-await working in compiled async bodies.
         _wcRejected = WcDefine(tb, "WcRejected", _types.Object, [typeof(Exception)]);
         var ril = _wcRejected.GetILGenerator();
-        var fromException = typeof(System.Threading.Tasks.Task)
-            .GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
+        var fromException = EmitGenerics.MakeGenericMethod(typeof(System.Threading.Tasks.Task)
+            .GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         ril.Emit(OpCodes.Ldarg_0);
         ril.Emit(OpCodes.Call, fromException);
         ril.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);

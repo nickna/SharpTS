@@ -351,7 +351,7 @@ public static class ParameterTypeResolver
         {
             if (baseType == typeof(void))
                 return typeof(Task);
-            return typeof(Task<>).MakeGenericType(baseType);
+            return EmitGenerics.MakeGenericType(typeof(Task<>), baseType);
         }
 
         return baseType;

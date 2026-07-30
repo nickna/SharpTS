@@ -28,13 +28,13 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        var globalRegistryType = typeof(Dictionary<,>).MakeGenericType(_types.String, typeBuilder);
+        var globalRegistryType = _types.MakeGenericType(typeof(Dictionary<,>), _types.String, typeBuilder);
         var globalRegistryField = typeBuilder.DefineField(
             "_globalRegistry",
             globalRegistryType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        var reverseRegistryType = typeof(Dictionary<,>).MakeGenericType(typeBuilder, _types.String);
+        var reverseRegistryType = _types.MakeGenericType(typeof(Dictionary<,>), typeBuilder, _types.String);
         var reverseRegistryField = typeBuilder.DefineField(
             "_reverseRegistry",
             reverseRegistryType,
