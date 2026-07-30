@@ -69,6 +69,10 @@ public static partial class ProcessBuiltIns
     /// <summary>
     /// Builds the diagnostic report object with the sections .NET can supply.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "process.report intentionally omits dynamic and bundled assemblies whose Location is empty.")]
     private static SharpTSObject BuildReport(string trigger, object? error)
     {
         var proc = Process.GetCurrentProcess();

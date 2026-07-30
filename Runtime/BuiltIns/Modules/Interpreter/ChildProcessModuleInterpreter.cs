@@ -816,6 +816,10 @@ public static class ChildProcessModuleInterpreter
     /// is the interpreter for interp-mode (null in compiled mode — stream pushes/events then
     /// dispatch compiled listeners directly).
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "The empty bundled location is an expected branch: a standalone CLI runs itself, while an embedded single-file runtime reports that fork needs the managed SharpTS.dll.")]
     private static SharpTSChildProcess RunFork(
         string modulePath, List<string> forkArgs, SharpTSObject? options, string? cwd,
         Interp? interp, Action refLoop, Action unrefLoop, Action<Action> post,

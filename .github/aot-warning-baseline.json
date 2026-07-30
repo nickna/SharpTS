@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 290,
+  "total": 281,
   "codes": [
     {
       "code": "IL2026",
@@ -39,10 +39,6 @@
       "count": 2
     },
     {
-      "code": "IL3000",
-      "count": 9
-    },
-    {
       "code": "IL3050",
       "count": 20
     }
@@ -50,7 +46,7 @@
   "areas": [
     {
       "area": "Compilation",
-      "count": 192
+      "count": 190
     },
     {
       "area": "Declaration",
@@ -62,7 +58,7 @@
     },
     {
       "area": "Program.cs",
-      "count": 5
+      "count": 1
     },
     {
       "area": "References",
@@ -70,7 +66,7 @@
     },
     {
       "area": "Runtime",
-      "count": 70
+      "count": 67
     },
     {
       "area": "TypeSystem",
@@ -82,6 +78,11 @@
       "file": "Compilation/AssemblyReferenceLoader.cs",
       "code": "IL2026",
       "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
+      "code": "IL2075",
+      "count": 2
     },
     {
       "file": "Runtime/DotNet/DotNetDelegateShim.cs",
@@ -109,11 +110,6 @@
       "count": 1
     },
     {
-      "file": "Runtime/BuiltIns/ProcessBuiltIns.Report.cs",
-      "code": "IL3000",
-      "count": 2
-    },
-    {
       "file": "Runtime/BuiltIns/ObjectBuiltIns.RuntimeDescriptors.cs",
       "code": "IL2075",
       "count": 3
@@ -121,11 +117,6 @@
     {
       "file": "Runtime/BuiltIns/Modules/Interpreter/VmModuleInterpreter.cs",
       "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/BuiltIns/Modules/Interpreter/ChildProcessModuleInterpreter.cs",
-      "code": "IL3000",
       "count": 1
     },
     {
@@ -139,18 +130,13 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
-      "code": "IL2075",
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
       "count": 2
     },
     {
       "file": "Program.cs",
-      "code": "IL3000",
-      "count": 4
-    },
-    {
-      "file": "Modules/DotNetExtensionImports.cs",
-      "code": "IL2075",
+      "code": "IL2026",
       "count": 1
     },
     {
@@ -204,24 +190,24 @@
       "count": 1
     },
     {
-      "file": "Program.cs",
-      "code": "IL2026",
+      "file": "Modules/DotNetExtensionImports.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
-      "file": "Compilation/RuntimeTypes.Reflection.cs",
-      "code": "IL2070",
-      "count": 6
-    },
-    {
       "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
+      "code": "IL2070",
+      "count": 3
     },
     {
       "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
       "code": "IL3050",
       "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMarshaller.cs",
+      "code": "IL3050",
+      "count": 1
     },
     {
       "file": "Runtime/Types/WebStreamsHelpers.cs",
@@ -279,13 +265,13 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
       "file": "Runtime/Types/SharpTSError.cs",
       "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
@@ -339,23 +325,18 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetMarshaller.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "file": "Compilation/RuntimeTypes.Reflection.cs",
       "code": "IL2070",
-      "count": 4
+      "count": 6
     },
     {
       "file": "Compilation/RuntimeTypes.Promise.cs",
       "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "code": "IL2070",
       "count": 3
     },
     {
@@ -419,14 +400,14 @@
       "count": 1
     },
     {
-      "file": "Compilation/ILCompiler.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
       "file": "Compilation/CompilationService.cs",
       "code": "IL2075",
       "count": 2
+    },
+    {
+      "file": "Compilation/CompilationService.cs",
+      "code": "IL2026",
+      "count": 3
     },
     {
       "file": "Compilation/CallHandlers/SuperConstructorHandler.cs",
@@ -479,19 +460,14 @@
       "count": 1
     },
     {
-      "file": "Compilation/AssemblyReferenceLoader.cs",
-      "code": "IL3000",
+      "file": "Compilation/ILCompiler.cs",
+      "code": "IL3050",
       "count": 1
     },
     {
-      "file": "Compilation/CompilationService.cs",
-      "code": "IL2026",
-      "count": 3
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
       "code": "IL2070",
-      "count": 3
+      "count": 4
     },
     {
       "file": "Compilation/ILCompiler.Functions.cs",
@@ -559,14 +535,14 @@
       "count": 6
     },
     {
-      "file": "Compilation/ILCompiler.Functions.cs",
-      "code": "IL2075",
-      "count": 4
-    },
-    {
       "file": "Compilation/RuntimeEmitter.Dns.cs",
       "code": "IL2026",
       "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BigInt.cs",
+      "code": "IL2075",
+      "count": 2
     },
     {
       "file": "Compilation/PropertyDescriptorStore.cs",
@@ -577,11 +553,6 @@
       "file": "Compilation/PropertyDescriptorStore.cs",
       "code": "IL2075",
       "count": 6
-    },
-    {
-      "file": "Compilation/ILVerifier.cs",
-      "code": "IL3000",
-      "count": 1
     },
     {
       "file": "Compilation/ILVerifier.cs",
@@ -624,9 +595,9 @@
       "count": 1
     },
     {
-      "file": "Compilation/RuntimeEmitter.BigInt.cs",
+      "file": "Compilation/ILCompiler.Functions.cs",
       "code": "IL2075",
-      "count": 2
+      "count": 4
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

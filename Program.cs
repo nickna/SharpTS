@@ -866,6 +866,10 @@ static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
 /// copy. <c>--standalone</c> suppresses the copy (the soft-dependent features then throw a clear
 /// "not supported" error at runtime instead).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "The managed assembly location is checked for an empty bundled value; native and single-file builds extract the embedded managed runtime instead.")]
 static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, OutputOptions outputOptions)
 {
     var reasons = compiler.RequiredSharpTSRuntimeReasons;
@@ -960,6 +964,10 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
 /// transitive dependency closure (assets-graph subtree for NuGet packages, AssemblyName walk
 /// for local DLLs). <c>--standalone</c> suppresses the copy but lists what deployment needs.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "Bundled assemblies have an empty location and are explicitly skipped; only external on-disk interop assemblies participate in the deployment copy set.")]
 static void CopyExternalReferencesIfNeeded(ILCompiler compiler, ReferenceSet externalRefs, string outputPath, OutputOptions outputOptions)
 {
     if (externalRefs.IsEmpty)

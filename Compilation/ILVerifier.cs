@@ -137,6 +137,10 @@ public class ILVerifier : IResolver, IDisposable
 
     #region IResolver Implementation
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "An empty bundled core-library location skips the runtime-directory probe and falls through to the explicit SDK and additional probe directories.")]
     public PEReader? ResolveAssembly(AssemblyNameInfo assemblyName)
     {
         var name = assemblyName.Name ?? "";

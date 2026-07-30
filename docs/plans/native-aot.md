@@ -110,9 +110,11 @@ Plan against these numbers, not the originals:
   seam lowered it again to 697; that seam added 3,072 bytes (0.0033%). Routing
   emitter-local and field-held types through the same required lookup API
   lowered it to 382 and added 3,584 bytes (0.0038%). Fixed BCL factory and
-  reflection-method metadata lookups lowered the inventory to 290. CI pins
-  total, per-code, per-area, and per-file/code counts, so both increases and
-  category swaps fail until the same PR updates the explained baseline.
+  reflection-method metadata lookups lowered the inventory to 290. Documenting
+  the already-explicit empty-location handling at single-file boundaries
+  lowered it to 281. CI pins total, per-code, per-area, and per-file/code
+  counts, so both increases and category swaps fail until the same PR updates
+  the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.

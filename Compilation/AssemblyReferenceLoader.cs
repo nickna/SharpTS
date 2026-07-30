@@ -19,6 +19,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
     /// </summary>
     /// <param name="assemblyPaths">Paths to referenced assemblies.</param>
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "Assembly.Location is only a managed-build fallback after SDK reference resolution; an empty single-file location is explicitly ignored.")]
     public AssemblyReferenceLoader(IEnumerable<string> assemblyPaths, string? sdkPath = null)
     {
         var paths = assemblyPaths.ToList();
