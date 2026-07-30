@@ -101,11 +101,11 @@ Plan against these numbers, not the originals:
   -p:EnableSingleFileAnalyzer=true`; fail if warnings exceed the baseline.
   Without this, every fix below can be silently regressed by an ordinary PR.
   (Exclude `.codex/`/`.claude/` worktrees from any count.) **Done:**
-  `aot-ratchet` job in `ci.yml`; baseline lives in
-  `.github/aot-warning-baseline.txt` (2,725 distinct warnings measured at this
-  tree — the assessed 2,730 minus drift) and the job fails on *any* deviation:
-  above means a regression, below means "lower the baseline in this PR", so
-  fixed warnings can't become slack.
+  `aot-ratchet` job in `ci.yml`; the structured baseline lives in
+  `.github/aot-warning-baseline.json`. The first cleanup tranche lowered the
+  inventory from 2,585 to 2,154 distinct warnings. CI pins total, per-code,
+  per-area, and per-file/code counts, so both increases and category swaps
+  fail until the same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.

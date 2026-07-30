@@ -73,13 +73,12 @@ jobs:
         timeout-minutes: 10
 
   # AOT-compatibility ratchet (#1324 Track 0). Builds SharpTS.csproj with the
-  # AOT/trim/single-file analyzers and compares the number of distinct IL####
-  # warnings against the committed baseline (.github/aot-warning-baseline.txt).
-  # The comparison is exact in BOTH directions: above the baseline fails (a PR
-  # introduced new AOT-incompatible code), and below it also fails with an ask
-  # to lower the baseline — otherwise fixed warnings leave slack under which
-  # later regressions hide, defeating the ratchet. The counts are OS-independent
-  # (Roslyn analyzers over the same sources), so one ubuntu job suffices.
+  # AOT/trim/single-file analyzers compare the distinct IL#### inventory against
+  # .github/aot-warning-baseline.json. The structured baseline pins total,
+  # per-code, per-area, and per-file/code counts, so replacing a fixed warning
+  # with a different warning cannot hide behind an unchanged scalar total.
+  # Counts are OS-independent (Roslyn analyzers over the same sources), so one
+  # ubuntu job suffices.
   aot-ratchet:
     runs-on: ubuntu-latest
     steps:
@@ -90,42 +89,20 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Build with AOT/trim/single-file analyzers
-        run: |
-          set -o pipefail
-          dotnet build SharpTS.csproj --configuration Release \
-            -p:IsAotCompatible=true \
-            -p:EnableAotAnalyzer=true \
-            -p:EnableTrimAnalyzer=true \
-            -p:EnableSingleFileAnalyzer=true \
-            | tee aot-analyzer.log | grep -E 'Warning\(s\)|Error\(s\)|error ' || true
-          # Fail the step on build errors even though we filtered the output.
-          grep -qE '^\s*0 Error\(s\)' aot-analyzer.log
+      - name: Build and enforce AOT analyzer inventory
+        shell: pwsh
+        run: ./scripts/aot-analyzer-report.ps1 -EnforceBaseline
 
-      - name: Enforce warning-count ratchet
-        run: |
-          baseline=$(tr -cd '0-9' < .github/aot-warning-baseline.txt)
-          # sort -u collapses MSBuild's duplicate printing (inline + summary)
-          # of the same warning line.
-          count=$(grep -E 'warning IL[0-9]{4}' aot-analyzer.log | sort -u | wc -l)
-          echo "AOT/trim/single-file analyzer warnings: $count (baseline: $baseline)"
-          grep -oE 'warning IL[0-9]{4}' aot-analyzer.log | sort | uniq -c | sort -rn
-          if [ "$count" -gt "$baseline" ]; then
-            echo "::error::AOT analyzer warnings increased from $baseline to $count. New AOT/trim-incompatible code was introduced — fix it, or (only if intentional) raise .github/aot-warning-baseline.txt with justification."
-            exit 1
-          elif [ "$count" -lt "$baseline" ]; then
-            echo "::error::AOT analyzer warnings decreased from $baseline to $count — nice! Lower .github/aot-warning-baseline.txt to $count in this PR so the improvement is locked in."
-            exit 1
-          fi
-
-      # The full warning list (2700+ lines) is deliberately not echoed to the
-      # job log; grab it here when diagnosing a ratchet failure.
+      # The full warning list is deliberately not echoed to the job log; the
+      # summary makes category drift visible, and the log retains every callsite.
       - name: Upload analyzer log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aot-analyzer-log
-          path: aot-analyzer.log
+          path: |
+            aot-analyzer.log
+            aot-analyzer-summary.json
 
   # The managed xUnit suite cannot exercise the Native-AOT-hosted compiler: it loads
   # emitted assemblies back into the test process. Publish a real native SharpTS host,

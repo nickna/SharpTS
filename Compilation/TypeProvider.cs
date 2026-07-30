@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
@@ -90,7 +91,11 @@ public class TypeProvider
     #region Core Types
 
     public Type Object => Resolve("System.Object");
-    public Type String => Resolve("System.String");
+    [DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.PublicConstructors)]
+    public Type String => typeof(string);
     public Type Double => Resolve("System.Double");
     public Type Boolean => Resolve("System.Boolean");
     public Type Int32 => Resolve("System.Int32");

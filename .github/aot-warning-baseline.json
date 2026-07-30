@@ -1,0 +1,2095 @@
+{
+  "schemaVersion": 1,
+  "total": 2154,
+  "codes": [
+    {
+      "code": "IL2026",
+      "count": 98
+    },
+    {
+      "code": "IL2055",
+      "count": 2
+    },
+    {
+      "code": "IL2057",
+      "count": 5
+    },
+    {
+      "code": "IL2060",
+      "count": 2
+    },
+    {
+      "code": "IL2067",
+      "count": 1
+    },
+    {
+      "code": "IL2070",
+      "count": 166
+    },
+    {
+      "code": "IL2072",
+      "count": 162
+    },
+    {
+      "code": "IL2075",
+      "count": 1577
+    },
+    {
+      "code": "IL2077",
+      "count": 2
+    },
+    {
+      "code": "IL2080",
+      "count": 70
+    },
+    {
+      "code": "IL2111",
+      "count": 40
+    },
+    {
+      "code": "IL3000",
+      "count": 9
+    },
+    {
+      "code": "IL3050",
+      "count": 20
+    }
+  ],
+  "areas": [
+    {
+      "area": "Compilation",
+      "count": 2056
+    },
+    {
+      "area": "Declaration",
+      "count": 13
+    },
+    {
+      "area": "Modules",
+      "count": 1
+    },
+    {
+      "area": "Program.cs",
+      "count": 5
+    },
+    {
+      "area": "References",
+      "count": 1
+    },
+    {
+      "area": "Runtime",
+      "count": 70
+    },
+    {
+      "area": "TypeSystem",
+      "count": 8
+    }
+  ],
+  "fileCodes": [
+    {
+      "file": "Compilation/AssemblyReferenceLoader.cs",
+      "code": "IL2026",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHmac.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHash.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHardLink.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHardLink.cs",
+      "code": "IL2026",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFunction.cs",
+      "code": "IL2075",
+      "count": 78
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFunction.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFunction.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFileDescriptorTable.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFileDescriptorTable.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSFileDescriptorTable.cs",
+      "code": "IL2070",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSEventLoop.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSEventEmitter.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSEventEmitter.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSError.cs",
+      "code": "IL2075",
+      "count": 23
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSError.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSECDH.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSECDH.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSECDH.cs",
+      "code": "IL2026",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDuplex.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDuplex.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDir.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHmac.cs",
+      "code": "IL2075",
+      "count": 11
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDir.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHttpServer.cs",
+      "code": "IL2070",
+      "count": 29
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHttpServer.cs",
+      "code": "IL2075",
+      "count": 17
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadableAsyncIter.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadable.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadable.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadable.cs",
+      "code": "IL2070",
+      "count": 14
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSPromise.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSPromise.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSProcess.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSProcess.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSPassThrough.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSObject.cs",
+      "code": "IL2075",
+      "count": 23
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSObject.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetSocket.cs",
+      "code": "IL2075",
+      "count": 11
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetSocket.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetServer.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetServer.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetClosures.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNetBlockList.cs",
+      "code": "IL2075",
+      "count": 12
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSNamespace.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSKeyObject.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSKeyObject.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSKeyObject.cs",
+      "code": "IL2026",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSHttpServer.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadableAsyncIter.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDH.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDecipher.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TextEncoding.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Symbols.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.SymbolAccessors.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.SymbolAccessors.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Strings.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StringPrototypeStubs.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamingCrypto.cs",
+      "code": "IL2075",
+      "count": 26
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamingCrypto.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamCompose.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamCompose.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamAddAbortSignal.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.StreamAddAbortSignal.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Stats.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Stats.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Sets.cs",
+      "code": "IL2075",
+      "count": 76
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Sets.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Sets.cs",
+      "code": "IL2070",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.RuntimeClassPhase1.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.RegExp.cs",
+      "code": "IL2075",
+      "count": 21
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReflectMetadata.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Reflect.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Timer.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDH.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Timer.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Tls.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDecipher.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDate.cs",
+      "code": "IL2075",
+      "count": 57
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDate.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDataView.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDatagramSocket.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDatagramSocket.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSDatagramReceive.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSCipher.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSCipher.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSBufferStatic.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSBufferInstance.cs",
+      "code": "IL2075",
+      "count": 10
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSBuffer.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSBoundTypedArrayMethod.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSArrayHole.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSArrayBuffer.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSArray.cs",
+      "code": "IL2080",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSArray.cs",
+      "code": "IL2075",
+      "count": 9
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSArray.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TransformStream.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TlsExtras.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TlsCheckIdentity.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TimerPromises.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSReadableHelpers.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSRegExp.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSRegExp.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetClass.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetClass.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Runtime/BuiltIns/ProcessBuiltIns.Report.cs",
+      "code": "IL3000",
+      "count": 2
+    },
+    {
+      "file": "Runtime/BuiltIns/ObjectBuiltIns.RuntimeDescriptors.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Runtime/BuiltIns/Modules/Interpreter/VmModuleInterpreter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/BuiltIns/Modules/Interpreter/ChildProcessModuleInterpreter.cs",
+      "code": "IL3000",
+      "count": 1
+    },
+    {
+      "file": "Runtime/BuiltIns/ConsoleBuiltIns.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "References/DotNetReferences.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Program.cs",
+      "code": "IL3000",
+      "count": 4
+    },
+    {
+      "file": "Program.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Modules/DotNetExtensionImports.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Declaration/TypeInspector.cs",
+      "code": "IL2070",
+      "count": 9
+    },
+    {
+      "file": "Declaration/DiscoveryGenerator.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Declaration/DiscoveryGenerator.cs",
+      "code": "IL2026",
+      "count": 3
+    },
+    {
+      "file": "Compilation/UnionTypeHelper.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Compilation/UnionTypeGenerator.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMarshaller.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/WebStreamsHelpers.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Runtime/Types/WebStreamsHelpers.cs",
+      "code": "IL2070",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/VmModule.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/Types/VmContext.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Runtime/Types/TSFunctionCallableAdapter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/StructuredClone.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Runtime/Types/SharpTSProxy.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Runtime/Types/SharpTSPropertyDescriptor.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/Types/SharpTSPromise.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSKeyObject.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSIntlDateTimeFormat.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSError.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSAbortSignal.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Runtime/RuntimeCallableDispatcher.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL3050",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2055",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetOperatorResolver.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMethod.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL2080",
+      "count": 3
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.UtilInspect.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSZlibTransform.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSX509.cs",
+      "code": "IL2111",
+      "count": 12
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSX509.cs",
+      "code": "IL2075",
+      "count": 12
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSX509.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSX509.cs",
+      "code": "IL2026",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSWritable.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSWritable.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTypedArray.cs",
+      "code": "IL2077",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTypedArray.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTransform.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTlsSocket.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTlsSocket.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTlsSocket.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTlsAccept.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSTlsAccept.cs",
+      "code": "IL2072",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSSymbol.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSSymbol.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSStreamUtils.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSStreamTransformCallbacks.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.TSRegExp.cs",
+      "code": "IL2075",
+      "count": 20
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.VirtualTimers.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.VirtualTimers.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WeakMaps.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WeakRefs.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Compilation/TypeProvider.cs",
+      "code": "IL2026",
+      "count": 14
+    },
+    {
+      "file": "Compilation/StateMachineEmitHelpers.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Utilities.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Reflection.cs",
+      "code": "IL2070",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Promise.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Json.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Exceptions.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReferenceEqualityComparer.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Dns.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ZlibHelpers.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ZlibHelpers.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WritableStream.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Worker.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WebCrypto.Types.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WebCrypto.Types.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WebCrypto.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WebCrypto.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WebCrypto.cs",
+      "code": "IL2026",
+      "count": 24
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.WeakSets.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Arrays.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "code": "IL2070",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReferenceEqualityComparer.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReadableStream.cs",
+      "code": "IL2080",
+      "count": 20
+    },
+    {
+      "file": "Compilation/PropertyDescriptorStore.cs",
+      "code": "IL2077",
+      "count": 1
+    },
+    {
+      "file": "Compilation/PropertyDescriptorStore.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/ILVerifier.cs",
+      "code": "IL3000",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILVerifier.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/ILLabelValidator.cs",
+      "code": "IL2075",
+      "count": 10
+    },
+    {
+      "file": "Compilation/ILEmitter.Statements.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/ILEmitter.Properties.Private.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/ILEmitter.Properties.External.cs",
+      "code": "IL2070",
+      "count": 12
+    },
+    {
+      "file": "Compilation/ILEmitter.Properties.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILEmitter.Operators.cs",
+      "code": "IL2070",
+      "count": 5
+    },
+    {
+      "file": "Compilation/ILEmitter.Expressions.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.StringMethods.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
+      "code": "IL2070",
+      "count": 10
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.Constructors.cs",
+      "code": "IL2111",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.Constructors.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.Closures.cs",
+      "code": "IL2070",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.InnerFunctions.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Functions.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/ILCompiler.Functions.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILCompiler.Functions.cs",
+      "code": "IL2070",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.AbortController.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILCompiler.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Arguments.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Arrays.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CjsModule.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CjsModule.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ChildProcessHelpers.cs",
+      "code": "IL2075",
+      "count": 119
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ChildProcessAsync.cs",
+      "code": "IL2075",
+      "count": 53
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ChildProcessAsync.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CallArgsPool.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BuiltInStaticDispatch.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BufferModuleHelpers.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BroadcastChannel.cs",
+      "code": "IL2080",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BroadcastChannel.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BroadcastChannel.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BoxedPrimitives.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BooleanPrototypePopulate.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.BigInt.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.AsyncLocalStorage.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.AsyncGenerator.cs",
+      "code": "IL2075",
+      "count": 15
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.AsyncFromSyncIterator.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.AsyncFromSyncIterator.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Arrays.Search.cs",
+      "code": "IL2075",
+      "count": 22
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Arrays.Mutators.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Arrays.cs",
+      "code": "IL2075",
+      "count": 47
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ArrayFrom.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Coercion.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/ILCompiler.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILCompiler.CommonJs.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/DelegateAdapterEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/DelegateAdapterEmitter.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/DelegateAdapterEmitter.cs",
+      "code": "IL2070",
+      "count": 1
+    },
+    {
+      "file": "Compilation/CompilationService.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/CompilationService.cs",
+      "code": "IL2026",
+      "count": 3
+    },
+    {
+      "file": "Compilation/CallHandlers/SuperConstructorHandler.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/CallHandlers/AsyncFunctionCallHandler.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/AttributeMapper.cs",
+      "code": "IL2070",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AttributeMapper.cs",
+      "code": "IL2067",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AttributeMapper.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncStateMachineBuilder.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/AsyncStateMachineBuilder.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncMoveNextEmitter.Operators.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/AsyncGeneratorStateMachineBuilder.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncGeneratorStateMachineBuilder.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncGeneratorMoveNextEmitter.Expressions.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/AsyncGeneratorMoveNextEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncBuilderBase.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/AsyncArrowStateMachineBuilder.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/AsyncArrowStateMachineBuilder.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/AssemblyReferenceLoader.cs",
+      "code": "IL3000",
+      "count": 1
+    },
+    {
+      "file": "Compilation/Emitters/AbortSignalEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.CommonJs.cs",
+      "code": "IL2111",
+      "count": 2
+    },
+    {
+      "file": "Compilation/Emitters/ArrayEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/Emitters/BufferStaticEmitter.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.Static.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.HasFields.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.cs",
+      "code": "IL2072",
+      "count": 6
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.Constructors.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.ClassExpressions.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILCompiler.Classes.ClassExpressions.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/ILCompiler.ArrowFunctions.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/GeneratorStateMachineBuilder.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/GeneratorMoveNextEmitter.Expressions.Yield.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/ExpressionEmitterBase.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/ExpressionEmitterBase.Constructors.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/EmitterTypeHelpers.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Compilation/Emitters/SymbolStaticEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/Emitters/StringStaticEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/Emitters/StringEmitter.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/Emitters/Modules/ProcessModuleEmitter.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/Emitters/Modules/CryptoModuleEmitter.cs",
+      "code": "IL2075",
+      "count": 27
+    },
+    {
+      "file": "Compilation/Emitters/EventEmitterEmitter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/Emitters/BufferEmitter.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ConsoleHelpers.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CoreTypes.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CoreTypes.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Properties.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Iteration.cs",
+      "code": "IL2075",
+      "count": 115
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Invocation.cs",
+      "code": "IL2075",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.GetPropertyBranches.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Extensibility.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Descriptors.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.DeleteProperty.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Comparison.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.NumberFormat.cs",
+      "code": "IL2075",
+      "count": 10
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Number.cs",
+      "code": "IL2075",
+      "count": 35
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.NodeError.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.NodeError.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Net.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.MessageChannel.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.MessageChannel.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Maps.cs",
+      "code": "IL2075",
+      "count": 40
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Maps.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Json.StringifyFull.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Json.Stringify.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.IteratorHelpers.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.IteratorHelpers.cs",
+      "code": "IL2072",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Properties.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Iterator.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Properties.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.SetProperty.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReadableStream.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReadableStream.cs",
+      "code": "IL2072",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.QueuingStrategy.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.PropertyDescriptorStore.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.PropertyDescriptorStore.cs",
+      "code": "IL2072",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Then.cs",
+      "code": "IL2075",
+      "count": 9
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Finally.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Executor.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Executor.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.CombinatorShared.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.CombinatorShared.cs",
+      "code": "IL2070",
+      "count": 7
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Capability.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Capability.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Any.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.Any.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.AllSettled.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Promises.All.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Os.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Operators.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Utilities.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Templates.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Objects.Prototype.cs",
+      "code": "IL2075",
+      "count": 11
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Iterator.cs",
+      "code": "IL2075",
+      "count": 14
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Iterator.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Http.cs",
+      "code": "IL2080",
+      "count": 30
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Dns.cs",
+      "code": "IL2111",
+      "count": 12
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Dns.cs",
+      "code": "IL2075",
+      "count": 14
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Dns.cs",
+      "code": "IL2026",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Date.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DataCloneError.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DataCloneError.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoPrimitives.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoPrimitives.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.SignVerify.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.SignVerify.cs",
+      "code": "IL2026",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.RSA.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.Primes.cs",
+      "code": "IL2075",
+      "count": 9
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.KeyPairs.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.KeyPairs.cs",
+      "code": "IL2026",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.KeyObject.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.KeyDerivation.cs",
+      "code": "IL2075",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.Info.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.Hashing.cs",
+      "code": "IL2075",
+      "count": 8
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.EcPoints.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.CryptoHelpers.Completion.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DnsPromises.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DnsResolver.cs",
+      "code": "IL2026",
+      "count": 6
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DnsResolver.cs",
+      "code": "IL2111",
+      "count": 12
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.DynamicImport.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Http.cs",
+      "code": "IL2075",
+      "count": 60
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Http.cs",
+      "code": "IL2072",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Http.cs",
+      "code": "IL2070",
+      "count": 17
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.HasOwnProperty.cs",
+      "code": "IL2075",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.GroupBy.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Functions.cs",
+      "code": "IL2075",
+      "count": 10
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Functions.cs",
+      "code": "IL2072",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FunctionPrototypePopulate.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsWatcher.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsWatcher.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.ReadlineHelpers.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsSync.cs",
+      "code": "IL2075",
+      "count": 9
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsStreams.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsStreams.cs",
+      "code": "IL2072",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsStatWatcher.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsAsyncRun.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsAsyncRun.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsAsync.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FinalizationRegistry.cs",
+      "code": "IL2075",
+      "count": 11
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FinalizationRegistry.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.EventSubscriptions.cs",
+      "code": "IL2070",
+      "count": 4
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.Error.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeEmitter.FsStreams.cs",
+      "code": "IL2080",
+      "count": 2
+    },
+    {
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "code": "IL3050",
+      "count": 4
+    }
+  ]
+}
