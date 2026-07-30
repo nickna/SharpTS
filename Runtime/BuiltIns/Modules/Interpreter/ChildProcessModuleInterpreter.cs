@@ -850,9 +850,16 @@ public static class ChildProcessModuleInterpreter
         var processPath = Environment.ProcessPath;
         var processName = processPath != null ? Path.GetFileNameWithoutExtension(processPath) : "";
         bool processIsDotnet = processName.Equals("dotnet", StringComparison.OrdinalIgnoreCase);
-        bool processIsSharpTs = processName.Equals("sharpts", StringComparison.OrdinalIgnoreCase);
+        // "This process IS the SharpTS CLI" — detected structurally (the entry assembly is the
+        // one hosting this method and the process is a real apphost, not the dotnet muxer)
+        // rather than by executable name: the shipped binary is renamed per SKU (sharpts,
+        // SharpTS.exe, user copies), so a name sniff breaks on the managed single-file SKU
+        // and on Native AOT, where there is no SharpTS.dll on disk at all (#1324).
+        bool processIsSharpTs = !processIsDotnet
+            && !string.IsNullOrEmpty(processPath)
+            && Assembly.GetEntryAssembly() == typeof(ChildProcessModuleInterpreter).Assembly;
 
-        if (processIsSharpTs && !string.IsNullOrEmpty(processPath))
+        if (processIsSharpTs)
         {
             // Running as a self-contained SharpTS executable — run it directly on the module.
             startInfo.FileName = processPath!;
@@ -862,6 +869,13 @@ public static class ChildProcessModuleInterpreter
             // Everything else (interp via `dotnet SharpTS.dll`, compiled output, or SharpTS
             // embedded as a library e.g. the test host): run the SharpTS.dll interpreter via
             // the dotnet host — ProcessPath when it is dotnet, otherwise the muxer on PATH.
+            if (string.IsNullOrEmpty(sharpTsPath))
+            {
+                throw new InvalidOperationException(
+                    "child_process.fork() needs SharpTS.dll on disk to launch the child " +
+                    "interpreter, but the SharpTS runtime is loaded from a single-file bundle. " +
+                    "Run the program with the SharpTS CLI, or use the managed (framework-dependent) build.");
+            }
             startInfo.FileName = processIsDotnet ? processPath! : "dotnet";
             startInfo.ArgumentList.Add("exec");
             startInfo.ArgumentList.Add(sharpTsPath);
