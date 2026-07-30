@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
             typeof(Task).GetMethod("ContinueWith", 1,
-                [typeof(Func<,>).MakeGenericType(typeof(Task), Type.MakeGenericMethodParameter(0))])!
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
             .MakeGenericMethod(typeof(object)));
 
         // WrapTaskAsPromise(task)
@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
             typeof(Task).GetMethod("ContinueWith", 1,
-                [typeof(Func<,>).MakeGenericType(typeof(Task), Type.MakeGenericMethodParameter(0))])!
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
             .MakeGenericMethod(typeof(object)));
 
         // WrapTaskAsPromise
@@ -481,7 +481,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
             typeof(Task).GetMethod("ContinueWith", 1,
-                [typeof(Func<,>).MakeGenericType(typeof(Task), Type.MakeGenericMethodParameter(0))])!
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
             .MakeGenericMethod(typeof(object)));
 
         // WrapTaskAsPromise → $TSPromise

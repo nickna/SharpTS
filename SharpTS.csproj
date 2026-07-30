@@ -27,6 +27,9 @@
   <ItemGroup>
     <None Include="LICENSE" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
+    <!-- Native AOT only (no effect on JIT builds): keeps the reflection-emit internals the
+         emit path's AOT fallbacks reach via reflection. See AotTrimmerRoots.xml. -->
+    <TrimmerRootDescriptor Include="AotTrimmerRoots.xml" />
   </ItemGroup>
 
   <!-- White-box test access: a handful of regression tests drive internal

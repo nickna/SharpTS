@@ -107,8 +107,7 @@ public partial class ILCompiler
         if (_classes.PrivateFieldStorage.TryGetValue(qualifiedClassName, out var privateFieldStorage))
         {
             // __privateFields = new ConditionalWeakTable<object, Dictionary<string, object?>>()
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             il.Emit(OpCodes.Newobj, cwtType.GetConstructor([])!);
             il.Emit(OpCodes.Stsfld, privateFieldStorage);
         }

@@ -481,10 +481,17 @@ public class TypeProvider
 
     /// <summary>
     /// Creates a generic type from an open generic definition and type arguments.
+    /// This is the emit path's chokepoint for generic instantiation (#1324 gate): under Native
+    /// AOT, a RUNTIME generic definition rejects builder-type arguments with
+    /// PlatformNotSupportedException ("created by a custom ReflectionContext"), where CoreCLR
+    /// returns a TypeBuilderInstantiation. The fallback constructs the persisted
+    /// reflection-emit implementation's TypeBuilderInstantiation directly — the same shape
+    /// PersistedAssemblyBuilder's own TypeBuilder.MakeGenericType produces, so the metadata
+    /// writer consumes it identically.
     /// </summary>
     public Type MakeGenericType(Type genericDefinition, params Type[] typeArguments)
     {
-        return genericDefinition.MakeGenericType(typeArguments);
+        return EmitGenerics.MakeGenericType(genericDefinition, typeArguments);
     }
 
     /// <summary>

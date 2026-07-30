@@ -835,8 +835,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         var storageField = Ctx.ClassRegistry!.GetPrivateFieldStorage(className);
         if (storageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
             var dictLocal = IL.DeclareLocal(dictType);
 
@@ -907,8 +906,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         var storageField = Ctx.ClassRegistry!.GetPrivateFieldStorage(className);
         if (storageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
             var dictLocal = IL.DeclareLocal(dictType);
             var valueLocal = IL.DeclareLocal(typeof(object));
@@ -993,8 +991,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             var storageField = Ctx.ClassRegistry!.GetPrivateFieldStorage(className);
             if (storageField != null)
             {
-                var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                    .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+                var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
                 var dictType = typeof(Dictionary<string, object?>);
                 var objLocal = IL.DeclareLocal(typeof(object));
                 var dictLocal = IL.DeclareLocal(dictType);
@@ -1463,7 +1460,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 Ctx.ClassRegistry!.GetGenericParams(resolvedClassName) != null)
             {
                 Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
-                targetType = typeBuilder.MakeGenericType(typeArgs);
+                targetType = EmitGenerics.MakeGenericType(typeBuilder, typeArgs);
                 targetCtor = EmitterTypeHelpers.ResolveConstructor(targetType, ctorBuilder);
             }
 

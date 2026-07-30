@@ -445,6 +445,6 @@ public class TypeMapper
         Type innerType = GetClrType(inner);
         if (innerType == typeof(void))
             return typeof(Task);
-        return typeof(Task<>).MakeGenericType(innerType);
+        return EmitGenerics.MakeGenericType(typeof(Task<>), innerType);
     }
 }

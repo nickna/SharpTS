@@ -45,8 +45,7 @@ public partial class ILEmitter
         var storageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
         if (storageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
 
             // Declare local for the dictionary result
@@ -138,8 +137,7 @@ public partial class ILEmitter
         var setStorageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
         if (setStorageField != null)
         {
-            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
 
             // Declare local for dictionary and value
@@ -254,8 +252,7 @@ public partial class ILEmitter
             var callStorageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
             if (callStorageField != null)
             {
-                var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-                    .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+                var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
                 var dictType = typeof(Dictionary<string, object?>);
 
                 // Emit object and keep a copy for method call

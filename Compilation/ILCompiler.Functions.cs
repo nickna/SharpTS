@@ -771,8 +771,8 @@ public partial class ILCompiler
         }
         var elemType = paramType.GetGenericArguments()[0];
         var addMethod = ctx.Types.GetMethod(targetListType, "Add", ctx.Types.Object);
-        var enumerableType = typeof(System.Collections.Generic.IEnumerable<>).MakeGenericType(elemType);
-        var enumeratorType = typeof(System.Collections.Generic.IEnumerator<>).MakeGenericType(elemType);
+        var enumerableType = _types.MakeGenericType(typeof(System.Collections.Generic.IEnumerable<>), elemType);
+        var enumeratorType = _types.MakeGenericType(typeof(System.Collections.Generic.IEnumerator<>), elemType);
         var getEnumerator = enumerableType.GetMethod("GetEnumerator")!;
         var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
         var getCurrent = enumeratorType.GetProperty("Current")!.GetGetMethod()!;

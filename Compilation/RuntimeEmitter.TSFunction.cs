@@ -560,7 +560,7 @@ public partial class RuntimeEmitter
         // overload skips reflection-Invoke's per-call setup and is ~10×
         // faster on hot paths. The Span<object?> wraps the existing
         // adjustedArgs array (no extra allocation).
-        var spanOfObject = typeof(Span<>).MakeGenericType(typeof(object));
+        var spanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
         var spanCtorFromArray = spanOfObject.GetConstructor([typeof(object[])])!;
         var invokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, spanOfObject])!;
 
@@ -795,7 +795,7 @@ public partial class RuntimeEmitter
         iwt.MarkLabel(iwtAfterTargetLabel);
 
         // _invoker.Invoke(invokeTarget, new Span<object>(adjustedArgs))
-        var iwtSpanOfObject = typeof(Span<>).MakeGenericType(typeof(object));
+        var iwtSpanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
         var iwtSpanCtor = iwtSpanOfObject.GetConstructor([typeof(object[])])!;
         var iwtInvokerInvokeSpan = _types.MethodInvoker.GetMethod("Invoke", [_types.Object, iwtSpanOfObject])!;
         iwt.Emit(OpCodes.Ldarg_0);

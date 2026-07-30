@@ -920,8 +920,8 @@ public partial class RuntimeEmitter
 
         // The keysType is Dictionary<,>.KeyCollection which is a concrete type once we have the closed generic
         // We can use the concrete KeyCollection type for string key
-        var keysCollectionType = typeof(Dictionary<,>.KeyCollection).MakeGenericType(_types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
-        var keysEnumeratorType = typeof(Dictionary<,>.KeyCollection.Enumerator).MakeGenericType(_types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
+        var keysCollectionType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection), _types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
+        var keysEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.KeyCollection.Enumerator), _types.String, _tsEventEmitterEventsField.FieldType.GetGenericArguments()[1]);
 
         // GetEnumerator on KeyCollection
         var getEnumeratorMethod = EmitterTypeHelpers.ResolveMethod(keysCollectionType, typeof(Dictionary<,>.KeyCollection).GetMethod("GetEnumerator")!);

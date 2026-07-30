@@ -131,7 +131,7 @@ public partial class ILEmitter
         if (isGeneric && n.TypeArgs != null && n.TypeArgs.Count > 0)
         {
             Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
-            targetType = typeBuilder.MakeGenericType(typeArgs);
+            targetType = EmitGenerics.MakeGenericType(typeBuilder, typeArgs);
             targetCtor = EmitterTypeHelpers.ResolveConstructor(targetType, ctorBuilder);
         }
 
@@ -212,7 +212,7 @@ public partial class ILEmitter
         for (int i = 0; i < inferred.Length; i++)
             inferred[i] ??= _ctx.Types.Object;
 
-        Type targetType = typeBuilder.MakeGenericType(inferred!);
+        Type targetType = EmitGenerics.MakeGenericType(typeBuilder, inferred!);
         ConstructorInfo targetCtor = EmitterTypeHelpers.ResolveConstructor(targetType, ctorBuilder);
 
         // 4. Reload arguments. Generic-parameter slots already hold a value whose CLR type
@@ -268,7 +268,7 @@ public partial class ILEmitter
 
             // Explicit type arguments (e.g. `new Box<number>(42)`): close the generic directly.
             Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
-            Type closedType = classExprTypeBuilder.MakeGenericType(typeArgs);
+            Type closedType = EmitGenerics.MakeGenericType(classExprTypeBuilder, typeArgs);
             ConstructorInfo closedCtor = EmitterTypeHelpers.ResolveConstructor(closedType, classExprCtor);
             EmitClassExprCtorCall(closedCtor, closedCtor.GetParameters(), n);
             return;

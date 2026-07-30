@@ -119,7 +119,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitAsyncGeneratorBuildResultMethod(TypeBuilder typeBuilder, ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var builderType = typeof(System.Runtime.CompilerServices.AsyncTaskMethodBuilder<>).MakeGenericType(_types.Object);
+        var builderType = _types.MakeGenericType(typeof(System.Runtime.CompilerServices.AsyncTaskMethodBuilder<>), _types.Object);
         var valueTaskAwaiterType = _types.ValueTaskAwaiterOfBool;
 
         // --- State machine type ---
