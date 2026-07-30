@@ -1,19 +1,19 @@
 using System.Reflection;
-using System.Reflection.Emit;
+using SharpTS.Compilation;
 
 namespace SharpTS.Packaging;
 
 /// <summary>
-/// Builds CustomAttributeBuilder instances for assembly-level attributes.
+/// Builds encoded assembly-level attributes (raw ECMA-335 blobs; CustomAttributeBuilder is unavailable under Native AOT, #1324).
 /// </summary>
 public static class AssemblyAttributeBuilder
 {
     /// <summary>
     /// Creates all assembly-level attribute builders from metadata.
     /// </summary>
-    public static List<CustomAttributeBuilder> BuildAll(AssemblyMetadata metadata)
+    public static List<EncodedCustomAttribute> BuildAll(AssemblyMetadata metadata)
     {
-        List<CustomAttributeBuilder> attributes = [];
+        List<EncodedCustomAttribute> attributes = [];
 
         if (!string.IsNullOrEmpty(metadata.Title))
             attributes.Add(BuildStringAttribute<AssemblyTitleAttribute>(metadata.Title));
@@ -43,11 +43,11 @@ public static class AssemblyAttributeBuilder
     /// <summary>
     /// Builds an attribute with a single string constructor parameter.
     /// </summary>
-    private static CustomAttributeBuilder BuildStringAttribute<TAttribute>(string value)
+    private static EncodedCustomAttribute BuildStringAttribute<TAttribute>(string value)
         where TAttribute : Attribute
     {
         var ctor = typeof(TAttribute).GetConstructor([typeof(string)])
             ?? throw new InvalidOperationException($"No string constructor found for {typeof(TAttribute).Name}");
-        return new CustomAttributeBuilder(ctor, [value]);
+        return new EncodedCustomAttribute(ctor, CustomAttributeEncoder.Encode(ctor, value));
     }
 }

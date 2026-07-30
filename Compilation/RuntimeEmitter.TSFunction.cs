@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
             _types.ObjectArray,
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        field.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        field.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentArgumentsField = field;
         typeBuilder.CreateType();
     }
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
-        currentThisField.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
+        currentThisField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.CurrentFunctionThisField = currentThisField;
 
         // Note: the thread-static `_currentArguments` slot used for JS `arguments` is

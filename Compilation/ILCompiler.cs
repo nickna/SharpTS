@@ -313,10 +313,10 @@ public partial class ILCompiler
         var constructor = typeof(System.Diagnostics.DebuggableAttribute)
             .GetConstructor([typeof(System.Diagnostics.DebuggableAttribute.DebuggingModes)])!;
 
-        _assemblyBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+        _assemblyBuilder.SetCustomAttribute(constructor, CustomAttributeEncoder.Encode(
             constructor,
-            [System.Diagnostics.DebuggableAttribute.DebuggingModes.Default
-                | System.Diagnostics.DebuggableAttribute.DebuggingModes.DisableOptimizations]));
+            System.Diagnostics.DebuggableAttribute.DebuggingModes.Default
+                | System.Diagnostics.DebuggableAttribute.DebuggingModes.DisableOptimizations));
     }
 
     private DebugEmitScope? CreateDebugScope(SourceDocument? document)
@@ -451,7 +451,7 @@ public partial class ILCompiler
         {
             foreach (var attr in AssemblyAttributeBuilder.BuildAll(metadata))
             {
-                _assemblyBuilder.SetCustomAttribute(attr);
+                _assemblyBuilder.SetCustomAttribute(attr.Ctor, attr.Blob);
             }
         }
 

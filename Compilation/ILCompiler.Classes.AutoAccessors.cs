@@ -237,7 +237,7 @@ public partial class ILCompiler
             var attribute = AttributeMapper.MapToAttribute(decorator);
             if (attribute != null)
             {
-                backingField.SetCustomAttribute(attribute);
+                backingField.SetCustomAttribute(attribute.Value.Ctor, attribute.Value.Blob);
             }
         }
     }

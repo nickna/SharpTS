@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
@@ -31,33 +32,31 @@ public partial class ILCompiler
                 typeof(AsyncIteratorStateMachineAttribute),
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
-        kickoff.SetCustomAttribute(new CustomAttributeBuilder(
-            attributeType.GetConstructor([typeof(Type)])!,
-            [stateMachine]));
+        var stateMachineAttrCtor = attributeType.GetConstructor([typeof(Type)])!;
+        kickoff.SetCustomAttribute(
+            stateMachineAttrCtor, CustomAttributeEncoder.Encode(stateMachineAttrCtor, stateMachine));
 
         foreach (MethodBuilder? method in infrastructure)
         {
             if (method is null)
                 continue;
             MarkCompilerGenerated(method);
-            method.SetCustomAttribute(new CustomAttributeBuilder(
+            method.SetCustomAttribute(
                 typeof(System.Diagnostics.DebuggerNonUserCodeAttribute)
                     .GetConstructor(Type.EmptyTypes)!,
-                []));
+                CustomAttributeEncoder.EmptyBlob);
         }
 
         if (EmitDebugSymbols)
             _debugInfo.RecordStateMachine(kickoff, moveNext);
     }
 
+    private static readonly ConstructorInfo _compilerGeneratedCtor =
+        typeof(CompilerGeneratedAttribute).GetConstructor(Type.EmptyTypes)!;
+
     private static void MarkCompilerGenerated(TypeBuilder type) =>
-        type.SetCustomAttribute(CompilerGeneratedAttribute());
+        type.SetCustomAttribute(_compilerGeneratedCtor, CustomAttributeEncoder.EmptyBlob);
 
     private static void MarkCompilerGenerated(MethodBuilder method) =>
-        method.SetCustomAttribute(CompilerGeneratedAttribute());
-
-    private static CustomAttributeBuilder CompilerGeneratedAttribute() =>
-        new(
-            typeof(CompilerGeneratedAttribute).GetConstructor(Type.EmptyTypes)!,
-            []);
+        method.SetCustomAttribute(_compilerGeneratedCtor, CustomAttributeEncoder.EmptyBlob);
 }

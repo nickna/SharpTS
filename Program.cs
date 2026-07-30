@@ -610,6 +610,9 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
     catch (Exception ex)
     {
+        // PROBE (gate, #1324): full stack for diagnosing native-AOT compile walls.
+        if (Environment.GetEnvironmentVariable("SHARPTS_DEBUG_STACK") == "1")
+            Console.Error.WriteLine(ex);
         if (outputOptions.MsBuildErrors)
         {
             // MSBuild error format: file(line,col): error CODE: message

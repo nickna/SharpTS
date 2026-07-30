@@ -147,10 +147,10 @@ public class UnionTypeGenerator
             [UnionTypeInterface]
         );
 
-        // Add StructLayout attribute for auto layout
-        var structLayoutCtor = typeof(StructLayoutAttribute).GetConstructor([typeof(LayoutKind)])!;
-        var structLayoutAttr = new CustomAttributeBuilder(structLayoutCtor, [LayoutKind.Auto]);
-        typeBuilder.SetCustomAttribute(structLayoutAttr);
+        // No StructLayout attribute needed: layout is a TypeDef flag, not a real CA row, and
+        // DefineType without SequentialLayout/ExplicitLayout already produces AutoLayout (0x0)
+        // — it is the C# compiler that stamps structs Sequential, not the metadata default.
+        // (The former CustomAttributeBuilder here also threw PNSE under Native AOT — #1324.)
 
         // Define _tag field (byte for efficiency, supports up to 256 union members)
         // Note: Cannot use InitOnly because implicit conversion operators need to set fields

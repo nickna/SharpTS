@@ -121,7 +121,7 @@ public partial class ILCompiler
             // used as a map/forEach/every callback reads a null index (#101).
             if (_runtime?.CapturesArgumentsAttrCtor != null)
                 methodBuilder.SetCustomAttribute(
-                    new System.Reflection.Emit.CustomAttributeBuilder(_runtime.CapturesArgumentsAttrCtor, []));
+                    _runtime.CapturesArgumentsAttrCtor, CustomAttributeEncoder.EmptyBlob);
         }
 
         // Generate overloads for functions with default parameters
@@ -1346,7 +1346,7 @@ public partial class ILCompiler
     {
         if (_runtime?.PadUndefinedAttrCtor != null)
             method.SetCustomAttribute(
-                new System.Reflection.Emit.CustomAttributeBuilder(_runtime.PadUndefinedAttrCtor, []));
+                _runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>
@@ -1361,7 +1361,7 @@ public partial class ILCompiler
     {
         if (_runtime?.ExpectsThisAttrCtor != null)
             method.SetCustomAttribute(
-                new System.Reflection.Emit.CustomAttributeBuilder(_runtime.ExpectsThisAttrCtor, []));
+                _runtime.ExpectsThisAttrCtor, CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>
