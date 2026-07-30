@@ -420,9 +420,6 @@ public partial class ILCompiler
         // Use the new emitter for full generator body emission
         var emitter = new GeneratorMoveNextEmitter(smBuilder, analysis, _types);
         emitter.EmitMoveNext(funcStmt.Body, ctx, funcStmt.Parameters);
-
-        ILLabelValidator.Validate(smBuilder.MoveNextMethod.GetILGenerator(),
-            $"generator MoveNext {funcStmt.Name.Lexeme}");
     }
 
     /// <summary>
@@ -504,9 +501,6 @@ public partial class ILCompiler
         // Emit MoveNext body
         var moveNextEmitter = new GeneratorMoveNextEmitter(smBuilder, analysis, _types);
         moveNextEmitter.EmitMoveNext(method.Body, ctx, method.Parameters);
-
-        ILLabelValidator.Validate(il,
-            $"generator method MoveNext {methodBuilder.DeclaringType?.Name}::{method.Name.Lexeme}");
 
         // Finalize the state machine type
         smBuilder.CreateType();

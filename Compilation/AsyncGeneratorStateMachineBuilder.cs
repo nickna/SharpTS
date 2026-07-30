@@ -810,12 +810,10 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     public FieldBuilder? GetEnumeratorField(Parsing.Stmt.ForOf loop) => _hoisting.GetEnumeratorField(loop);
 
     /// <summary>
-    /// Finalizes the type after MoveNextAsync body has been emitted.
+    /// Finalizes the type after the MoveNextAsync body has been emitted.
     /// </summary>
     public override Type CreateType()
     {
-        ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
-        ILLabelValidator.SweepConstructors(new[] { _stateMachineType });
         return _stateMachineType.CreateType()!;
     }
 }

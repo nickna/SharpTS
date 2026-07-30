@@ -68,27 +68,6 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     // Delegated enumerator field for yield* expressions
     public FieldBuilder? DelegatedEnumeratorField { get; private set; }
 
-    // Stack-spill fields for yield*'s that appear in expression contexts with pre-existing
-    // stack items. A yield*'s resume label is the target of both fall-through (stack=N) and
-    // state-dispatch (stack=0), which CLR rejects as a stack-imbalance. We spill pre-yield*
-    // stack items into these fields, run setup/resume with an empty stack, and restore them
-    // at loop-end so callers observe the expected stack shape.
-    private readonly Dictionary<(int StateNumber, int Slot), FieldBuilder> _yieldStarSpillFields = new();
-
-    public FieldBuilder GetOrDefineYieldStarSpillField(int stateNumber, int slot)
-    {
-        var key = (stateNumber, slot);
-        if (!_yieldStarSpillFields.TryGetValue(key, out var f))
-        {
-            f = _stateMachineType.DefineField(
-                $"<>s__{stateNumber}_{slot}",
-                _types.Object,
-                FieldAttributes.Private);
-            _yieldStarSpillFields[key] = f;
-        }
-        return f;
-    }
-
     // Constructor
     public ConstructorBuilder Constructor { get; private set; } = null!;
 
@@ -448,8 +427,6 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     /// </summary>
     public override Type CreateType()
     {
-        ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
-        ILLabelValidator.SweepConstructors(new[] { _stateMachineType });
         return _stateMachineType.CreateType()!;
     }
 

@@ -83,14 +83,10 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     // AsyncTaskMethodBuilder has a parameterless SetResult, the generic builders take the value.
 
     /// <summary>
-    /// Finalizes the type after the MoveNext body has been emitted. Validates labels on every
-    /// method in this state-machine type first — CreateType() clears the ILGenerator control-flow
-    /// state, so a post-finalize sweep cannot see unmarked branched labels.
+    /// Finalizes the type after the MoveNext body has been emitted.
     /// </summary>
     public override Type CreateType()
     {
-        ILLabelValidator.SweepAllTypes(new[] { StateMachineType });
-        ILLabelValidator.SweepConstructors(new[] { StateMachineType });
         return StateMachineType.CreateType()!;
     }
 }

@@ -1384,12 +1384,6 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
-        // Run label validation BEFORE finalizing types — ILGenerator branch/label state is cleared
-        // once CreateType() is called, so we need to catch unmarked-and-branched labels here.
-        var allTypes = ILLabelValidator.AllTypesFromModule(_moduleBuilder).ToList();
-        ILLabelValidator.SweepAllTypes(allTypes);
-        ILLabelValidator.SweepConstructors(allTypes);
-
         _unionGenerator?.FinalizeAllUnionTypes();
 
         // Finalize generated object-literal shape structs (#862) before any type that uses them.

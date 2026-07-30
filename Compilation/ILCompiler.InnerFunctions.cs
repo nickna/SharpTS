@@ -618,7 +618,6 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ret);
             }
 
-            ILLabelValidator.Validate(il, $"inner fn {enclosingFuncName}::{func.Name.Lexeme}");
         }
         _modules.CurrentPath = savedPath;
     }

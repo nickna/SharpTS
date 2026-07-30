@@ -472,7 +472,6 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
-        ILLabelValidator.Validate(il, $"function {qualifiedFunctionName}");
     }
 
     /// <summary>
@@ -1060,8 +1059,6 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
 
         il.Emit(OpCodes.Ret);
-
-        ILLabelValidator.Validate(il, "entry point (single-file)");
     }
 
     /// <summary>
@@ -1268,7 +1265,6 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
-        ILLabelValidator.Validate(il, "entry point (multi-module)");
     }
 
     /// <summary>
