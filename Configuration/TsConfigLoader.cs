@@ -18,8 +18,6 @@ public static class TsConfigLoader
 {
     public const string FileName = "tsconfig.json";
 
-    private static JsonSerializerOptions JsonOptions => FileDiscovery.LenientJsonOptions;
-
     /// <summary>
     /// Finds the nearest tsconfig.json in <paramref name="startDirectory"/> or its parents and
     /// loads it with its <c>extends</c> chain. Returns null when none exists.
@@ -109,7 +107,7 @@ public static class TsConfigLoader
         try
         {
             using var stream = File.OpenRead(full);
-            return JsonSerializer.Deserialize<TsConfigJson>(stream, JsonOptions)
+            return JsonSerializer.Deserialize(stream, TsConfigJsonContext.Default.TsConfigJson)
                 ?? throw new Exception($"Error: {FileName} ('{full}') is empty or null.");
         }
         catch (JsonException ex)

@@ -181,7 +181,7 @@ public static partial class RuntimeTypes
             null => "null",
             bool b => b ? "true" : "false",
             double d => FormatJsonNumber(d),
-            string s => JsonSerializer.Serialize(s),
+            string s => Runtime.BuiltIns.JsonStringEscaper.Quote(s),
             List<object?> arr => StringifyJsonArray(arr, replacer, allowedKeys, indentStr, depth),
             Dictionary<string, object?> obj => StringifyJsonObject(obj, replacer, allowedKeys, indentStr, depth),
             _ => null
@@ -286,7 +286,7 @@ public static partial class RuntimeTypes
             var str = StringifyJsonValue(val, replacer, allowedKeys, indentStr, depth + 1);
             if (str != null)
             {
-                var escapedKey = JsonSerializer.Serialize(kv.Key);
+                var escapedKey = Runtime.BuiltIns.JsonStringEscaper.Quote(kv.Key);
                 parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
             }
         }
@@ -357,7 +357,7 @@ public static partial class RuntimeTypes
             var str = StringifyJsonValue(val, replacer, allowedKeys, indentStr, depth + 1);
             if (str != null)
             {
-                var escapedKey = JsonSerializer.Serialize(kv.Key);
+                var escapedKey = Runtime.BuiltIns.JsonStringEscaper.Quote(kv.Key);
                 parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
             }
         }

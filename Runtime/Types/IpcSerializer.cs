@@ -13,7 +13,7 @@ public static class IpcSerializer
     /// </summary>
     public static string Serialize(object? value)
     {
-        return JsonSerializer.Serialize(ToJsonElement(value));
+        return BuiltIns.JsonGraphWriter.Write(ToJsonElement(value));
     }
 
     /// <summary>

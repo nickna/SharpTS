@@ -10,8 +10,6 @@ public static class SharpTsManifestLoader
 {
     public const string FileName = "sharpts.json";
 
-    private static JsonSerializerOptions JsonOptions => FileDiscovery.LenientJsonOptions;
-
     /// <summary>
     /// Finds and loads the nearest sharpts.json in <paramref name="startDirectory"/>
     /// or its parents. Walk policy (temp/user-profile ceilings) is
@@ -40,7 +38,7 @@ public static class SharpTsManifestLoader
         try
         {
             using var stream = File.OpenRead(path);
-            manifest = JsonSerializer.Deserialize<SharpTsManifest>(stream, JsonOptions);
+            manifest = JsonSerializer.Deserialize(stream, SharpTsManifestContext.Default.SharpTsManifest);
         }
         catch (JsonException ex)
         {

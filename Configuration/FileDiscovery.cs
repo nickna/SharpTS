@@ -11,16 +11,6 @@ namespace SharpTS.Configuration;
 /// </summary>
 internal static class FileDiscovery
 {
-    /// <summary>
-    /// The lenient parse options every config/manifest loader uses: case-insensitive keys,
-    /// comments, and trailing commas allowed. Shared read-only instance — never mutate.
-    /// </summary>
-    internal static readonly JsonSerializerOptions LenientJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
 
     /// <summary>
     /// Returns the full path of the nearest <paramref name="fileName"/> in

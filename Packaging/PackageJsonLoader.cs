@@ -8,7 +8,6 @@ namespace SharpTS.Packaging;
 /// </summary>
 public static class PackageJsonLoader
 {
-    private static JsonSerializerOptions JsonOptions => FileDiscovery.LenientJsonOptions;
 
     /// <summary>
     /// Attempts to find and load a package.json file in the specified directory or its parents.
@@ -37,7 +36,7 @@ public static class PackageJsonLoader
             throw new FileNotFoundException($"package.json not found at: {path}", path);
 
         using var stream = File.OpenRead(path);
-        return JsonSerializer.Deserialize<PackageJson>(stream, JsonOptions)
+        return JsonSerializer.Deserialize(stream, PackageJsonContext.Default.PackageJson)
             ?? throw new JsonException($"Failed to parse package.json at: {path}");
     }
 

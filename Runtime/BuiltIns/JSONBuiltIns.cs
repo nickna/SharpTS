@@ -284,7 +284,7 @@ public static class JSONBuiltIns
                 else sb.Append(numStr);
                 return true;
             case string s:
-                sb.Append(JsonSerializer.Serialize(s));
+                JsonStringEscaper.AppendQuoted(sb, s);
                 return true;
             case SharpTSBigInt:
                 throw new ThrowException("TypeError: BigInt value can't be serialized in JSON");
@@ -461,7 +461,7 @@ public static class JSONBuiltIns
                     if (pretty) sb.Append(stepIndent);
                 }
 
-                sb.Append(JsonSerializer.Serialize(key));
+                JsonStringEscaper.AppendQuoted(sb, key);
                 sb.Append(':');
                 if (pretty) sb.Append(' ');
 

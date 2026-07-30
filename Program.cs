@@ -382,8 +382,9 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
         },
     };
 
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-        payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    // JsonGraphWriter, not JsonSerializer.Serialize(object): --show-config must work in the
+    // native SKU, where the reflection resolver is unavailable (#1324 Phase 1).
+    Console.WriteLine(SharpTS.Runtime.BuiltIns.JsonGraphWriter.Write(payload, indented: true));
 }
 
 /// <summary>
