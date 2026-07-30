@@ -76,7 +76,9 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     /// Detected by type name (the type cannot be referenced from SharpTS.dll), the same
     /// approach <see cref="StructuredClone"/> uses for <c>$ArrayBuffer</c>/<c>$SharedArrayBuffer</c>.
     /// </summary>
-    public static bool IsEmittedMessagePort(object? value) => value?.GetType().Name == "$MessagePort";
+    public static bool IsEmittedMessagePort(object? value) =>
+        value != null && ManagedEmittedShapeReflection.IsShape(
+            value.GetType(), ManagedEmittedShape.MessagePort);
 
     /// <summary>
     /// Adopts a transferred compiled <c>$MessagePort</c> into a worker-usable bridge.
@@ -88,11 +90,13 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     {
         var type = compiledPort.GetType();
 
-        var postMessage = type.GetMethod("PostMessage", [typeof(object)])
+        var postMessage = ManagedEmittedShapeReflection.GetPublicMethod(
+                type, ManagedEmittedShape.MessagePort, "PostMessage", [typeof(object)])
             ?? throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: no PostMessage(object) method (emitted shape changed?)");
 
-        var pendingField = type.GetField("_pending", BindingFlags.NonPublic | BindingFlags.Instance)
+        var pendingField = ManagedEmittedShapeReflection.GetNonPublicInstanceField(
+                type, ManagedEmittedShape.MessagePort, "_pending")
             ?? throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: no _pending field (emitted shape changed?)");
 
@@ -100,11 +104,13 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
             throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: _pending is not a ConcurrentQueue<object>");
 
-        var onEnqueueField = type.GetField("_onEnqueue", BindingFlags.NonPublic | BindingFlags.Instance)
+        var onEnqueueField = ManagedEmittedShapeReflection.GetNonPublicInstanceField(
+                type, ManagedEmittedShape.MessagePort, "_onEnqueue")
             ?? throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: no _onEnqueue field (emitted shape changed?)");
 
-        var markTransferred = type.GetMethod("MarkTransferredAcrossThreads", Type.EmptyTypes)
+        var markTransferred = ManagedEmittedShapeReflection.GetPublicMethod(
+                type, ManagedEmittedShape.MessagePort, "MarkTransferredAcrossThreads", Type.EmptyTypes)
             ?? throw new StructuredClone.DataCloneError(
                 "Cannot transfer $MessagePort: no MarkTransferredAcrossThreads method (emitted shape changed?)");
         // Flags this port AND its (compiled, still parent-side) partner cross-thread, so a

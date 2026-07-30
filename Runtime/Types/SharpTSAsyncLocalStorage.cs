@@ -135,10 +135,12 @@ public class SharpTSAsyncLocalStorage
     /// </summary>
     private static object? InvokeCallback(Interp? interpreter, object? callback, List<object?> args)
     {
-        if (callback is ISharpTSCallable callable)
-            return callable.Call(interpreter!, args);
+        if (RuntimeCallableDispatcher.IsCallable(callback))
+            return RuntimeCallableDispatcher.Invoke(interpreter, callback, args.ToArray());
 
-        // Compiled mode: use reflection to find Invoke(object[]) on emitted types
+        // Preserve the managed .NET interop fallback for arbitrary objects
+        // exposing Invoke(object[]). Its warning remains until that native
+        // interop surface is defined.
         var invokeMethod = callback?.GetType().GetMethod("Invoke", [typeof(object?[])]);
         if (invokeMethod != null)
             return invokeMethod.Invoke(callback, [args.ToArray()]);

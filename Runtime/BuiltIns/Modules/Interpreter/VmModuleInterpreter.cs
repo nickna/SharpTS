@@ -525,8 +525,14 @@ public static class VmModuleInterpreter
             case Dictionary<string, object?> dict:
                 return dict.TryGetValue(key, out var val) ? val : null;
             default:
-                // Emitted $Object / other shapes — reflect on a "Fields" dictionary.
-                var fieldsProp = options.GetType().GetProperty("Fields");
+                // Compiler-emitted $Object uses the managed-shape boundary.
+                // Preserve other CLR "Fields" shapes for managed .NET interop.
+                var type = options.GetType();
+                var fieldsProp = ManagedEmittedShapeReflection.IsShape(
+                        type, ManagedEmittedShape.Object)
+                    ? ManagedEmittedShapeReflection.GetPublicProperty(
+                        type, ManagedEmittedShape.Object, "Fields")
+                    : type.GetProperty("Fields");
                 if (fieldsProp?.GetValue(options) is IEnumerable<KeyValuePair<string, object?>> fields)
                 {
                     foreach (var kv in fields)
