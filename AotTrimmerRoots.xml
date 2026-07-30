@@ -1,9 +1,11 @@
 <!-- Trimmer roots for Native AOT builds (#1324 gate). Only consulted by ILLink/ILC;
      a no-op for normal JIT builds.
-     TypeBuilderInstantiation: TypeProvider.MakeGenericType's AOT fallback constructs it via
-     internal reflection (see TypeProvider.cs) — root it so trimming can't remove the factory. -->
+     TypeBuilderInstantiation (corelib): EmitGenerics' AOT fallback constructs it via its
+     internal static MakeGenericType(Type, Type[]) factory — see EmitGenerics.cs. Rooting the
+     single type keeps that reflectable (a full-corelib descriptor fails to link; this targeted
+     one is fine — probe-verified on ILC 10.0.9). -->
 <linker>
-  <assembly fullname="System.Reflection.Emit">
+  <assembly fullname="System.Private.CoreLib">
     <type fullname="System.Reflection.Emit.TypeBuilderInstantiation" preserve="all" />
   </assembly>
 </linker>

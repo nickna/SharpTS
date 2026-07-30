@@ -32,12 +32,19 @@ internal static class EmitGenerics
 
     private static Type MakeTypeBuilderInstantiation(Type genericDefinition, Type[] typeArguments)
     {
-        // Internal API of the managed System.Reflection.Emit (the persisted implementation —
-        // the only one that exists under Native AOT). Kept alive by the TrimmerRootDescriptor
-        // in AotTrimmerRoots.xml. If the internal shape ever changes, this fails loudly here
-        // rather than corrupting output.
+        // Internal corelib API (probe-verified on ILC 10.0.9): under Native AOT,
+        // TypeBuilderInstantiation lives in System.Private.CoreLib (it is what
+        // TypeBuilder.MakeGenericType returns there), and constructing it through this factory
+        // yields instantiations that PersistedAssemblyBuilder's signature writer AND
+        // TypeBuilder.GetConstructor/GetMethod accept — Save produces correct
+        // TypeSpec/MemberRef rows. Kept alive by the targeted TrimmerRootDescriptor in
+        // AotTrimmerRoots.xml (full-corelib descriptors fail to link; one type is fine). The
+        // unqualified name resolves in corelib on both runtimes, but on CoreCLR the fallback
+        // never fires — RuntimeType.MakeGenericType already returns TypeBuilderInstantiation
+        // for builder args. If the internal shape ever changes, this fails loudly here rather
+        // than corrupting output.
         _tbiFactory ??= Type.GetType(
-                "System.Reflection.Emit.TypeBuilderInstantiation, System.Reflection.Emit",
+                "System.Reflection.Emit.TypeBuilderInstantiation",
                 throwOnError: true)!
             .GetMethod(
                 "MakeGenericType",
