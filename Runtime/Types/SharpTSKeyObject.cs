@@ -377,7 +377,7 @@ public class SharpTSKeyObject : ISharpTSPropertyAccessor
         // values have already gone through the guarded StreamFields path.
         if (options != null &&
             !ManagedEmittedShapeReflection.IsShape(
-                options.GetType(), ManagedEmittedShape.Object) &&
+                options.GetType(), ManagedEmittedShape.HasFields) &&
             options is not SharpTSObject &&
             options is not IDictionary<string, object?>)
         {

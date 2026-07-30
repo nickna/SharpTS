@@ -69,48 +69,18 @@ public static partial class ObjectBuiltIns
                 break;
 
             default:
-                // Try reflection for compiled class instances
-                var type = source.GetType();
-
-                // First, get typed backing fields (fields starting with __) for compiled class instances
-                foreach (var backingField in type.GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+                // Compiler-emitted classes expose a combined view of typed
+                // backing fields and expando properties through $IHasFields.
+                if (ManagedEmittedShapeReflection.TryGetFields(
+                        source, out var emittedFields))
                 {
-                    if (backingField.Name.StartsWith("__"))
+                    foreach (var kv in emittedFields!)
                     {
-                        string pascalName = backingField.Name[2..]; // Remove __ prefix
-                        // Convert PascalCase back to camelCase (how TypeScript originally named it)
-                        string propName = ToCamelCase(pascalName);
-                        target[propName] = backingField.GetValue(source);
-                    }
-                }
-
-                // Also check for _fields dictionary (for dynamically added properties)
-                var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (fieldsField != null)
-                {
-                    var fieldsValue = fieldsField.GetValue(source);
-                    if (fieldsValue is System.Collections.IDictionary fieldsDict)
-                    {
-                        foreach (System.Collections.DictionaryEntry entry in fieldsDict)
-                        {
-                            target[entry.Key?.ToString() ?? ""] = entry.Value;
-                        }
+                        target[kv.Key] = kv.Value;
                     }
                 }
                 break;
         }
-    }
-
-    /// <summary>
-    /// Converts a PascalCase property name to camelCase.
-    /// </summary>
-    private static string ToCamelCase(string pascalCase)
-    {
-        if (string.IsNullOrEmpty(pascalCase))
-            return pascalCase;
-        if (char.IsLower(pascalCase[0]))
-            return pascalCase;
-        return char.ToLowerInvariant(pascalCase[0]) + pascalCase[1..];
     }
 
     /// <summary>
@@ -250,50 +220,29 @@ public static partial class ObjectBuiltIns
     private static SharpTSPropertyDescriptor? TryGetPropertyDescriptorViaReflection(object target, string propKey)
     {
         var type = target.GetType();
-        var methods = type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-        // Find HasProperty and GetProperty methods
-        System.Reflection.MethodInfo? hasPropertyMethod = null;
-        System.Reflection.MethodInfo? getPropertyMethod = null;
-
-        foreach (var m in methods)
+        if (!ManagedEmittedShapeReflection.IsShape(
+                type, ManagedEmittedShape.HasFields))
         {
-            if (m.Name == "HasProperty")
-            {
-                var parms = m.GetParameters();
-                if (parms.Length == 1 && parms[0].ParameterType == typeof(string))
-                {
-                    hasPropertyMethod = m;
-                }
-            }
-            else if (m.Name == "GetProperty")
-            {
-                var parms = m.GetParameters();
-                if (parms.Length == 1 && parms[0].ParameterType == typeof(string))
-                {
-                    getPropertyMethod = m;
-                }
-            }
+            return null;
         }
 
-        if (hasPropertyMethod != null && getPropertyMethod != null)
-        {
-            var hasProperty = (bool?)hasPropertyMethod.Invoke(target, [propKey]);
-            if (hasProperty != true)
-            {
-                return null;
-            }
+        var hasPropertyMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+            type, ManagedEmittedShape.HasFields, "HasProperty", [typeof(string)]);
+        var getPropertyMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+            type, ManagedEmittedShape.HasFields, "GetProperty", [typeof(string)]);
 
-            var value = getPropertyMethod.Invoke(target, [propKey]);
-            return new SharpTSPropertyDescriptor
-            {
-                Value = value,
-                Writable = true,
-                Enumerable = true,
-                Configurable = true
-            };
+        if (hasPropertyMethod?.Invoke(target, [propKey]) is not true ||
+            getPropertyMethod == null)
+        {
+            return null;
         }
 
-        return null;
+        return new SharpTSPropertyDescriptor
+        {
+            Value = getPropertyMethod.Invoke(target, [propKey]),
+            Writable = true,
+            Enumerable = true,
+            Configurable = true
+        };
     }
 }

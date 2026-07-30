@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns.Modules;
 
 namespace SharpTS.Compilation;
@@ -274,17 +275,8 @@ public static partial class RuntimeTypes
     /// </summary>
     private static void InvokeCallback(object callback, object?[] args)
     {
-        if (callback is Delegate del)
-        {
-            del.DynamicInvoke(new object?[] { args });
-            return;
-        }
-
-        // Emitted TSFunction: look for Invoke(object[]) method
-        var invokeMethod = callback.GetType().GetMethod("Invoke",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
-            null, [typeof(object?[])], null);
-        invokeMethod?.Invoke(callback, [args]);
+        if (RuntimeCallableDispatcher.IsCallable(callback))
+            RuntimeCallableDispatcher.Invoke(null, callback, args);
     }
 
     private static string[] ExtractStringArray(object? value)

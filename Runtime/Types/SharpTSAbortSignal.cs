@@ -1,4 +1,5 @@
 using SharpTS.Compilation;
+using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 using Interp = SharpTS.Execution.Interpreter;
@@ -171,12 +172,8 @@ public class SharpTSAbortSignal : ITypeCategorized
             return;
         }
 
-        // Reflection fallback for unknown callable types
-        var invokeMethod = listener.GetType().GetMethod("Invoke");
-        if (invokeMethod != null)
-        {
-            invokeMethod.Invoke(listener, [Array.Empty<object?>()]);
-        }
+        if (RuntimeCallableDispatcher.IsCallable(listener))
+            RuntimeCallableDispatcher.Invoke(interpreter, listener);
     }
 
     #region Static Factories

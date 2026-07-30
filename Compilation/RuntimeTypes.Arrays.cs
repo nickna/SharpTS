@@ -1,4 +1,4 @@
-using System.Reflection;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -37,37 +37,12 @@ public static partial class RuntimeTypes
         {
             return Enumerable.Range(0, list.Count).Select(i => (object?)i.ToString()).ToList();
         }
-        // For compiled class instances, get keys from typed backing fields AND _fields dictionary
-        if (obj != null)
+        // Compiler-emitted $Object and class instances expose a combined
+        // typed-field + expando dictionary through their $IHasFields contract.
+        if (obj != null &&
+            ManagedEmittedShapeReflection.TryGetFields(obj, out var fields))
         {
-            List<object?> keys = [];
-            var type = obj.GetType();
-
-            // Get typed backing fields (fields starting with __)
-            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
-            {
-                if (backingField.Name.StartsWith("__"))
-                {
-                    // Extract property name by removing __ prefix
-                    string propName = backingField.Name[2..];
-                    keys.Add(propName);
-                }
-            }
-
-            // Also get keys from _fields dictionary (for dynamic properties and generic type fields)
-            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
-            {
-                foreach (var key in fields.Keys)
-                {
-                    if (!keys.Contains(key))
-                    {
-                        keys.Add(key);
-                    }
-                }
-            }
-
-            return keys;
+            return fields!.Keys.Select(k => (object?)k).ToList();
         }
         return [];
     }
@@ -93,37 +68,12 @@ public static partial class RuntimeTypes
             names.Add("length");
             return names;
         }
-        // For compiled class instances, get names from typed backing fields AND _fields dictionary
-        if (obj != null)
+        // Compiler-emitted $Object and class instances expose all string-keyed
+        // own fields through their $IHasFields contract.
+        if (obj != null &&
+            ManagedEmittedShapeReflection.TryGetFields(obj, out var fields))
         {
-            List<object?> names = [];
-            var type = obj.GetType();
-
-            // Get typed backing fields (fields starting with __)
-            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
-            {
-                if (backingField.Name.StartsWith("__"))
-                {
-                    // Extract property name by removing __ prefix
-                    string propName = backingField.Name[2..];
-                    names.Add(propName);
-                }
-            }
-
-            // Also get names from _fields dictionary (for dynamic properties and generic type fields)
-            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
-            {
-                foreach (var key in fields.Keys)
-                {
-                    if (!names.Contains(key))
-                    {
-                        names.Add(key);
-                    }
-                }
-            }
-
-            return names;
+            return fields!.Keys.Select(k => (object?)k).ToList();
         }
         return [];
     }

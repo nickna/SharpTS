@@ -1,3 +1,5 @@
+using SharpTS.Runtime;
+
 namespace SharpTS.Compilation;
 
 public static partial class RuntimeTypes
@@ -145,41 +147,17 @@ public static partial class RuntimeTypes
     }
 
     /// <summary>
-    /// Invokes a function-like object (TSFunction or emitted $TSFunction).
-    /// Uses duck typing to support both the SharpTS TSFunction class and the emitted type.
+    /// Invokes a recognised runtime callable with one argument.
     /// </summary>
     private static bool TryInvokeFunction(object? func, object? arg, out object? result)
     {
         result = null;
 
-        if (func == null)
+        if (!RuntimeCallableDispatcher.IsCallable(func))
             return false;
 
-        // Check for SharpTS.Compilation.TSFunction
-        if (func is TSFunction tsFunc)
-        {
-            result = tsFunc.Invoke(arg);
-            return true;
-        }
-
-        // Check for emitted $TSFunction or any type with an Invoke method
-        var invokeMethod = func.GetType().GetMethod("Invoke");
-        if (invokeMethod != null)
-        {
-            var parameters = invokeMethod.GetParameters();
-            // Handle params array signature: Invoke(params object?[] args)
-            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(object[]))
-            {
-                result = invokeMethod.Invoke(func, [new object?[] { arg }]);
-            }
-            else
-            {
-                result = invokeMethod.Invoke(func, [arg]);
-            }
-            return true;
-        }
-
-        return false;
+        result = RuntimeCallableDispatcher.Invoke(null, func, arg);
+        return true;
     }
 
     /// <summary>
@@ -189,38 +167,21 @@ public static partial class RuntimeTypes
     {
         result = null;
 
-        if (func == null)
+        if (!RuntimeCallableDispatcher.IsCallable(func))
             return false;
 
-        // Check for SharpTS.Compilation.TSFunction
-        if (func is TSFunction tsFunc)
+        try
         {
-            result = tsFunc.Invoke();
+            result = RuntimeCallableDispatcher.Invoke(null, func);
             return true;
         }
-
-        // Check for emitted $TSFunction or any type with an Invoke method
-        var invokeMethod = func.GetType().GetMethod("Invoke");
-        if (invokeMethod != null)
+        catch (System.Reflection.TargetInvocationException ex)
         {
-            try
-            {
-                var parameters = invokeMethod.GetParameters();
-                // The emitted $TSFunction.Invoke has signature: Invoke(params object?[] args)
-                // We need to pass an empty array
-                result = invokeMethod.Invoke(func, [Array.Empty<object?>()]);
-                return true;
-            }
-            catch (System.Reflection.TargetInvocationException ex)
-            {
-                // Re-throw the inner exception for cleaner stack traces
-                if (ex.InnerException != null)
-                    throw ex.InnerException;
-                throw;
-            }
+            // Re-throw the inner exception for cleaner stack traces.
+            if (ex.InnerException != null)
+                throw ex.InnerException;
+            throw;
         }
-
-        return false;
     }
 
     /// <summary>
@@ -547,34 +508,11 @@ public static partial class RuntimeTypes
     {
         result = null;
 
-        if (func == null)
+        if (!RuntimeCallableDispatcher.IsCallable(func))
             return false;
 
-        // Check for SharpTS.Compilation.TSFunction
-        if (func is TSFunction tsFunc)
-        {
-            result = tsFunc.Invoke(arg1, arg2);
-            return true;
-        }
-
-        // Check for emitted $TSFunction or any type with an Invoke method
-        var invokeMethod = func.GetType().GetMethod("Invoke");
-        if (invokeMethod != null)
-        {
-            var parameters = invokeMethod.GetParameters();
-            // Handle params array signature: Invoke(params object?[] args)
-            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(object[]))
-            {
-                result = invokeMethod.Invoke(func, [new object?[] { arg1, arg2 }]);
-            }
-            else
-            {
-                result = invokeMethod.Invoke(func, [arg1, arg2]);
-            }
-            return true;
-        }
-
-        return false;
+        result = RuntimeCallableDispatcher.Invoke(null, func, arg1, arg2);
+        return true;
     }
 
     /// <summary>
