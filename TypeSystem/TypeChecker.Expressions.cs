@@ -18,13 +18,13 @@ public partial class TypeChecker
 {
     /// <summary>
     /// Type-checks an expression and returns its resolved type.
-    /// Dispatches to the appropriate Visit* method via the registry.
+    /// Dispatches to the appropriate Visit* method via the dispatch switch.
     /// </summary>
     /// <param name="expr">The expression AST node to type-check.</param>
     /// <returns>The resolved TypeInfo for the expression.</returns>
     private TypeInfo CheckExpr(Expr expr)
     {
-        TypeInfo result = _registry.DispatchExpr(expr, this);
+        TypeInfo result = DispatchExpr(expr);
         _typeMap.Set(expr, result);
         return result;
     }

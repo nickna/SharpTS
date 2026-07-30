@@ -108,9 +108,14 @@ public static class DotNetReferences
                         "Point at the implementation assembly (e.g. bin/, not obj/ref/).");
                 }
             }
-            catch (Exception ex) when (ex is BadImageFormatException or FileLoadException or FileNotFoundException)
+            // PlatformNotSupportedException: Assembly.LoadFrom under Native AOT — there is no IL
+            // engine in a native process, so third-party references can never work there (#1324).
+            // Fail with the routing message instead of an unhandled crash.
+            catch (Exception ex) when (ex is BadImageFormatException or FileLoadException or FileNotFoundException or PlatformNotSupportedException)
             {
-                (failures ??= []).Add($"'{reference.Path}' could not be loaded: {ex.Message}");
+                (failures ??= []).Add(ex is PlatformNotSupportedException
+                    ? $"'{reference.Path}': loading .NET reference assemblies is not available in the native SharpTS build — use the managed build."
+                    : $"'{reference.Path}' could not be loaded: {ex.Message}");
             }
         }
 

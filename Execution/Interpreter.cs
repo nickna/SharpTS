@@ -41,13 +41,6 @@ namespace SharpTS.Execution;
 /// <seealso cref="ILCompiler"/>
 public partial class Interpreter : IDisposable
 {
-    /// <summary>
-    /// Static registry containing handlers for all AST node types.
-    /// Initialized once at startup and validated for exhaustiveness.
-    /// </summary>
-    private static readonly NodeRegistry<Interpreter, RuntimeValue, ExecutionResult> _registry =
-        InterpreterRegistry.Create();
-
     private RuntimeEnvironment _environment = new();
     // Keyed by AST-node identity, not structural value. The resolver stores and reads the
     // same Expr instance, so reference identity is the intent. Expr is a record, so the

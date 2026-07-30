@@ -159,6 +159,8 @@ switch (command)
             PrintResolvedConfig(compileOptions, compile.GlobalOptions.Strictness, compileConfig);
             return;
         }
+        if (compile.CompileOptions.VerifyIL)
+            RequireManagedBuild("--verify"); // ILVerifier resolves the BCL from typeof(object).Assembly.Location — no BCL on disk in a native build
         var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode, compile.CompileOptions.Standalone, compile.CompileOptions.EmitDebugSymbols);
         CompileFile(
             compile.InputFile,
@@ -180,8 +182,25 @@ switch (command)
         break;
 
     case ParsedCommand.GenDecl genDecl:
+        RequireManagedBuild("--gen-decl"); // DiscoveryGenerator needs Assembly.LoadFrom; the by-name fallback returns truncated metadata
         GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json, genDecl.References);
         break;
+}
+
+/// <summary>
+/// Fails fast (print + exit 1, the CLI's config-error seam) when a feature that fundamentally
+/// requires the managed runtime is invoked from a Native AOT build (#1324). A no-op on the
+/// managed builds, where dynamic code is always supported; each gated feature's error names the
+/// fix instead of letting it die later on an obscure loader exception.
+/// </summary>
+static void RequireManagedBuild(string feature)
+{
+    if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+    {
+        Console.Error.WriteLine(
+            $"Error: {feature} is not available in the native SharpTS build — use the managed build.");
+        Environment.Exit(1);
+    }
 }
 
 /// <summary>
@@ -363,8 +382,9 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
         },
     };
 
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-        payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    // JsonGraphWriter, not JsonSerializer.Serialize(object): --show-config must work in the
+    // native SKU, where the reflection resolver is unavailable (#1324 Phase 1).
+    Console.WriteLine(SharpTS.Runtime.BuiltIns.JsonGraphWriter.Write(payload, indented: true));
 }
 
 /// <summary>

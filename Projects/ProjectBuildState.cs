@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SharpTS.Configuration;
 
 namespace SharpTS.Projects;
@@ -12,7 +13,8 @@ internal static class ProjectBuildState
     private static readonly string ToolVersion =
         typeof(ProjectBuildState).Assembly.GetName().Version?.ToString() ?? "unknown";
 
-    private sealed record State(
+    // internal (not private) so the source-generated ProjectBuildStateContext below can bind it.
+    internal sealed record State(
         int Version,
         string ToolVersion,
         string ConfigPath,
@@ -27,7 +29,8 @@ internal static class ProjectBuildState
 
         try
         {
-            var state = JsonSerializer.Deserialize<State>(File.ReadAllText(project.BuildInfoFile));
+            var state = JsonSerializer.Deserialize(
+                File.ReadAllText(project.BuildInfoFile), ProjectBuildStateContext.Default.State);
             if (state is null ||
                 state.Version != FormatVersion ||
                 !string.Equals(state.ToolVersion, ToolVersion, StringComparison.Ordinal) ||
@@ -88,7 +91,7 @@ internal static class ProjectBuildState
         var state = new State(FormatVersion, ToolVersion, project.ConfigPath, optionsKey, inputs, outputs);
         File.WriteAllText(
             project.BuildInfoFile,
-            JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(state, ProjectBuildStateContext.Default.State));
     }
 
     private static string Hash(string path)
@@ -103,3 +106,12 @@ internal static class ProjectBuildState
             Path.GetFullPath(right),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }
+
+/// <summary>
+/// Source-generated serializer context for the .tsbuildinfo state file (#1324 Phase 1 — see
+/// <see cref="Configuration.TsConfigJsonContext"/> for the rationale). WriteIndented matches the
+/// previous runtime options; reads keep the default strict parsing this format always had.
+/// </summary>
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(ProjectBuildState.State))]
+internal sealed partial class ProjectBuildStateContext : JsonSerializerContext;

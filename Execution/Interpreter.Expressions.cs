@@ -32,7 +32,7 @@ public partial class Interpreter
     /// </summary>
     internal object? Evaluate(Expr expr)
     {
-        return _registry.DispatchExpr(expr, this).ToObject();
+        return DispatchExpr(expr).ToObject();
     }
 
     /// <summary>
@@ -41,10 +41,10 @@ public partial class Interpreter
     /// </summary>
     internal RuntimeValue EvaluateRV(Expr expr)
     {
-        return _registry.DispatchExpr(expr, this);
+        return DispatchExpr(expr);
     }
 
-    // Expression handlers - called by the registry via RuntimeValue dispatch.
+    // Expression handlers - called by the dispatch switch via RuntimeValue dispatch.
     // All Evaluate* methods return RuntimeValue directly — no FromBoxed in dispatch.
 
     internal RuntimeValue VisitComma(Expr.Comma comma) { Evaluate(comma.Left); return EvaluateRV(comma.Right); }
@@ -102,9 +102,9 @@ public partial class Interpreter
     internal RuntimeValue VisitClassExpr(Expr.ClassExpr classExpr) => EvaluateClassExpression(classExpr);
 
     /// <summary>
-    /// Asynchronously dispatches an expression to the appropriate evaluator via the registry.
-    /// Routes through NodeRegistry.DispatchExprAsync for exhaustiveness-checked dispatch,
-    /// mirroring the synchronous EvaluateRV path (#930).
+    /// Asynchronously dispatches an expression to the appropriate evaluator.
+    /// Routes through DispatchExprAsync (Interpreter.Dispatch.cs) for exhaustiveness-checked
+    /// dispatch, mirroring the synchronous EvaluateRV path (#930).
     /// </summary>
     /// <param name="expr">The expression AST node to evaluate.</param>
     /// <returns>A ValueTask that resolves to the runtime value produced by evaluating the expression.</returns>
@@ -114,11 +114,11 @@ public partial class Interpreter
     /// </remarks>
     internal ValueTask<RuntimeValue> EvaluateAsync(Expr expr)
     {
-        return _registry.DispatchExprAsync(expr, this);
+        return DispatchExprAsync(expr);
     }
 
-    // Async expression handlers — registered in NodeRegistry via RegisterExprAsync
-    // (see InterpreterRegistry.Create). Each handler returns ValueTask<RuntimeValue>.
+    // Async expression handlers — wired in DispatchExprAsync (Interpreter.Dispatch.cs).
+    // Each handler returns ValueTask<RuntimeValue>.
     // Sync-safe nodes wrap the existing VisitXxx / EvaluateXxx directly;
     // async nodes delegate to the existing EvaluateXxxAsync helpers.
 

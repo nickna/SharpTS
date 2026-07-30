@@ -76,7 +76,7 @@ public static class ResponseBuiltIns
 
     private static string SerializeToJson(object? value)
     {
-        return JsonSerializer.Serialize(ConvertToSerializable(value));
+        return JsonGraphWriter.Write(ConvertToSerializable(value));
     }
 
     private static object? ConvertToSerializable(object? value)

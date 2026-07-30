@@ -362,7 +362,7 @@ public static class FetchBuiltIns
     /// </summary>
     private static string SerializeToJson(object? value)
     {
-        return JsonSerializer.Serialize(ConvertToSerializable(value));
+        return JsonGraphWriter.Write(ConvertToSerializable(value));
     }
 
     /// <summary>

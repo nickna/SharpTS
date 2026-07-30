@@ -1636,18 +1636,18 @@ public partial class Interpreter
     internal ExecutionResult ExecuteStatement(Stmt stmt) => Execute(stmt);
 
     /// <summary>
-    /// Internal async wrapper for statement execution using registry-based dispatch.
+    /// Internal async wrapper for statement execution.
     /// Uses DispatchStmtAsync which falls back to sync handlers when no async handler exists.
     /// </summary>
     /// <param name="stmt">The statement to execute.</param>
     /// <returns>A task containing the execution result.</returns>
     internal async Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt)
     {
-        return await _registry.DispatchStmtAsync(stmt, this);
+        return await DispatchStmtAsync(stmt);
     }
 
     /// <summary>
-    /// Dispatches a statement to the appropriate execution handler using the registry.
+    /// Dispatches a statement to the appropriate execution handler.
     /// </summary>
     /// <param name="stmt">The statement AST node to execute.</param>
     /// <remarks>
@@ -1657,10 +1657,10 @@ public partial class Interpreter
     /// </remarks>
     private ExecutionResult Execute(Stmt stmt)
     {
-        return _registry.DispatchStmt(stmt, this);
+        return DispatchStmt(stmt);
     }
 
-    // Statement handlers - called by the registry
+    // Statement handlers - called by the dispatch switch
 
     internal ExecutionResult VisitBlock(Stmt.Block block) =>
         ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));

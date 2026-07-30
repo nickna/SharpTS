@@ -22,15 +22,15 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
-    /// Type-checks a statement. Dispatches to the appropriate Visit* method via the registry.
+    /// Type-checks a statement. Dispatches to the appropriate Visit* method via the dispatch switch.
     /// </summary>
     /// <param name="stmt">The statement AST node to type-check.</param>
     private void CheckStmt(Stmt stmt)
     {
-        _registry.DispatchStmt(stmt, this);
+        DispatchStmt(stmt);
     }
 
-    // Statement handlers - called by the registry
+    // Statement handlers - called by the dispatch switch
 
     internal VoidResult VisitBlock(Stmt.Block stmt)
     {
