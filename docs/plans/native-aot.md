@@ -120,10 +120,13 @@ Plan against these numbers, not the originals:
   access lowered it to 167. Guarding the managed-only IL-verification API and
   documenting the persisted generic-member metadata seam lowered it to 157.
   The guard also lets Native AOT prune the verifier path: the win-arm64 image
-  is 93,458,944 bytes, 991,232 bytes (1.05%) smaller than the original
-  2,585-warning image. CI pins total, per-code, per-area, and per-file/code
-  counts, so both increases and category swaps fail until the same PR updates
-  the explained baseline.
+  dropped by roughly 1 MB at that checkpoint. Routing the remaining
+  compiler-owned array and emitted-base-type shapes, explicitly guarding the
+  managed in-memory compiler, and replacing attribute-default activation
+  lowered the inventory to 151. The current image is 93,462,528 bytes, 987,648
+  bytes (1.05%) smaller than the original 2,585-warning image. CI pins total,
+  per-code, per-area, and per-file/code counts, so both increases and category
+  swaps fail until the same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -164,9 +167,9 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (157)
+### Residual analyzer inventory (151)
 
-The cleanup tranches removed 2,428 of 2,585 warnings (93.9%) without broad
+The cleanup tranches removed 2,434 of 2,585 warnings (94.2%) without broad
 `DynamicallyAccessedMembers` annotations. What remains is no longer one
 mechanical problem:
 
@@ -175,8 +178,8 @@ mechanical problem:
 | IL2075 | 68 | Reflection from a returned/derived `Type`: emitted runtime duck typing, compiler inspection of user types, and private Reflection.Emit validation |
 | IL2070 | 61 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
 | IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
-| IL3050 | 18 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
-| Other flow warnings | 9 | Two each IL2055/IL2057/IL2060, and one each IL2067/IL2072/IL2077, concentrated in dynamic interop/type synthesis |
+| IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
+| Other flow warnings | 7 | Two each IL2055/IL2057/IL2060 and one IL2072, concentrated in dynamic interop/type synthesis |
 
 The remaining work is split at three ownership boundaries:
 

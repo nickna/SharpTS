@@ -319,7 +319,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var throwLabel = il.DefineLabel();
         var nextMethodLocal = il.DeclareLocal(_types.Object);
-        var argsLocal = il.DeclareLocal(_types.Object.MakeArrayType());
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         // Get "next" property from iterator
         il.Emit(OpCodes.Ldarg_0);

@@ -17,6 +17,10 @@ internal static class EmitTypeDefinitions
         "Trimming",
         "IL2067",
         Justification = EmitMetadataJustification)]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2077",
+        Justification = EmitMetadataJustification)]
     internal static TypeBuilder DefineType(
         ModuleBuilder module,
         string name,

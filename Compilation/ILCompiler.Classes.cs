@@ -707,7 +707,7 @@ public partial class ILCompiler
         {
             var elementTypeArg = typeArg[..^2];
             var elementType = ResolveTypeArgument(elementTypeArg, classGenericParams, classTypeParams);
-            return elementType.MakeArrayType();
+            return _types.MakeArrayType(elementType);
         }
 
         // 6. Check for nested generics (e.g., "Map<string, number>")

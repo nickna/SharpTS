@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 157,
+  "total": 151,
   "codes": [
     {
       "code": "IL2026",
@@ -19,10 +19,6 @@
       "count": 2
     },
     {
-      "code": "IL2067",
-      "count": 1
-    },
-    {
       "code": "IL2070",
       "count": 61
     },
@@ -35,18 +31,14 @@
       "count": 68
     },
     {
-      "code": "IL2077",
-      "count": 1
-    },
-    {
       "code": "IL3050",
-      "count": 18
+      "count": 14
     }
   ],
   "areas": [
     {
       "area": "Compilation",
-      "count": 75
+      "count": 69
     },
     {
       "area": "Declaration",
@@ -70,21 +62,6 @@
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2057",
       "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
     },
     {
       "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
@@ -132,14 +109,14 @@
       "count": 3
     },
     {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
       "file": "Runtime/RuntimeCallableDispatcher.cs",
       "code": "IL2070",
       "count": 2
+    },
+    {
+      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
+      "code": "IL2075",
+      "count": 4
     },
     {
       "file": "Runtime/Types/SharpTSAbortSignal.cs",
@@ -202,29 +179,24 @@
       "count": 3
     },
     {
-      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
-      "code": "IL2075",
-      "count": 4
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
       "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
       "count": 2
     },
     {
-      "file": "Runtime/DotNet/DotNetClass.cs",
+      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
       "code": "IL2075",
       "count": 2
     },
     {
-      "file": "Compilation/AttributeMapper.cs",
-      "code": "IL2067",
-      "count": 1
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL3050",
+      "count": 2
     },
     {
       "file": "Compilation/AttributeMapper.cs",
@@ -235,16 +207,6 @@
       "file": "Compilation/GeneratorMoveNextEmitter.Expressions.Yield.cs",
       "code": "IL2075",
       "count": 4
-    },
-    {
-      "file": "Compilation/ILCompiler.Classes.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Compilation/ILCompiler.cs",
-      "code": "IL3050",
-      "count": 1
     },
     {
       "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
@@ -272,21 +234,6 @@
       "count": 10
     },
     {
-      "file": "Compilation/RuntimeEmitter.Iterator.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Compilation/RuntimeEmitter.Objects.Properties.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Compilation/RuntimeEmitter.TSTypedArray.cs",
-      "code": "IL2077",
-      "count": 1
-    },
-    {
       "file": "Compilation/RuntimeTypes.Arrays.cs",
       "code": "IL2075",
       "count": 4
@@ -307,13 +254,13 @@
       "count": 5
     },
     {
-      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
       "code": "IL2070",
-      "count": 3
+      "count": 4
     },
     {
-      "file": "Compilation/RuntimeTypes.Promise.cs",
-      "code": "IL2075",
+      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "code": "IL2070",
       "count": 3
     },
     {
@@ -357,9 +304,24 @@
       "count": 1
     },
     {
-      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "file": "Runtime/DotNet/DotNetClass.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
       "code": "IL2070",
-      "count": 4
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Promise.cs",
+      "code": "IL2075",
+      "count": 3
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

@@ -72,7 +72,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.MethodInfo);
-        var methodsArrayType = _types.MethodInfo.MakeArrayType();
+        var methodsArrayType = _types.MakeArrayType(_types.MethodInfo);
         var methodsLocal = il.DeclareLocal(methodsArrayType);
         var iLocal = il.DeclareLocal(_types.Int32);
         var mLocal = il.DeclareLocal(_types.MethodInfo);

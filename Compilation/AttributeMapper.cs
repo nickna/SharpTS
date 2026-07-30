@@ -186,8 +186,31 @@ public static class AttributeMapper
     /// </summary>
     private static object? GetDefaultValue(Type type)
     {
-        if (type.IsValueType)
-            return Activator.CreateInstance(type);
-        return null;
+        if (!type.IsValueType)
+            return null;
+
+        if (type.IsEnum)
+            return GetDefaultValue(Enum.GetUnderlyingType(type));
+
+        // CLI attribute constructor arguments are restricted to this primitive set
+        // (plus string/Type/arrays, whose default is null). Avoid Activator here:
+        // it implies an arbitrary public constructor that Native AOT cannot root.
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Boolean => false,
+            TypeCode.Char => '\0',
+            TypeCode.SByte => (sbyte)0,
+            TypeCode.Byte => (byte)0,
+            TypeCode.Int16 => (short)0,
+            TypeCode.UInt16 => (ushort)0,
+            TypeCode.Int32 => 0,
+            TypeCode.UInt32 => 0U,
+            TypeCode.Int64 => 0L,
+            TypeCode.UInt64 => 0UL,
+            TypeCode.Single => 0F,
+            TypeCode.Double => 0D,
+            _ => throw new NotSupportedException(
+                $"Attribute constructor parameter type '{type}' is not supported.")
+        };
     }
 }

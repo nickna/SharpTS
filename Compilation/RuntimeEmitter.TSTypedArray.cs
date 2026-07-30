@@ -240,7 +240,8 @@ public partial class RuntimeEmitter
         bool isFloat = false,
         bool isBigInt = false)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(
+            module,
             $"${name}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _typedArrayBaseType
