@@ -66,3 +66,136 @@ jobs:
         with:
           generate_release_notes: true
           files: ./nupkg/*
+
+  # Managed SKU (#1324 Track 0): self-contained single-file binaries per RID,
+  # attached to the GitHub Release. No .NET install required on the target
+  # machine; full feature set (interop, -r, --verify, --gen-decl). Exception:
+  # child_process.fork still shells `dotnet exec SharpTS.dll` and so needs an
+  # installed .NET until Phase 1 moves it to Environment.ProcessPath.
+  #
+  # Runner selection: self-contained *managed* publishing is cross-RID capable,
+  # so everything could build on ubuntu — win-x64 gets a windows runner (and
+  # linux-x64 stays native on ubuntu) purely so the two most common RIDs are
+  # smoke-tested against the actual published binary before upload. macOS
+  # binaries are cross-published (macOS runner minutes bill at 10x); the SDK
+  # ad-hoc-signs single-file Mach-O bundles during publish, but if Gatekeeper
+  # still rejects a downloaded binary, `codesign -s - sharpts` re-signs it.
+  binaries:
+    name: Managed SKU (${{ matrix.rid }})
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest, smoke: true }
+          - { rid: win-arm64,   os: ubuntu-latest,  smoke: false }
+          - { rid: linux-x64,   os: ubuntu-latest,  smoke: true }
+          - { rid: linux-arm64, os: ubuntu-latest,  smoke: false }
+          - { rid: osx-x64,     os: ubuntu-latest,  smoke: false }
+          - { rid: osx-arm64,   os: ubuntu-latest,  smoke: false }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      # IncludeAllContentForSelfExtract (not just native libs): several managed-SKU
+      # features need real files on disk behind Assembly.Location — --verify
+      # (ILVerifier resolves the BCL from typeof(object).Assembly.Location, fails
+      # with "Assembly or module not found: System.Runtime" under in-bundle
+      # loading) and soft-dep SharpTS.dll co-location after --compile
+      # (Program.cs CopySharpTSRuntimeIfNeeded). Full extraction restores both;
+      # the cache under %TEMP%/.net is written once on first run.
+      #
+      # PlatformTarget=AnyCPU: a RID publish otherwise infers PlatformTarget=x64/
+      # arm64, arch-stamping every managed assembly — including the SharpTS.dll
+      # that gets co-located next to compiled soft-dep output, which then fails to
+      # load ("SharpTS runtime not present") when that output runs on a different
+      # architecture's dotnet (e.g. x64 SKU under emulation on an arm64 machine).
+      # Only the apphost needs to be RID-specific; keep the IL arch-neutral.
+      - name: Publish self-contained single-file
+        shell: bash
+        run: |
+          dotnet publish SharpTS.csproj --configuration Release \
+            -r ${{ matrix.rid }} --self-contained \
+            -p:PublishSingleFile=true \
+            -p:IncludeAllContentForSelfExtract=true \
+            -p:PlatformTarget=AnyCPU \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            -o ./sku/${{ matrix.rid }}
+
+      # Embedded-resource smoke: the interpreter and compiler both depend on
+      # resources bundled into the single-file exe (stdlib/*.ts via
+      # EmbeddedStdlibProvider, lib.*.d.ts via TypeScriptLibProvider). Run the
+      # actual published binary over a stdlib-importing program in both modes,
+      # and run the compiled output under the runner's JIT.
+      - name: Smoke test published binary
+        if: matrix.smoke
+        shell: bash
+        run: |
+          cat > smoke.ts <<'EOF'
+          import * as path from "node:path";
+          const joined = path.join("alpha", "beta", "gamma.txt");
+          console.log(joined.split(path.sep).join("|"));
+          const sum: number = [1, 2, 3, 4].map((x) => x * 2).reduce((a, b) => a + b, 0);
+          console.log(`sum=${sum}`);
+          EOF
+          expected=$'alpha|beta|gamma.txt\nsum=20'
+          exe=./sku/${{ matrix.rid }}/SharpTS
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          # tr -d '\r': Windows console output is CRLF; normalize for the compare.
+          actual=$("$exe" smoke.ts | tr -d '\r')
+          [ "$actual" = "$expected" ] || { echo "interpret output mismatch:"; echo "$actual"; exit 1; }
+          "$exe" --compile smoke.ts -o smoke-out.dll --verify
+          actual=$(dotnet smoke-out.dll | tr -d '\r')
+          [ "$actual" = "$expected" ] || { echo "compiled output mismatch:"; echo "$actual"; exit 1; }
+          # Soft-dep path: eval() makes the compiler co-locate SharpTS.dll from
+          # the single-file extraction cache; the output must find it at runtime.
+          echo 'console.log(eval("6 * 7"));' > softdep.ts
+          mkdir softdep-out
+          "$exe" --compile softdep.ts -o softdep-out/softdep.dll
+          actual=$(dotnet softdep-out/softdep.dll | tr -d '\r')
+          [ "$actual" = "42" ] || { echo "soft-dep output mismatch:"; echo "$actual"; exit 1; }
+          echo "✓ smoke passed (interpret + compile + --verify + soft-dep co-locate)"
+
+      # The binary keeps assembly identity "SharpTS" (a reflection contract:
+      # compiled DLLs late-bind via Type.GetType("…, SharpTS")) — only the
+      # file on disk is renamed to the familiar CLI name.
+      - name: Package archive
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          RID=${{ matrix.rid }}
+          mkdir staging
+          cp LICENSE README.md staging/
+          case "$RID" in
+            win-*)
+              cp ./sku/$RID/SharpTS.exe staging/sharpts.exe
+              # zip on ubuntu runners (win-arm64 cross-publish), 7z on windows.
+              if command -v zip >/dev/null 2>&1; then
+                (cd staging && zip -r ../sharpts-$VERSION-$RID.zip .)
+              else
+                (cd staging && 7z a ../sharpts-$VERSION-$RID.zip .)
+              fi
+              ;;
+            *)
+              cp ./sku/$RID/SharpTS staging/sharpts
+              chmod +x staging/sharpts
+              tar -C staging -czf sharpts-$VERSION-$RID.tar.gz .
+              ;;
+          esac
+
+      - name: Upload to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" sharpts-${{ steps.version.outputs.VERSION }}-${{ matrix.rid }}.* --clobber
