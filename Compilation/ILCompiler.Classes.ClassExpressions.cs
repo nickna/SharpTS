@@ -647,7 +647,7 @@ public partial class ILCompiler
             else
             {
                 Type baseType = typeBuilder.BaseType ?? typeof(object);
-                var fallbackCtor = baseType.GetConstructor([]) ?? _types.ObjectDefaultCtor;
+                var fallbackCtor = _types.TryGetConstructor(baseType) ?? _types.ObjectDefaultCtor;
                 il.Emit(OpCodes.Call, fallbackCtor);
             }
         }

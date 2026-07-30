@@ -59,7 +59,7 @@ public class DelegateAdapterEmitter
 
     private AdapterHandle Emit(Type delegateType)
     {
-        var invokeMethod = delegateType.GetMethod("Invoke")
+        var invokeMethod = _types.TryGetMethod(delegateType, "Invoke")
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' has no Invoke method.");
 

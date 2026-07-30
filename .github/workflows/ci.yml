@@ -199,7 +199,7 @@ jobs:
           # Managed-only public boundaries must fail before their reflection/loader paths.
           if "$native" Examples/AotCompileGate/main.ts \
               -r "$PWD/artifacts/managed-runtime/SharpTS.dll" \
-              2> "$scratch/reference-error.txt"; then
+              > "$scratch/reference-error.txt" 2>&1; then
             echo "third-party reference loading unexpectedly ran under Native AOT"
             exit 1
           fi
@@ -207,7 +207,8 @@ jobs:
             'loading .NET reference assemblies is not available in the native SharpTS build' \
             "$scratch/reference-error.txt"
 
-          if "$native" --gen-decl System.String 2> "$scratch/gen-decl-error.txt"; then
+          if "$native" --gen-decl System.String \
+              > "$scratch/gen-decl-error.txt" 2>&1; then
             echo "declaration discovery unexpectedly ran under Native AOT"
             exit 1
           fi

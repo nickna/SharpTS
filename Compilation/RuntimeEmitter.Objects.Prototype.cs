@@ -208,8 +208,8 @@ public partial class RuntimeEmitter
         }
         else
         {
-            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
-                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            var setItem = _types.TryGetMethod(_types.ConditionalWeakTable, "set_Item")
+                ?? _types.TryGetProperty(_types.ConditionalWeakTable, "Item")?.GetSetMethod();
             if (setItem != null)
             {
                 il.Emit(OpCodes.Callvirt, setItem);

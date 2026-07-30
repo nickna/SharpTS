@@ -1257,6 +1257,32 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Attempts to get a method from a type by name only.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo? TryGetMethod(Type type, string name)
+    {
+        return type.GetMethod(name);
+    }
+
+    /// <summary>
+    /// Attempts to get a method from a type with the specified parameter types.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo? TryGetMethod(Type type, string name, params Type[] parameterTypes)
+    {
+        return type.GetMethod(name, parameterTypes);
+    }
+
+    /// <summary>
     /// Gets a method from a type by name using explicit binding flags.
     /// </summary>
     [UnconditionalSuppressMessage(
@@ -1342,6 +1368,19 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Attempts to get a property from a type by name.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public PropertyInfo? TryGetProperty(Type type, string name)
+    {
+        return type.GetProperty(name);
+    }
+
+    /// <summary>
     /// Gets a property from a type by name using explicit binding flags.
     /// </summary>
     [UnconditionalSuppressMessage(
@@ -1397,6 +1436,19 @@ public class TypeProvider
                 throw new CompileException($"Could not find constructor {k.Item1.FullName}({string.Join(", ", k.Item2.Select(t => t.FullName))})");
             return ctor;
         });
+    }
+
+    /// <summary>
+    /// Attempts to get a constructor from a type with the specified parameter types.
+    /// Use this only where absence is an expected compiler metadata outcome.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public ConstructorInfo? TryGetConstructor(Type type, params Type[] parameterTypes)
+    {
+        return type.GetConstructor(parameterTypes);
     }
 
     /// <summary>

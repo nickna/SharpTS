@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -282,10 +283,6 @@ internal class PrototypeInfo
 /// </summary>
 public class CompiledPropertyDescriptor
 {
-    // Cached types for reflection
-    private static readonly Type? _sharpTSPropertyDescriptorType = Type.GetType("SharpTS.Runtime.Types.SharpTSPropertyDescriptor, SharpTS");
-    private static readonly Type? _sharpTSObjectType = Type.GetType("SharpTS.Runtime.Types.SharpTSObject, SharpTS");
-
     /// <summary>Value for data properties.</summary>
     public object? Value { get; set; }
 
@@ -306,25 +303,19 @@ public class CompiledPropertyDescriptor
 
     /// <summary>
     /// Creates a descriptor from a SharpTSPropertyDescriptor or similar object.
-    /// Uses reflection to avoid compile-time dependency on SharpTS.dll.
     /// </summary>
     public static CompiledPropertyDescriptor FromAny(object? descriptorObj)
     {
         var result = new CompiledPropertyDescriptor();
 
-        // Check for SharpTSPropertyDescriptor via reflection
-        if (descriptorObj != null && _sharpTSPropertyDescriptorType?.IsInstanceOfType(descriptorObj) == true)
+        if (descriptorObj is SharpTSPropertyDescriptor descriptor)
         {
-            var pdType = descriptorObj.GetType();
-            result.Value = pdType.GetProperty("Value")?.GetValue(descriptorObj);
-            result.Getter = pdType.GetProperty("Get")?.GetValue(descriptorObj);
-            result.Setter = pdType.GetProperty("Set")?.GetValue(descriptorObj);
-            if (pdType.GetProperty("Writable")?.GetValue(descriptorObj) is bool w)
-                result.Writable = w;
-            if (pdType.GetProperty("Enumerable")?.GetValue(descriptorObj) is bool e)
-                result.Enumerable = e;
-            if (pdType.GetProperty("Configurable")?.GetValue(descriptorObj) is bool c)
-                result.Configurable = c;
+            result.Value = descriptor.Value;
+            result.Getter = descriptor.Get;
+            result.Setter = descriptor.Set;
+            result.Writable = descriptor.Writable;
+            result.Enumerable = descriptor.Enumerable;
+            result.Configurable = descriptor.Configurable;
             return result;
         }
 
@@ -368,8 +359,7 @@ public class CompiledPropertyDescriptor
     }
 
     /// <summary>
-    /// Converts to a SharpTSObject (or Dictionary if type not available) for returning from getOwnPropertyDescriptor.
-    /// Uses reflection to avoid compile-time dependency on SharpTS.dll.
+    /// Converts to a SharpTSObject for returning from getOwnPropertyDescriptor.
     /// </summary>
     public object ToObject()
     {
@@ -393,14 +383,7 @@ public class CompiledPropertyDescriptor
         fields["enumerable"] = Enumerable;
         fields["configurable"] = Configurable;
 
-        // Try to create SharpTSObject via reflection, fall back to Dictionary
-        if (_sharpTSObjectType != null)
-        {
-            var obj = Activator.CreateInstance(_sharpTSObjectType, fields);
-            return obj!;
-        }
-
-        return fields;
+        return new SharpTSObject(fields);
     }
 }
 

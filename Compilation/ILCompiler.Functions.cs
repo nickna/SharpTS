@@ -578,9 +578,9 @@ public partial class ILCompiler
         // List<object> because that's the lowest-common-denominator type for
         // every code path that reads `arguments`.
         var argsCtorEmpty = ctx.Runtime?.ArgumentsDefaultCtor
-            ?? (System.Reflection.ConstructorInfo)listType.GetConstructor(Type.EmptyTypes)!;
+            ?? ctx.Types.GetDefaultConstructor(listType);
         var argsCtorEnum = ctx.Runtime?.ArgumentsEnumerableCtor
-            ?? (System.Reflection.ConstructorInfo)listType.GetConstructor([ctx.Types.IEnumerableOfObject])!;
+            ?? ctx.Types.GetConstructor(listType, ctx.Types.IEnumerableOfObject);
 
         // Fast-path: if $TSFunction._currentArguments is set (we were invoked via
         // $TSFunction.Invoke, which publishes the full caller args before AdjustArgs
@@ -754,7 +754,10 @@ public partial class ILCompiler
         // Fast path: parameter is already List<object?> (the common case).
         if (paramType == targetListType)
         {
-            var addRange = targetListType.GetMethod("AddRange", [ctx.Types.IEnumerableOfObject])!;
+            var addRange = ctx.Types.GetMethod(
+                targetListType,
+                "AddRange",
+                ctx.Types.IEnumerableOfObject);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Ldarg, argIndex);
             il.Emit(OpCodes.Callvirt, addRange);
@@ -773,9 +776,9 @@ public partial class ILCompiler
         var addMethod = ctx.Types.GetMethod(targetListType, "Add", ctx.Types.Object);
         var enumerableType = _types.MakeGenericType(typeof(System.Collections.Generic.IEnumerable<>), elemType);
         var enumeratorType = _types.MakeGenericType(typeof(System.Collections.Generic.IEnumerator<>), elemType);
-        var getEnumerator = enumerableType.GetMethod("GetEnumerator")!;
+        var getEnumerator = ctx.Types.GetMethodNoParams(enumerableType, "GetEnumerator");
         var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
-        var getCurrent = enumeratorType.GetProperty("Current")!.GetGetMethod()!;
+        var getCurrent = ctx.Types.GetPropertyGetter(enumeratorType, "Current");
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();

@@ -62,7 +62,11 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloca, dictLocal);
 
             // Call TryGetValue(object key, out TValue value)
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(
+                cwtType,
+                "TryGetValue",
+                typeof(object),
+                dictType.MakeByRefType());
             IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             // If false, throw TypeError (brand check failed)
@@ -155,7 +159,11 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloca, dictLocal);
 
             // Call TryGetValue
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(
+                cwtType,
+                "TryGetValue",
+                typeof(object),
+                dictType.MakeByRefType());
             IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             // If false, throw TypeError
@@ -268,7 +276,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldsfld, callStorageField);
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Ldloca, dictLocal);
-                var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+                var tryGetValueMethod = Types.GetMethod(
+                    cwtType,
+                    "TryGetValue",
+                    typeof(object),
+                    dictType.MakeByRefType());
                 IL.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
                 var validLabel = IL.DefineLabel();

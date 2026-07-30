@@ -18,6 +18,7 @@ public class AsyncFunctionCallHandler : ICallHandler
             return false;
 
         var ctx = emitter.Context;
+        var types = ctx.Types;
         if (ctx.AsyncMethods?.TryGetValue(asyncVar.Name.Lexeme, out var asyncMethod) != true || asyncMethod == null)
             return false;
 
@@ -43,9 +44,9 @@ public class AsyncFunctionCallHandler : ICallHandler
         var returnType = asyncMethod.ReturnType;
         if (returnType.FullName == "System.Threading.Tasks.Task" || (!returnType.IsGenericType && typeof(System.Threading.Tasks.Task).IsAssignableFrom(returnType)))
         {
-            var getAwaiter = returnType.GetMethod("GetAwaiter")!;
+            var getAwaiter = types.GetMethod(returnType, "GetAwaiter");
             var awaiterType = getAwaiter.ReturnType;
-            var getResult = awaiterType.GetMethod("GetResult")!;
+            var getResult = types.GetMethod(awaiterType, "GetResult");
 
             var taskLocal = il.DeclareLocal(returnType);
             il.Emit(OpCodes.Stloc, taskLocal);
@@ -61,9 +62,9 @@ public class AsyncFunctionCallHandler : ICallHandler
         }
         else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition().FullName == "System.Threading.Tasks.Task`1")
         {
-            var getAwaiter = returnType.GetMethod("GetAwaiter")!;
+            var getAwaiter = types.GetMethod(returnType, "GetAwaiter");
             var awaiterType = getAwaiter.ReturnType;
-            var getResult = awaiterType.GetMethod("GetResult")!;
+            var getResult = types.GetMethod(awaiterType, "GetResult");
 
             var taskLocal = il.DeclareLocal(returnType);
             il.Emit(OpCodes.Stloc, taskLocal);
