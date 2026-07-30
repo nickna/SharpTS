@@ -275,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, sanExtLocal);
 
         // var dnsList = sanExt.EnumerateDnsNames().ToList()
-        var toListString = typeof(System.Linq.Enumerable).GetMethod("ToList")!.MakeGenericMethod(typeof(string));
+        var toListString = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToList")!, typeof(string));
         var dnsListLocal = il.DeclareLocal(typeof(List<string>));
         il.Emit(OpCodes.Ldloc, sanExtLocal);
         il.Emit(OpCodes.Callvirt, typeof(X509SubjectAlternativeNameExtension).GetMethod("EnumerateDnsNames", Type.EmptyTypes)!);
@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, dnsBody);
 
         // var ipList = sanExt.EnumerateIPAddresses().ToList()
-        var toListIp = typeof(System.Linq.Enumerable).GetMethod("ToList")!.MakeGenericMethod(typeof(IPAddress));
+        var toListIp = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToList")!, typeof(IPAddress));
         var ipListLocal = il.DeclareLocal(typeof(List<IPAddress>));
         il.Emit(OpCodes.Ldloc, sanExtLocal);
         il.Emit(OpCodes.Callvirt, typeof(X509SubjectAlternativeNameExtension).GetMethod("EnumerateIPAddresses", Type.EmptyTypes)!);

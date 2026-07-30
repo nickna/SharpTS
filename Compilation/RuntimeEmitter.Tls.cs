@@ -217,8 +217,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, alpnDone);
         il.Emit(OpCodes.Ldloc, tempLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Call, typeof(System.Linq.Enumerable).GetMethod("OfType")!.MakeGenericMethod(_types.String));
-        il.Emit(OpCodes.Call, typeof(System.Linq.Enumerable).GetMethod("ToArray")!.MakeGenericMethod(_types.String));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("OfType")!, _types.String));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToArray")!, _types.String));
         il.Emit(OpCodes.Stloc, alpnLocal);
         il.MarkLabel(alpnDone);
 

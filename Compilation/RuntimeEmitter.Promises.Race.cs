@@ -114,12 +114,11 @@ public partial class RuntimeEmitter
         var tasksLocal = EmitCombinatorTaskListLoop(il, listLocal);
 
         // Call Task.WhenAny<object?>(tasks)
-        var whenAnyMethod = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
+        var whenAnyMethod = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "WhenAny" && m.IsGenericMethod &&
                    m.GetParameters().Length == 1 &&
                    m.GetParameters()[0].ParameterType.IsGenericType &&
-                   m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-            .MakeGenericMethod(typeof(object));
+                   m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>)), typeof(object));
         il.Emit(OpCodes.Ldloc, tasksLocal);
         il.Emit(OpCodes.Call, whenAnyMethod);
 

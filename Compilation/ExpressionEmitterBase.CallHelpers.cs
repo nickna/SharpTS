@@ -151,7 +151,7 @@ public abstract partial class ExpressionEmitterBase
                     if (c.TypeArgs != null && c.TypeArgs.Count > 0)
                     {
                         Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
-                        targetMethod = methodBuilder.MakeGenericMethod(typeArgs);
+                        targetMethod = EmitGenerics.MakeGenericMethod(methodBuilder, typeArgs);
                     }
                     else
                     {
@@ -164,7 +164,7 @@ public abstract partial class ExpressionEmitterBase
                                 ? baseConstraint
                                 : Types.Object;
                         }
-                        targetMethod = methodBuilder.MakeGenericMethod(inferredArgs);
+                        targetMethod = EmitGenerics.MakeGenericMethod(methodBuilder, inferredArgs);
                     }
                 }
 

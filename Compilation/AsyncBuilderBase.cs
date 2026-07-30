@@ -59,7 +59,7 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     {
         var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
         var startMethod = methods.First(m => m.Name == "Start" && m.IsGenericMethod);
-        return startMethod.MakeGenericMethod(StateMachineType);
+        return EmitGenerics.MakeGenericMethod(startMethod, StateMachineType);
     }
 
     /// <summary>Gets the SetException method for the specific builder type.</summary>
@@ -76,7 +76,7 @@ public abstract class AsyncBuilderBase : StateMachineBuilderBase
     {
         var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
         var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
-        return awaitMethod.MakeGenericMethod(AwaiterType, StateMachineType);
+        return EmitGenerics.MakeGenericMethod(awaitMethod, AwaiterType, StateMachineType);
     }
 
     // GetBuilderSetResultMethod stays specialized in each subclass: the non-generic

@@ -186,7 +186,7 @@ public class StateMachineEmitHelpers
         MethodInfo taskGetter,
         TypeProvider types)
     {
-        var unbox = UnsafeUnboxOpen.MakeGenericMethod(stateMachineType);
+        var unbox = EmitGenerics.MakeGenericMethod(UnsafeUnboxOpen, stateMachineType);
 
         // object boxed = (object)sm;  (heap copy shared with nested arrows)
         il.Emit(OpCodes.Ldloc, smLocal);

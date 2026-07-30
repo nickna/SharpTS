@@ -155,15 +155,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodInfo ResolveAsyncFromSyncContinueWith() =>
+    private MethodInfo ResolveAsyncFromSyncContinueWith() => EmitGenerics.MakeGenericMethod(
         _types.TaskOfObject.GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "ContinueWith" && m.IsGenericMethodDefinition
                 && m.GetParameters() is { Length: 3 } p
                 && p[0].ParameterType.IsGenericType
                 && p[0].ParameterType.GetGenericTypeDefinition() == typeof(Func<,,>)
                 && p[1].ParameterType == typeof(object)
-                && p[2].ParameterType == typeof(TaskContinuationOptions))
-            .MakeGenericMethod(_types.Object);
+                && p[2].ParameterType == typeof(TaskContinuationOptions)), _types.Object);
 
     private void EmitAsyncFromSyncIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -603,9 +602,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodInfo TaskFromExceptionObject() =>
-        typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!
-            .MakeGenericMethod(_types.Object);
+    private MethodInfo TaskFromExceptionObject() => EmitGenerics.MakeGenericMethod(
+        typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
 
     private void EmitSingleObjectArgumentArray(ILGenerator il, int argumentIndex)
     {

@@ -889,7 +889,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterBoundArgsLabel);
 
         il.MarkLabel(noBoundArgsLabel);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Stloc, boundArgsLocal);
         il.MarkLabel(afterBoundArgsLabel);
 
@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterCallArgsLabel);
 
         il.MarkLabel(noCallArgsLabel);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.MarkLabel(afterCallArgsLabel);
 
@@ -1225,7 +1225,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isTSArrayLabel);
 
         // Unknown type - empty array
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.Emit(OpCodes.Br, afterConvertLabel);
 
@@ -1252,7 +1252,7 @@ public partial class RuntimeEmitter
 
         // null argsArray - use empty array
         il.MarkLabel(nullArgsArrayLabel);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Stloc, callArgsLocal);
 
         il.MarkLabel(afterConvertLabel);

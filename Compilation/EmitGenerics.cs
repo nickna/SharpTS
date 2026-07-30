@@ -31,6 +31,30 @@ internal static class EmitGenerics
         }
     }
 
+    internal static MethodInfo MakeGenericMethod(MethodInfo genericDefinition, params Type[] typeArguments)
+    {
+        try
+        {
+            return genericDefinition.MakeGenericMethod(typeArguments);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // Same story as MakeGenericType: corelib's MethodBuilderInstantiation factory
+            // (probe-verified: constructs, emits into IL, and saves under Native AOT).
+            _mbiFactory ??= Type.GetType(
+                    "System.Reflection.Emit.MethodBuilderInstantiation",
+                    throwOnError: true)!
+                .GetMethod(
+                    "MakeGenericMethod",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                    [typeof(MethodInfo), typeof(Type[])])
+                ?? throw new PlatformNotSupportedException(
+                    "MethodBuilderInstantiation.MakeGenericMethod(MethodInfo, Type[]) not found — the reflection-emit internals changed.");
+            return (MethodInfo)_mbiFactory.Invoke(null, [genericDefinition, typeArguments])!;
+        }
+    }
+
+    private static MethodInfo? _mbiFactory;
     private static MethodInfo? _tbiFactory;
 
     private static Type MakeTypeBuilderInstantiation(Type genericDefinition, Type[] typeArguments)

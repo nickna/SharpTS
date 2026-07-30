@@ -873,8 +873,8 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldloc, tempLocal);
         ctorIL.Emit(OpCodes.Castclass, _types.ListOfObject);
-        ctorIL.Emit(OpCodes.Call, typeof(System.Linq.Enumerable).GetMethod("OfType")!.MakeGenericMethod(_types.String));
-        ctorIL.Emit(OpCodes.Call, typeof(System.Linq.Enumerable).GetMethod("ToArray")!.MakeGenericMethod(_types.String));
+        ctorIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("OfType")!, _types.String));
+        ctorIL.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethod("ToArray")!, _types.String));
         ctorIL.Emit(OpCodes.Stfld, _tlsServerAlpnField);
         ctorIL.MarkLabel(noAlpn);
 

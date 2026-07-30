@@ -275,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldftn, _dnsDisplay1Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
@@ -333,7 +333,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldftn, _dnsDisplay2Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);

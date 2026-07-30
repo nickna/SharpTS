@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
         // Found - invoke factory and return Task.FromResult(factory())
         il.Emit(OpCodes.Ldloc, factoryLocal);
         il.Emit(OpCodes.Callvirt, funcType.GetMethod("Invoke")!);
-        il.Emit(OpCodes.Call, taskType.GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(taskType.GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Br, returnLabel);
 
         // Not found - return rejected task

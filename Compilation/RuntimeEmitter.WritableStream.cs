@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         // Default: Task.FromResult(result ?? undefined)
         il.MarkLabel(notPromiseLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
 
         il.MarkLabel(doneLabel);
     }
@@ -309,7 +309,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noCallbackLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -346,7 +346,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noCallbackLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -392,7 +392,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noCallbackLabel);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -618,7 +618,7 @@ public partial class RuntimeEmitter
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);

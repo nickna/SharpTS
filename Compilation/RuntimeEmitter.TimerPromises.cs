@@ -224,9 +224,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, _timerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
-            typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
-            .MakeGenericMethod(typeof(object)));
+            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise(task)
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
@@ -264,7 +263,7 @@ public partial class RuntimeEmitter
             // Create faulted task with AbortError exception, then wrap as promise
             il.Emit(OpCodes.Ldstr, "AbortError: The operation was aborted");
             il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
-            il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(typeof(object)));
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, typeof(object)));
             il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
             il.Emit(OpCodes.Ret);
         }
@@ -307,9 +306,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, _timerPromiseClosureOnComplete);
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
-            typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
-            .MakeGenericMethod(typeof(object)));
+            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
@@ -456,7 +454,7 @@ public partial class RuntimeEmitter
             // Create {value: null, done: true} dict
             EmitIteratorResultDict(il, null, true);
             // Task.FromResult<object>(dict)
-            il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
             // WrapTaskAsPromise → $TSPromise
             il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
             il.Emit(OpCodes.Ret);
@@ -480,9 +478,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, EmitOnNextComplete(runtime));
         il.Emit(OpCodes.Newobj, typeof(Func<Task, object?>).GetConstructors()[0]);
         il.Emit(OpCodes.Call,
-            typeof(Task).GetMethod("ContinueWith", 1,
-                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!
-            .MakeGenericMethod(typeof(object)));
+            EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("ContinueWith", 1,
+                [_types.MakeGenericType(typeof(Func<,>), typeof(Task), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
 
         // WrapTaskAsPromise → $TSPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
@@ -607,7 +604,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, dictSetItem);
 
         // Task.FromResult<object>(dict) → WrapTaskAsPromise → $TSPromise
-        il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
         il.Emit(OpCodes.Ret);
     }

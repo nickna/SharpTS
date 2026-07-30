@@ -129,7 +129,7 @@ public partial class RuntimeEmitter
         // Otherwise, create new Promise from Task.FromResult(value)
         il.MarkLabel(notPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Task.GetMethod("FromResult")!.MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.Task.GetMethod("FromResult")!, _types.Object));
         il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
         il.Emit(OpCodes.Ret);
     }

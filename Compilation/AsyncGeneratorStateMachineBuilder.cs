@@ -552,7 +552,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, ExecutingField);
         il.Emit(OpCodes.Ldloc, exLocal);
-        var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
+        var fromException = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         il.Emit(OpCodes.Call, fromException);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
@@ -579,21 +579,19 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
     }
 
     /// <summary>Resolves <c>Task.ContinueWith&lt;Task&lt;object&gt;&gt;(Func&lt;Task,object,Task&lt;object&gt;&gt;, object, TaskContinuationOptions)</c>.</summary>
-    private MethodInfo ResolveContinueWithFuncState() =>
+    private MethodInfo ResolveContinueWithFuncState() => EmitGenerics.MakeGenericMethod(
         typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "ContinueWith" && m.IsGenericMethodDefinition
                 && m.GetParameters() is { Length: 3 } p
                 && p[0].ParameterType.IsGenericType
                 && p[0].ParameterType.GetGenericTypeDefinition() == typeof(Func<,,>)
                 && p[1].ParameterType == typeof(object)
-                && p[2].ParameterType == typeof(System.Threading.Tasks.TaskContinuationOptions))
-            .MakeGenericMethod(_types.TaskOfObject);
+                && p[2].ParameterType == typeof(System.Threading.Tasks.TaskContinuationOptions)), _types.TaskOfObject);
 
     /// <summary>Resolves <c>TaskExtensions.Unwrap&lt;object&gt;(Task&lt;Task&lt;object&gt;&gt;)</c>.</summary>
-    private MethodInfo ResolveTaskUnwrap() =>
+    private MethodInfo ResolveTaskUnwrap() => EmitGenerics.MakeGenericMethod(
         typeof(System.Threading.Tasks.TaskExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .First(m => m.Name == "Unwrap" && m.IsGenericMethodDefinition)
-            .MakeGenericMethod(_types.Object);
+            .First(m => m.Name == "Unwrap" && m.IsGenericMethodDefinition), _types.Object);
 
     private void EmitReturnMethodBody()
     {
@@ -679,7 +677,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
 
         // Wrap in Task.FromResult
-        var fromResultMethod = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object);
+        var fromResultMethod = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object);
         il.Emit(OpCodes.Call, fromResultMethod);
         il.Emit(OpCodes.Ret);
     }
@@ -715,7 +713,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         // Stack now has Exception
 
         // Use Task.FromException<object>(exception)
-        var fromExceptionMethod = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
+        var fromExceptionMethod = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         il.Emit(OpCodes.Call, fromExceptionMethod);
         il.Emit(OpCodes.Ret);
     }
@@ -784,7 +782,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Ldstr, "Async generator is already running");
         il.Emit(OpCodes.Newobj, _runtime!.TSTypeErrorCtor);
         il.Emit(OpCodes.Call, _runtime!.CreateException);
-        var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
+        var fromException = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
         il.Emit(OpCodes.Call, fromException);
         il.Emit(OpCodes.Ret);
     }

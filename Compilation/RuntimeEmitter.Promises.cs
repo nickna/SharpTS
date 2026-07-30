@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notTaskLabel);
             il.Emit(OpCodes.Ldarg_0);
             // Call Task.FromResult<object?>(value) - keep typeof() for generic method lookup
-            var fromResult = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object);
+            var fromResult = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object);
             il.Emit(OpCodes.Call, fromResult);
             il.Emit(OpCodes.Ret);
         }
@@ -199,7 +199,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Newobj, runtime.TSPromiseRejectedExceptionCtor);
             // Call Task.FromException<object?>(exception) - keep typeof() for arity-based generic lookup
-            var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
+            var fromException = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!, _types.Object);
             il.Emit(OpCodes.Call, fromException);
             il.Emit(OpCodes.Ret);
         }

@@ -7,5 +7,6 @@
 <linker>
   <assembly fullname="System.Private.CoreLib">
     <type fullname="System.Reflection.Emit.TypeBuilderInstantiation" preserve="all" />
+    <type fullname="System.Reflection.Emit.MethodBuilderInstantiation" preserve="all" />
   </assembly>
 </linker>

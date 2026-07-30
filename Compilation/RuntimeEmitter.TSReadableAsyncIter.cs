@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
     }
 
     private static MethodInfo TaskFromResultObject(TypeProvider types)
-        => types.Task.GetMethod("FromResult")!.MakeGenericMethod(types.Object);
+        => EmitGenerics.MakeGenericMethod(types.Task.GetMethod("FromResult")!, types.Object);
 
     /// <summary>
     /// private Dictionary&lt;string,object?&gt; MakeIterResult(object? value, bool done)
