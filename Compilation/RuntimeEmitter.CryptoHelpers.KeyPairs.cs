@@ -447,7 +447,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(createKeyLabel);
         var ecdsaLocal = il.DeclareLocal(typeof(ECDsa));
         il.Emit(OpCodes.Ldloc, curveLocal);
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", [typeof(ECCurve)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stloc, ecdsaLocal);
 
         il.BeginExceptionBlock();

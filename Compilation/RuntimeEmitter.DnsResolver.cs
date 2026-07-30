@@ -46,7 +46,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldstr, "DnsCreateResolver");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            typeof(Type),
+            "GetMethod",
+            [typeof(string), typeof(BindingFlags)]));
         var methodInfoLocal = il.DeclareLocal(typeof(MethodInfo));
         il.Emit(OpCodes.Stloc, methodInfoLocal);
 

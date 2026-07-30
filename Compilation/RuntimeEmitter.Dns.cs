@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
 
                 il.Emit(OpCodes.Ldloc, typeLocal);
                 il.Emit(OpCodes.Ldstr, "DnsSetDefaultResultOrder");
-                il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [_types.String])!);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", [_types.String]));
                 il.Emit(OpCodes.Stloc, methodLocal);
                 il.Emit(OpCodes.Ldloc, methodLocal);
                 il.Emit(OpCodes.Brfalse, syncDone);

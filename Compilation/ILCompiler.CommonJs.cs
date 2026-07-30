@@ -195,7 +195,10 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Ldstr, exportsField.Name);
         il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(System.Reflection.BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            typeof(Type),
+            "GetField",
+            [typeof(string), typeof(System.Reflection.BindingFlags)]));
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);

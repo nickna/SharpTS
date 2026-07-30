@@ -738,7 +738,7 @@ public partial class RuntimeEmitter
         var aesLocal = il.DeclareLocal(typeof(Aes));
         var resultLocal = il.DeclareLocal(_types.ByteArray);
 
-        il.Emit(OpCodes.Call, typeof(Aes).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Aes), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, aesLocal);
 
         il.Emit(OpCodes.Ldloc, aesLocal);
@@ -812,7 +812,7 @@ public partial class RuntimeEmitter
         var paddingLocal = il.DeclareLocal(typeof(RSAEncryptionPadding));
         var resultLocal = il.DeclareLocal(_types.ByteArray);
 
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         EmitWcImportInto(il, rsaLocal, typeof(RSA), derArgIndex: 0, isPrivateArgIndex: 1);
 
@@ -878,7 +878,7 @@ public partial class RuntimeEmitter
         var paddingLocal = il.DeclareLocal(typeof(RSASignaturePadding));
         var resultLocal = il.DeclareLocal(_types.Object);
 
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         EmitWcImportInto(il, rsaLocal, typeof(RSA), derArgIndex: 0, isPrivateArgIndex: 1);
 
@@ -944,7 +944,7 @@ public partial class RuntimeEmitter
         var hashLocal = il.DeclareLocal(typeof(HashAlgorithmName));
         var resultLocal = il.DeclareLocal(_types.Object);
 
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecLocal);
         EmitWcImportInto(il, ecLocal, typeof(ECDsa), derArgIndex: 0, isPrivateArgIndex: 1);
 
@@ -1032,7 +1032,7 @@ public partial class RuntimeEmitter
         var truncatedLocal = il.DeclareLocal(_types.ByteArray);
         var outLocal = il.DeclareLocal(_types.Int32);
 
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, privLocal);
         il.Emit(OpCodes.Ldloc, privLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, outLocal);
         il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ImportPkcs8PrivateKey", [_types.ReadOnlySpanOfByte, typeof(int).MakeByRefType()])!);
 
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, pubLocal);
         il.Emit(OpCodes.Ldloc, pubLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -1180,7 +1180,7 @@ public partial class RuntimeEmitter
         var arrLocal = il.DeclareLocal(typeof(object[]));
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", [typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", [typeof(int)])!);
         il.Emit(OpCodes.Stloc, rsaLocal);
 
         il.Emit(OpCodes.Ldc_I4_2);
@@ -1216,7 +1216,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _wcCurve);
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", [typeof(ECCurve)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stloc, ecLocal);
 
         il.Emit(OpCodes.Ldc_I4_2);
@@ -1330,7 +1330,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, typeof(ECPoint).GetField("Y")!);
 
         // ec = ECDsa.Create(); ec.ImportParameters(params); result = ec.ExportSubjectPublicKeyInfo()
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecLocal);
         il.Emit(OpCodes.Ldloc, ecLocal);
         il.Emit(OpCodes.Ldloc, paramsLocal);
@@ -1357,7 +1357,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.ByteArray);
         var outLocal = il.DeclareLocal(_types.Int32);
 
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecLocal);
         il.Emit(OpCodes.Ldloc, ecLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -1435,7 +1435,7 @@ public partial class RuntimeEmitter
         var rsaLocal = il.DeclareLocal(typeof(RSA));
         var sizeLocal = il.DeclareLocal(_types.Int32);
 
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         EmitWcImportInto(il, rsaLocal, typeof(RSA), derArgIndex: 0, isPrivateArgIndex: 1);
 
@@ -1455,7 +1455,7 @@ public partial class RuntimeEmitter
         var il = _wcImportEcCheck.GetILGenerator();
 
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecLocal);
         EmitWcImportInto(il, ecLocal, typeof(ECDsa), derArgIndex: 0, isPrivateArgIndex: 1);
         il.Emit(OpCodes.Ldloc, ecLocal);

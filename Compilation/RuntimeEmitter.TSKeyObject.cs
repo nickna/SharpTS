@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         // Explicit RSA key path
         asymCtorIL.MarkLabel(tryRsaExplicitLabel);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
-        asymCtorIL.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        asymCtorIL.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         asymCtorIL.Emit(OpCodes.Stfld, rsaKeyField);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
         asymCtorIL.Emit(OpCodes.Ldfld, rsaKeyField);
@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
         // Explicit EC key path
         asymCtorIL.MarkLabel(tryEcExplicitLabel);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
-        asymCtorIL.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        asymCtorIL.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         asymCtorIL.Emit(OpCodes.Stfld, ecdsaKeyField);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
         asymCtorIL.Emit(OpCodes.Ldfld, ecdsaKeyField);
@@ -167,7 +167,7 @@ public partial class RuntimeEmitter
         // try { RSA import }
         asymCtorIL.BeginExceptionBlock();
         asymCtorIL.Emit(OpCodes.Ldarg_0);
-        asymCtorIL.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        asymCtorIL.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         asymCtorIL.Emit(OpCodes.Stfld, rsaKeyField);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
         asymCtorIL.Emit(OpCodes.Ldfld, rsaKeyField);
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
         asymCtorIL.Emit(OpCodes.Stfld, rsaKeyField);
         // Try EC
         asymCtorIL.Emit(OpCodes.Ldarg_0);
-        asymCtorIL.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        asymCtorIL.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         asymCtorIL.Emit(OpCodes.Stfld, ecdsaKeyField);
         asymCtorIL.Emit(OpCodes.Ldarg_0);
         asymCtorIL.Emit(OpCodes.Ldfld, ecdsaKeyField);

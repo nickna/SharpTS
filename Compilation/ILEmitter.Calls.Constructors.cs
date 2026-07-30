@@ -513,7 +513,10 @@ public partial class ILEmitter
         }
 
         // ctor = type.GetConstructors()[0]
-        var getConstructorsMethod = typeof(Type).GetMethod("GetConstructors", Type.EmptyTypes)!;
+        var getConstructorsMethod = _ctx.Types.GetMethod(
+            typeof(Type),
+            "GetConstructors",
+            Type.EmptyTypes);
         IL.Emit(OpCodes.Ldloc, typeLocal);
         IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
         IL.Emit(OpCodes.Ldc_I4_0);

@@ -181,7 +181,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(createLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, curveLocal);
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", [typeof(ECCurve)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", [typeof(ECCurve)])!);
         il.Emit(OpCodes.Stfld, _tsECDHEcdhField);
 
         il.Emit(OpCodes.Ret);
@@ -249,7 +249,7 @@ public partial class RuntimeEmitter
 
         // Create an ECDiffieHellman for the other party
         var otherEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
         // Call helper to compute the shared secret (handles raw points + SPKI, DeriveRawSecretAgreement)
@@ -514,7 +514,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var otherEcdhLocal = il.DeclareLocal(typeof(ECDiffieHellman));
-        il.Emit(OpCodes.Call, typeof(ECDiffieHellman).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDiffieHellman), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, otherEcdhLocal);
 
         var rawPointLabel = il.DefineLabel();

@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
 
         // try { ECDsa sign }
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecdsaLocal);
         il.Emit(OpCodes.Ldloc, ecdsaLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -241,7 +241,7 @@ public partial class RuntimeEmitter
         // RSA signing path
         il.MarkLabel(rsaSignLabel);
         var rsaLocal = il.DeclareLocal(typeof(RSA));
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         il.Emit(OpCodes.Ldloc, rsaLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -295,7 +295,7 @@ public partial class RuntimeEmitter
 
         // try { ECDsa verify }
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecdsaLocal);
         il.Emit(OpCodes.Ldloc, ecdsaLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -329,7 +329,7 @@ public partial class RuntimeEmitter
         // RSA verification path
         il.MarkLabel(rsaVerifyLabel);
         var rsaLocal = il.DeclareLocal(typeof(RSA));
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         il.Emit(OpCodes.Ldloc, rsaLocal);
         il.Emit(OpCodes.Ldarg_0);

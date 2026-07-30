@@ -905,7 +905,7 @@ public partial class RuntimeEmitter
 
         var rsaLocal = il.DeclareLocal(typeof(RSA));
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
         il.Emit(OpCodes.Ldloc, rsaLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -936,7 +936,7 @@ public partial class RuntimeEmitter
         // EC path
         il.MarkLabel(ecLabel);
         var ecLocal = il.DeclareLocal(typeof(ECDsa));
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, ecLocal);
         il.Emit(OpCodes.Ldloc, ecLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -1326,7 +1326,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "export");
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", [typeof(string)]));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
