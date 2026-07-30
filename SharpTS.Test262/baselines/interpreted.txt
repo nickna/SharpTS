@@ -3344,8 +3344,8 @@ test/built-ins/JSON/stringify/value-object-circular.js Fail
 test/built-ins/JSON/stringify/value-object-proxy-revoked.js Fail
 test/built-ins/JSON/stringify/value-object-proxy.js Fail
 test/built-ins/JSON/stringify/value-primitive-top-level.js Pass
-test/built-ins/JSON/stringify/value-string-escape-ascii.js Fail
-test/built-ins/JSON/stringify/value-string-escape-unicode.js Fail
+test/built-ins/JSON/stringify/value-string-escape-ascii.js Pass
+test/built-ins/JSON/stringify/value-string-escape-unicode.js Pass
 test/built-ins/JSON/stringify/value-string-object.js Pass
 test/built-ins/JSON/stringify/value-symbol.js Pass
 test/built-ins/JSON/stringify/value-tojson-abrupt.js Fail
