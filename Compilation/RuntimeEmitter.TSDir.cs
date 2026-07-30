@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDirType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$Dir",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
@@ -185,7 +185,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDirentType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$Dirent",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object

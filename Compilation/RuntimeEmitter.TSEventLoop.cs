@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSEventLoopClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$EventLoop",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
     private void EmitEventLoopSyncContext(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // --- Closure: holds (SendOrPostCallback d, object state); Run() => d(state). ---
-        var closure = moduleBuilder.DefineType(
+        var closure = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SyncContextClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

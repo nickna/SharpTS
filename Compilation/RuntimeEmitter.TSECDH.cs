@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
     private void EmitTSECDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $ECDH
-        _tsECDHTypeBuilder = moduleBuilder.DefineType(
+        _tsECDHTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ECDH",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -815,7 +815,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBoundECDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _boundECDHMethodTypeBuilder = moduleBuilder.DefineType(
+        _boundECDHMethodTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundECDHMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

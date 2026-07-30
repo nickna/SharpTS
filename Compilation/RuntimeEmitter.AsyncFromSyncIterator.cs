@@ -166,7 +166,7 @@ public partial class RuntimeEmitter
 
     private void EmitAsyncFromSyncIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncFromSyncIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,

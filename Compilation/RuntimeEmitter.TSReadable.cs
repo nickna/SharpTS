@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
     private void EmitTSReadableTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Readable : $EventEmitter
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Readable",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType  // Extends $EventEmitter

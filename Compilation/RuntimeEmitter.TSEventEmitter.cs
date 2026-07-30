@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
         EmitListenerWrapperType(moduleBuilder, runtime);
 
         // Define class: public class $EventEmitter (not sealed - stream types inherit from it)
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$EventEmitter",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
     private void EmitListenerWrapperType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define nested class: public sealed class $ListenerWrapper
-        _tsEventEmitterListenerWrapperType = moduleBuilder.DefineType(
+        _tsEventEmitterListenerWrapperType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ListenerWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

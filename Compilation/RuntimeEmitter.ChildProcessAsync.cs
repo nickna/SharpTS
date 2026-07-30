@@ -428,7 +428,7 @@ public partial class RuntimeEmitter
     private void DefineChildPushType(EmittedRuntime runtime)
     {
         var mb = (ModuleBuilder)((TypeBuilder)runtime.TSEventEmitterType).Module;
-        var t = mb.DefineType("$ChildPush",
+        var t = EmitTypeDefinitions.DefineType(mb, "$ChildPush",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, _types.Object);
         _childPushType = t;
         _childPushStream = t.DefineField("_stream", _types.Object, FieldAttributes.Public);
@@ -457,7 +457,7 @@ public partial class RuntimeEmitter
     private void DefineChildCtxType(EmittedRuntime runtime)
     {
         var mb = (ModuleBuilder)((TypeBuilder)runtime.TSEventEmitterType).Module;
-        var t = mb.DefineType(
+        var t = EmitTypeDefinitions.DefineType(mb,
             "$ChildProcessCtx",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
 
     private void DefineFsReadStreamType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _fsReadStreamType = moduleBuilder.DefineType(
+        _fsReadStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsReadStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSReadableType  // Extends $Readable instead of object
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
     {
         // Reparent onto $EventEmitter so it's a real emitter (on/once/emit) with
         // open/ready/finish/close events (#980).
-        _fsWriteStreamType = moduleBuilder.DefineType(
+        _fsWriteStreamType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWriteStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

@@ -114,7 +114,7 @@ public partial class RuntimeEmitter
         // base Count may diverge from _length once sparse writes occur; built-
         // in emitters that care use the explicit getters (Length / LongLength /
         // HasIndex) rather than falling through to base Count.
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Array",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.ListOfObject

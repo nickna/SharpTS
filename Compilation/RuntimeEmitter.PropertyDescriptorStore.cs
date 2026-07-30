@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFrozenSealedStateClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FrozenSealedState",
             TypeAttributes.NotPublic | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPrototypeInfoClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PrototypeInfo",
             TypeAttributes.NotPublic | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCompiledPropertyDescriptorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CompiledPropertyDescriptor",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPropertyDescriptorStoreClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PropertyDescriptorStore",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

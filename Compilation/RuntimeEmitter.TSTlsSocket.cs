@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
 
     private void EmitTlsSocketClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsSocket",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.NetSocketType  // extends $NetSocket — inherits real socket I/O over the SslStream
@@ -748,7 +748,7 @@ public partial class RuntimeEmitter
 
     private void EmitTlsServerClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsServer",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

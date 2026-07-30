@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
     /// </remarks>
     private void EmitFileDescriptorTableType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$FileDescriptorTable",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object

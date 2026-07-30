@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDataViewType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        var typeBuilder = module.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$DataView",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object

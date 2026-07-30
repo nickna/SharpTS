@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
     private void EmitTSObjectClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Object
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Object",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
         runtime.TSObjectType = typeBuilder;
 
         // Implement $IHasFields interface for unified property access
-        typeBuilder.AddInterfaceImplementation(runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, runtime.IHasFieldsInterface);
 
         // Fields
         _tsObjectFieldsField = typeBuilder.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);

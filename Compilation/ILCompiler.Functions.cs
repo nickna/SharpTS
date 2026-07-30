@@ -93,7 +93,7 @@ public partial class ILCompiler
                     if (constraintType.IsInterface)
                         genericParams[i].SetInterfaceConstraints(constraintType);
                     else
-                        genericParams[i].SetBaseTypeConstraint(constraintType);
+                        EmitTypeDefinitions.SetBaseTypeConstraint(genericParams[i], constraintType);
                 }
             }
 
@@ -283,7 +283,7 @@ public partial class ILCompiler
     {
         // Create display class type. The counter guarantees a unique type name; '.' and ':' in the key
         // (async-method keys are "<Class>::<method>") are sanitized to valid identifier characters.
-        var displayClass = _moduleBuilder.DefineType(
+        var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<>c__FuncDisplayClass_{qualifiedFunctionName.Replace(".", "_").Replace(":", "_")}_{_closures.DisplayClassCounter++}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

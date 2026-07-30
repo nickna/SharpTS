@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitStreamAbortCallbackClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StreamAbortCallback",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Object);

@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
     private void DefineRuntimeClassPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public static class $Runtime
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Runtime",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

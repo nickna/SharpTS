@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSNetSocketPhase1(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NetSocket",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

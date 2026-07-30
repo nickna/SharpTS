@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
         EmitTSPromiseRejectedException(moduleBuilder, runtime);
 
         // Define class: public class $Promise
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Promise",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -258,7 +258,7 @@ public partial class RuntimeEmitter
     private void EmitTSPromiseRejectedException(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $PromiseRejectedException : Exception
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseRejectedException",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Exception

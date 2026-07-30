@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private AnyStateClass DefineAnyStateClass(ModuleBuilder moduleBuilder)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AnyState",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

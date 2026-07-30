@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
         ModuleBuilder moduleBuilder, string typeName,
         string unsupportedAlgorithmPrefix, string updateFinalizedMessage)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

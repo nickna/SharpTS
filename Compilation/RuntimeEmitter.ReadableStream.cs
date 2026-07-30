@@ -53,17 +53,17 @@ public partial class RuntimeEmitter
         _pendingReadsTcsType = typeof(TaskCompletionSource<object>);
         _pendingReadsQueueType = typeof(Queue<TaskCompletionSource<object>>);
 
-        var streamBuilder = moduleBuilder.DefineType(
+        var streamBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStream",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var controllerBuilder = moduleBuilder.DefineType(
+        var controllerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStreamDefaultController",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);
 
-        var readerBuilder = moduleBuilder.DefineType(
+        var readerBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadableStreamDefaultReader",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);

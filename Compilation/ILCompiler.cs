@@ -829,7 +829,7 @@ public partial class ILCompiler
         {
             if (_closures.ObjectShapes.ByKey.ContainsKey(shape.CanonicalKey)) continue;
 
-            var structType = _moduleBuilder.DefineType(
+            var structType = EmitTypeDefinitions.DefineType(_moduleBuilder,
                 $"$Shape_{_closures.ObjectShapes.Counter++}",
                 TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.SequentialLayout,
                 _types.ValueType);
@@ -1978,7 +1978,7 @@ public partial class ILCompiler
             return _closures.EntryPointDisplayClass;
         }
 
-        var displayClass = _moduleBuilder.DefineType(
+        var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
             "<>c__EntryPointDisplayClass",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

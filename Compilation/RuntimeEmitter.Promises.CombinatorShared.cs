@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
     {
         var builderType = _types.AsyncTaskMethodBuilderOfObject;
 
-        var smType = moduleBuilder.DefineType(
+        var smType = EmitTypeDefinitions.DefineType(moduleBuilder,
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,

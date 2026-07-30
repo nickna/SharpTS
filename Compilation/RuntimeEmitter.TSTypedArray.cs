@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedRuntime runtime)
     {
-        _typedArrayBaseType = module.DefineType(
+        _typedArrayBaseType = EmitTypeDefinitions.DefineType(module,
             "$TypedArray",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class,
             _types.Object

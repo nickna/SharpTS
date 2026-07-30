@@ -466,7 +466,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private TypeBuilder EmitPromiseResolveCallbackType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseResolveCallback",
             TypeAttributes.Public | TypeAttributes.Sealed,
             _types.Object
@@ -593,7 +593,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private TypeBuilder EmitPromiseRejectCallbackType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseRejectCallback",
             TypeAttributes.Public | TypeAttributes.Sealed,
             _types.Object

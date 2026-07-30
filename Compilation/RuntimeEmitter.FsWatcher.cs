@@ -33,7 +33,7 @@ public partial class RuntimeEmitter
         EmitFsWatchChangeClosure(moduleBuilder, runtime);
 
         // 2. Define $FsWatcher : $EventEmitter
-        _fsWatcherType = moduleBuilder.DefineType(
+        _fsWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FsWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType);

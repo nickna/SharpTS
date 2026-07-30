@@ -71,7 +71,7 @@ public class DelegateAdapterEmitter
         // collide in the module's type namespace.
         var typeName = $"$DelegateAdapter_{SanitizeName(delegateType.Name)}_{_counter++}";
 
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             typeName,
             TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);

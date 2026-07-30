@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
     private void EmitTSKeyObjectClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $TSKeyObject
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TSKeyObject",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object

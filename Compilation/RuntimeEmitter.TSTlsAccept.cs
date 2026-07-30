@@ -42,7 +42,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsAcceptClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsAcceptClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsConnectOkClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectOkClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTlsConnectErrClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectErrClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         EmitTlsConnectOkClosureClass(moduleBuilder, runtime);
         EmitTlsConnectErrClosureClass(moduleBuilder, runtime);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TlsConnectClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
     private void EmitTSErrorBaseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Error
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Error",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -612,7 +612,7 @@ public partial class RuntimeEmitter
         Action<TypeBuilder, ConstructorBuilder> setOnRuntime)
     {
         // Define class that extends $Error
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             className,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSErrorType
@@ -693,7 +693,7 @@ public partial class RuntimeEmitter
     private void EmitTSAggregateErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class that extends $Error
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AggregateError",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSErrorType

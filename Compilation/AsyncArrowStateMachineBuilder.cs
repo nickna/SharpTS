@@ -138,7 +138,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         GrandparentStateMachineType = grandparentType;
 
         // Define the state machine struct
-        _stateMachineType = _moduleBuilder.DefineType(
+        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<>c__AsyncArrow_{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,
@@ -246,7 +246,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
         OuterStateMachineField = null;
 
         // Define the state machine struct
-        _stateMachineType = _moduleBuilder.DefineType(
+        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<>c__AsyncArrow_{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,

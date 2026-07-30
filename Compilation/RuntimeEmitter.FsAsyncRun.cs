@@ -26,7 +26,8 @@ public partial class RuntimeEmitter
     /// <summary>$FsAsyncOp { MethodInfo _m; object[] _args; object Worker() }</summary>
     private void EmitFsAsyncOpClosure(TypeBuilder typeBuilder)
     {
-        var t = ((ModuleBuilder)typeBuilder.Module).DefineType(
+        var t = EmitTypeDefinitions.DefineType(
+            (ModuleBuilder)typeBuilder.Module,
             "$FsAsyncOp",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

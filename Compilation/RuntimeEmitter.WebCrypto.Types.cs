@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
 
     private void EmitCryptoKeyType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$CryptoKey",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
@@ -137,7 +137,7 @@ public partial class RuntimeEmitter
 
     private void EmitSubtleCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$SubtleCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);
@@ -1549,7 +1549,7 @@ public partial class RuntimeEmitter
 
     private void EmitWebCryptoType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WebCrypto",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object);

@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
     private void EmitTSDuplexTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Duplex : $Readable
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Duplex",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSReadableType  // Extends $Readable

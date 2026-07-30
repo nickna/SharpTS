@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromiseCapabilityType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseCapability",
             TypeAttributes.Public | TypeAttributes.Sealed,
             _types.Object);

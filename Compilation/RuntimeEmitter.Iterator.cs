@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
     private void EmitIteratorWrapperType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $IteratorWrapper : IEnumerator<object>, IEnumerator, IDisposable
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$IteratorWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,

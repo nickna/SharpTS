@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
 {
     private void EmitTSX509Class(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$X509Certificate",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             _types.Object);

@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
     {
         // Define class: public sealed class $TSNamespace
         // Mirrors SharpTSNamespace but is emitted into the compiled assembly
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TSNamespace",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

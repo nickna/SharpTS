@@ -98,7 +98,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
         // Define the state machine struct
         // Name follows C# compiler convention: <MethodName>d__N
-        _stateMachineType = _moduleBuilder.DefineType(
+        _stateMachineType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<{methodName}>d__{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.ValueType,

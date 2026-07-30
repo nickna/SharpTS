@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
     {
         EmitStatWatchPollClosure(moduleBuilder, runtime);
 
-        _statWatcherType = moduleBuilder.DefineType(
+        _statWatcherType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StatWatcher",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType);

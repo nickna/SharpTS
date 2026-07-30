@@ -1058,7 +1058,7 @@ public partial class RuntimeEmitter
 
     private void EmitProcessEmitClosureType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ProcessEmitClosure",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);
@@ -1112,11 +1112,11 @@ public partial class RuntimeEmitter
 
     private void EmitProcessType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var tb = moduleBuilder.DefineType(
+        var tb = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Process",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType);
-        tb.AddInterfaceImplementation(runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.IHasFieldsInterface);
 
         _processFieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);

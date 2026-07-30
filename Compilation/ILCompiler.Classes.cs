@@ -119,7 +119,7 @@ public partial class ILCompiler
                     if (constraintType.IsInterface)
                         classGenericParams[i].SetInterfaceConstraints(constraintType);
                     else
-                        classGenericParams[i].SetBaseTypeConstraint(constraintType);
+                        EmitTypeDefinitions.SetBaseTypeConstraint(classGenericParams[i], constraintType);
                 }
             }
 
@@ -217,13 +217,13 @@ public partial class ILCompiler
         // Set the parent type (defaults to Object if baseType is null)
         if (baseType != null)
         {
-            typeBuilder.SetParent(baseType);
+            EmitTypeDefinitions.SetParent(typeBuilder, baseType);
         }
 
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
         // Each class emits its own GetProperty/SetProperty methods that access its _fields
-        typeBuilder.AddInterfaceImplementation(_runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.IHasFieldsInterface);
 
         string className = qualifiedClassName;
 

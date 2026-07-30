@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
     private void EmitTSDHTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $DiffieHellman
-        _tsDHTypeBuilder = moduleBuilder.DefineType(
+        _tsDHTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DiffieHellman",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -1477,7 +1477,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBoundDHMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        _boundDHMethodTypeBuilder = moduleBuilder.DefineType(
+        _boundDHMethodTypeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BoundDHMethod",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object

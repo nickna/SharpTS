@@ -274,7 +274,7 @@ public partial class ILCompiler
             else
             {
                 // Capturing: create display class
-                var displayClass = _moduleBuilder.DefineType(
+                var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
                     $"<>c__DisplayClass{_closures.DisplayClassCounter++}",
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
                     _types.Object
@@ -1123,7 +1123,7 @@ public partial class ILCompiler
                 return;
         }
 
-        var displayClass = _moduleBuilder.DefineType(
+        var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
             $"<>c__{nameSuffix}{_closures.DisplayClassCounter++}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

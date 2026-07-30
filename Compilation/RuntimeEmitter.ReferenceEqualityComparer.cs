@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
         // This implements JavaScript-style equality for Map/Set keys:
         // - Primitives (string, double, bool): value equality
         // - Objects: reference equality
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReferenceEqualityComparer",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,

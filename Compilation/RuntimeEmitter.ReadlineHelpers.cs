@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
     private void EmitReadlineInterfaceTypeDefinition(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $ReadlineInterface extends $EventEmitter
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ReadlineInterface",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

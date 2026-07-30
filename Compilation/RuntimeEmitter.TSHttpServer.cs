@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
     {
         var httpListenerRequestType = typeof(HttpListenerRequest);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpRequest",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
@@ -455,7 +455,7 @@ public partial class RuntimeEmitter
     {
         var httpListenerResponseType = typeof(HttpListenerResponse);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpResponse",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType
@@ -1204,7 +1204,7 @@ public partial class RuntimeEmitter
         var httpListenerType = typeof(HttpListener);
 
         // Define class: public class $HttpServer : $EventEmitter
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpServer",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

@@ -39,7 +39,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitTSWriteCallbackWrapperClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$WriteCallbackWrapper",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
     private void EmitTSWritableClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $Writable : $EventEmitter
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$Writable",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType  // Extends $EventEmitter

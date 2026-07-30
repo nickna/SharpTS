@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         _bcInnerDictType = typeof(ConcurrentDictionary<long, object>);
         _bcRegistryDictType = typeof(ConcurrentDictionary<string, object>);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$BroadcastChannel",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType

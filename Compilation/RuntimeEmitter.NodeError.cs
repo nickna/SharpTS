@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
     private void EmitNodeErrorClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public class $NodeError : Exception
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$NodeError",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Exception

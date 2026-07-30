@@ -301,7 +301,7 @@ public partial class ILCompiler
             else
             {
                 // Capturing: create display class
-                var displayClass = _moduleBuilder.DefineType(
+                var displayClass = EmitTypeDefinitions.DefineType(_moduleBuilder,
                     $"<>c__InnerFuncDC{_closures.DisplayClassCounter++}_{func.Name.Lexeme}",
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
                     _types.Object
