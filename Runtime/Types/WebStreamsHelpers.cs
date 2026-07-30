@@ -28,8 +28,17 @@ internal static class StreamFields
         {
             return dict.TryGetValue(name, out value);
         }
-        // Compiled-mode $Object: reflect the Fields property.
-        var prop = _fieldsPropCache.GetOrAdd(target.GetType(), t => t.GetProperty("Fields"));
+        // Compiled-mode $Object: reflect the Fields property through the
+        // managed-emitted-shape boundary. Other CLR objects are not part of
+        // this adapter's documented contract.
+        var targetType = target.GetType();
+        if (!ManagedEmittedShapeReflection.IsShape(targetType, ManagedEmittedShape.Object))
+        {
+            return false;
+        }
+        var prop = _fieldsPropCache.GetOrAdd(targetType, t =>
+            ManagedEmittedShapeReflection.GetPublicProperty(
+                t, ManagedEmittedShape.Object, "Fields"));
         if (prop != null && prop.GetValue(target) is IDictionary<string, object?> reflected)
         {
             return reflected.TryGetValue(name, out value);
@@ -108,7 +117,8 @@ internal static class WebStreamsHelpers
         {
             return PipeTo(interp, source, ws, opts);
         }
-        if (dest != null && dest.GetType().Name == "$WritableStream")
+        if (dest != null && ManagedEmittedShapeReflection.IsShape(
+                dest.GetType(), ManagedEmittedShape.WritableStream))
         {
             return PipeToEmittedWritable(interp, source, dest, opts);
         }
@@ -123,11 +133,14 @@ internal static class WebStreamsHelpers
     private static SharpTSPromise PipeToEmittedWritable(Interp interp, SharpTSReadableStream source, object dest, object? opts)
     {
         var destType = dest.GetType();
-        var writeMethod = destType.GetMethod("Write", [typeof(object)])
+        var writeMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+                destType, ManagedEmittedShape.WritableStream, "Write", [typeof(object)])
             ?? throw new Exception("$WritableStream.Write not found");
-        var closeMethod = destType.GetMethod("Close", System.Type.EmptyTypes)
+        var closeMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+                destType, ManagedEmittedShape.WritableStream, "Close", Type.EmptyTypes)
             ?? throw new Exception("$WritableStream.Close not found");
-        var abortMethod = destType.GetMethod("Abort", [typeof(object)])
+        var abortMethod = ManagedEmittedShapeReflection.GetPublicMethod(
+                destType, ManagedEmittedShape.WritableStream, "Abort", [typeof(object)])
             ?? throw new Exception("$WritableStream.Abort not found");
 
         bool preventClose = false, preventAbort = false, preventCancel = false;

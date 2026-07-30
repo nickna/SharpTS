@@ -363,32 +363,31 @@ public class SharpTSKeyObject : ISharpTSPropertyAccessor
         string? type = null;
         string? format = null;
 
-        // Extract type and format from options if provided
-        if (options is SharpTSObject obj)
+        // StreamFields is the shared adapter for interpreter objects,
+        // dictionaries, and compiler-emitted $Object values.
+        if (StreamFields.TryGet(options, "type", out var typeValue) &&
+            typeValue is string typeString)
+            type = typeString;
+        if (StreamFields.TryGet(options, "format", out var formatValue) &&
+            formatValue is string formatString)
+            format = formatString;
+
+        // Preserve the managed .NET interop fallback for custom options
+        // objects exposing GetProperty(string). Compiler-emitted $Object
+        // values have already gone through the guarded StreamFields path.
+        if (options != null &&
+            !ManagedEmittedShapeReflection.IsShape(
+                options.GetType(), ManagedEmittedShape.Object) &&
+            options is not SharpTSObject &&
+            options is not IDictionary<string, object?>)
         {
-            if (obj.Fields.TryGetValue("type", out var t) && t is string ts)
-                type = ts;
-            if (obj.Fields.TryGetValue("format", out var f) && f is string fs)
-                format = fs;
-        }
-        else if (options is Dictionary<string, object?> dict)
-        {
-            if (dict.TryGetValue("type", out var t) && t is string ts)
-                type = ts;
-            if (dict.TryGetValue("format", out var f) && f is string fs)
-                format = fs;
-        }
-        else if (options != null)
-        {
-            // Try reflection for compiled $Object
-            var optionsType = options.GetType();
-            var getPropertyMethod = optionsType.GetMethod("GetProperty", [typeof(string)]);
+            var getPropertyMethod = options.GetType().GetMethod("GetProperty", [typeof(string)]);
             if (getPropertyMethod != null)
             {
-                var typeVal = getPropertyMethod.Invoke(options, ["type"]);
-                if (typeVal is string ts) type = ts;
-                var formatVal = getPropertyMethod.Invoke(options, ["format"]);
-                if (formatVal is string fs) format = fs;
+                if (getPropertyMethod.Invoke(options, ["type"]) is string reflectedType)
+                    type = reflectedType;
+                if (getPropertyMethod.Invoke(options, ["format"]) is string reflectedFormat)
+                    format = reflectedFormat;
             }
         }
 

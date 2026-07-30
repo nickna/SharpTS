@@ -68,17 +68,13 @@ public class SharpTSProxy : ISharpTSCallable
         if (value == null || value is SharpTSUndefined)
             return null;
 
-        // ISharpTSCallable (interpreter mode)
-        if (value is ISharpTSCallable)
+        if (RuntimeCallableDispatcher.IsCallable(value))
             return value;
 
-        // Check for compiled function types (TSFunction, Func<>, etc.) via Invoke method
+        // Preserve the managed .NET interop fallback for arbitrary callable
+        // objects. Known compiler-emitted functions are handled above.
         var invokeMethod = value.GetType().GetMethod("Invoke");
         if (invokeMethod != null)
-            return value;
-
-        // Func<object?[], object?> delegate
-        if (value is Func<object?[], object?>)
             return value;
 
         throw new Exception($"Runtime Error: Proxy handler trap '{trapName}' is not a function.");
@@ -89,42 +85,15 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     private object? InvokeTrap(object trap, Interpreter? interp, List<object?> args)
     {
-        if (trap is ISharpTSCallable callable)
-            return callable.Call(interp!, args);
+        if (RuntimeCallableDispatcher.IsCallable(trap))
+            return RuntimeCallableDispatcher.Invoke(interp, trap, args.ToArray());
 
-        // Func<object?[], object?> delegate
-        if (trap is Func<object?[], object?> func)
-            return func(args.ToArray());
-
-        // Try Invoke(params object?[]) for TSFunction and similar compiled types
+        // Managed .NET interop fallback for arbitrary Invoke-shaped objects.
+        // The emitted function path above no longer needs to inspect its
+        // private _method field because InvokeWithThis owns that contract.
         var invokeMethod = trap.GetType().GetMethod("Invoke");
         if (invokeMethod != null)
-        {
-            // TSFunction.Invoke() takes params object?[] and handles argument conversion internally.
-            // Object method shorthands in compiled mode have a __this parameter as the first arg.
-            // We need to check the underlying method's parameter list to see if we need to prepend
-            // a null __this arg so the trap args align correctly.
-            var argsArray = args.ToArray();
-
-            var methodField = trap.GetType().GetField("_method",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (methodField != null)
-            {
-                var mi = (System.Reflection.MethodInfo)methodField.GetValue(trap)!;
-                var parameters = mi.GetParameters();
-                // Check if the first parameter is __this (object method shorthand pattern)
-                if (parameters.Length > 0 && parameters[0].Name == "__this")
-                {
-                    // Prepend null for __this
-                    var extended = new object?[argsArray.Length + 1];
-                    extended[0] = null;
-                    Array.Copy(argsArray, 0, extended, 1, argsArray.Length);
-                    argsArray = extended;
-                }
-            }
-
-            return invokeMethod.Invoke(trap, [argsArray]);
-        }
+            return invokeMethod.Invoke(trap, [args.ToArray()]);
 
         throw new Exception("Runtime Error: Cannot invoke proxy trap.");
     }

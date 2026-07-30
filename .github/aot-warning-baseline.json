@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 151,
+  "total": 139,
   "codes": [
     {
       "code": "IL2026",
@@ -20,7 +20,7 @@
     },
     {
       "code": "IL2070",
-      "count": 61
+      "count": 58
     },
     {
       "code": "IL2072",
@@ -28,7 +28,7 @@
     },
     {
       "code": "IL2075",
-      "count": 68
+      "count": 59
     },
     {
       "code": "IL3050",
@@ -50,7 +50,7 @@
     },
     {
       "area": "Runtime",
-      "count": 64
+      "count": 52
     },
     {
       "area": "TypeSystem",
@@ -62,6 +62,16 @@
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2057",
       "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2070",
+      "count": 3
     },
     {
       "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
@@ -109,16 +119,6 @@
       "count": 3
     },
     {
-      "file": "Runtime/RuntimeCallableDispatcher.cs",
-      "code": "IL2070",
-      "count": 2
-    },
-    {
-      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
-      "code": "IL2075",
-      "count": 4
-    },
-    {
       "file": "Runtime/Types/SharpTSAbortSignal.cs",
       "code": "IL2075",
       "count": 1
@@ -146,7 +146,7 @@
     {
       "file": "Runtime/Types/SharpTSProxy.cs",
       "code": "IL2075",
-      "count": 4
+      "count": 3
     },
     {
       "file": "Runtime/Types/StructuredClone.cs",
@@ -166,27 +166,7 @@
     {
       "file": "Runtime/Types/VmModule.cs",
       "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/Types/WebStreamsHelpers.cs",
-      "code": "IL2070",
       "count": 1
-    },
-    {
-      "file": "Runtime/Types/WebStreamsHelpers.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
     },
     {
       "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
@@ -196,6 +176,16 @@
     {
       "file": "Runtime/DotNet/DotNetDelegateShim.cs",
       "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2070",
       "count": 2
     },
     {
@@ -249,18 +239,18 @@
       "count": 1
     },
     {
-      "file": "Compilation/RuntimeTypes.Json.cs",
-      "code": "IL2075",
-      "count": 5
-    },
-    {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",
       "code": "IL2070",
       "count": 4
     },
     {
-      "file": "Compilation/RuntimeTypes.Objects.cs",
-      "code": "IL2070",
+      "file": "Compilation/RuntimeTypes.Json.cs",
+      "code": "IL2075",
+      "count": 5
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Promise.cs",
+      "code": "IL2075",
       "count": 3
     },
     {
@@ -309,18 +299,8 @@
       "count": 2
     },
     {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "file": "Compilation/RuntimeTypes.Objects.cs",
       "code": "IL2070",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Promise.cs",
-      "code": "IL2075",
       "count": 3
     },
     {

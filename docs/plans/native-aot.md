@@ -123,10 +123,15 @@ Plan against these numbers, not the originals:
   dropped by roughly 1 MB at that checkpoint. Routing the remaining
   compiler-owned array and emitted-base-type shapes, explicitly guarding the
   managed in-memory compiler, and replacing attribute-default activation
-  lowered the inventory to 151. The current image is 93,462,528 bytes, 987,648
-  bytes (1.05%) smaller than the original 2,585-warning image. CI pins total,
-  per-code, per-area, and per-file/code counts, so both increases and category
-  swaps fail until the same PR updates the explained baseline.
+  lowered the inventory to 151. Isolating reflection over known
+  compiler-emitted managed shapes (`$Object`, `$TSFunction`/
+  `$BoundTSFunction`, `$WritableStream`, and `$MessagePort`) behind a closed,
+  Native-AOT-guarded boundary then lowered it to 139. That boundary added
+  37,888 bytes (0.041%) to the win-arm64 image: the current measurement is
+  93,500,416 bytes, still 949,760 bytes (1.01%) smaller than the original
+  2,585-warning image. CI pins total, per-code, per-area, and per-file/code
+  counts, so both increases and category swaps fail until the same PR updates
+  the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -167,16 +172,16 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (151)
+### Residual analyzer inventory (139)
 
-The cleanup tranches removed 2,434 of 2,585 warnings (94.2%) without broad
+The cleanup tranches removed 2,446 of 2,585 warnings (94.6%) without broad
 `DynamicallyAccessedMembers` annotations. What remains is no longer one
 mechanical problem:
 
 | Analyzer | Count | Primary meaning now |
 |---|---:|---|
-| IL2075 | 68 | Reflection from a returned/derived `Type`: emitted runtime duck typing, compiler inspection of user types, and private Reflection.Emit validation |
-| IL2070 | 61 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
+| IL2075 | 59 | Reflection from a returned/derived `Type`: generic managed runtime duck typing, compiler inspection of user types, and private Reflection.Emit validation |
+| IL2070 | 58 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
 | IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
 | IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
 | Other flow warnings | 7 | Two each IL2055/IL2057/IL2060 and one IL2072, concentrated in dynamic interop/type synthesis |
@@ -195,12 +200,17 @@ The remaining work is split at three ownership boundaries:
    native image by 6.55%. Define the supported native BCL surface and root only
    that surface; guard third-party and unavailable generic shapes.
 3. **Generated/runtime reflection.** `RuntimeTypes` and object helpers reflect
-   over SharpTS-emitted managed types. Separate code that only runs later under
-   CoreCLR from code reachable in the native interpreter, then put exact
-   suppressions or generated accessors at that boundary. `ILLabelValidator`
-   and the generator spill reader are a distinct refactor: they inspect
-   private Reflection.Emit implementation fields and should eventually track
-   their state explicitly instead.
+   over SharpTS-emitted managed types. The four name-stable shapes used by
+   hybrid managed execution now go through
+   `ManagedEmittedShapeReflection`: its exact suppressions are restricted to a
+   closed shape enum and it rejects Native AOT before reflection. VM fallbacks
+   that intentionally accept arbitrary CLR `Fields`, `Invoke`, or
+   `SetProperty` shapes remain unsuppressed and belong to the dynamic interop
+   policy. Other emitted user-class shapes have arbitrary names and still need
+   a trustworthy marker or generated accessor. `ILLabelValidator` and the
+   generator spill reader are a distinct refactor: they inspect private
+   Reflection.Emit implementation fields and should eventually track their
+   state explicitly instead.
 
 Analyzer zero is not itself the goal. The target is zero unexplained warnings:
 each residual warning should end at a tested metadata seam, a feature guard, or

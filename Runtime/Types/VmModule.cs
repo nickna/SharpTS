@@ -228,12 +228,23 @@ public abstract class VmModuleBase
             throw new Exception("TypeError: callback is not a function");
 
         var type = callable.GetType();
-        if (type.Name is "$TSFunction" or "$BoundTSFunction")
+        if (ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function))
         {
-            var withThis = type.GetMethod("InvokeWithThis", [typeof(object), typeof(object[])]);
+            var withThis = ManagedEmittedShapeReflection.GetPublicMethod(
+                type, ManagedEmittedShape.Function, "InvokeWithThis",
+                [typeof(object), typeof(object[])]);
             if (withThis != null)
                 return withThis.Invoke(callable, [thisArg, args]);
+
+            var emittedInvoke = ManagedEmittedShapeReflection.GetPublicMethod(
+                type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]);
+            if (emittedInvoke != null)
+                return emittedInvoke.Invoke(callable, [args]);
         }
+
+        // Managed .NET interop also accepts an arbitrary object exposing
+        // Invoke(object[]). Keep that reflection visible to the analyzer until
+        // the native interop policy is defined.
         var invoke = type.GetMethod("Invoke", [typeof(object[])]);
         if (invoke != null)
             return invoke.Invoke(callable, [args]);

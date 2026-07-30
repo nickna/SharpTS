@@ -66,8 +66,15 @@ public static class VmContext
         }
         else if (contextObject != null)
         {
-            // Fallback: handle emitted $Object and other types with a Fields property
-            var fieldsProp = contextObject.GetType().GetProperty("Fields");
+            // Compiler-emitted $Object uses the managed-shape boundary. Preserve
+            // the existing arbitrary CLR "Fields" fallback for .NET interop;
+            // that path remains part of the separate native interop policy.
+            var type = contextObject.GetType();
+            var fieldsProp = ManagedEmittedShapeReflection.IsShape(
+                    type, ManagedEmittedShape.Object)
+                ? ManagedEmittedShapeReflection.GetPublicProperty(
+                    type, ManagedEmittedShape.Object, "Fields")
+                : type.GetProperty("Fields");
             if (fieldsProp?.GetValue(contextObject) is IEnumerable<KeyValuePair<string, object?>> fields)
             {
                 foreach (var kv in fields)
@@ -93,8 +100,15 @@ public static class VmContext
             if (value == null || value is ISharpTSCallable || value is BuiltInMethod)
                 continue;
 
-            // Check for Invoke(object[]) method — signature of emitted $TSFunction
-            var invokeMethod = value.GetType().GetMethod("Invoke", [typeof(object[])]);
+            // Compiler-emitted functions use the managed-shape boundary. Keep
+            // accepting arbitrary CLR Invoke(object[]) objects for managed
+            // interop until the native interop surface is defined.
+            var type = value.GetType();
+            var invokeMethod = ManagedEmittedShapeReflection.IsShape(
+                    type, ManagedEmittedShape.Function)
+                ? ManagedEmittedShapeReflection.GetPublicMethod(
+                    type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
+                : type.GetMethod("Invoke", [typeof(object[])]);
             if (invokeMethod != null)
             {
                 props[key] = new CompiledCallableAdapter(value, invokeMethod);
@@ -125,9 +139,15 @@ public static class VmContext
         }
         else if (contextObject != null)
         {
-            // Fallback: handle emitted $Object via reflection on SetProperty method
-            var setMethod = contextObject.GetType().GetMethod("SetProperty",
-                [typeof(string), typeof(object)]);
+            // Compiler-emitted $Object uses the managed-shape boundary. Preserve
+            // custom CLR SetProperty shapes as the managed interop fallback.
+            var type = contextObject.GetType();
+            var setMethod = ManagedEmittedShapeReflection.IsShape(
+                    type, ManagedEmittedShape.Object)
+                ? ManagedEmittedShapeReflection.GetPublicMethod(
+                    type, ManagedEmittedShape.Object, "SetProperty",
+                    [typeof(string), typeof(object)])
+                : type.GetMethod("SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)
             {
                 foreach (var name in originalProperties.Keys)

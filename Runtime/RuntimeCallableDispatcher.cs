@@ -80,16 +80,20 @@ public static class RuntimeCallableDispatcher
         // dispatch via reflection on InvokeWithThis (which understands the
         // synthetic __this first-parameter contract).
         var type = callable.GetType();
-        if (type.Name is "$TSFunction" or "$BoundTSFunction")
+        if (ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function))
         {
             var invokeWithThis = _invokeWithThisCache.GetOrAdd(type, t =>
-                t.GetMethod("InvokeWithThis", [typeof(object), typeof(object[])]));
+                ManagedEmittedShapeReflection.GetPublicMethod(
+                    t, ManagedEmittedShape.Function, "InvokeWithThis",
+                    [typeof(object), typeof(object[])]));
             if (invokeWithThis != null)
             {
                 return invokeWithThis.Invoke(callable, new object?[] { null, args });
             }
 
-            var invoke = _invokeCache.GetOrAdd(type, t => t.GetMethod("Invoke", [typeof(object[])]));
+            var invoke = _invokeCache.GetOrAdd(type, t =>
+                ManagedEmittedShapeReflection.GetPublicMethod(
+                    t, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]));
             if (invoke != null)
             {
                 return invoke.Invoke(callable, new object?[] { args });
@@ -116,7 +120,8 @@ public static class RuntimeCallableDispatcher
         if (value is Func<object?[], object?>) return true;
         if (value is Action<object?[]>) return true;
         if (value is Delegate) return true;
-        return value.GetType().Name is "$TSFunction" or "$BoundTSFunction";
+        return ManagedEmittedShapeReflection.IsShape(
+            value.GetType(), ManagedEmittedShape.Function);
     }
 
     /// <summary>
