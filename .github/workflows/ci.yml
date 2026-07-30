@@ -220,7 +220,10 @@ jobs:
           test ! -f "$scratch/fork.dll"
 
           # Exercise PE-Packer from inside SharpTS's partial-trim closure too.
-          "$native" --compile Examples/AotCompileGate/main.ts -t exe \
+          # The same empty DOTNET_ROOT used above also proves executable creation
+          # comes from PE-Packer's embedded apphost rather than the runner's SDK.
+          DOTNET_ROOT="$empty_dotnet_root" "$native" --compile \
+            Examples/AotCompileGate/main.ts -t exe \
             -o "$scratch/modules"
           "$scratch/modules" > "$scratch/bundled.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/bundled.txt"
