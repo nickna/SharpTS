@@ -95,12 +95,23 @@ public static class DotNetReferences
         var set = Resolve(startDirectory, cliReferences);
         if (set.IsEmpty) return set;
 
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+        {
+            string origin = set.ManifestPath != null ? $" (manifest: '{set.ManifestPath}')" : "";
+            throw new Exception(
+                $"Error: failed to load reference assembl{(set.References.Count == 1 ? "y" : "ies")}{origin}:\n  " +
+                string.Join(
+                    "\n  ",
+                    set.References.Select(reference =>
+                        $"'{reference.Path}': loading .NET reference assemblies is not available in the native SharpTS build — use the managed build.")));
+        }
+
         List<string>? failures = null;
         foreach (var reference in set.References)
         {
             try
             {
-                var assembly = Assembly.LoadFrom(reference.Path);
+                var assembly = LoadManagedReference(reference.Path);
                 if (assembly.GetCustomAttribute<ReferenceAssemblyAttribute>() != null)
                 {
                     (failures ??= []).Add(
@@ -129,6 +140,12 @@ public static class DotNetReferences
 
         return set;
     }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Callers reject Native AOT before loading third-party executable assemblies into the managed host.")]
+    private static Assembly LoadManagedReference(string path) => Assembly.LoadFrom(path);
 
     private static StringComparer PathComparer =>
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

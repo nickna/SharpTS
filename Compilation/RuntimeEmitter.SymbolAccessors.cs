@@ -461,8 +461,7 @@ public partial class RuntimeEmitter
         var loopTop = il.DefineLabel();
         var nextBase = il.DefineLabel();
         var retIt = il.DefineLabel();
-        var runClassCtor = typeof(System.Runtime.CompilerServices.RuntimeHelpers)
-            .GetMethod("RunClassConstructor", [typeof(RuntimeTypeHandle)])!;
+        var runClassCtor = _types.RuntimeHelpersRunClassConstructor;
         var getTypeHandle = _types.GetProperty(_types.Type, "TypeHandle").GetGetMethod()!;
 
         il.MarkLabel(loopTop);

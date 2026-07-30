@@ -196,6 +196,25 @@ jobs:
             "$scratch/fork-error.txt"
           test ! -f "$scratch/fork.dll"
 
+          # Managed-only public boundaries must fail before their reflection/loader paths.
+          if "$native" Examples/AotCompileGate/main.ts \
+              -r "$PWD/artifacts/managed-runtime/SharpTS.dll" \
+              2> "$scratch/reference-error.txt"; then
+            echo "third-party reference loading unexpectedly ran under Native AOT"
+            exit 1
+          fi
+          grep -Fq \
+            'loading .NET reference assemblies is not available in the native SharpTS build' \
+            "$scratch/reference-error.txt"
+
+          if "$native" --gen-decl System.String 2> "$scratch/gen-decl-error.txt"; then
+            echo "declaration discovery unexpectedly ran under Native AOT"
+            exit 1
+          fi
+          grep -Fq -- \
+            '--gen-decl is not available in the native SharpTS build' \
+            "$scratch/gen-decl-error.txt"
+
           # Exercise PE-Packer from inside SharpTS's partial-trim closure too.
           # The same empty DOTNET_ROOT used above also proves executable creation
           # comes from PE-Packer's embedded apphost rather than the runner's SDK.

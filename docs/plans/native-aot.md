@@ -113,12 +113,13 @@ Plan against these numbers, not the originals:
   reflection-method metadata lookups lowered the inventory to 290. Documenting
   the already-explicit empty-location handling at single-file boundaries
   lowered it to 281. Routing the remaining required BCL, async-builder, emitted
-  member and P/Invoke metadata through the same seams lowered it to 221. The
-  win-arm64 image is 17,920 bytes smaller than the preceding measured
-  checkpoint and only 1,536 bytes (0.0016%) above the original 2,585-warning
-  image. CI pins total, per-code, per-area, and per-file/code counts, so both
-  increases and category swaps fail until the same PR updates the explained
-  baseline.
+  member and P/Invoke metadata through the same seams lowered it to 221.
+  AOT-safe stack diagnostics and explicit managed-only boundaries lowered it
+  to 202. The win-arm64 image is exactly the same 94,450,176 bytes as the
+  original 2,585-warning image (and 19,456 bytes smaller than the preceding
+  measured cleanup checkpoint). CI pins total, per-code, per-area, and
+  per-file/code counts, so both increases and category swaps fail until the
+  same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -159,9 +160,9 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (221)
+### Residual analyzer inventory (202)
 
-The cleanup tranches removed 2,364 of 2,585 warnings (91.5%) without broad
+The cleanup tranches removed 2,383 of 2,585 warnings (92.2%) without broad
 `DynamicallyAccessedMembers` annotations. What remains is no longer one
 mechanical problem:
 
@@ -169,17 +170,18 @@ mechanical problem:
 |---|---:|---|
 | IL2075 | 106 | Reflection from a returned/derived `Type`: emitted runtime duck typing, compiler inspection of user types, and private Reflection.Emit validation |
 | IL2070 | 67 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
-| IL2026 | 18 | Assembly loading/type enumeration and other managed-only or explicitly unsupported native features |
+| IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
 | IL3050 | 18 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
-| Other flow warnings | 12 | Four IL2057, two each IL2055/IL2060/IL2077, and one each IL2067/IL2072, concentrated in dynamic interop/type synthesis |
+| Other flow warnings | 10 | Two each IL2055/IL2057/IL2060/IL2077, and one each IL2067/IL2072, concentrated in dynamic interop/type synthesis |
 
 The remaining work is split at three ownership boundaries:
 
-1. **Managed-only feature guards.** Gate in-process compiled-assembly execution,
-   third-party assembly loading, declaration discovery and verification before
-   their reflection calls, using the same named native-SKU errors already used
-   at the CLI boundary. These should remove or narrowly justify most IL2026
-   warnings without changing managed behavior.
+1. **Managed-only feature guards (done for the current inventory).**
+   In-process compiled-assembly execution, third-party executable assembly
+   loading and declaration discovery now reject Native AOT at their public
+   boundaries. MetadataLoadContext inspection has a narrow metadata-only
+   justification. The one remaining IL2026 belongs to dynamic interop policy,
+   not this bucket.
 2. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
    emitters and `Runtime/DotNet` deliberately inspect arbitrary types. Broad
    member annotations were measured and rejected because they increased the

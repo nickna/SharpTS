@@ -578,6 +578,25 @@ public partial class ILCompiler
             // Fall through to broader lookup below.
         }
 
+        // The remaining lookup exists for managed embedders whose host assembly owns
+        // the requested type. Native compilation supports the TypeProvider/BCL path
+        // above but cannot consume arbitrary executable assemblies.
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+            return null;
+
+        return TryResolveManagedHostType(clrTypeName);
+    }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Only managed embedders reach this fallback; Native AOT returns after the supported TypeProvider/BCL lookup.")]
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = "Only managed embedders reach this fallback; Native AOT returns after the supported TypeProvider/BCL lookup.")]
+    private static Type? TryResolveManagedHostType(string clrTypeName)
+    {
         // Type.GetType only searches the executing assembly + mscorlib by default.
         // Search all currently loaded assemblies too, so types in referencing projects
         // (e.g., a host app with its own .NET domain model) are resolvable just like in

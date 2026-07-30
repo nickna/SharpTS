@@ -604,8 +604,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stelem_Ref);
             }
 
-            var makeGenericTypeMethod = typeof(Type).GetMethod("MakeGenericType", [typeof(Type[])]);
-            IL.Emit(OpCodes.Callvirt, makeGenericTypeMethod!);
+            var makeGenericTypeMethod = _ctx.Types.GetMethod(
+                _ctx.Types.Type,
+                "MakeGenericType",
+                _ctx.Types.MakeArrayType(_ctx.Types.Type));
+            IL.Emit(OpCodes.Callvirt, makeGenericTypeMethod);
         }
 
         IL.Emit(OpCodes.Ldc_I4, arguments.Count);

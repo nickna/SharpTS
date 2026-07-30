@@ -222,10 +222,8 @@ public class SharpTSPromiseRejectedException : Exception
         var sb = new System.Text.StringBuilder();
         foreach (var frame in frames)
         {
-            var method = frame.GetMethod();
-            if (method == null) continue;
-            var typeName = method.DeclaringType?.Name ?? "";
-            var methodName = method.Name;
+            if (StackFrameDisplay.GetMethodName(frame) is not { } displayName) continue;
+            var (typeName, methodName) = displayName;
             var fileName = frame.GetFileName();
             var line = frame.GetFileLineNumber();
 

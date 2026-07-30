@@ -703,10 +703,9 @@ public static class ConsoleBuiltIns
         var frames = stackTrace.GetFrames();
         foreach (var frame in frames.Skip(2)) // Skip ConsoleBuiltIns frames
         {
-            var method = frame.GetMethod();
-            if (method == null) continue;
-            var className = method.DeclaringType?.Name ?? "?";
-            var methodName = method.Name;
+            if (StackFrameDisplay.GetMethodName(frame) is not { } displayName) continue;
+            var (className, methodName) = displayName;
+            if (string.IsNullOrEmpty(className)) className = "?";
             var fileName = frame.GetFileName();
             var lineNumber = frame.GetFileLineNumber();
 

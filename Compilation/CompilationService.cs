@@ -191,11 +191,23 @@ public static class CompilationService
     /// <para><b>Limitation:</b> guest <c>process.exit(n)</c> compiles to
     /// <see cref="Environment.Exit"/> and terminates the host process.</para>
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The method rejects Native AOT before loading or reflecting over emitted IL; in-process IL execution is a managed-host-only API.")]
     public static RunResult Execute(byte[] assemblyBytes, TextWriter output,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(assemblyBytes);
         ArgumentNullException.ThrowIfNull(output);
+
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            return new RunResult(
+                false,
+                "In-process compiled assembly execution is not available in a native SharpTS build — use a managed host.",
+                0);
+        }
 
         var alc = new AssemblyLoadContext($"SharpTS.Execute_{Guid.NewGuid():N}", isCollectible: true);
         var stopwatch = Stopwatch.StartNew();
