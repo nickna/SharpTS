@@ -21,9 +21,12 @@ internal static class EmitGenerics
         {
             return genericDefinition.MakeGenericType(typeArguments);
         }
-        catch (PlatformNotSupportedException) when (
-            Array.Exists(typeArguments, static t => t is TypeBuilder || t.Module is ModuleBuilder))
+        catch (PlatformNotSupportedException)
         {
+            // Native AOT rejecting a non-runtime argument. The arg can be a TypeBuilder, but
+            // also a nested TypeBuilderInstantiation (e.g. CWT<object, Dictionary<string, $X>>)
+            // or an array of one — no cheap complete predicate, so any PNSE takes the fallback;
+            // a genuinely unsupported shape fails loudly inside the factory instead.
             return MakeTypeBuilderInstantiation(genericDefinition, typeArguments);
         }
     }
