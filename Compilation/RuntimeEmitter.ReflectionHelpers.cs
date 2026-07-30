@@ -38,9 +38,9 @@ public partial class RuntimeEmitter
     /// Defines a public static helper method on <paramref name="typeBuilder"/> whose
     /// body calls <c>RuntimeTypes.{methodName}</c> via the late-bound reflection idiom
     /// (<c>Type.GetType("…, SharpTS").GetMethod(name).Invoke(null, args)</c>).
-    /// All parameters and the return value are <c>object?</c>. No missing-runtime
-    /// guard is emitted — callers reach these paths only for features that record
-    /// <see cref="EmittedRuntime.RequireSharpTSRuntime"/>, so SharpTS.dll is co-located.
+    /// All parameters and the return value are <c>object?</c>. A missing-runtime
+    /// guard turns deployment mistakes into a named error instead of a null
+    /// reference exception.
     /// </summary>
     private MethodBuilder EmitReflectionHelper(TypeBuilder typeBuilder, string methodName, int argCount)
     {
@@ -71,10 +71,9 @@ public partial class RuntimeEmitter
     /// reference — box value types). Defaults to <c>ldarg i</c>.
     /// </param>
     /// <param name="onMissing">
-    /// When supplied, a <c>Type.GetType</c> null-check is emitted and this callback
-    /// provides the missing-runtime path; it must NOT fall through — end with
-    /// <c>ret</c> or <c>throw</c>. When null, no guard is emitted (the site relies on
-    /// RequireSharpTSRuntime co-locating SharpTS.dll, and fails with an NRE otherwise).
+    /// Provides a custom missing-runtime path; it must NOT fall through — end with
+    /// <c>ret</c> or <c>throw</c>. When null, a clear
+    /// <see cref="InvalidOperationException"/> is emitted.
     /// </param>
     private void EmitReflectionCall(ILGenerator il, string typeName, string methodName, int argCount,
         System.Action<int>? emitArg = null, System.Action? onMissing = null)
@@ -82,17 +81,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, typeName);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
 
+        var typeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Stloc, typeLocal);
+        var typeOk = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Brtrue, typeOk);
         if (onMissing != null)
         {
-            var typeLocal = il.DeclareLocal(_types.Type);
-            il.Emit(OpCodes.Stloc, typeLocal);
-            var typeOk = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, typeLocal);
-            il.Emit(OpCodes.Brtrue, typeOk);
             onMissing();
-            il.MarkLabel(typeOk);
-            il.Emit(OpCodes.Ldloc, typeLocal);
         }
+        else
+        {
+            il.Emit(
+                OpCodes.Ldstr,
+                $"{methodName} requires the SharpTS runtime (SharpTS.dll). " +
+                "Recompile without --standalone or deploy SharpTS.dll next to the output.");
+            il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
+            il.Emit(OpCodes.Throw);
+        }
+        il.MarkLabel(typeOk);
+        il.Emit(OpCodes.Ldloc, typeLocal);
 
         il.Emit(OpCodes.Ldstr, methodName);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));

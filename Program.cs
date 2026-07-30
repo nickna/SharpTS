@@ -745,6 +745,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
             compileBody(compiler);
             PrintCompilerWarnings(compiler);
+            ValidateCompiledRuntimeRequirements(compiler);
             // Symbols belong beside the final executable, not beside the temporary DLL that gets
             // bundled into it.
             compiler.Save(tempDllPath, outputOptions.EmitDebugSymbols ? Path.ChangeExtension(outputPath, ".pdb") : null);
@@ -804,6 +805,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
+        ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
 
         GenerateRuntimeConfig(outputPath);
@@ -845,6 +847,18 @@ static void PrintCompilerWarnings(ILCompiler compiler)
     foreach (var warning in compiler.Warnings)
         Console.Error.WriteLine($"Warning: {warning}");
 }
+
+/// <summary>
+/// Rejects compiled features whose runtime model cannot work in the Native AOT SKU.
+/// <c>child_process.fork</c> starts a separate <c>dotnet exec SharpTS.dll</c> compiler
+/// process, so extracting the in-process managed soft-dependency is not sufficient.
+/// </summary>
+static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
+{
+    if (compiler.RequiredSharpTSRuntimeReasons.Contains("child_process.fork"))
+        RequireManagedBuild("child_process.fork in compiled output");
+}
+
 /// <summary>
 /// Co-locates SharpTS.dll with the compiled output when, and only when, the compilation emitted
 /// late binding into the SharpTS runtime whose normal execution needs it (eval, Proxy, Intl, vm,
@@ -869,20 +883,32 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
         return;
     }
 
-    var sharpTsPath = typeof(SharpTS.Execution.Interpreter).Assembly.Location;
     var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
-    if (string.IsNullOrEmpty(sharpTsPath) || !File.Exists(sharpTsPath) || outDir == null)
+    if (outDir == null)
     {
         if (!outputOptions.QuietMode)
-            Console.WriteLine($"Warning: could not locate SharpTS.dll to co-locate with output; features ({reasonList}) may fail at runtime.");
+            Console.WriteLine($"Warning: could not resolve the output directory; features ({reasonList}) may fail at runtime.");
         return;
     }
 
-    var destPath = Path.Combine(outDir, Path.GetFileName(sharpTsPath));
+    var sharpTsPath = typeof(SharpTS.Execution.Interpreter).Assembly.Location;
+    var destPath = Path.Combine(outDir, "SharpTS.dll");
     try
     {
-        if (!string.Equals(Path.GetFullPath(sharpTsPath), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
-            File.Copy(sharpTsPath, destPath, overwrite: true);
+        bool copiedFromManagedBuild = !string.IsNullOrEmpty(sharpTsPath) && File.Exists(sharpTsPath);
+        if (copiedFromManagedBuild)
+        {
+            if (!string.Equals(Path.GetFullPath(sharpTsPath), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+                File.Copy(sharpTsPath, destPath, overwrite: true);
+        }
+        else if (!SharpTS.Runtime.EmbeddedManagedRuntime.TryExtractTo(destPath, out string? extractionError))
+        {
+            if (!outputOptions.QuietMode)
+                Console.WriteLine(
+                    $"Warning: could not extract the embedded SharpTS.dll ({extractionError}); " +
+                    $"features ({reasonList}) may fail at runtime.");
+            return;
+        }
 
         // child_process.fork() spawns a SEPARATE `dotnet exec SharpTS.dll <module>` process
         // (unlike Worker/eval which load SharpTS.dll in-process). That child needs SharpTS's
@@ -891,6 +917,8 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
         // need SharpTS.dll loaded in-process.
         if (reasons.Contains("child_process.fork"))
         {
+            // Native builds are rejected before Save by ValidateCompiledRuntimeRequirements.
+            // This closure copy is retained for the managed SKU.
             var sharpTsDir = Path.GetDirectoryName(sharpTsPath);
             if (!string.IsNullOrEmpty(sharpTsDir))
             {
@@ -913,7 +941,8 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
         if (!outputOptions.QuietMode)
         {
             var what = reasons.Contains("child_process.fork") ? "SharpTS runtime" : "SharpTS.dll";
-            Console.WriteLine($"Copied {what} next to output — required at runtime by: {reasonList}");
+            var action = copiedFromManagedBuild ? "Copied" : "Extracted embedded";
+            Console.WriteLine($"{action} {what} next to output — required at runtime by: {reasonList}");
         }
     }
     catch (Exception ex)
