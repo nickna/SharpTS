@@ -210,13 +210,17 @@ DLL loads and runs under JIT with correct stdout.
 SharpTS passes an explicit compatibility policy. Item 8 can choose
 `RetargetCoreLibOnly` when it begins deploying a genuine SharpTS reference.
 
-8. **Embed SharpTS.dll** as a resource; rewrite `Program.cs:838`
-   (`CopySharpTSRuntimeIfNeeded`) to extract to `AppContext.BaseDirectory`.
-   Coherent: compiled output already requires a runtime, so the target machine
-   has .NET. Restores the 14 soft-dep features. Pass non-null `onMissing` to
-   `EmitReflectionCall` (`RuntimeEmitter.ReflectionHelpers.cs:79`) so failures
-   are messages, not NREs. Keep `CopySharpTSRuntimeIfNeeded`. Drop
-   `child_process.fork` from the native SKU.
+8. **Managed runtime handoff: done.** A two-stage native build first produces
+   the ordinary AnyCPU `SharpTS.dll`, then passes it as
+   `SharpTSManagedRuntimePayloadPath`; the Native AOT binary embeds it as
+   `SharpTS.ManagedRuntime.dll`. `CopySharpTSRuntimeIfNeeded` preserves the
+   managed-SKU `Assembly.Location` copy and falls back to atomic resource
+   extraction for native builds. The native CI gate compiles and runs an
+   `eval()` soft-dependency program under CoreCLR, proving the extracted bytes
+   are usable, not merely present. Missing reflection targets now throw a named
+   deployment error instead of NRE. `child_process.fork` is rejected before
+   output is written in the native SKU because it needs a second compiler
+   process and full managed runtime closure.
 9. **PE-Packer integration:** 1.0.5 supplies `BundleRequest`,
    `IReferenceAssemblyIndex`, `ReferenceAction`, the embedded CoreLib-surface
    index, and the `MetadataReader` implementation. Remaining: embed supported
@@ -269,7 +273,7 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
 
 | # | Unknown | Status / next step |
 |---|---|---|
-| 1 | Cross-platform native compiler | win-arm64 passes locally; linux-x64 is a required CI smoke. Add the remaining release RIDs in Phase 3. |
+| 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. Add the remaining release RIDs in Phase 3. |
 | 2 | BCL interop preservation | Targeted roots work for the emit internals; define and test the supported `@DotNetType` surface, including the known dynamic-event edge. |
 | 3 | MLC-types-into-TypeBuilder latent JIT limitation | Conceded for the native SKU; file upstream separately. |
 | 4 | Native-emitted output metadata parity | Executed output and PE-Packer rewriting pass. Add a `MetadataDiffer` fixture if byte/table-level parity becomes release-blocking. |

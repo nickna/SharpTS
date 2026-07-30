@@ -147,6 +147,18 @@ jobs:
       - name: Install Native AOT prerequisites
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
+      # The native compiler carries an ordinary AnyCPU SharpTS.dll for compiled
+      # programs that late-bind to interpreter/runtime features. This must be a
+      # separate first build: an assembly cannot embed itself while it is being
+      # compiled.
+      - name: Build managed runtime payload
+        run: |
+          dotnet publish SharpTS.csproj --configuration Release \
+            -p:PlatformTarget=AnyCPU \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o artifacts/managed-runtime
+
       - name: Publish Native AOT SharpTS
         run: |
           dotnet publish SharpTS.csproj --configuration Release -r linux-x64 \
@@ -157,6 +169,7 @@ jobs:
             -p:StackTraceSupport=true \
             -p:DebugType=None \
             -p:DebugSymbols=false \
+            -p:SharpTSManagedRuntimePayloadPath="$PWD/artifacts/managed-runtime/SharpTS.dll" \
             -o artifacts/native-aot
 
       - name: Compile and execute from the native host
@@ -183,6 +196,28 @@ jobs:
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" > "$scratch/features.txt"
           grep -qx '2 2 33' "$scratch/features.txt"
+
+          # A soft-dependency compile extracts the embedded AnyCPU SharpTS.dll.
+          # Running eval proves this is a usable managed payload, not merely a
+          # resource/copy assertion.
+          mkdir "$scratch/softdep"
+          "$native" --compile Examples/AotCompileGate/softdep.ts --ref-asm \
+            -o "$scratch/softdep/softdep.dll"
+          test -f "$scratch/softdep/SharpTS.dll"
+          dotnet "$scratch/softdep/softdep.dll" > "$scratch/softdep.txt"
+          grep -qx '42' "$scratch/softdep.txt"
+
+          # fork needs a second compiler process and is deliberately absent from
+          # the native SKU. Fail before writing a misleading output assembly.
+          if "$native" --compile Examples/AotCompileGate/fork.ts \
+              -o "$scratch/fork.dll" 2> "$scratch/fork-error.txt"; then
+            echo "child_process.fork unexpectedly compiled under Native AOT"
+            exit 1
+          fi
+          grep -Fq \
+            'child_process.fork in compiled output is not available in the native SharpTS build' \
+            "$scratch/fork-error.txt"
+          test ! -f "$scratch/fork.dll"
 
           # Exercise PE-Packer from inside SharpTS's partial-trim closure too.
           "$native" --compile Examples/AotCompileGate/main.ts -t exe \

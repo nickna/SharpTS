@@ -32,6 +32,26 @@
     <TrimmerRootDescriptor Include="AotTrimmerRoots.xml" />
   </ItemGroup>
 
+  <!--
+    Native-SKU two-stage build input (#1324): first build the ordinary AnyCPU
+    SharpTS.dll, then pass its path to the Native AOT publish as
+    -p:SharpTSManagedRuntimePayloadPath=... . A project cannot embed the same
+    assembly that is currently being compiled, so the payload must be explicit.
+    Managed builds leave the property empty and continue co-locating their own
+    Assembly.Location as before.
+  -->
+  <ItemGroup Condition="'$(SharpTSManagedRuntimePayloadPath)' != ''">
+    <EmbeddedResource Include="$(SharpTSManagedRuntimePayloadPath)"
+                      LogicalName="SharpTS.ManagedRuntime.dll" />
+  </ItemGroup>
+
+  <Target Name="ValidateSharpTSManagedRuntimePayload"
+          BeforeTargets="PrepareResources"
+          Condition="'$(SharpTSManagedRuntimePayloadPath)' != ''">
+    <Error Condition="!Exists('$(SharpTSManagedRuntimePayloadPath)')"
+           Text="SharpTSManagedRuntimePayloadPath does not exist: $(SharpTSManagedRuntimePayloadPath)" />
+  </Target>
+
   <!-- White-box test access: a handful of regression tests drive internal
        runtime seams directly (e.g. WebStreamsHelpers.PipeTo + the event-loop
        Ref counter) to assert behavior that cannot be observed through guest
