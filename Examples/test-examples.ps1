@@ -20,6 +20,12 @@
 .PARAMETER SkipCleanup
     Skip cleanup of temporary files and directories
 
+.PARAMETER SharpTSExe
+    Path to a SharpTS executable to drive instead of `dotnet run --` from the repo
+    (e.g. a self-contained single-file publish or a Native AOT build — #1324). When
+    set, the repo build step is skipped and every interpret/compile invocation runs
+    through this binary.
+
 .EXAMPLE
     .\test-examples.ps1
     Run all tests with default settings
@@ -31,6 +37,10 @@
 .EXAMPLE
     .\test-examples.ps1 -Mode interpreted -OutputFormat json
     Test only interpreted mode and output JSON
+
+.EXAMPLE
+    .\test-examples.ps1 -SharpTSExe ..\publish\sharpts.exe
+    Drive a published binary over the full corpus (the native-SKU smoke job's entry point)
 #>
 
 param(
@@ -39,10 +49,19 @@ param(
     [string]$Mode = "all",
     [ValidateSet("json", "table", "verbose")]
     [string]$OutputFormat = "table",
-    [switch]$SkipCleanup
+    [switch]$SkipCleanup,
+    [string]$SharpTSExe = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($SharpTSExe) {
+    if (-not (Test-Path $SharpTSExe -PathType Leaf)) {
+        Write-Host "SharpTSExe not found: $SharpTSExe" -ForegroundColor Red
+        exit 1
+    }
+    $SharpTSExe = (Resolve-Path $SharpTSExe).Path
+}
 
 # ========== Configuration ==========
 
@@ -501,6 +520,20 @@ function Invoke-ProcessWithTimeout {
     }
 }
 
+function Invoke-SharpTSCli {
+    # Runs the SharpTS CLI with the given arguments — through -SharpTSExe when provided
+    # (published/native binary), otherwise via `dotnet run --` against the repo.
+    param(
+        [string[]]$CliArgs,
+        [int]$Timeout = $Script:ProcessTimeout
+    )
+
+    if ($SharpTSExe) {
+        return Invoke-ProcessWithTimeout -FilePath $SharpTSExe -Arguments $CliArgs -Timeout $Timeout
+    }
+    return Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments (@("run", "--") + $CliArgs) -Timeout $Timeout
+}
+
 function Invoke-Interpreted {
     param(
         [string]$TsFile,
@@ -508,8 +541,7 @@ function Invoke-Interpreted {
         [int]$Timeout = $Script:ProcessTimeout
     )
 
-    $allArgs = @("run", "--", $TsFile) + $Arguments
-    return Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $allArgs -Timeout $Timeout
+    return Invoke-SharpTSCli -CliArgs (@($TsFile) + $Arguments) -Timeout $Timeout
 }
 
 function Invoke-CompiledDll {
@@ -529,8 +561,7 @@ function Invoke-CompiledDll {
     $dllPath = Join-Path $outputDir "$baseName.dll"
 
     # Compile to DLL
-    $compileArgs = @("run", "--", "--compile", $TsFile, "-o", $dllPath)
-    $compileResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $compileArgs -Timeout $Script:BuildTimeout
+    $compileResult = Invoke-SharpTSCli -CliArgs @("--compile", $TsFile, "-o", $dllPath) -Timeout $Script:BuildTimeout
 
     if (-not $compileResult.Success) {
         return @{
@@ -576,8 +607,7 @@ function Invoke-CompiledExe {
     $exePath = Join-Path $outputDir "$baseName.exe"
 
     # Compile to EXE
-    $compileArgs = @("run", "--", "--compile", $TsFile, "-t", "exe", "-o", $exePath)
-    $compileResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $compileArgs -Timeout $Script:BuildTimeout
+    $compileResult = Invoke-SharpTSCli -CliArgs @("--compile", $TsFile, "-t", "exe", "-o", $exePath) -Timeout $Script:BuildTimeout
 
     if (-not $compileResult.Success) {
         return @{
@@ -962,16 +992,23 @@ function Format-JsonOutput {
 # ========== Main Entry Point ==========
 
 try {
-    # Ensure project is built
-    Write-Host "Building SharpTS..." -ForegroundColor Cyan
-    $buildResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments @("build", "-c", "Debug") -Timeout $Script:BuildTimeout
-    if (-not $buildResult.Success) {
-        Write-Host "Build failed:" -ForegroundColor Red
-        Write-Host $buildResult.Error
-        exit 1
+    if ($SharpTSExe) {
+        # Driving an external binary — nothing to build here.
+        Write-Host "Using SharpTS binary: $SharpTSExe" -ForegroundColor Cyan
+        Write-Host ""
     }
-    Write-Host "Build completed." -ForegroundColor Green
-    Write-Host ""
+    else {
+        # Ensure project is built
+        Write-Host "Building SharpTS..." -ForegroundColor Cyan
+        $buildResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments @("build", "-c", "Debug") -Timeout $Script:BuildTimeout
+        if (-not $buildResult.Success) {
+            Write-Host "Build failed:" -ForegroundColor Red
+            Write-Host $buildResult.Error
+            exit 1
+        }
+        Write-Host "Build completed." -ForegroundColor Green
+        Write-Host ""
+    }
 
     # Initialize temp directory
     Initialize-TempDirectory
