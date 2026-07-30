@@ -70,9 +70,7 @@ jobs:
       # [Trait("Category","LoadSensitive")] and is excluded here automatically.
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive"
-        # The generated-assembly-heavy suite currently contains 16k+ tests. Keep a
-        # hard ceiling while allowing for hosted-runner CPU/memory variance.
-        timeout-minutes: 20
+        timeout-minutes: 10
 
   # AOT-compatibility ratchet (#1324 Track 0). Builds SharpTS.csproj with the
   # AOT/trim/single-file analyzers compare the distinct IL#### inventory against
