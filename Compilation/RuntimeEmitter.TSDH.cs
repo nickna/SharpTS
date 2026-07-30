@@ -458,7 +458,7 @@ public partial class RuntimeEmitter
         // Normalize group name
         var nameLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         // Local for prime bytes
@@ -501,8 +501,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Unknown DH group: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Set prime and generator
@@ -526,7 +526,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, groupName);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, matchLabel);
     }
 
@@ -1024,7 +1024,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, memberName);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, matchLabel);
     }
 
@@ -1052,17 +1052,17 @@ public partial class RuntimeEmitter
 
         var encodingLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         il.Emit(OpCodes.Br, bufferLabel);
@@ -1070,7 +1070,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(base64Label);
@@ -1141,17 +1141,17 @@ public partial class RuntimeEmitter
 
         var encodingLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         il.Emit(OpCodes.Br, utf8Label);
@@ -1174,7 +1174,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Input must be a Buffer, byte array, or string");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -1656,7 +1656,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, methodNameLocal);
         il.Emit(OpCodes.Ldstr, methodName);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, matchLabel);
     }
 }

@@ -199,8 +199,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSymbolGenericHelperBodies(EmittedRuntime runtime)
     {
-        var isConstructedGeneric = _types.Type.GetProperty("IsConstructedGenericType")!.GetGetMethod()!;
-        var isGenericTypeDef = _types.Type.GetProperty("IsGenericTypeDefinition")!.GetGetMethod()!;
+        var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
+        var isGenericTypeDef = _types.GetProperty(_types.Type, "IsGenericTypeDefinition")!.GetGetMethod()!;
         var getGenericTypeDef = _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition");
         var getGenericArgs = _types.GetMethodNoParams(_types.Type, "GetGenericArguments");
         var makeGenericType = _types.GetMethod(_types.Type, "MakeGenericType", _types.MakeArrayType(_types.Type));
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
         var getTypeHandle = _types.GetProperty(_types.Type, "TypeHandle").GetGetMethod()!;
         var getMethodHandle = _types.GetProperty(_types.MethodBase, "MethodHandle").GetGetMethod()!;
         var getDeclaringType = _types.GetProperty(typeof(System.Reflection.MemberInfo), "DeclaringType").GetGetMethod()!;
-        var containsGenericParams = _types.Type.GetProperty("ContainsGenericParameters")!.GetGetMethod()!;
+        var containsGenericParams = _types.GetProperty(_types.Type, "ContainsGenericParameters")!.GetGetMethod()!;
         var getMethodFromHandle = _types.MethodBaseGetMethodFromHandleWithType;
 
         // ---- SymbolRegistryKey(Type owner) ----

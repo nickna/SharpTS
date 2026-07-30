@@ -367,7 +367,7 @@ public partial class RuntimeEmitter
         // Get keys and iterate: foreach (var key in symbolDict.Keys) result.Add(key);
         // symbolDict.Keys
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
-        var keysProperty = _types.DictionaryObjectObject.GetProperty("Keys")!.GetGetMethod()!;
+        var keysProperty = _types.GetProperty(_types.DictionaryObjectObject, "Keys")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, keysProperty);
 
         // Get enumerator
@@ -393,7 +393,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         var currentProperty = enumeratorType.GetProperty("Current")!.GetGetMethod()!;
         il.Emit(OpCodes.Call, currentProperty);
-        var addMethod = _types.ListOfObjectNullable.GetMethod("Add", [_types.Object])!;
+        var addMethod = _types.GetMethod(_types.ListOfObjectNullable, "Add", [_types.Object])!;
         il.Emit(OpCodes.Callvirt, addMethod);
 
         il.Emit(OpCodes.Br, loopStart);

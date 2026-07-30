@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
 
         // _writeCorkBuffer = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsDuplexWriteCorkBufferField);
 
         // _writableObjectMode = false

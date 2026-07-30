@@ -1421,7 +1421,7 @@ public partial class RuntimeEmitter
         var objTypeNotObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, objTypeNotObjectLabel);
         void EmitObjectMethodValueDescCheck(string n, MethodBuilder targetMethod, int specLength)
         {
@@ -1517,7 +1517,7 @@ public partial class RuntimeEmitter
         var notArrayTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notArrayTypeLabel);
         void EmitArrayMethodNameCheck(string n)
         {
@@ -1550,7 +1550,7 @@ public partial class RuntimeEmitter
         var notDoubleTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notDoubleTypeLabel);
         void EmitNumberStaticCheck(string n, bool isMethod, double? constValue = null, MethodBuilder? methodTarget = null, int methodArity = 1)
         {
@@ -2475,7 +2475,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, keyGetter);
         il.Emit(OpCodes.Ldstr, "__");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
         il.Emit(OpCodes.Brtrue, loopStartLabel);
 
         // Skip if PDS descriptor exists with Enumerable=false.

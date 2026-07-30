@@ -18,6 +18,9 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public class TypeProvider
 {
+    private const string EmitMetadataLookupJustification =
+        "TypeProvider resolves required framework metadata for serialization into emitted IL; the native host does not invoke these members through reflection. Complete type metadata is generated for the compiler, and native compile smoke tests exercise this lookup seam.";
+
     private readonly Assembly _coreAssembly;
     private readonly ConcurrentDictionary<string, Type> _typeCache = new();
     private readonly ConcurrentDictionary<(Type, string, Type[]), MethodInfo> _methodCache = new(new MethodCacheKeyComparer());
@@ -1201,6 +1204,10 @@ public class TypeProvider
     /// <summary>
     /// Gets a method from a type with the specified parameter types.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public MethodInfo GetMethod(Type type, string name, params Type[] parameterTypes)
     {
         var key = (type, name, parameterTypes);
@@ -1218,11 +1225,49 @@ public class TypeProvider
     /// WARNING: This will throw AmbiguousMatchException for overloaded methods.
     /// Use GetMethodNoParams() for parameterless methods that have overloads.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
     public MethodInfo GetMethod(Type type, string name)
     {
         var method = type.GetMethod(name);
         if (method == null)
             throw new CompileException($"Could not find method {type.FullName}.{name}");
+        return method;
+    }
+
+    /// <summary>
+    /// Gets a method from a type by name using explicit binding flags.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo GetMethod(Type type, string name, BindingFlags bindingFlags)
+    {
+        var method = type.GetMethod(name, bindingFlags);
+        if (method == null)
+            throw new CompileException($"Could not find method {type.FullName}.{name}");
+        return method;
+    }
+
+    /// <summary>
+    /// Gets a method from a type by name, binding flags, and parameter types.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
+    public MethodInfo GetMethod(
+        Type type,
+        string name,
+        BindingFlags bindingFlags,
+        params Type[] parameterTypes)
+    {
+        var method = type.GetMethod(name, bindingFlags, parameterTypes);
+        if (method == null)
+            throw new CompileException($"Could not find method {type.FullName}.{name}({string.Join(", ", parameterTypes.Select(t => t.FullName))})");
         return method;
     }
 
@@ -1237,6 +1282,10 @@ public class TypeProvider
     /// <summary>
     /// Gets a property from a type by name.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public PropertyInfo GetProperty(Type type, string name)
     {
         var key = (type, name);
@@ -1276,6 +1325,10 @@ public class TypeProvider
     /// <summary>
     /// Gets a constructor from a type with the specified parameter types.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2080",
+        Justification = EmitMetadataLookupJustification)]
     public ConstructorInfo GetConstructor(Type type, params Type[] parameterTypes)
     {
         var key = (type, parameterTypes);
@@ -1299,6 +1352,10 @@ public class TypeProvider
     /// <summary>
     /// Gets a field from a type by name.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmitMetadataLookupJustification)]
     public FieldInfo GetField(Type type, string name)
     {
         var field = type.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance);

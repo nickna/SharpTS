@@ -403,7 +403,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Object);
         il.Emit(OpCodes.Call, getTypeFromHandle);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetConstructor", [typeof(Type[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetConstructor", [typeof(Type[])])!);
         il.Emit(OpCodes.Stloc, ctorLocal);
 
         // if (ctor == null) return result;
@@ -487,7 +487,7 @@ public partial class RuntimeEmitter
             var il = ctor.GetILGenerator();
             // Call base constructor
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             // this._tcs = tcs
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -613,7 +613,7 @@ public partial class RuntimeEmitter
         {
             var il = ctor.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Stfld, tcsField);
@@ -760,7 +760,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tcsLocal);
 
         // object lockObj = new object();
-        il.Emit(OpCodes.Newobj, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, lockLocal);
 
         // var resolveCallback = new $PromiseResolveCallback(tcs, lockObj);

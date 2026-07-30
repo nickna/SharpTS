@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
         il.Emit(OpCodes.Ldloc, inputBytesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfByte.GetMethod("AddRange", [_types.IEnumerableOfByte])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "AddRange", [_types.IEnumerableOfByte])!);
 
         // Return empty buffer (all data processed in Final)
         var resultLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         var plaintextLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfByte.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "ToArray")!);
         il.Emit(OpCodes.Stloc, plaintextLocal);
 
         // Create ciphertext array (same size as plaintext for GCM)
@@ -209,7 +209,7 @@ public partial class RuntimeEmitter
         var bufferedDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsCipherPlaintextBufferField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfByte.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfByte, "ToArray")!);
         il.Emit(OpCodes.Stloc, bufferedDataLocal);
 
         // result = _encryptor.TransformFinalBlock(bufferedData, 0, bufferedData.Length)
@@ -221,7 +221,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bufferedDataLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, _types.ICryptoTransform.GetMethod("TransformFinalBlock")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ICryptoTransform, "TransformFinalBlock")!);
         il.Emit(OpCodes.Stloc, finalBlockLocal);
 
         EmitCipherFormatOutput(il, runtime, finalBlockLocal, OpCodes.Ldarg_1, supportUtf8: false);
@@ -255,7 +255,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsCipherIsGcmField);
         il.Emit(OpCodes.Brtrue, isGcmLabel);
         il.Emit(OpCodes.Ldstr, "getAuthTag is only available for GCM mode ciphers");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(isGcmLabel);
@@ -266,7 +266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsCipherFinalizedField);
         il.Emit(OpCodes.Brtrue, isFinalizedLabel);
         il.Emit(OpCodes.Ldstr, "getAuthTag must be called after final()");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(isFinalizedLabel);

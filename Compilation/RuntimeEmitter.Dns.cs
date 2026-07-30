@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldloc, strLocal);
                 il.Emit(OpCodes.Ldstr, allowed);
-                il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
                 il.Emit(OpCodes.Brtrue, valid);
             }
 
@@ -266,7 +266,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
             il.Emit(OpCodes.Ldstr, "ipv4first");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, tryV6First);
             il.Emit(OpCodes.Ldc_I4_4);
             il.Emit(OpCodes.Stloc, requestedFamilyLocal);
@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(tryV6First);
             il.Emit(OpCodes.Ldsfld, _dnsResultOrderField);
             il.Emit(OpCodes.Ldstr, "ipv6first");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, orderDone);
             il.Emit(OpCodes.Ldc_I4_6);
             il.Emit(OpCodes.Stloc, requestedFamilyLocal);
@@ -1527,12 +1527,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4, (int)'.');
         il.Emit(OpCodes.Stelem_I2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimEnd", [typeof(char[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", [typeof(char[])])!);
 
         // string[] labels = trimmed.Split('.', StringSplitOptions.None)
         il.Emit(OpCodes.Ldc_I4, (int)'.');
         il.Emit(OpCodes.Ldc_I4_0); // StringSplitOptions.None
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Split", [_types.Char, typeof(StringSplitOptions)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Split", [_types.Char, typeof(StringSplitOptions)])!);
         var labelsLocal = il.DeclareLocal(typeof(string[])); // 0
         il.Emit(OpCodes.Stloc, labelsLocal);
 
@@ -1898,7 +1898,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, envLocal);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, defaultLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -1981,7 +1981,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(Environment).GetMethod("GetEnvironmentVariable", [_types.String])!);
         il.Emit(OpCodes.Stloc, envLocal);
         il.Emit(OpCodes.Ldloc, envLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrEmpty", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!);
         il.Emit(OpCodes.Brtrue, noOverrideLabel);
         il.Emit(OpCodes.Ldloc, envLocal);
         il.Emit(OpCodes.Ret);
@@ -2887,7 +2887,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(typeTXTLabel);
         {
             var chunksLocal = il.DeclareLocal(_types.ListOfObject);
-            il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, chunksLocal);
 
             var endLocal = il.DeclareLocal(_types.Int32);
@@ -2935,7 +2935,7 @@ public partial class RuntimeEmitter
             // chunks.Add(text)
             il.Emit(OpCodes.Ldloc, chunksLocal);
             il.Emit(OpCodes.Ldloc, textLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
             // offset[0] += strLen
             il.Emit(OpCodes.Ldarg_1);
@@ -3524,7 +3524,7 @@ public partial class RuntimeEmitter
 
         // var results = new List<object?>()
         var resultsLocal = il.DeclareLocal(_types.ListOfObject); // 7
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultsLocal);
 
         // for (int i = 0; i < ancount; i++)
@@ -3649,7 +3649,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, ansLoopContinue);
         il.Emit(OpCodes.Ldloc, resultsLocal);
         il.Emit(OpCodes.Ldloc, recordLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Br, ansLoopContinue);
 
         // else: offset[0] += rdlength (skip non-matching record)
@@ -3742,7 +3742,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Create output List<object?>
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var outListLocal = il.DeclareLocal(_types.ListOfObject); // 0
         il.Emit(OpCodes.Stloc, outListLocal);
 
@@ -3774,7 +3774,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Call, runtime.CreateObject);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         var continueLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -3790,7 +3790,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Br, continueLabel);
 
         il.MarkLabel(notInnerListLabel);
@@ -3798,7 +3798,7 @@ public partial class RuntimeEmitter
         // else: add as-is (string, etc.)
         il.Emit(OpCodes.Ldloc, outListLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.MarkLabel(continueLabel);
 
@@ -4135,13 +4135,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, hostEntryLocal);
 
         // Build array with hostname
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, hostEntryLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("HostName")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);

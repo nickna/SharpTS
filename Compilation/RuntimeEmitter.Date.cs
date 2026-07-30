@@ -393,7 +393,7 @@ public partial class RuntimeEmitter
         // Call date.ToString()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSDateType);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(invalidLabel);
@@ -653,7 +653,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(invalidLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid Date");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -735,7 +735,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["GetTime"]);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN")!);
         il.Emit(OpCodes.Brtrue, nullLabel);
 
         il.Emit(OpCodes.Ldarg_0);

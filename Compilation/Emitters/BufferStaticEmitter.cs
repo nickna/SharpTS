@@ -24,7 +24,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 var ofListLocal = il.DeclareLocal(ctx.Types.ListOfObject);
                 il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ListOfObject));
                 il.Emit(OpCodes.Stloc, ofListLocal);
-                var ofAdd = ctx.Types.ListOfObject.GetMethod("Add", [ctx.Types.Object])!;
+                var ofAdd = ctx.Types.GetMethod(ctx.Types.ListOfObject, "Add", [ctx.Types.Object])!;
                 foreach (var arg in arguments)
                 {
                     il.Emit(OpCodes.Ldloc, ofListLocal);
@@ -106,7 +106,7 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                     emitter.EmitExpression(arguments[1]);
                     emitter.EmitBoxIfNeeded(arguments[1]);
                     // Convert to string
-                    il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
                 }
                 else
                 {

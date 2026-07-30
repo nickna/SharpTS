@@ -473,7 +473,7 @@ public partial class RuntimeEmitter
             // Get entries based on recursive option
             // Directory.GetFileSystemEntries(path, "*", SearchOption)
             var searchOptionType = typeof(SearchOption);
-            var getEntriesMethod = _types.Directory.GetMethod("GetFileSystemEntries", [_types.String, _types.String, searchOptionType])!;
+            var getEntriesMethod = _types.GetMethod(_types.Directory, "GetFileSystemEntries", [_types.String, _types.String, searchOptionType])!;
             var entriesLocal = il.DeclareLocal(_types.StringArray);
 
             var nonRecursiveLabel = il.DefineLabel();
@@ -553,7 +553,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, useFilenameLabel);
 
             // Recursive: use Path.GetRelativePath(basePath, entryPath)
-            var getRelativePathMethod = _types.Path.GetMethod("GetRelativePath", [_types.String, _types.String])!;
+            var getRelativePathMethod = _types.GetMethod(_types.Path, "GetRelativePath", [_types.String, _types.String])!;
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Ldloc, entryPathLocal);
             il.Emit(OpCodes.Call, getRelativePathMethod);
@@ -1063,7 +1063,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(unixLabel);
 
             // File.SetUnixFileMode(path, (UnixFileMode)mode)
-            var setUnixFileMode = _types.File.GetMethod("SetUnixFileMode", [typeof(string), typeof(UnixFileMode)])!;
+            var setUnixFileMode = _types.GetMethod(_types.File, "SetUnixFileMode", [typeof(string), typeof(UnixFileMode)])!;
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Ldloc, modeLocal);
             il.Emit(OpCodes.Call, setUnixFileMode);
@@ -1391,7 +1391,7 @@ public partial class RuntimeEmitter
 
             // Create file symlink
             il.MarkLabel(createFileSymlink);
-            var createFileSymlinkMethod = _types.File.GetMethod("CreateSymbolicLink", [typeof(string), typeof(string)])!;
+            var createFileSymlinkMethod = _types.GetMethod(_types.File, "CreateSymbolicLink", [typeof(string), typeof(string)])!;
             il.Emit(OpCodes.Ldloc, linkPathLocal);
             il.Emit(OpCodes.Ldloc, targetLocal);
             il.Emit(OpCodes.Call, createFileSymlinkMethod);
@@ -1400,7 +1400,7 @@ public partial class RuntimeEmitter
 
             // Create directory symlink
             il.MarkLabel(doneLabel);
-            var createDirSymlinkMethod = _types.Directory.GetMethod("CreateSymbolicLink", [typeof(string), typeof(string)])!;
+            var createDirSymlinkMethod = _types.GetMethod(_types.Directory, "CreateSymbolicLink", [typeof(string), typeof(string)])!;
             il.Emit(OpCodes.Ldloc, linkPathLocal);
             il.Emit(OpCodes.Ldloc, targetLocal);
             il.Emit(OpCodes.Call, createDirSymlinkMethod);
@@ -1552,7 +1552,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fullPathLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileInfo, _types.String));
             il.Emit(OpCodes.Ldc_I4_1); // returnFinalTarget: true
-            var resolveLinkTarget = _types.FileInfo.GetMethod("ResolveLinkTarget", [typeof(bool)])!;
+            var resolveLinkTarget = _types.GetMethod(_types.FileInfo, "ResolveLinkTarget", [typeof(bool)])!;
             il.Emit(OpCodes.Callvirt, resolveLinkTarget);
             var resolvedLocal = il.DeclareLocal(typeof(FileSystemInfo));
             il.Emit(OpCodes.Stloc, resolvedLocal);
@@ -1571,7 +1571,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fullPathLocal);
             il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DirectoryInfo, _types.String));
             il.Emit(OpCodes.Ldc_I4_1); // returnFinalTarget: true
-            var dirResolveLinkTarget = _types.DirectoryInfo.GetMethod("ResolveLinkTarget", [typeof(bool)])!;
+            var dirResolveLinkTarget = _types.GetMethod(_types.DirectoryInfo, "ResolveLinkTarget", [typeof(bool)])!;
             il.Emit(OpCodes.Callvirt, dirResolveLinkTarget);
             il.Emit(OpCodes.Stloc, resolvedLocal);
 
@@ -1669,13 +1669,13 @@ public partial class RuntimeEmitter
             il.MarkLabel(existsLabel);
 
             // File.SetLastAccessTime(path, atime)
-            var setLastAccessTime = _types.File.GetMethod("SetLastAccessTime", [typeof(string), typeof(DateTime)])!;
+            var setLastAccessTime = _types.GetMethod(_types.File, "SetLastAccessTime", [typeof(string), typeof(DateTime)])!;
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Ldloc, atimeLocal);
             il.Emit(OpCodes.Call, setLastAccessTime);
 
             // File.SetLastWriteTime(path, mtime)
-            var setLastWriteTime = _types.File.GetMethod("SetLastWriteTime", [typeof(string), typeof(DateTime)])!;
+            var setLastWriteTime = _types.GetMethod(_types.File, "SetLastWriteTime", [typeof(string), typeof(DateTime)])!;
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Ldloc, mtimeLocal);
             il.Emit(OpCodes.Call, setLastWriteTime);

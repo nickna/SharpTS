@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, bufLabel);
 
         il.Emit(OpCodes.Ldstr, "X509Certificate: argument must be a PEM string or Buffer");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // PEM string
@@ -165,9 +165,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, derLabel);
 
         // PEM in a Buffer
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [typeof(byte[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [typeof(byte[])])!);
         il.Emit(OpCodes.Call, typeof(MemoryExtensions).GetMethod("AsSpan", [typeof(string)])!);
         il.Emit(OpCodes.Call, typeof(X509Certificate2).GetMethod("CreateFromPem", [typeof(ReadOnlySpan<char>)])!);
         il.Emit(OpCodes.Stloc, certLocal);
@@ -301,7 +301,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dnsListLocal);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Callvirt, listStringAdd);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, partsLocal);
         il.Emit(OpCodes.Ldstr, "IP Address:");
         il.Emit(OpCodes.Ldloc, ipStrLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Callvirt, listStringAdd);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -375,7 +375,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloc, partsLocal);
         il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("ToArray", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(string[])])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(string[])])!);
         il.Emit(OpCodes.Stfld, sanField);
         il.Emit(OpCodes.Br, sanDoneLabel);
         il.MarkLabel(noSanLabel);
@@ -415,7 +415,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)'\n');
         il.Emit(OpCodes.Stelem_I2);
         il.Emit(OpCodes.Ldc_I4_1); // StringSplitOptions.RemoveEmptyEntries
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Split", [typeof(char[]), typeof(StringSplitOptions)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Split", [typeof(char[]), typeof(StringSplitOptions)])!);
         il.Emit(OpCodes.Stloc, linesLocal);
 
         // var result = new List<string>(); walk BACKWARD so lines come out in cert order
@@ -452,12 +452,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4, (int)' ');
         il.Emit(OpCodes.Stelem_I2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Trim", [typeof(char[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", [typeof(char[])])!);
         il.Emit(OpCodes.Stloc, tLocal);
 
         // if (t.Length > 0) result.Add(t)
         il.Emit(OpCodes.Ldloc, tLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, skip);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, tLocal);
@@ -477,7 +477,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "\n");
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("ToArray", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(string[])])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(string[])])!);
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -517,7 +517,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, invGetter);
         il.Emit(OpCodes.Call, typeof(DateTime).GetMethod("ToString", [typeof(string), typeof(IFormatProvider)])!);
 
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Format",
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Format",
             [typeof(IFormatProvider), typeof(string), typeof(object), typeof(object), typeof(object)])!);
         il.Emit(OpCodes.Ret);
         return method;
@@ -605,8 +605,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldc_I4, (int)'.');
             il.Emit(OpCodes.Stelem_I2);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimEnd", [typeof(char[])])!);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", [typeof(char[])])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant", Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, target);
         }
 
@@ -617,7 +617,7 @@ public partial class RuntimeEmitter
         var hasWildcard = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, pLocal);
         il.Emit(OpCodes.Ldc_I4, (int)'*');
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("IndexOf", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [typeof(char)])!);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bge, hasWildcard);
         il.Emit(OpCodes.Ldloc, pLocal);
@@ -640,7 +640,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldc_I4, (int)'.');
             il.Emit(OpCodes.Stelem_I2);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Split", [typeof(char[])])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Split", [typeof(char[])])!);
             il.Emit(OpCodes.Stloc, target);
         }
 
@@ -682,7 +682,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nlLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, returnFalse);
         il.Emit(OpCodes.Br, next);
 
@@ -736,7 +736,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4, (int)'\n');
         il.Emit(OpCodes.Stelem_I2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Split", [typeof(char[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Split", [typeof(char[])])!);
         il.Emit(OpCodes.Stloc, linesLocal);
 
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -753,13 +753,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldstr, "CN=");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [typeof(string)])!);
         il.Emit(OpCodes.Brfalse, next);
         il.Emit(OpCodes.Ldloc, linesLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(next);
@@ -880,7 +880,7 @@ public partial class RuntimeEmitter
         void EmitHashCase(Label label, string prop)
         {
             il.MarkLabel(label);
-            il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty(prop)!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, prop)!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, hashLocal);
             il.Emit(OpCodes.Br, haveHashLabel);
         }
@@ -893,7 +893,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Unsupported certificate signature algorithm OID ");
         il.Emit(OpCodes.Ldloc, oidLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Newobj, typeof(NotSupportedException).GetConstructor([_types.String])!);
         il.Emit(OpCodes.Throw);
 
@@ -1031,7 +1031,7 @@ public partial class RuntimeEmitter
         if (runtime.TSDateCtorMilliseconds == null)
         {
             il.Emit(OpCodes.Ldstr, $"X509Certificate.{propName} requires Date support in the compiled program");
-            il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
             il.Emit(OpCodes.Throw);
         }
         else
@@ -1065,7 +1065,7 @@ public partial class RuntimeEmitter
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, certField);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty(hashProp)!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, hashProp)!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetMethod("GetCertHash", [typeof(HashAlgorithmName)])!);
         il.Emit(OpCodes.Call, colonHex);
         il.Emit(OpCodes.Ret);
@@ -1179,10 +1179,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(X509KeyUsageExtension).GetProperty("KeyUsages")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, flagsLocal);
 
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        var listAdd = _types.ListOfObject.GetMethod("Add", [_types.Object])!;
+        var listAdd = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
         void EmitFlagCheck(X509KeyUsageFlags flag, string name)
         {
             var skipLabel = il.DefineLabel();
@@ -1266,7 +1266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(X509EnhancedKeyUsageExtension).GetProperty("EnhancedKeyUsages")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, oidsLocal);
 
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, listLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1280,7 +1280,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Callvirt, typeof(OidCollection).GetProperty("Item", [typeof(int)])!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(System.Security.Cryptography.Oid).GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -1338,7 +1338,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, okLabel);
         il.Emit(OpCodes.Ldstr, "X509Certificate.verify requires a public KeyObject argument");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -1533,7 +1533,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, certField);
         il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetMethod("ExportCertificatePem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, "\n");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
         tb.DefineMethodOverride(toString, _types.GetMethodNoParams(_types.Object, "ToString"));
 
@@ -1554,7 +1554,7 @@ public partial class RuntimeEmitter
             _types.Object, [_types.Object]);
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 }

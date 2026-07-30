@@ -54,7 +54,7 @@ public partial class RuntimeEmitter
         var countLocal = il.DeclareLocal(_types.Int32);
         var idxLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, idxLocal);
@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, streamLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Callvirt, runtime.TSReadablePush);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, idxLocal);
@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
         runtime.StreamComposeBridgeCtor = ctor;
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
-        cil.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_1); cil.Emit(OpCodes.Stfld, firstField);
         cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_2); cil.Emit(OpCodes.Stfld, duplexField);
         cil.Emit(OpCodes.Ret);

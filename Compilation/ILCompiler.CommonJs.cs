@@ -198,7 +198,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(System.Reflection.BindingFlags)])!);
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Ldstr, module.Path);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _runtime.CjsModuleCtor);
         il.Emit(OpCodes.Stsfld, moduleObjField);

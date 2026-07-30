@@ -92,9 +92,9 @@ public partial class RuntimeEmitter
         var countGetter = queueType.GetProperty("Count")!.GetGetMethod()!;
         var dequeue = queueType.GetMethod("Dequeue")!;
         var fromResult = TaskFromResultObject(_types);
-        var tcsCtor = _types.TaskCompletionSourceOfObject.GetConstructor([typeof(TaskCreationOptions)])!;
-        var tcsTaskGetter = _types.TaskCompletionSourceOfObject.GetProperty("Task")!.GetGetMethod()!;
-        var trySetException = _types.TaskCompletionSourceOfObject.GetMethod("TrySetException", [_types.Exception])!;
+        var tcsCtor = _types.GetConstructor(_types.TaskCompletionSourceOfObject, [typeof(TaskCreationOptions)])!;
+        var tcsTaskGetter = _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task")!.GetGetMethod()!;
+        var trySetException = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception])!;
 
         var notBuffered = il.DefineLabel();
         var notErrored = il.DefineLabel();
@@ -273,7 +273,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitSettleIterWaiterDone(ILGenerator il, EmittedRuntime runtime)
     {
-        var trySetResult = _types.TaskCompletionSourceOfObject.GetMethod("TrySetResult", [_types.Object])!;
+        var trySetResult = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object])!;
         var noWaiter = il.DefineLabel();
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 
@@ -304,7 +304,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitFaultIterWaiter(ILGenerator il, EmittedRuntime runtime)
     {
-        var trySetException = _types.TaskCompletionSourceOfObject.GetMethod("TrySetException", [_types.Exception])!;
+        var trySetException = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception])!;
         var noWaiter = il.DefineLabel();
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 
@@ -334,7 +334,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDeliverChunkToIterWaiterAndReturn(ILGenerator il, EmittedRuntime runtime)
     {
-        var trySetResult = _types.TaskCompletionSourceOfObject.GetMethod("TrySetResult", [_types.Object])!;
+        var trySetResult = _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object])!;
         var noWaiter = il.DefineLabel();
         var wLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
 

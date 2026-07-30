@@ -100,7 +100,7 @@ public class DelegateAdapterEmitter
 
         // base().ctor()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // this._fn = fn
         il.Emit(OpCodes.Ldarg_0);

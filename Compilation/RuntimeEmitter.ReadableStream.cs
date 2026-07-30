@@ -335,7 +335,7 @@ public partial class RuntimeEmitter
         // tcs.TrySetResult({ value: chunk, done: false })
         il.Emit(OpCodes.Ldloc, tcsLocal);
         // Build the result dict inline (shared with Read())
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -534,7 +534,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _pendingReadsQueueType.GetMethod("Dequeue")!);
 
         // Build done result dict inline
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
@@ -807,7 +807,7 @@ public partial class RuntimeEmitter
     private void EmitMakeReadResultAsTask(ILGenerator il, LocalBuilder? chunkLocal, bool doneFlag, EmittedRuntime runtime)
     {
         // new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 

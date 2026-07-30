@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
         // ±Infinity / finite branches
         var notPosInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInf);
         il.Emit(OpCodes.Ldc_I4, 1 << 20);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -404,7 +404,7 @@ public partial class RuntimeEmitter
 
         var notNegInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNegInf);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -454,7 +454,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Stloc, idxAsIntLocal);
         il.Emit(OpCodes.Ldloca, idxAsIntLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
@@ -502,12 +502,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         // Box char to string via ToString()
         var charLocal = il.DeclareLocal(_types.Char);
         il.Emit(OpCodes.Stloc, charLocal);
         il.Emit(OpCodes.Ldloca, charLocal);
-        il.Emit(OpCodes.Call, _types.Char.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.Emit(OpCodes.Ldloc, idxLocal);
@@ -541,7 +541,7 @@ public partial class RuntimeEmitter
         var idxLocal = il.DeclareLocal(_types.Int32);
         var valLocal = il.DeclareLocal(_types.Object);
 
-        var tryGetValue = _types.DictionaryStringObject.GetMethod(
+        var tryGetValue = _types.GetMethod(_types.DictionaryStringObject,
             "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!;
 
@@ -565,7 +565,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, lenAsDouble);
         // NaN/Infinity → 0; else clamp
         il.Emit(OpCodes.Ldloc, lenAsDouble);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         var finiteLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, finiteLabel);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -615,7 +615,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Stloc, idxAsIntLocal);
         il.Emit(OpCodes.Ldloca, idxAsIntLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldloca, valLocal);
         il.Emit(OpCodes.Callvirt, tryGetValue);
         var noEntry = il.DefineLabel();
@@ -664,7 +664,7 @@ public partial class RuntimeEmitter
 
         // Reused below for indexed reads (must distinguish "absent" → hole
         // from "present" → value, which GetProperty can't do alone).
-        var tryGetValue = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
 
         // lenVal = $Runtime.GetProperty(receiver, "length")
         il.Emit(OpCodes.Ldarg_0);
@@ -724,7 +724,7 @@ public partial class RuntimeEmitter
         // +Infinity → 1<<20 (clamp), -Infinity → 0
         var notPosInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInf);
         il.Emit(OpCodes.Ldc_I4, 1 << 20);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -733,7 +733,7 @@ public partial class RuntimeEmitter
 
         var notNegInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNegInf);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -786,7 +786,7 @@ public partial class RuntimeEmitter
         // propagates. If no PDS entry either, push ArrayHole sentinel.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, idxLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldloca, valLocal);
         il.Emit(OpCodes.Callvirt, tryGetValue);
         var wasPresent = il.DefineLabel();
@@ -798,7 +798,7 @@ public partial class RuntimeEmitter
         // exist — push ArrayHole. Otherwise the getter ran and returned a value.
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, idxLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, valLocal);
         il.Emit(OpCodes.Ldloc, valLocal);
@@ -1552,7 +1552,7 @@ public partial class RuntimeEmitter
         // +Inf → 1<<20 cap (matches ArrayLikeMaterialize's existing clamp)
         var notPosInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notPosInf);
         il.Emit(OpCodes.Ldc_I4, 1 << 20);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -1562,7 +1562,7 @@ public partial class RuntimeEmitter
         // -Inf → 0
         var notNegInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNegativeInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, notNegInf);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, lenLocal);
@@ -1615,7 +1615,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Stloc, dictLocal);
 
-            var containsKey = _types.DictionaryStringObject.GetMethod(
+            var containsKey = _types.GetMethod(_types.DictionaryStringObject,
                 "ContainsKey", [_types.String])!;
 
             var keyStrLocal = il.DeclareLocal(_types.String);
@@ -1627,7 +1627,7 @@ public partial class RuntimeEmitter
 
             // keyStr = idx.ToString()
             il.Emit(OpCodes.Ldloca, idxLocal);
-            il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, keyStrLocal);
 
             var present = il.DefineLabel();
@@ -1764,10 +1764,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dictLocal);
         // keyStr = idx.ToString()
         il.Emit(OpCodes.Ldarga_S, (byte)1);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, keyStrLocal);
         // if (dict.TryGetValue(keyStr, out dictVal)) return dictVal;
-        var tryGetValue = _types.DictionaryStringObject.GetMethod(
+        var tryGetValue = _types.GetMethod(_types.DictionaryStringObject,
             "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!;
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -1826,7 +1826,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnListValLabel);
         var tsoKeyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarga_S, (byte)1);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tsoKeyStrLocal);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
@@ -1900,7 +1900,7 @@ public partial class RuntimeEmitter
         // dict.ContainsKey(key)
         il.Emit(OpCodes.Ldloc, dictTmpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Brtrue, trueLabel);
         // PDSGetPropertyDescriptor(current, key) — non-null = own accessor.
         il.Emit(OpCodes.Ldloc, currentLocal);
@@ -1969,7 +1969,7 @@ public partial class RuntimeEmitter
         var listIdxLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listIdxLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, notListLabel);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1994,7 +1994,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
 

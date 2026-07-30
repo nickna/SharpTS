@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         // name = ((string)arg0).ToLowerInvariant(); isName = true
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, nameLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, isNameLocal);
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, checkNidLabel);
             il.Emit(OpCodes.Ldloc, nameLocal);
             il.Emit(OpCodes.Ldstr, info.Name);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brtrue, matchLabel);
             il.Emit(OpCodes.Br, nextLabel);
             il.MarkLabel(checkNidLabel);
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
         runtime.CryptoGetCurves = method;
 
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldstr, curve);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         }
 
         il.Emit(OpCodes.Ldloc, listLocal);

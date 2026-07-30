@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
 
         // Call String.Concat(string[])
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string[])])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [typeof(string[])])!);
     }
 
     /// <summary>
@@ -215,9 +215,9 @@ public partial class RuntimeEmitter
         // Default case
         il.Emit(OpCodes.Ldstr, "UNKNOWN: unknown error (");
         il.Emit(OpCodes.Ldloca, errorLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, ")");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
 
         il.MarkLabel(endLabel);
     }
@@ -259,9 +259,9 @@ public partial class RuntimeEmitter
         // Default case
         il.Emit(OpCodes.Ldstr, "UNKNOWN: unknown error (");
         il.Emit(OpCodes.Ldloca, errnoLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, ")");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
 
         il.MarkLabel(endLabel);
     }

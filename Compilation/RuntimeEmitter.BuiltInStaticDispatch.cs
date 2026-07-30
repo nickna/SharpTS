@@ -56,8 +56,8 @@ public partial class RuntimeEmitter
 
         // Pre-compute the MethodInfo object for op_Equality on System.Type and
         // GetTypeFromHandle on RuntimeTypeHandle — both called many times below.
-        var strEquals = _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!;
-        var getTypeFromHandle = _types.Type.GetMethod("GetTypeFromHandle", [_types.RuntimeTypeHandle])!;
+        var strEquals = _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!;
+        var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!;
         var stringOpEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         // Emit one branch per (Type, name, runtimeMethod, specLength) tuple. Uses

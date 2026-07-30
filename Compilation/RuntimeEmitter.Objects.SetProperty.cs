@@ -784,7 +784,7 @@ public partial class RuntimeEmitter
             var notNumberTypeForSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Double);
-            il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notNumberTypeForSetLabel);
             EmitTypeSetSkipName("MAX_VALUE");
             EmitTypeSetSkipName("MIN_VALUE");
@@ -837,7 +837,7 @@ public partial class RuntimeEmitter
 
             // Reject NaN / +Infinity / -Infinity via IsFinite.
             il.Emit(OpCodes.Ldloc, doubleValLocal);
-            il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
             il.Emit(OpCodes.Brfalse, rangeErrorLabel);
 
             // ToUint32 reciprocity: cast to long, ensure 0..2^32-1 inclusive,

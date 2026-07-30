@@ -488,7 +488,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "port");
             il.Emit(OpCodes.Ldloca, valLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noPort);
 
             il.Emit(OpCodes.Ldloc, valLocal);
@@ -520,7 +520,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "writableHighWaterMark");
             il.Emit(OpCodes.Ldloca, hwmValLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, tryPlainHwm);
             il.Emit(OpCodes.Ldloc, hwmValLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "highWaterMark");
             il.Emit(OpCodes.Ldloca, hwmValLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noHwm);
             il.Emit(OpCodes.Ldloc, hwmValLocal);
             il.Emit(OpCodes.Isinst, typeof(double));
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
             il.Emit(OpCodes.Ldstr, "allowHalfOpen");
             il.Emit(OpCodes.Ldloca, hwmValLocal);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
             il.Emit(OpCodes.Brfalse, noAho);
             il.Emit(OpCodes.Ldloc, hwmValLocal);
             il.Emit(OpCodes.Isinst, typeof(bool));
@@ -722,7 +722,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, exLocal);
-        wil.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+        wil.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         wil.Emit(OpCodes.Ldloc, exLocal);
         wil.Emit(OpCodes.Call, _getSocketErrorCodeMethod);
         wil.Emit(OpCodes.Newobj, _socketConnectErrClosureCtor);
@@ -826,7 +826,7 @@ public partial class RuntimeEmitter
             wil.Emit(OpCodes.Ldarg_0);
             wil.Emit(OpCodes.Ldfld, _netSocketConnectHostField);
             wil.Emit(OpCodes.Ldstr, "'");
-            wil.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+            wil.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
             wil.Emit(OpCodes.Newobj, typeof(System.IO.FileNotFoundException).GetConstructor([_types.String])!);
             wil.Emit(OpCodes.Throw);
             wil.MarkLabel(pipeExists);
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
         wil.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
         wil.Emit(OpCodes.Ldarg_0);
         wil.Emit(OpCodes.Ldloc, exLocal);
-        wil.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+        wil.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         wil.Emit(OpCodes.Ldloc, exLocal);
         wil.Emit(OpCodes.Call, _getSocketErrorCodeMethod);
         wil.Emit(OpCodes.Newobj, _socketConnectErrClosureCtor);
@@ -917,12 +917,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, @"\\.\pipe\");
         il.Emit(OpCodes.Ldc_I4_5); // StringComparison.OrdinalIgnoreCase
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notPipePrefix);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, 9); // length of "\\.\pipe\"
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notPipePrefix);
@@ -963,7 +963,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(System.IO.Directory).GetMethod("GetFiles", [_types.String])!);
         il.Emit(OpCodes.Ldstr, @"\\.\pipe\");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Call, typeof(StringComparer).GetProperty("OrdinalIgnoreCase")!.GetGetMethod()!);
         var containsWithComparer = EmitGenerics.MakeGenericMethod(typeof(System.Linq.Enumerable).GetMethods()
             .Single(m => m.Name == "Contains" && m.GetParameters().Length == 3), _types.String);
@@ -1122,7 +1122,7 @@ public partial class RuntimeEmitter
         var bytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Call, typeof(Encoding).GetProperty("UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
@@ -1359,7 +1359,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, okLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, exLocal);
-            il.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
             il.Emit(OpCodes.Stfld, _netSocketPendingWriteErrorField);
             il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
             il.Emit(OpCodes.Ldarg_0);
@@ -2145,7 +2145,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stfld, _netSocketEncodingField);
         il.MarkLabel(notString);
 
@@ -2468,7 +2468,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldarg, argIndex);
         il.Emit(OpCodes.Ldstr, value);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, target);
     }
 
@@ -2485,7 +2485,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, key);
         il.Emit(OpCodes.Ldloca, valLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, skipLabel);
 
         // if (val is string s) target = s
@@ -2535,7 +2535,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, epLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty(property)!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(done);
@@ -2668,7 +2668,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, epLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPEndPoint).GetProperty(property)!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(done);

@@ -327,7 +327,7 @@ public partial class RuntimeEmitter
         var nanLabel = il.DefineLabel();
         var idxLoadedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, nanLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Conv_I4);
@@ -338,7 +338,7 @@ public partial class RuntimeEmitter
         var posInfLabel = il.DefineLabel();
         var negInfLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, posInfLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, idxLocal);
@@ -797,7 +797,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, throwRangeLabel);
         // +Infinity check
         il.Emit(OpCodes.Ldloc, countDoubleLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsPositiveInfinity", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double])!);
         il.Emit(OpCodes.Brtrue, throwRangeLabel);
         il.Emit(OpCodes.Br, nonNegLabel);
 
@@ -1754,7 +1754,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldarg_0); // str
         il.Emit(OpCodes.Ldloc, normFormLocal);
-        var normalizeMethod = _types.String.GetMethod("Normalize", [typeof(System.Text.NormalizationForm)])!;
+        var normalizeMethod = _types.GetMethod(_types.String, "Normalize", [typeof(System.Text.NormalizationForm)])!;
         il.Emit(OpCodes.Callvirt, normalizeMethod);
         il.Emit(OpCodes.Ret);
 
@@ -1784,7 +1784,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // str
         il.Emit(OpCodes.Ldarg_1); // that
         il.Emit(OpCodes.Ldc_I4_1); // StringComparison.CurrentCulture = 1
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Compare", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Compare", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // if (result < 0) return -1.0

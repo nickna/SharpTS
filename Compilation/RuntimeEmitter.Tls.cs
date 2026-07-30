@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
 
         // tls.connect(options) form: when port/host weren't given positionally, read them from
         // the options dict (options.port / options.host). Mirrors interp Connect's options branch.
-        var optTryGet = _types.DictionaryStringObject.GetMethod("TryGetValue")!;
+        var optTryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue")!;
         var optTmpLocal = il.DeclareLocal(_types.Object);
         var optParseDone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, optionsLocal);
@@ -190,7 +190,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Ldstr, "rejectUnauthorized");
         il.Emit(OpCodes.Ldloca, tempLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue")!);
         il.Emit(OpCodes.Brfalse, rejectDone);
         il.Emit(OpCodes.Ldloc, tempLocal);
         il.Emit(OpCodes.Isinst, _types.Boolean);
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Ldstr, "ALPNProtocols");
         il.Emit(OpCodes.Ldloca, tempLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue")!);
         il.Emit(OpCodes.Brfalse, alpnDone);
         il.Emit(OpCodes.Ldloc, tempLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);

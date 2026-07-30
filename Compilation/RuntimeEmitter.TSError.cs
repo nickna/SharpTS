@@ -115,7 +115,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // _name = name
         il.Emit(OpCodes.Ldarg_0);
@@ -401,7 +401,7 @@ public partial class RuntimeEmitter
         // if (string.IsNullOrEmpty(_message))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsErrorMessageField);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrEmpty")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty")!);
         il.Emit(OpCodes.Brfalse, hasMessageLabel);
 
         // return _name;
@@ -416,7 +416,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ": ");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsErrorMessageField);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -437,13 +437,13 @@ public partial class RuntimeEmitter
         var stackTraceLocal = il.DeclareLocal(_types.StackTrace);
         il.Emit(OpCodes.Ldc_I4_3); // skipFrames
         il.Emit(OpCodes.Ldc_I4_1); // fNeedFileInfo = true
-        il.Emit(OpCodes.Newobj, _types.StackTrace.GetConstructor([_types.Int32, _types.Boolean])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StackTrace, [_types.Int32, _types.Boolean])!);
         il.Emit(OpCodes.Stloc, stackTraceLocal);
 
         // var frames = stackTrace.GetFrames();
         var framesLocal = il.DeclareLocal(_types.MakeArrayType(_types.StackFrame));
         il.Emit(OpCodes.Ldloc, stackTraceLocal);
-        il.Emit(OpCodes.Callvirt, _types.StackTrace.GetMethod("GetFrames")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackTrace, "GetFrames")!);
         il.Emit(OpCodes.Stloc, framesLocal);
 
         // if (frames == null || frames.Length == 0) return "";
@@ -466,7 +466,7 @@ public partial class RuntimeEmitter
 
         // var sb = new StringBuilder();
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
-        il.Emit(OpCodes.Newobj, _types.StringBuilder.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // Loop through frames
@@ -494,7 +494,7 @@ public partial class RuntimeEmitter
 
         // method = frame.GetMethod()
         il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.StackFrame.GetMethod("GetMethod")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetMethod")!);
         il.Emit(OpCodes.Stloc, methodLocal);
 
         // if (method == null) continue
@@ -512,7 +512,7 @@ public partial class RuntimeEmitter
         // sb.Append("    at ");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "    at ");
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         // Get type name
@@ -522,7 +522,7 @@ public partial class RuntimeEmitter
         var afterTypeLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetProperty("DeclaringType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "DeclaringType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, declaringTypeLocal);
         il.Emit(OpCodes.Ldloc, declaringTypeLocal);
         il.Emit(OpCodes.Brfalse, skipTypeLabel);
@@ -530,12 +530,12 @@ public partial class RuntimeEmitter
         // sb.Append(typeName + ".")
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, declaringTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ".");
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipTypeLabel);
@@ -543,8 +543,8 @@ public partial class RuntimeEmitter
         // sb.Append(method.Name)
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Callvirt, _types.MethodBase.GetProperty("Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         // Add file info if available
@@ -552,40 +552,40 @@ public partial class RuntimeEmitter
         var noFileLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.StackFrame.GetMethod("GetFileName")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetFileName")!);
         il.Emit(OpCodes.Stloc, fileNameLocal);
         il.Emit(OpCodes.Ldloc, fileNameLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrEmpty")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty")!);
         il.Emit(OpCodes.Brtrue, noFileLabel);
 
         // sb.Append(" (" + fileName + ":" + lineNumber + ")")
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, " (");
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, fileNameLocal);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ":");
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.StackFrame.GetMethod("GetFileLineNumber")!);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetFileLineNumber")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.Int32])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ")");
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(noFileLabel);
 
         // sb.AppendLine()
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("AppendLine", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "AppendLine", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
 
         // index++
@@ -599,8 +599,8 @@ public partial class RuntimeEmitter
 
         // return sb.ToString().TrimEnd()
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimEnd", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -754,7 +754,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsAggregateErrorErrorsField);
         il.Emit(OpCodes.Ldloc, errorsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("AddRange", [typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [typeof(IEnumerable<object?>)])!);
         il.Emit(OpCodes.Br, endCtorLabel);
 
         il.MarkLabel(notListLabel);
@@ -766,7 +766,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsAggregateErrorErrorsField);
         il.Emit(OpCodes.Ldarg_1);  // errors
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.MarkLabel(errorsNullLabel);
         il.MarkLabel(endCtorLabel);

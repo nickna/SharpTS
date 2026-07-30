@@ -381,7 +381,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, cache);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(create);
-        il.Emit(OpCodes.Newobj, _types.HashSetOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.HashSetOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stsfld, cache);
         il.Emit(OpCodes.Ret);

@@ -96,10 +96,10 @@ public partial class RuntimeEmitter
         var isExplicitRsaLocal = asymCtorIL.DeclareLocal(_types.Boolean);
         asymCtorIL.Emit(OpCodes.Ldarg_1);
         asymCtorIL.Emit(OpCodes.Ldstr, "RSA PRIVATE KEY");
-        asymCtorIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        asymCtorIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         asymCtorIL.Emit(OpCodes.Ldarg_1);
         asymCtorIL.Emit(OpCodes.Ldstr, "RSA PUBLIC KEY");
-        asymCtorIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        asymCtorIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         asymCtorIL.Emit(OpCodes.Or);
         asymCtorIL.Emit(OpCodes.Stloc, isExplicitRsaLocal);
 
@@ -107,10 +107,10 @@ public partial class RuntimeEmitter
         var isExplicitEcLocal = asymCtorIL.DeclareLocal(_types.Boolean);
         asymCtorIL.Emit(OpCodes.Ldarg_1);
         asymCtorIL.Emit(OpCodes.Ldstr, "EC PRIVATE KEY");
-        asymCtorIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        asymCtorIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         asymCtorIL.Emit(OpCodes.Ldarg_1);
         asymCtorIL.Emit(OpCodes.Ldstr, "EC PUBLIC KEY");
-        asymCtorIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        asymCtorIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         asymCtorIL.Emit(OpCodes.Or);
         asymCtorIL.Emit(OpCodes.Stloc, isExplicitEcLocal);
 
@@ -355,7 +355,7 @@ public partial class RuntimeEmitter
 
         // Create dictionary for details
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // Check if RSA

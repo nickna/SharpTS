@@ -330,7 +330,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         if (arguments.Count == 0)
         {
             il.Emit(OpCodes.Ldstr, "Runtime Error: process.nextTick requires at least 1 argument");
-            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
             il.Emit(OpCodes.Throw);
             // Throw is terminal, but the verifier needs a value-producing expression.
             il.Emit(OpCodes.Ldnull);
@@ -348,7 +348,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldloc, cbLocal);
         il.Emit(OpCodes.Brtrue, callbackOkLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: process.nextTick callback must be a function");
-        il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+        il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(ctx.Types.ArgumentException, [ctx.Types.String])!);
         il.Emit(OpCodes.Throw);
         il.MarkLabel(callbackOkLabel);
 

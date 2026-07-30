@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         var countGetter = GetListMethod(listType, _listCountGetter);
         var toArrayMethod = GetListMethod(listType, _listToArray);
         var tryGetValueMethod = GetDictMethod(_tsEventEmitterEventsField.FieldType, _dictTryGetValue);
-        var stringEquals = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var stringEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
 
         // Local: invoke the listener in `listenerLocal`, leaving its return value on the stack.
         void EmitInvokeLeaveResult(LocalBuilder listenerLocal)
@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, stringEquals);
         il.Emit(OpCodes.Brfalse, skipThrow);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldtoken, runtime.TSEventEmitterType);
         il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle", [typeof(RuntimeTypeHandle)])!);
         il.Emit(OpCodes.Bne_Un, skipThrow);
@@ -811,7 +811,7 @@ public partial class RuntimeEmitter
 
         // Create List<object?> and populate
         var resultListLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultListLocal);
 
         // Iterate and add each listener
@@ -839,7 +839,7 @@ public partial class RuntimeEmitter
         var getItemMethod = GetListMethod(listType, _listGetItem);
         il.Emit(OpCodes.Callvirt, getItemMethod);
         il.Emit(OpCodes.Ldfld, _tsEventEmitterListenerWrapperListener);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -855,7 +855,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(emptyLabel);
         // return new $Array(new List<object?>())
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
         il.Emit(OpCodes.Ret);
     }
@@ -907,7 +907,7 @@ public partial class RuntimeEmitter
 
         // Create List<object?> to accumulate keys
         var resultListLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultListLocal);
 
         // foreach (var key in _events.Keys)
@@ -943,7 +943,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         var getCurrentMethod = EmitterTypeHelpers.ResolveMethod(keysEnumeratorType, typeof(Dictionary<,>.KeyCollection.Enumerator).GetProperty("Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, getCurrentMethod);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Br, loopStart);
 

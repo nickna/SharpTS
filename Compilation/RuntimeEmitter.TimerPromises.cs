@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-        var symbolDictSetItem = _types.DictionaryObjectObject.GetMethod("set_Item", [_types.Object, _types.Object])!;
+        var symbolDictSetItem = _types.GetMethod(_types.DictionaryObjectObject, "set_Item", [_types.Object, _types.Object])!;
         il.Emit(OpCodes.Callvirt, symbolDictSetItem);
 
         // return dict;
@@ -834,7 +834,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "[Symbol.asyncIterator]");
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
-        var symbolDictSetItem = _types.DictionaryObjectObject.GetMethod("set_Item", [_types.Object, _types.Object])!;
+        var symbolDictSetItem = _types.GetMethod(_types.DictionaryObjectObject, "set_Item", [_types.Object, _types.Object])!;
         il.Emit(OpCodes.Callvirt, symbolDictSetItem);
 
         il.Emit(OpCodes.Ldloc, dictLocal);

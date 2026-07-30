@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
 
         // Lowercase the encoding
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check encodings (must mirror Runtime/Types/BufferEncoding.Encode exactly).
@@ -104,9 +104,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBase64UrlNormalize(ILGenerator il)
     {
-        var replace = _types.String.GetMethod("Replace", [_types.String, _types.String])!;
-        var concat = _types.String.GetMethod("Concat", [_types.String, _types.String])!;
-        var getLength = _types.String.GetProperty("Length")!.GetGetMethod()!;
+        var replace = _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!;
+        var concat = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!;
+        var getLength = _types.GetProperty(_types.String, "Length")!.GetGetMethod()!;
 
         var s = il.DeclareLocal(_types.String);
         var rem = il.DeclareLocal(_types.Int32);
@@ -148,9 +148,9 @@ public partial class RuntimeEmitter
 
     private void EmitEncodingGetBytes(ILGenerator il, string encodingProperty, ConstructorBuilder bufferCtor)
     {
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty(encodingProperty)!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, encodingProperty)!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Newobj, bufferCtor);
     }
 
@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Ldstr, value);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, target);
     }
 

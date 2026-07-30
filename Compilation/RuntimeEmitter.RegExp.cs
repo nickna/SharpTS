@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, patternNullLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, afterSearchLabel);
         il.MarkLabel(patternNullLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
         // string unchanged. Build manually via StringBuilder.
         var emptySearchLabelRA = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, emptySearchLabelRA);
 
         // return Regex.Replace(str, Regex.Escape(search), replacement) so
@@ -757,7 +757,7 @@ public partial class RuntimeEmitter
         // if (matches.Count == 0) return null
         var hasMatchesLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, matchesLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, hasMatchesLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -781,7 +781,7 @@ public partial class RuntimeEmitter
         // var idx = str.IndexOf(search)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("IndexOf", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
         il.Emit(OpCodes.Stloc, idxLocal);
 
         // if (idx < 0) return null
@@ -795,10 +795,10 @@ public partial class RuntimeEmitter
         // `m.index` / `m.input` got null. Build the array, then attach the
         // properties via $Runtime.SetProperty so they appear as own props.
         var matchArrayLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
         il.Emit(OpCodes.Stloc, matchArrayLocal);
 
@@ -900,7 +900,7 @@ public partial class RuntimeEmitter
         var groupLoopEndLabel = il.DefineLabel();
 
         // var result = new List<object?>()
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // var matchColl = regex.Matches(str)
@@ -930,7 +930,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, matchLocal);
 
         // var fields = new Dictionary<string, object?>()
-        var dictSetItem = _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!;
+        var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!;
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, fieldsLocal);
 
@@ -987,7 +987,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldloca, groupIndexLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
 
         il.Emit(OpCodes.Ldloc, groupLocal);
         il.Emit(OpCodes.Callvirt, typeof(Group).GetProperty("Success")!.GetGetMethod()!);
@@ -1015,7 +1015,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -1116,7 +1116,7 @@ public partial class RuntimeEmitter
         // var idx = str.IndexOf(search)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("IndexOf", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
         il.Emit(OpCodes.Stloc, idxLocal);
 
         // if (idx < 0) return str
@@ -1128,18 +1128,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
 
         il.Emit(OpCodes.Ldloc, replacementLocal);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
 
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notFoundLabel);
@@ -1227,7 +1227,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, matchIdxLocal);
         il.Emit(OpCodes.Ldloc, posLocal);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String, _types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String, _types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Pop);
 
         // ECMA-262 22.1.3.18 functional replacement args:
@@ -1331,7 +1331,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, resultObjLocal);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         // posLocal = match.Index + match.Length
@@ -1362,8 +1362,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, posLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
@@ -1381,7 +1381,7 @@ public partial class RuntimeEmitter
         var idxLocal2 = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("IndexOf", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
         il.Emit(OpCodes.Stloc, idxLocal2);
 
         // if (idx < 0) return str
@@ -1420,7 +1420,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, idxLocal2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
 
         il.Emit(OpCodes.Ldloc, resultStrLocal);
         il.Emit(OpCodes.Call, runtime.ToJsString);
@@ -1428,11 +1428,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxLocal2);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
 
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notFoundLabel);
@@ -1483,7 +1483,7 @@ public partial class RuntimeEmitter
         // return (double)str.IndexOf(search)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("IndexOf", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
     }
@@ -1523,10 +1523,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brfalse, sepNotUndefSingletonLabel);
         // separator is $Undefined: return [str]
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(sepNotUndefSingletonLabel);
 
@@ -1546,7 +1546,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, partsLocal);
 
         // Convert to List<object?>
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1563,7 +1563,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, partsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1587,12 +1587,12 @@ public partial class RuntimeEmitter
         var splitDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sepLocal);
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brfalse, nonEmptySepLabel);
 
         // Empty separator: split into characters
         // result = new List<object?>()
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         var charLoopStartLabel = il.DefineLabel();
@@ -1603,16 +1603,16 @@ public partial class RuntimeEmitter
         il.MarkLabel(charLoopStartLabel);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, charLoopEndLabel);
 
         // result.Add(Char.ToString(str[i]))
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "ToString", _types.Char));
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1635,7 +1635,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, partsLocal);
 
         // Convert to List<object?>
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         var strLoopStartLabel = il.DefineLabel();
@@ -1654,7 +1654,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, partsLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1715,7 +1715,7 @@ public partial class RuntimeEmitter
         var notInfLabel = il.DefineLabel();
         var clampDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, limitDouble);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brtrue, notInfLabel);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
         il.Emit(OpCodes.Stloc, limitInt);
@@ -1743,7 +1743,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, limitInt);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("GetRange", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "GetRange", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(returnResultLabel);

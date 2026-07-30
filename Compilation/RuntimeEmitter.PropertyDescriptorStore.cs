@@ -49,7 +49,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldc_I4_1); // true
         ctorIl.Emit(OpCodes.Stfld, isExtensibleField);
@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ret);
 
         // Property: Prototype
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         );
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         // Writable = true
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldc_I4_1);
@@ -1185,7 +1185,7 @@ public partial class RuntimeEmitter
         // result.Add(currentKey)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
@@ -1272,7 +1272,7 @@ public partial class RuntimeEmitter
         // No Enumerable filter — return all PDS keys.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);

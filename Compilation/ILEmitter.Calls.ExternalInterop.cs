@@ -759,7 +759,7 @@ public partial class ILEmitter
             // Decimal requires calling the explicit conversion operator
             if (_stackType != StackType.Double)
                 EmitUnboxToDouble();
-            var opExplicit = _ctx.Types.Decimal.GetMethod("op_Explicit",
+            var opExplicit = _ctx.Types.GetMethod(_ctx.Types.Decimal, "op_Explicit",
                 BindingFlags.Public | BindingFlags.Static, [_ctx.Types.Double]);
             IL.Emit(OpCodes.Call, opExplicit!);
         }

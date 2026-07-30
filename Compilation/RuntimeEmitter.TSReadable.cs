@@ -145,7 +145,7 @@ public partial class RuntimeEmitter
 
         // _pipeDestinations = new List<object>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsReadablePipeDestinationsField);
 
         // _ended = false
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
 
         // var result = new StringBuilder()
-        il.Emit(OpCodes.Newobj, _types.StringBuilder.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.MarkLabel(loopStart);
@@ -271,7 +271,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(afterToStringLabel);
 
-        il.Emit(OpCodes.Callvirt, _types.StringBuilder.GetMethod("Append", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, idxLocal);
@@ -366,7 +366,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
         il.Emit(OpCodes.Stloc, destLocal);
 
         var tryWritable = il.DefineLabel();
@@ -472,7 +472,7 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, eofCountLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, eofIdxLocal);
@@ -486,7 +486,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
             il.Emit(OpCodes.Ldloc, eofIdxLocal);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item")!);
             il.Emit(OpCodes.Stloc, eofDestLocal);
 
             var eofTryWritable = il.DefineLabel();
@@ -788,7 +788,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsReadablePipeDestinationsField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         // Set _flowing = 1 (flowing mode) after pipe setup
         il.Emit(OpCodes.Ldarg_0);
@@ -842,7 +842,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
 
         il.MarkLabel(afterSetLabel);
         il.Emit(OpCodes.Stfld, _tsReadableEncodingField);
@@ -1082,7 +1082,7 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
-        var strEquals = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
         var retLabel = il.DefineLabel();
         var checkEndLabel = il.DefineLabel();
 

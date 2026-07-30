@@ -390,7 +390,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             var clampDoneLabel = il.DefineLabel();
             var notInfLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, limitDouble);
-            il.Emit(OpCodes.Call, ctx.Types.Double.GetMethod("IsFinite", [ctx.Types.Double])!);
+            il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Double, "IsFinite", [ctx.Types.Double])!);
             il.Emit(OpCodes.Brtrue, notInfLabel);
             il.Emit(OpCodes.Ldc_I4, int.MaxValue);
             il.Emit(OpCodes.Stloc, limitLocal);
@@ -411,7 +411,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloc, limitLocal);
-            il.Emit(OpCodes.Callvirt, ctx.Types.ListOfObject.GetMethod("GetRange", [ctx.Types.Int32, ctx.Types.Int32])!);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "GetRange", [ctx.Types.Int32, ctx.Types.Int32])!);
             il.Emit(OpCodes.Stloc, listLocal);
             il.MarkLabel(skipTrimLabel);
             il.Emit(OpCodes.Ldloc, listLocal);

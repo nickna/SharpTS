@@ -39,13 +39,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup); il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, "input"); il.Emit(OpCodes.Ldloca, tmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, tmpLocal); il.Emit(OpCodes.Isinst, _types.String); il.Emit(OpCodes.Stloc, inputLocal);
         il.MarkLabel(done);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldloc, inputLocal); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Cgt_Un);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardInput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardInput")!.GetSetMethod()!);
         return inputLocal;
     }
 
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
     private void EmitSyncInputWrite(ILGenerator il, LocalBuilder processLocal, LocalBuilder inputLocal)
     {
         var noWrite = il.DefineLabel();
-        var stdinGet = _types.Process.GetProperty("StandardInput")!.GetGetMethod()!;
+        var stdinGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         il.Emit(OpCodes.Ldloc, inputLocal); il.Emit(OpCodes.Brfalse, noWrite);
         il.Emit(OpCodes.Ldloc, processLocal); il.Emit(OpCodes.Callvirt, stdinGet);
         il.Emit(OpCodes.Ldloc, inputLocal); il.Emit(OpCodes.Callvirt, typeof(System.IO.TextWriter).GetMethod("Write", [_types.String])!);
@@ -88,49 +88,49 @@ public partial class RuntimeEmitter
         var tempObjLocal = il.DeclareLocal(_types.Object);
 
         // var startInfo = new ProcessStartInfo()
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         // startInfo.UseShellExecute = false
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardOutput = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardError = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
 
         // startInfo.CreateNoWindow = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
         var __inputES = EmitSyncInputRedirect(il, startInfoLocal, 1);
 
         // Platform check: if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         var notWindowsLabel = il.DefineLabel();
         var afterPlatformLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Call, _types.OSPlatform.GetProperty("Windows")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.RuntimeInformation.GetMethod("IsOSPlatform", [_types.OSPlatform])!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.OSPlatform, "Windows")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RuntimeInformation, "IsOSPlatform", [_types.OSPlatform])!);
         il.Emit(OpCodes.Brfalse, notWindowsLabel);
 
         // Windows: startInfo.FileName = "cmd.exe"
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "cmd.exe");
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("FileName")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetSetMethod()!);
 
         // startInfo.Arguments = "/c " + command
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "/c ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("Arguments")!.GetSetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "Arguments")!.GetSetMethod()!);
         il.Emit(OpCodes.Br, afterPlatformLabel);
 
         // Unix/Linux
@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         // startInfo.FileName = "/bin/sh"
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "/bin/sh");
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("FileName")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetSetMethod()!);
 
         // startInfo.Arguments = "-c \"" + command.Replace("\"", "\\\"") + "\""
         il.Emit(OpCodes.Ldloc, startInfoLocal);
@@ -147,10 +147,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "\"");
         il.Emit(OpCodes.Ldstr, "\\\"");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "\"");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("Arguments")!.GetSetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "Arguments")!.GetSetMethod()!);
 
         il.MarkLabel(afterPlatformLabel);
 
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "cwd");
         il.Emit(OpCodes.Ldloca, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
@@ -180,8 +180,8 @@ public partial class RuntimeEmitter
         // startInfo.WorkingDirectory = cwdObj.ToString()
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("WorkingDirectory")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "WorkingDirectory")!.GetSetMethod()!);
 
         il.MarkLabel(noCwdLabel);
 
@@ -198,7 +198,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "env");
         il.Emit(OpCodes.Ldloca, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, noEnvLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -210,7 +210,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, envDictLocal);
 
         // startInfo.Environment.Clear() - to replace inherited env (Node.js behavior)
-        var envProp = _types.ProcessStartInfo.GetProperty("Environment")!.GetGetMethod()!;
+        var envProp = _types.GetProperty(_types.ProcessStartInfo, "Environment")!.GetGetMethod()!;
         var iDictStringString = typeof(IDictionary<string, string?>);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Callvirt, envProp);
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
 
         // foreach (var kvp in envDict) { startInfo.Environment[kvp.Key] = kvp.Value?.ToString() ?? ""; }
         il.Emit(OpCodes.Ldloc, envDictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, envEnumeratorLocal);
 
         var envLoopStart = il.DefineLabel();
@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, envValNullLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, envValDoneLabel);
         il.MarkLabel(envValNullLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -272,39 +272,39 @@ public partial class RuntimeEmitter
 
         il.BeginExceptionBlock();
 
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
 
         // process.StartInfo = startInfo
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
 
         // process.Start()
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("Start", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
         EmitSyncInputWrite(il, processLocal, __inputES);
 
         // stdout = process.StandardOutput.ReadToEnd()
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardOutput")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stdoutLocal);
 
         // stderr = process.StandardError.ReadToEnd()
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardError")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stderrLocal);
 
         // process.WaitForExit()
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("WaitForExit", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!);
 
         // exitCode = process.ExitCode
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("ExitCode")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, exitCodeLocal);
 
         il.Emit(OpCodes.Leave, afterTryLabel);
@@ -315,7 +315,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Brfalse, skipDisposeLabel);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.IDisposable.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
         il.MarkLabel(skipDisposeLabel);
         il.Emit(OpCodes.Endfinally);
 
@@ -331,11 +331,11 @@ public partial class RuntimeEmitter
         // throw new Exception("Command failed with exit code " + exitCode + ": " + stderr)
         il.Emit(OpCodes.Ldstr, "Command failed with exit code ");
         il.Emit(OpCodes.Ldloca, exitCodeLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, ": ");
         il.Emit(OpCodes.Ldloc, stderrLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noErrorLabel);
@@ -384,28 +384,28 @@ public partial class RuntimeEmitter
 
         // var startInfo = new ProcessStartInfo(command)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, [_types.String])!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         // startInfo.UseShellExecute = false
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardOutput = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardError = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
 
         // startInfo.CreateNoWindow = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
 
         // input = options["input"] as string; RedirectStandardInput = input != null. (#1021)
         var inputLocal = il.DeclareLocal(_types.String);
@@ -418,7 +418,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "input");
         il.Emit(OpCodes.Ldloca, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, noInputOpt);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -428,7 +428,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, inputLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un); // input != null
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardInput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardInput")!.GetSetMethod()!);
 
         // Extract args if provided (args is List<object?>)
         var noArgsLabel = il.DefineLabel();
@@ -446,7 +446,7 @@ public partial class RuntimeEmitter
 
         // Get ArgumentList
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("ArgumentList")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "ArgumentList")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, argListLocal);
 
         // for (int i = 0; i < argsList.Count; i++) { argumentList.Add(argsList[i]?.ToString() ?? ""); }
@@ -459,13 +459,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(argsLoopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, argsLoopEnd);
 
         // var arg = argsList[i]
         il.Emit(OpCodes.Ldloc, argsListLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, tempObjLocal);
 
         // argumentList.Add(arg?.ToString() ?? "")
@@ -475,7 +475,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, argNullLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, argAddLabel);
         il.MarkLabel(argNullLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -508,15 +508,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "cwd");
         il.Emit(OpCodes.Ldloca, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("WorkingDirectory")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "WorkingDirectory")!.GetSetMethod()!);
 
         il.MarkLabel(noCwdLabel);
 
@@ -525,20 +525,20 @@ public partial class RuntimeEmitter
 
         il.BeginExceptionBlock();
 
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("Start", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
 
         // if (input != null) { process.StandardInput.Write(input); process.StandardInput.Close(); }  (#1021)
         var noInputWrite = il.DefineLabel();
-        var stdinGet = _types.Process.GetProperty("StandardInput")!.GetGetMethod()!;
+        var stdinGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         il.Emit(OpCodes.Ldloc, inputLocal);
         il.Emit(OpCodes.Brfalse, noInputWrite);
         il.Emit(OpCodes.Ldloc, processLocal);
@@ -551,31 +551,31 @@ public partial class RuntimeEmitter
         il.MarkLabel(noInputWrite);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardOutput")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stdoutLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardError")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stderrLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("WaitForExit", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("ExitCode")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, exitCodeLocal);
 
         // Dispose process
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.IDisposable.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
 
         il.Emit(OpCodes.Leave, afterProcessLabel);
 
         // catch (Exception ex) { errorMsg = ex.Message; exitCode = -1; }
         il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, errorMsgLocal);
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Stloc, exitCodeLocal);
@@ -586,7 +586,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(afterProcessLabel);
 
         // Create result dictionary
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // result["stdout"] = stdout
@@ -657,69 +657,69 @@ public partial class RuntimeEmitter
     {
         var startInfoLocal = il.DeclareLocal(_types.ProcessStartInfo);
 
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         // UseShellExecute = false, RedirectStd* = true, CreateNoWindow = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardInput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardInput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
 
         // Platform check
         var notWindowsLabel = il.DefineLabel();
         var afterPlatformLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Call, _types.OSPlatform.GetProperty("Windows")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.RuntimeInformation.GetMethod("IsOSPlatform", [_types.OSPlatform])!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.OSPlatform, "Windows")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RuntimeInformation, "IsOSPlatform", [_types.OSPlatform])!);
         il.Emit(OpCodes.Brfalse, notWindowsLabel);
 
         // Windows: cmd.exe /c command
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "cmd.exe");
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("FileName")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "/c ");
         il.Emit(OpCodes.Ldloc, commandArg);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("Arguments")!.GetSetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "Arguments")!.GetSetMethod()!);
         il.Emit(OpCodes.Br, afterPlatformLabel);
 
         // Unix: /bin/sh -c "command"
         il.MarkLabel(notWindowsLabel);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "/bin/sh");
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("FileName")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldstr, "-c \"");
         il.Emit(OpCodes.Ldloc, commandArg);
         il.Emit(OpCodes.Ldstr, "\"");
         il.Emit(OpCodes.Ldstr, "\\\"");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "\"");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("Arguments")!.GetSetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "Arguments")!.GetSetMethod()!);
 
         il.MarkLabel(afterPlatformLabel);
 
         // new Process { StartInfo = startInfo }
         var processLocal = il.DeclareLocal(_types.Process);
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, processLocal); // leave Process on stack
     }
 
@@ -761,7 +761,7 @@ public partial class RuntimeEmitter
         // Re-derive the start info from the process to apply options.
         var siLocal = il.DeclareLocal(_types.ProcessStartInfo);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, siLocal);
         EmitApplyChildOptions(il, siLocal, optionsLocal);
 
@@ -788,24 +788,24 @@ public partial class RuntimeEmitter
         var startInfoLocal = il.DeclareLocal(_types.ProcessStartInfo);
 
         // startInfo = new ProcessStartInfo()
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardInput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardInput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
 
         // options = arg1 (if dict, the no-args form spawn(cmd, opts)) or arg2.
         var a1 = il.DeclareLocal(_types.Object);
@@ -824,11 +824,11 @@ public partial class RuntimeEmitter
 
         // new Process { StartInfo = startInfo }
         var processLocal = il.DeclareLocal(_types.Process);
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
 
         EmitApplyChildOptions(il, startInfoLocal, optionsLocal);
 
@@ -875,28 +875,28 @@ public partial class RuntimeEmitter
 
         // var startInfo = new ProcessStartInfo(file)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, [_types.String])!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         // startInfo.UseShellExecute = false
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardOutput = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
 
         // startInfo.RedirectStandardError = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
 
         // startInfo.CreateNoWindow = true
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
         var __inputEFS = EmitSyncInputRedirect(il, startInfoLocal, 2);
 
         // Extract args if provided (args is List<object?>)
@@ -913,7 +913,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argsListLocal);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("ArgumentList")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "ArgumentList")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, argListLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -925,12 +925,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(argsLoopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, argsLoopEnd);
 
         il.Emit(OpCodes.Ldloc, argsListLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, tempObjLocal);
 
         il.Emit(OpCodes.Ldloc, argListLocal);
@@ -939,7 +939,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, argNullLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, argAddLabel);
         il.MarkLabel(argNullLabel);
         il.Emit(OpCodes.Ldstr, "");
@@ -971,15 +971,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "cwd");
         il.Emit(OpCodes.Ldloca, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
         il.Emit(OpCodes.Brfalse, noCwdLabel);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldloc, tempObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("WorkingDirectory")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "WorkingDirectory")!.GetSetMethod()!);
 
         il.MarkLabel(noCwdLabel);
 
@@ -988,33 +988,33 @@ public partial class RuntimeEmitter
 
         il.BeginExceptionBlock();
 
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("Start", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
         EmitSyncInputWrite(il, processLocal, __inputEFS);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardOutput")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stdoutLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StandardError")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.TextReader.GetMethod("ReadToEnd")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextReader, "ReadToEnd")!);
         il.Emit(OpCodes.Stloc, stderrLocal);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetMethod("WaitForExit", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!);
 
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("ExitCode")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, exitCodeLocal);
 
         il.Emit(OpCodes.Leave, afterTryLabel);
@@ -1025,7 +1025,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Brfalse, skipDisposeLabel);
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.IDisposable.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
         il.MarkLabel(skipDisposeLabel);
         il.Emit(OpCodes.Endfinally);
 
@@ -1040,11 +1040,11 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "Command failed with exit code ");
         il.Emit(OpCodes.Ldloca, exitCodeLocal);
-        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, ": ");
         il.Emit(OpCodes.Ldloc, stderrLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noErrorLabel);
@@ -1071,24 +1071,24 @@ public partial class RuntimeEmitter
         // execFile(file, args?, options?, callback?)
         var startInfoLocal = il.DeclareLocal(_types.ProcessStartInfo);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ProcessStartInfo.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ProcessStartInfo, [_types.String])!);
         il.Emit(OpCodes.Stloc, startInfoLocal);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("UseShellExecute")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "UseShellExecute")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardOutput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardOutput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardError")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardError")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("RedirectStandardInput")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "RedirectStandardInput")!.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("CreateNoWindow")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "CreateNoWindow")!.GetSetMethod()!);
 
         // Add args from arg1 if it's a List (proper per-arg, not space-join).
         var noArgsLabel = il.DefineLabel();
@@ -1103,7 +1103,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noArgsLabel);
 
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("ArgumentList")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "ArgumentList")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, argListLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -1112,11 +1112,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(argsLoop);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, argsLoopEnd);
         il.Emit(OpCodes.Ldloc, argsListLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, argTmpLocal);
         il.Emit(OpCodes.Ldloc, argListLocal);
         var argNull = il.DefineLabel();
@@ -1124,7 +1124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argTmpLocal);
         il.Emit(OpCodes.Brfalse, argNull);
         il.Emit(OpCodes.Ldloc, argTmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, argAdd);
         il.MarkLabel(argNull);
         il.Emit(OpCodes.Ldstr, "");
@@ -1151,11 +1151,11 @@ public partial class RuntimeEmitter
         EmitSelectCallback(il, [a3, a2, a1], callbackLocal);
 
         var processLocal = il.DeclareLocal(_types.Process);
-        il.Emit(OpCodes.Newobj, _types.Process.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Process, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, processLocal);
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetSetMethod()!);
 
         EmitApplyChildOptions(il, startInfoLocal, optionsLocal);
         EmitBuildChildAndLaunch(il, runtime, processLocal, optionsLocal, callbackLocal, streamed: false);

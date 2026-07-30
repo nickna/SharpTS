@@ -103,7 +103,10 @@ Plan against these numbers, not the originals:
   (Exclude `.codex/`/`.claude/` worktrees from any count.) **Done:**
   `aot-ratchet` job in `ci.yml`; the structured baseline lives in
   `.github/aot-warning-baseline.json`. The first cleanup tranche lowered the
-  inventory from 2,585 to 2,154 distinct warnings. CI pins total, per-code,
+  inventory from 2,585 to 2,154 distinct warnings. The compiler-metadata seam
+  then routed required framework member lookups through `TypeProvider`,
+  lowering it to 858 without broad member annotations (the win-arm64 native
+  image changed by only 12,800 bytes, 0.0136%). CI pins total, per-code,
   per-area, and per-file/code counts, so both increases and category swaps
   fail until the same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained

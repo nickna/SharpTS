@@ -818,7 +818,7 @@ public partial class ILEmitter
         {
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.Object.GetMethod("ToString")!);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisGetProperty);
             SetStackUnknown();
             return;
@@ -1107,7 +1107,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, valueTemp);
             EmitExpression(si.Index);
             EmitBoxIfNeeded(si.Index);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.Object.GetMethod("ToString")!);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
             IL.Emit(OpCodes.Ldloc, valueTemp); // expression result

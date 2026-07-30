@@ -282,7 +282,7 @@ public partial class RuntimeEmitter
 
         // _corkBuffer = new List<object?>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _tsWritableCorkBufferField);
 
         // _highWaterMark = 16384
@@ -349,7 +349,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Ldarg_3); // callback
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         il.Emit(OpCodes.Ldc_I4_0); // return false (matches interpreter)
         il.Emit(OpCodes.Ret);
 
@@ -376,7 +376,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStringLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, chunkSizeLocal);
         il.Emit(OpCodes.Br, afterChunkSizeLabel);
         il.MarkLabel(notStringLabel);
@@ -674,7 +674,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item")!.GetGetMethod()!);
         il.Emit(OpCodes.Castclass, typeof(object[]));
         il.Emit(OpCodes.Stloc, entryLocal);
 
@@ -703,13 +703,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Blt, loopStartLabel);
 
         // _corkBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear")!);
 
         il.MarkLabel(notCorkedLabel);
         il.Emit(OpCodes.Ret);
@@ -746,7 +746,7 @@ public partial class RuntimeEmitter
         // _corkBuffer.Clear()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsWritableCorkBufferField);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Clear")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear")!);
 
         // if (error != null) { _errored = true; emit 'error'; }  (#1030)
         il.Emit(OpCodes.Ldarg_1);

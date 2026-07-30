@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         ctorIL.Emit(OpCodes.Ldstr, "udp6");
-        ctorIL.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        ctorIL.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         ctorIL.Emit(OpCodes.Brfalse, skipUdp6);
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldc_I4, 23); // InterNetworkV6
@@ -506,13 +506,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "address");
         il.Emit(OpCodes.Ldloc, addressLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // dict["family"] = familyStr
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "family");
         il.Emit(OpCodes.Ldloc, familyLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         // dict["port"] = (double)port
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -520,7 +520,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, portLocal);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
     }

@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kpKey);
         il.Emit(OpCodes.Ldstr, "__");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
         il.Emit(OpCodes.Brtrue, copyLoopStart);
 
         // Skip if PDS descriptor present with Enumerable=false. Use the

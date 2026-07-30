@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(afterPropLabel);
 
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // Get or create inner dict
@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloca, innerLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brtrue, foundLabel);
 
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // metadataKey
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
 
         var foundLabel = il.DefineLabel();
@@ -207,7 +207,7 @@ public partial class RuntimeEmitter
         // Check if inner dict contains key
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }
@@ -230,7 +230,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, _reflectMetadataStore);
         il.Emit(OpCodes.Brtrue, storeExistsLabel);
         // Return empty array
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(storeExistsLabel);
@@ -246,13 +246,13 @@ public partial class RuntimeEmitter
 
         // new List<object?>(innerDict.Keys)
         // Actually, iterate and build list
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // Get the Keys collection and iterate
         il.Emit(OpCodes.Ldloc, innerDictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Keys")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys")!.GetGetMethod()!);
         var keysLocal = il.DeclareLocal(typeof(Dictionary<string, object>.KeyCollection));
         il.Emit(OpCodes.Stloc, keysLocal);
 
@@ -275,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloca, enumLocal);
         il.Emit(OpCodes.Call, enumType.GetProperty("Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
@@ -316,7 +316,7 @@ public partial class RuntimeEmitter
         // Remove key from inner dict
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("Remove", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", [_types.String])!);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }

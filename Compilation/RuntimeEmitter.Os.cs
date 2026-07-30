@@ -38,11 +38,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0); // generation = 0 (Gen0)
         il.Emit(OpCodes.Ldc_I4_0); // GCCollectionMode.Default = 0
         il.Emit(OpCodes.Ldc_I4_0); // blocking = false
-        il.Emit(OpCodes.Call, _types.GC.GetMethod("Collect", [_types.Int32, typeof(GCCollectionMode), _types.Boolean])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.GC, "Collect", [_types.Int32, typeof(GCCollectionMode), _types.Boolean])!);
 
         // var info = GC.GetGCMemoryInfo();
         var infoLocal = il.DeclareLocal(typeof(GCMemoryInfo));
-        il.Emit(OpCodes.Call, _types.GC.GetMethod("GetGCMemoryInfo", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.GC, "GetGCMemoryInfo", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, infoLocal);
 
         // return (double)(info.TotalAvailableMemoryBytes - info.MemoryLoadBytes);

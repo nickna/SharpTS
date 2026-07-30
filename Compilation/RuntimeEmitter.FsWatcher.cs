@@ -414,7 +414,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "interval");
         il.Emit(OpCodes.Ldloca, intervalObjLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue")!);
         il.Emit(OpCodes.Pop);
 
         // if (intervalObj is double) interval = (int)(double)intervalObj

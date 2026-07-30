@@ -569,8 +569,8 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Create a new Dictionary<string, object?>
-        var dictCtor = _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!;
-        var addMethod = _types.DictionaryStringObject.GetMethod("Add", [typeof(string), typeof(object)])!;
+        var dictCtor = _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!;
+        var addMethod = _types.GetMethod(_types.DictionaryStringObject, "Add", [typeof(string), typeof(object)])!;
 
         il.Emit(OpCodes.Newobj, dictCtor);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);

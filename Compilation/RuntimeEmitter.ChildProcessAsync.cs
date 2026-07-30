@@ -91,16 +91,16 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitChildProcessAsyncInfra(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
-        _miProcStart = _types.Process.GetMethod("Start", Type.EmptyTypes)!;
-        _miProcIdGet = _types.Process.GetProperty("Id")!.GetGetMethod()!;
-        _miProcStdoutGet = _types.Process.GetProperty("StandardOutput")!.GetGetMethod()!;
-        _miProcStderrGet = _types.Process.GetProperty("StandardError")!.GetGetMethod()!;
-        _miProcExitCodeGet = _types.Process.GetProperty("ExitCode")!.GetGetMethod()!;
-        _miProcHasExitedGet = _types.Process.GetProperty("HasExited")!.GetGetMethod()!;
-        _miProcWaitForExit = _types.Process.GetMethod("WaitForExit", Type.EmptyTypes)!;
-        _miProcWaitForExitMs = _types.Process.GetMethod("WaitForExit", [_types.Int32])!;
-        _miProcKillTree = _types.Process.GetMethod("Kill", [_types.Boolean])!;
-        _miExceptionMessageGet = _types.Exception.GetProperty("Message")!.GetGetMethod()!;
+        _miProcStart = _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!;
+        _miProcIdGet = _types.GetProperty(_types.Process, "Id")!.GetGetMethod()!;
+        _miProcStdoutGet = _types.GetProperty(_types.Process, "StandardOutput")!.GetGetMethod()!;
+        _miProcStderrGet = _types.GetProperty(_types.Process, "StandardError")!.GetGetMethod()!;
+        _miProcExitCodeGet = _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!;
+        _miProcHasExitedGet = _types.GetProperty(_types.Process, "HasExited")!.GetGetMethod()!;
+        _miProcWaitForExit = _types.GetMethod(_types.Process, "WaitForExit", Type.EmptyTypes)!;
+        _miProcWaitForExitMs = _types.GetMethod(_types.Process, "WaitForExit", [_types.Int32])!;
+        _miProcKillTree = _types.GetMethod(_types.Process, "Kill", [_types.Boolean])!;
+        _miExceptionMessageGet = _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!;
         _miDictSet = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object)!;
         _miGetMethodFromHandle = typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!;
 
@@ -142,7 +142,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "stdio");
         il.Emit(OpCodes.Ldloca, tmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, pipe);
 
         // if (tmp is string) strLocal = tmp; else if (tmp is List l) strLocal = l[fd] as string (when fd<count); else pipe
@@ -163,11 +163,11 @@ public partial class RuntimeEmitter
         // if (fd >= list.Count) pipe
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, pipe);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, strLocal);
         il.Emit(OpCodes.Br, haveStr);
@@ -177,7 +177,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveStr);
         // if (strLocal == "inherit") return 1; if (strLocal == "ignore") return 2; else 0
         var notInherit = il.DefineLabel();
-        var strEq = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var strEq = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Ldstr, "inherit");
         il.Emit(OpCodes.Call, strEq);
@@ -217,10 +217,10 @@ public partial class RuntimeEmitter
         var shellPathLocal = il.DeclareLocal(_types.String);
         var tmpLocal = il.DeclareLocal(_types.Object);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var concat2 = _types.String.GetMethod("Concat", [_types.String, _types.String])!;
-        var concat3 = _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!;
-        var fnSet = _types.ProcessStartInfo.GetProperty("FileName")!.GetSetMethod()!;
-        var argSet = _types.ProcessStartInfo.GetProperty("Arguments")!.GetSetMethod()!;
+        var concat2 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!;
+        var concat3 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!;
+        var fnSet = _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetSetMethod()!;
+        var argSet = _types.GetProperty(_types.ProcessStartInfo, "Arguments")!.GetSetMethod()!;
 
         // Redirect each fd unless its stdio mode is 'inherit' (1). options = arg3.
         void SetRedirect(string prop, int fd)
@@ -233,7 +233,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ceq);           // mode == inherit
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ceq);           // redirect = !(mode == inherit)
-            il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty(prop)!.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, prop)!.GetSetMethod()!);
         }
         SetRedirect("RedirectStandardInput", 0);
         SetRedirect("RedirectStandardOutput", 1);
@@ -251,13 +251,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsListLocal);
         il.Emit(OpCodes.Brfalse, noJoin);
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, noJoin);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
         il.Emit(OpCodes.Call, typeof(string).GetMethod("Join", [typeof(string), typeof(object[])])!);
         il.Emit(OpCodes.Call, concat3);
         il.Emit(OpCodes.Stloc, fullCmdLocal);
@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "shell");
         il.Emit(OpCodes.Ldloca, tmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, afterShellOpt);
 
         // if (tmp is bool) useShell = (bool)tmp;
@@ -297,7 +297,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, notStr);          // (string s) on stack
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notStr);          // length 0 → leaves the string; handled below
         il.Emit(OpCodes.Stloc, shellPathLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -316,8 +316,8 @@ public partial class RuntimeEmitter
         // Shell path: platform branch
         var notWindows = il.DefineLabel();
         var afterPlatform = il.DefineLabel();
-        il.Emit(OpCodes.Call, _types.OSPlatform.GetProperty("Windows")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.RuntimeInformation.GetMethod("IsOSPlatform", [_types.OSPlatform])!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.OSPlatform, "Windows")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RuntimeInformation, "IsOSPlatform", [_types.OSPlatform])!);
         il.Emit(OpCodes.Brfalse, notWindows);
         // Windows: FileName = shellPath ?? "cmd.exe"; Arguments = "/d /s /c " + fullCmd
         il.Emit(OpCodes.Ldarg_0);
@@ -339,7 +339,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, fullCmdLocal);
         il.Emit(OpCodes.Ldstr, "\"");
         il.Emit(OpCodes.Ldstr, "\\\"");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "\"");
         il.Emit(OpCodes.Call, concat3);
         il.Emit(OpCodes.Callvirt, argSet);
@@ -362,7 +362,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
         il.Emit(OpCodes.Call, typeof(string).GetMethod("Join", [typeof(string), typeof(object[])])!);
         il.Emit(OpCodes.Callvirt, argSet);
         il.Emit(OpCodes.Br, endLabel);
@@ -375,7 +375,7 @@ public partial class RuntimeEmitter
         var iLocal = il.DeclareLocal(_types.Int32);
         var aTmp = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("ArgumentList")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "ArgumentList")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, argListLocal);
         il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, iLocal);
         var loop = il.DefineLabel();
@@ -383,11 +383,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(loop);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, argsListLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
         il.Emit(OpCodes.Ldloc, argsListLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, aTmp);
         il.Emit(OpCodes.Ldloc, argListLocal);
         var aNull = il.DefineLabel();
@@ -395,7 +395,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, aTmp);
         il.Emit(OpCodes.Brfalse, aNull);
         il.Emit(OpCodes.Ldloc, aTmp);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, aAdd);
         il.MarkLabel(aNull);
         il.Emit(OpCodes.Ldstr, "");
@@ -436,7 +436,7 @@ public partial class RuntimeEmitter
 
         var ctor = t.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object, _types.Object]);
         var cil = ctor.GetILGenerator();
-        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_1); cil.Emit(OpCodes.Stfld, _childPushStream);
         cil.Emit(OpCodes.Ldarg_0); cil.Emit(OpCodes.Ldarg_2); cil.Emit(OpCodes.Stfld, _childPushChunk);
         cil.Emit(OpCodes.Ret);
@@ -487,7 +487,7 @@ public partial class RuntimeEmitter
         var ctor = t.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
-        cil.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         cil.Emit(OpCodes.Ret);
         _childCtxCtor = ctor;
 
@@ -610,7 +610,7 @@ public partial class RuntimeEmitter
     private void EmitNewErrorObject(ILGenerator il, Action emitMessage, Action? emitCode)
     {
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "message");
@@ -785,8 +785,8 @@ public partial class RuntimeEmitter
                 {
                     il.Emit(OpCodes.Ldstr, "Command failed with exit code ");
                     il.Emit(OpCodes.Ldloca, codeLocal);
-                    il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
-                    il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+                    il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+                    il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
                 },
                 () => { il.Emit(OpCodes.Ldloc, codeLocal); il.Emit(OpCodes.Conv_R8); il.Emit(OpCodes.Box, _types.Double); }));
         il.MarkLabel(zeroCode);
@@ -1078,7 +1078,7 @@ public partial class RuntimeEmitter
         var readerLocal = il.DeclareLocal(_types.TextReader);
         var bufLocal = il.DeclareLocal(typeof(char[]));
         var nLocal = il.DeclareLocal(_types.Int32);
-        var readMethod = _types.TextReader.GetMethod("Read", [typeof(char[]), _types.Int32, _types.Int32])!;
+        var readMethod = _types.GetMethod(_types.TextReader, "Read", [typeof(char[]), _types.Int32, _types.Int32])!;
         var newStr = typeof(string).GetConstructor([typeof(char[]), _types.Int32, _types.Int32])!;
         var afterTry = il.DefineLabel();
 
@@ -1180,7 +1180,7 @@ public partial class RuntimeEmitter
     {
         var il = _childCtxStdinWrite.GetILGenerator();
         var afterWrite = il.DefineLabel();
-        var swGet = _types.Process.GetProperty("StandardInput")!.GetGetMethod()!;
+        var swGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         var swWrite = typeof(System.IO.TextWriter).GetMethod("Write", [_types.String])!;
         var swFlush = typeof(System.IO.TextWriter).GetMethod("Flush", Type.EmptyTypes)!;
 
@@ -1196,7 +1196,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, wLocal);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Callvirt, swWrite);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Callvirt, swFlush);
@@ -1221,7 +1221,7 @@ public partial class RuntimeEmitter
     {
         var il = _childCtxStdinEnd.GetILGenerator();
         var afterEnd = il.DefineLabel();
-        var swGet = _types.Process.GetProperty("StandardInput")!.GetGetMethod()!;
+        var swGet = _types.GetProperty(_types.Process, "StandardInput")!.GetGetMethod()!;
         var swWrite = typeof(System.IO.TextWriter).GetMethod("Write", [_types.String])!;
         var swClose = typeof(System.IO.TextWriter).GetMethod("Close", Type.EmptyTypes)!;
 
@@ -1236,7 +1236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skip);
         il.Emit(OpCodes.Ldloc, wLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Callvirt, swWrite);
         il.MarkLabel(skip);
         il.Emit(OpCodes.Ldloc, wLocal);
@@ -1294,7 +1294,7 @@ public partial class RuntimeEmitter
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
         var doneLabel = il.DefineLabel();
-        var tryGet = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
 
         // dict = options as Dictionary; if null, done.
         il.Emit(OpCodes.Ldloc, optionsObjLocal);
@@ -1314,8 +1314,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noCwd);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Ldloc, tmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
-        il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("WorkingDirectory")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "WorkingDirectory")!.GetSetMethod()!);
         il.MarkLabel(noCwd);
 
         // env
@@ -1334,14 +1334,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, envDictLocal);
         il.Emit(OpCodes.Brfalse, noEnv);
 
-        var envProp = _types.ProcessStartInfo.GetProperty("Environment")!.GetGetMethod()!;
+        var envProp = _types.GetProperty(_types.ProcessStartInfo, "Environment")!.GetGetMethod()!;
         var iDictStringString = typeof(IDictionary<string, string?>);
         il.Emit(OpCodes.Ldloc, startInfoLocal);
         il.Emit(OpCodes.Callvirt, envProp);
         il.Emit(OpCodes.Callvirt, typeof(ICollection<KeyValuePair<string, string?>>).GetMethod("Clear")!);
 
         il.Emit(OpCodes.Ldloc, envDictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, envEnumLocal);
         var envLoop = il.DefineLabel();
         var envLoopEnd = il.DefineLabel();
@@ -1363,7 +1363,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tmpLocal);
         il.Emit(OpCodes.Brfalse, valNull);
         il.Emit(OpCodes.Ldloc, tmpLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Br, valDone);
         il.MarkLabel(valNull);
         il.Emit(OpCodes.Ldstr, "");
@@ -1385,7 +1385,7 @@ public partial class RuntimeEmitter
     {
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
-        var tryGet = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldc_R8, 0.0);
@@ -1494,7 +1494,7 @@ public partial class RuntimeEmitter
         EmitStoreEncodingFields(il, ctxLocal, optionsLocal);
 
         // dict = new Dictionary<string,object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // pid = 0.0, killed = false, connected = false, exitCode = null, signalCode = null
@@ -1555,8 +1555,8 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldloc, exLocal);
                 il.Emit(OpCodes.Ldloc, processLocal);
-                il.Emit(OpCodes.Callvirt, _types.Process.GetProperty("StartInfo")!.GetGetMethod()!);
-                il.Emit(OpCodes.Callvirt, _types.ProcessStartInfo.GetProperty("FileName")!.GetGetMethod()!);
+                il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "StartInfo")!.GetGetMethod()!);
+                il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ProcessStartInfo, "FileName")!.GetGetMethod()!);
                 il.Emit(OpCodes.Ldstr, "spawn");
                 il.Emit(OpCodes.Call, _childSpawnError);
             });
@@ -1637,7 +1637,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, stdinDone);
         il.MarkLabel(stdinPipe);
         var stdinLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, stdinLocal);
         EmitDictSet(il, stdinLocal, "writable", () => { il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Box, _types.Boolean); });
         EmitDictSet(il, stdinLocal, "write", () => EmitTSFunc(il, runtime, () => il.Emit(OpCodes.Ldloc, ctxLocal), _childCtxStdinWrite));
@@ -1678,8 +1678,8 @@ public partial class RuntimeEmitter
         var encStr = il.DeclareLocal(_types.String);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
-        var tryGet = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
-        var strEq = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var tryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var strEq = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Stloc, encStr);
@@ -1721,7 +1721,7 @@ public partial class RuntimeEmitter
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
         var resultLocal = il.DeclareLocal(_types.Boolean);
-        var tryGet = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg, argIdx);
@@ -1743,7 +1743,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.Int32);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var tmpLocal = il.DeclareLocal(_types.Object);
-        var tryGet = _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var tryGet = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Ldc_I4, 1048576);
@@ -1853,8 +1853,8 @@ public partial class RuntimeEmitter
         _childSpawnError = m;
         var il = m.GetILGenerator();
         var w32 = typeof(System.ComponentModel.Win32Exception);
-        var concat3 = _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!;
-        var concat2 = _types.String.GetMethod("Concat", [_types.String, _types.String])!;
+        var concat3 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!;
+        var concat2 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!;
         var prefixLocal = il.DeclareLocal(_types.String);   // "syscall command"
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var wLocal = il.DeclareLocal(w32);
@@ -1876,7 +1876,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, concat3);
         il.Emit(OpCodes.Stloc, prefixLocal);
 
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
         void Set(string key, Action v) { il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, key); v(); il.Emit(OpCodes.Callvirt, _miDictSet); }
         Set("message", () => { il.Emit(OpCodes.Ldloc, prefixLocal); il.Emit(OpCodes.Ldstr, " ENOENT"); il.Emit(OpCodes.Call, concat2); });
@@ -1885,8 +1885,8 @@ public partial class RuntimeEmitter
         {
             var unix = il.DefineLabel();
             var done = il.DefineLabel();
-            il.Emit(OpCodes.Call, _types.OSPlatform.GetProperty("Windows")!.GetGetMethod()!);
-            il.Emit(OpCodes.Call, _types.RuntimeInformation.GetMethod("IsOSPlatform", [_types.OSPlatform])!);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.OSPlatform, "Windows")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.RuntimeInformation, "IsOSPlatform", [_types.OSPlatform])!);
             il.Emit(OpCodes.Brfalse, unix);
             il.Emit(OpCodes.Ldc_R8, -4058.0); il.Emit(OpCodes.Br, done);
             il.MarkLabel(unix); il.Emit(OpCodes.Ldc_R8, -2.0);
@@ -1899,7 +1899,7 @@ public partial class RuntimeEmitter
 
         // generic: { message: ((Exception)exObj).Message }
         il.MarkLabel(generic);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, dictLocal); il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, _types.Exception); il.Emit(OpCodes.Callvirt, _miExceptionMessageGet);

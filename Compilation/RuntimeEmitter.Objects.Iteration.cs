@@ -281,7 +281,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStrLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         {
             var strLocal = il.DeclareLocal(_types.String);
@@ -309,7 +309,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, cLocal);
             il.Emit(OpCodes.Ldloca, cLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
             il.Emit(OpCodes.Ldloc, sIdxLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -329,11 +329,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, reflectionLabel);
 
         // Create result list and add all values from dictionary
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         var dictLoopStart = il.DefineLabel();
@@ -341,12 +341,12 @@ public partial class RuntimeEmitter
         var valDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         il.MarkLabel(dictLoopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, dictLoopEnd);
 
         // current = enumerator.Current
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // ECMA-262 §20.1.2.23 EnumerableOwnProperties: skip a key whose installed
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         var valIncludeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, valDescLocal);
         il.Emit(OpCodes.Ldloc, valDescLocal);
@@ -370,13 +370,13 @@ public partial class RuntimeEmitter
         // result.Add(current.Value)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, dictLoopStart);
 
         il.MarkLabel(dictLoopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // PDS-only enumerable own properties (accessor-only created via
         // defineProperty without backing-dict write). Iterate the extra-keys
@@ -395,16 +395,16 @@ public partial class RuntimeEmitter
         il.MarkLabel(pdsLoopStartV);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxV);
         il.Emit(OpCodes.Ldloc, pdsKeysListV);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
         il.Emit(OpCodes.Bge, pdsLoopEndV);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, pdsKeysListV);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxV);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxV);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -427,7 +427,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, listType);
         il.Emit(OpCodes.Brfalse, notListLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         {
             var listIterLocal = il.DeclareLocal(listType);
@@ -444,12 +444,12 @@ public partial class RuntimeEmitter
             il.MarkLabel(loopStart);
             il.Emit(OpCodes.Ldloc, iLocal);
             il.Emit(OpCodes.Ldloc, listIterLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, loopEnd);
 
             il.Emit(OpCodes.Ldloc, listIterLocal);
             il.Emit(OpCodes.Ldloc, iLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Stloc, elemLocal);
 
             // Skip holes.
@@ -460,7 +460,7 @@ public partial class RuntimeEmitter
             // result.Add(elem);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, elemLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
 
             il.MarkLabel(advance);
             il.Emit(OpCodes.Ldloc, iLocal);
@@ -487,16 +487,16 @@ public partial class RuntimeEmitter
             il.MarkLabel(pdsValStart);
             il.Emit(OpCodes.Ldloc, iLocal3);
             il.Emit(OpCodes.Ldloc, valPdsKeysLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, pdsValEnd);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, valPdsKeysLocal);
             il.Emit(OpCodes.Ldloc, iLocal3);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, iLocal3);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -517,7 +517,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFnForValuesLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
@@ -533,16 +533,16 @@ public partial class RuntimeEmitter
             il.MarkLabel(loopStart2);
             il.Emit(OpCodes.Ldloc, iLocal2);
             il.Emit(OpCodes.Ldloc, fnValsKeysLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, loopEnd2);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, fnValsKeysLocal);
             il.Emit(OpCodes.Ldloc, iLocal2);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, iLocal2);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -554,7 +554,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForValuesLabel);
 
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         // $IHasFields supports class-instance key/value storage.
         il.Emit(OpCodes.Ldarg_0);
@@ -569,28 +569,28 @@ public partial class RuntimeEmitter
 
         // Iterate _fields and add values
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "GetEnumerator")!);
         var fieldsDictEnumeratorLocal = il.DeclareLocal(enumeratorType);
         il.Emit(OpCodes.Stloc, fieldsDictEnumeratorLocal);
 
         il.MarkLabel(fieldsLoopStart);
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, fieldsLoopEnd);
 
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, fieldsLoopStart);
 
         il.MarkLabel(fieldsLoopEnd);
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // $TSObject literal accessors: iterate _getters keys, call
         // GetProperty(obj, key) (which fires the getter). Mirrors GetKeys'
@@ -613,17 +613,17 @@ public partial class RuntimeEmitter
         var valGettersEnum = il.DeclareLocal(keysEnumType);
         il.Emit(OpCodes.Ldloc, tsoValGettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, valGettersEnum);
         var valGettersStart = il.DefineLabel();
         var valGettersEnd = il.DefineLabel();
         var valGettersKey = il.DeclareLocal(_types.String);
         il.MarkLabel(valGettersStart);
         il.Emit(OpCodes.Ldloca, valGettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, valGettersEnd);
         il.Emit(OpCodes.Ldloca, valGettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, valGettersKey);
         // PDS enum check
         var valGetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
@@ -643,11 +643,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valGettersKey);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, valGettersStart);
         il.MarkLabel(valGettersEnd);
         il.Emit(OpCodes.Ldloca, valGettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumType, "Dispose")!);
         il.MarkLabel(skipValGetters);
 
         // Symmetric iteration of _setters for setter-only literal accessors.
@@ -662,17 +662,17 @@ public partial class RuntimeEmitter
         var valSettersEnum = il.DeclareLocal(keysEnumType);
         il.Emit(OpCodes.Ldloc, tsoValSettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, keysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, valSettersEnum);
         var valSettersStart = il.DefineLabel();
         var valSettersEnd = il.DefineLabel();
         var valSettersKey = il.DeclareLocal(_types.String);
         il.MarkLabel(valSettersStart);
         il.Emit(OpCodes.Ldloca, valSettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, valSettersEnd);
         il.Emit(OpCodes.Ldloca, valSettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, valSettersKey);
         // Skip if paired getter already added.
         il.Emit(OpCodes.Ldloc, tsoValGettersDict);
@@ -680,7 +680,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipPairCheck);
         il.Emit(OpCodes.Ldloc, tsoValGettersDict);
         il.Emit(OpCodes.Ldloc, valSettersKey);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("ContainsKey")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey")!);
         il.Emit(OpCodes.Brtrue, valSettersStart);
         il.MarkLabel(skipPairCheck);
         // PDS enum check
@@ -700,11 +700,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valSettersKey);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, valSettersStart);
         il.MarkLabel(valSettersEnd);
         il.Emit(OpCodes.Ldloca, valSettersEnum);
-        il.Emit(OpCodes.Call, keysEnumType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(keysEnumType, "Dispose")!);
         il.MarkLabel(skipValSetters);
         il.MarkLabel(notTSObjForVal);
 
@@ -713,7 +713,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -768,7 +768,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStrLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         {
             var strLocal = il.DeclareLocal(_types.String);
@@ -790,13 +790,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bge, sLoopEnd);
             // entry = new List<object?>()
             var sEntry = il.DeclareLocal(listType);
-            il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, sEntry);
             // entry.Add(idx.ToString())
             il.Emit(OpCodes.Ldloc, sEntry);
             il.Emit(OpCodes.Ldloca, sIdxLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
             // entry.Add(str[idx].ToString())
             var sChar = il.DeclareLocal(_types.Char);
             il.Emit(OpCodes.Ldloc, sEntry);
@@ -806,11 +806,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, sChar);
             il.Emit(OpCodes.Ldloca, sChar);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
             // result.Add(entry)
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, sEntry);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
             il.Emit(OpCodes.Ldloc, sIdxLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -830,22 +830,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, reflectionLabel);
 
         // Create result list and add [key, value] entries
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         var dictLoopStart = il.DefineLabel();
         var dictLoopEnd = il.DefineLabel();
         il.MarkLabel(dictLoopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, dictLoopEnd);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // ECMA-262 §20.1.2.5 EnumerableOwnProperties: skip a key whose installed
@@ -856,7 +856,7 @@ public partial class RuntimeEmitter
         var entIncludeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, entDescLocal);
         il.Emit(OpCodes.Ldloc, entDescLocal);
@@ -867,25 +867,25 @@ public partial class RuntimeEmitter
         il.MarkLabel(entIncludeLabel);
 
         // var entry = new List<object?> { kvp.Key, kvp.Value };
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, dictLoopStart);
 
         il.MarkLabel(dictLoopEnd);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // PDS-only enumerable own properties: accessor-only defineProperty
         // entries. Iterate the extra-keys list and append [key, GetProperty(obj,key)]
@@ -904,27 +904,27 @@ public partial class RuntimeEmitter
         il.MarkLabel(pdsLoopStartE);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxE);
         il.Emit(OpCodes.Ldloc, pdsKeysListE);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
         il.Emit(OpCodes.Bge, pdsLoopEndE);
         il.Emit(OpCodes.Ldloc, pdsKeysListE);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxE);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, pdsKeyE);
         // var entry = new List<object?> { key, GetProperty(obj, key) };
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloc, pdsKeyE);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, pdsKeyE);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, pdsKeyIdxE);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -947,7 +947,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, listType);
         il.Emit(OpCodes.Brfalse, notListLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         {
             var listIterLocal = il.DeclareLocal(listType);
@@ -964,12 +964,12 @@ public partial class RuntimeEmitter
             il.MarkLabel(loopStart);
             il.Emit(OpCodes.Ldloc, iLocal);
             il.Emit(OpCodes.Ldloc, listIterLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, loopEnd);
 
             il.Emit(OpCodes.Ldloc, listIterLocal);
             il.Emit(OpCodes.Ldloc, iLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Stloc, elemLocal);
 
             // Skip holes.
@@ -978,18 +978,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, advance);
 
             // entry = new List<object> { i.ToString(), elem }; result.Add(entry);
-            il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, entryLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldloca, iLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldloc, elemLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
 
             il.MarkLabel(advance);
             il.Emit(OpCodes.Ldloc, iLocal);
@@ -1016,26 +1016,26 @@ public partial class RuntimeEmitter
             il.MarkLabel(pdsEntStart);
             il.Emit(OpCodes.Ldloc, iLocal4);
             il.Emit(OpCodes.Ldloc, entPdsKeysLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, pdsEntEnd);
             il.Emit(OpCodes.Ldloc, entPdsKeysLocal);
             il.Emit(OpCodes.Ldloc, iLocal4);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Stloc, keyLocal2);
-            il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, entryLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldloc, keyLocal2);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, keyLocal2);
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, iLocal4);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -1054,7 +1054,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFnForEntriesLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
@@ -1071,26 +1071,26 @@ public partial class RuntimeEmitter
             il.MarkLabel(loopStart2);
             il.Emit(OpCodes.Ldloc, iLocal2);
             il.Emit(OpCodes.Ldloc, fnEntKeysLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Count")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
             il.Emit(OpCodes.Bge, loopEnd2);
             il.Emit(OpCodes.Ldloc, fnEntKeysLocal);
             il.Emit(OpCodes.Ldloc, iLocal2);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Stloc, keyLocal);
-            il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
             il.Emit(OpCodes.Stloc, entryLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldloc, keyLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, keyLocal);
             il.Emit(OpCodes.Call, runtime.GetProperty);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, entryLocal);
-            il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
             il.Emit(OpCodes.Ldloc, iLocal2);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Add);
@@ -1102,7 +1102,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForEntriesLabel);
 
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
@@ -1116,37 +1116,37 @@ public partial class RuntimeEmitter
 
         var fieldsDictEnumeratorLocal = il.DeclareLocal(enumeratorType);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, fieldsDictEnumeratorLocal);
 
         il.MarkLabel(fieldsLoopStart);
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, fieldsLoopEnd);
 
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, fieldsLoopStart);
 
         il.MarkLabel(fieldsLoopEnd);
         il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
-        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // $TSObject literal accessors: iterate _getters keys, append
         // [key, GetProperty(obj, key)] (GetProperty fires the accessor's
@@ -1168,17 +1168,17 @@ public partial class RuntimeEmitter
         var entGettersEnum = il.DeclareLocal(entKeysEnumType);
         il.Emit(OpCodes.Ldloc, tsoEntGettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, entKeysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(entKeysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, entGettersEnum);
         var entGettersStart = il.DefineLabel();
         var entGettersEnd = il.DefineLabel();
         var entGettersKey = il.DeclareLocal(_types.String);
         il.MarkLabel(entGettersStart);
         il.Emit(OpCodes.Ldloca, entGettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(entKeysEnumType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, entGettersEnd);
         il.Emit(OpCodes.Ldloca, entGettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(entKeysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, entGettersKey);
         // PDS enum check
         var entGetterDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
@@ -1194,23 +1194,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, entGettersStart);
         il.MarkLabel(entGetterAddLabel);
         // entry = [key, GetProperty(obj, key)]
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entGettersKey);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, entGettersKey);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, entGettersStart);
         il.MarkLabel(entGettersEnd);
         il.Emit(OpCodes.Ldloca, entGettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(entKeysEnumType, "Dispose")!);
         il.MarkLabel(skipEntGetters);
 
         // Symmetric iteration of _setters for setter-only literal accessors.
@@ -1225,17 +1225,17 @@ public partial class RuntimeEmitter
         var entSettersEnum = il.DeclareLocal(entKeysEnumType);
         il.Emit(OpCodes.Ldloc, tsoEntSettersDict);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Keys").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, entKeysType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(entKeysType, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, entSettersEnum);
         var entSettersStart = il.DefineLabel();
         var entSettersEnd = il.DefineLabel();
         var entSettersKey = il.DeclareLocal(_types.String);
         il.MarkLabel(entSettersStart);
         il.Emit(OpCodes.Ldloca, entSettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(entKeysEnumType, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, entSettersEnd);
         il.Emit(OpCodes.Ldloca, entSettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(entKeysEnumType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, entSettersKey);
         // Skip if paired getter already emitted.
         il.Emit(OpCodes.Ldloc, tsoEntGettersDict);
@@ -1243,7 +1243,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, entSkipPairCheck);
         il.Emit(OpCodes.Ldloc, tsoEntGettersDict);
         il.Emit(OpCodes.Ldloc, entSettersKey);
-        il.Emit(OpCodes.Callvirt, dictType.GetMethod("ContainsKey")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey")!);
         il.Emit(OpCodes.Brtrue, entSettersStart);
         il.MarkLabel(entSkipPairCheck);
         // PDS enum check
@@ -1259,23 +1259,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, entSettersStart);
         il.MarkLabel(entSetterAddLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldloc, entSettersKey);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, entryLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, entSettersKey);
         il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
         il.Emit(OpCodes.Br, entSettersStart);
         il.MarkLabel(entSettersEnd);
         il.Emit(OpCodes.Ldloca, entSettersEnum);
-        il.Emit(OpCodes.Call, entKeysEnumType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(entKeysEnumType, "Dispose")!);
         il.MarkLabel(skipEntSetters);
         il.MarkLabel(notTSObjForEnt);
 
@@ -1284,7 +1284,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 

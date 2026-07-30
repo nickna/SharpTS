@@ -286,7 +286,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // _data = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Brfalse, noInitLabel);
 
         // Iterate over init dictionary entries
-        var getEnumeratorMethod = _types.DictionaryStringObject.GetMethod("GetEnumerator", Type.EmptyTypes)!;
+        var getEnumeratorMethod = _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator", Type.EmptyTypes)!;
         var enumeratorType = getEnumeratorMethod.ReturnType;
         var enumeratorLocal = ctorIL.DeclareLocal(enumeratorType);
 
@@ -384,7 +384,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldstr, "");
         ctorIL.Emit(OpCodes.Br, valueDoneLabel);
         ctorIL.MarkLabel(hasValueLabel);
-        ctorIL.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         ctorIL.Emit(OpCodes.Dup);
         var notNullLabel = ctorIL.DefineLabel();
         ctorIL.Emit(OpCodes.Brtrue, notNullLabel);
@@ -470,7 +470,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "set-cookie");
         il.Emit(OpCodes.Ldc_I4_5); // StringComparison.OrdinalIgnoreCase
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notSetCookieLabel);
 
         // values.Count > 0 ? values[0] : null
@@ -490,7 +490,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notSetCookieLabel);
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloc, valuesLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Ret);
 
         // return null
@@ -686,7 +686,7 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // string value = string.Join(", ", kvp.Value)
@@ -694,7 +694,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // InvokeMethodValue(null, callback, [value, key])
@@ -797,7 +797,7 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // value = string.Join(", ", kvp.Value)
@@ -805,7 +805,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // Add to result based on mode
@@ -869,7 +869,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Br, doneLabel);
         il.MarkLabel(hasArgLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Dup);
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notNullLabel);
@@ -910,7 +910,7 @@ public partial class RuntimeEmitter
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // Store all fields
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -1019,10 +1019,10 @@ public partial class RuntimeEmitter
         var textLocal = il.DeclareLocal(_types.String);
 
         // string text = Encoding.UTF8.GetString(_bodyBytes)
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.ByteArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
         il.Emit(OpCodes.Stloc, textLocal);
 
         // Mark body as consumed
@@ -1054,10 +1054,10 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // string text = Encoding.UTF8.GetString(_bodyBytes)
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _fetchResponseBodyBytesField);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.ByteArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
 
         // Mark body as consumed
         il.Emit(OpCodes.Ldarg_0);
@@ -1356,7 +1356,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_7);
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Castclass, _types.String);
-            il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
             il.Emit(OpCodes.Throw);
 
             il.BeginFinallyBlock();
@@ -1516,7 +1516,7 @@ public partial class RuntimeEmitter
         var cookieContainerProp = _httpClientHandlerType.GetProperty("CookieContainer")!;
         var cookieContainerCtor = _cookieContainerType!.GetConstructor(Type.EmptyTypes)!;
         var timeoutProp = _httpClientType.GetProperty("Timeout")!;
-        var fromSecondsMethod = _types.TimeSpan.GetMethod("FromSeconds", [_types.Double])!;
+        var fromSecondsMethod = _types.GetMethod(_types.TimeSpan, "FromSeconds", [_types.Double])!;
 
         // Local helper: emit the create-and-cache sequence for one of the four field combinations.
         // Note: this is C# code that emits IL, not a runtime helper.
@@ -1660,7 +1660,7 @@ public partial class RuntimeEmitter
             // via CreateException so try/catch can catch it as a JS TypeError.
             gen.Emit(OpCodes.Ldstr, "Invalid URL: ");
             gen.Emit(OpCodes.Ldarg, argIndex);
-            gen.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+            gen.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
             gen.Emit(OpCodes.Newobj, typeErrorCtor);
             gen.Emit(OpCodes.Call, runtime.CreateException);
             gen.Emit(OpCodes.Throw);
@@ -1831,12 +1831,12 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Ldc_I4, (int)'.');
                 il.Emit(OpCodes.Stelem_I2);
-                il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimStart", [typeof(char[])])!);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimStart", [typeof(char[])])!);
                 il.Emit(OpCodes.Stloc, hostLocal);
 
                 // if (string.IsNullOrEmpty(host)) continue;
                 il.Emit(OpCodes.Ldloc, hostLocal);
-                il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrEmpty", [_types.String])!);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!);
                 il.Emit(OpCodes.Brtrue, phase2Start);
 
                 // try { _cookieContainer.GetCookieHeader(new Uri("http://" + host + "/")); } catch { }
@@ -1845,7 +1845,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldstr, "http://");
                 il.Emit(OpCodes.Ldloc, hostLocal);
                 il.Emit(OpCodes.Ldstr, "/");
-                il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
                 il.Emit(OpCodes.Newobj, typeof(Uri).GetConstructor([_types.String])!);
                 il.Emit(OpCodes.Callvirt, getCookieHeaderMethod);
                 il.Emit(OpCodes.Pop);
@@ -2234,7 +2234,7 @@ public partial class RuntimeEmitter
         var lowerKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloca, hdrKvpLocal);
         il.Emit(OpCodes.Call, hdrKvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, lowerKeyLocal);
 
         // if (lowerKey == "set-cookie") store as List<string>; else store joined string.
@@ -2262,7 +2262,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloca, hdrKvpLocal);
         il.Emit(OpCodes.Call, hdrKvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         il.MarkLabel(afterStoreLabel);
@@ -2311,11 +2311,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, headersLocal);
         il.Emit(OpCodes.Ldloca, chdrKvpLocal);
         il.Emit(OpCodes.Call, hdrKvpType.GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloca, chdrKvpLocal);
         il.Emit(OpCodes.Call, hdrKvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         il.Emit(OpCodes.Br, chdrLoopStart);
@@ -2409,8 +2409,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_7);
         il.Emit(OpCodes.Ldstr, "fetch failed: ");
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, _types.Exception.GetProperty("Message")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Stelem_Ref);
 
         il.Emit(OpCodes.Leave, endLabel);
@@ -2510,7 +2510,7 @@ public partial class RuntimeEmitter
         var hNotCtLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, hKeyLocal);
         il.Emit(OpCodes.Ldstr, "Content-Type");
-        var stringEqualsMethod = _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!;
+        var stringEqualsMethod = _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!;
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
         il.Emit(OpCodes.Call, stringEqualsMethod);
         il.Emit(OpCodes.Brfalse, hNotCtLabel);
@@ -2523,7 +2523,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ", ");
         il.Emit(OpCodes.Ldloca, hKvpLocal);
         il.Emit(OpCodes.Call, hKvpType.GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!);
         il.Emit(OpCodes.Stloc, hValueLocal);
 
         // request.Headers.TryAddWithoutValidation(key, value)
@@ -2553,7 +2553,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isDictLabel);
 
         // Get enumerator: var enumerator = headers.GetEnumerator()
-        var getEnumeratorMethod = _types.DictionaryStringObject.GetMethod("GetEnumerator", Type.EmptyTypes)!;
+        var getEnumeratorMethod = _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator", Type.EmptyTypes)!;
         var enumeratorType = getEnumeratorMethod.ReturnType;
         var enumeratorLocal = il.DeclareLocal(enumeratorType);
 
@@ -2591,7 +2591,7 @@ public partial class RuntimeEmitter
         var notContentTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldstr, "Content-Type");
-        var stringEqualsOrdinalIgnoreCase = _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!;
+        var stringEqualsOrdinalIgnoreCase = _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!;
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
         il.Emit(OpCodes.Call, stringEqualsOrdinalIgnoreCase);
         il.Emit(OpCodes.Brfalse, notContentTypeLabel);
@@ -2758,7 +2758,7 @@ public partial class RuntimeEmitter
     {
         var regexType = typeof(System.Text.RegularExpressions.Regex);
         var isMatch = regexType.GetMethod("IsMatch", [_types.String, _types.String])!;
-        var objToString = _types.Object.GetMethod("ToString", Type.EmptyTypes)!;
+        var objToString = _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!;
 
         void EmitThrowTypeError(ILGenerator il, string message, string code)
         {
@@ -3375,7 +3375,7 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // _url = url?.ToString() ?? ""
         var urlLocal = il.DeclareLocal(_types.String);
@@ -3412,8 +3412,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipMethod);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToUpperInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToUpperInvariant")!);
         il.Emit(OpCodes.Stfld, _requestMethodField);
         il.MarkLabel(skipMethod);
 
@@ -3493,7 +3493,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasBody);
         il.Emit(OpCodes.Ldloc, bodyLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
 
         il.MarkLabel(done);
         // Mark consumed
@@ -3527,7 +3527,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasBody);
         il.Emit(OpCodes.Ldloc, bodyLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
 
         il.MarkLabel(done);
         il.Emit(OpCodes.Call, runtime.JsonParse);
@@ -3562,10 +3562,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasBody);
         // Encoding.UTF8.GetBytes(body.ToString())
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, bodyLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.ByteArray])!.DeclaringType!
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!.DeclaringType!
             .GetMethod("GetBytes", [_types.String])!);
 
         il.MarkLabel(done);
@@ -3650,7 +3650,7 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // Defaults
         il.Emit(OpCodes.Ldarg_0);
@@ -3685,10 +3685,10 @@ public partial class RuntimeEmitter
 
         // body != null: Encoding.UTF8.GetBytes(body.ToString())
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stfld, _responseBodyBytesField);
         il.Emit(OpCodes.Br, bodyDone);
 
@@ -3752,7 +3752,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipST);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, stLocal);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _responseStatusTextField);
         il.MarkLabel(skipST);
 
@@ -3838,10 +3838,10 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("text", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.ByteArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -3856,10 +3856,10 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod("json", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
 
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _responseBodyBytesField);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.ByteArray])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.ByteArray])!);
         il.Emit(OpCodes.Call, runtime.JsonParse);
 
         il.Emit(OpCodes.Ldarg_0);

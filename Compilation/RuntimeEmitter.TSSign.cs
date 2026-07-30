@@ -96,19 +96,19 @@ public partial class RuntimeEmitter
         // Normalize encoding to lowercase
         var encodingLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check for "hex"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, hexLabel);
 
         // Check for "base64"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, base64Label);
 
         // Default to Buffer
@@ -118,7 +118,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldloc, signatureBytesLocal);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Br, endLabel);
 
         // base64: Convert.ToBase64String(bytes)

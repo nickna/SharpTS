@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
-        il.Emit(OpCodes.Call, _types.BigInteger.GetMethod("op_Equality", [_types.BigInteger, _types.BigInteger])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Equality", [_types.BigInteger, _types.BigInteger])!);
         il.Emit(OpCodes.Ret);
 
         // Check for Symbol - use reference equality
@@ -149,7 +149,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(useValueEqualityLabel);
         il.Emit(OpCodes.Ldarg_1);  // x
         il.Emit(OpCodes.Ldarg_2);  // y
-        il.Emit(OpCodes.Call, _types.Object.GetMethod("Equals", [_types.Object, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", [_types.Object, _types.Object])!);
         il.Emit(OpCodes.Ret);
 
         // Return true

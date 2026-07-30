@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
 
         // _pending = new ConcurrentQueue<object>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ConcurrentQueueOfObject.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ConcurrentQueueOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _messagePortPendingField);
 
         // Not refed at construction — an unstarted port must not keep the
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _messagePortPendingField);
         il.Emit(OpCodes.Ldloca, msgLocal);
-        il.Emit(OpCodes.Callvirt, _types.ConcurrentQueueOfObject.GetMethod("TryDequeue", [_types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "TryDequeue", [_types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, exitLabel);
 
         // A clone-failure sentinel (from postMessage of an uncloneable value) is
@@ -413,7 +413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, partnerLocal);
         il.Emit(OpCodes.Ldfld, _messagePortPendingField);
         il.Emit(OpCodes.Ldloc, clonedLocal);
-        il.Emit(OpCodes.Callvirt, _types.ConcurrentQueueOfObject.GetMethod("Enqueue", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConcurrentQueueOfObject, "Enqueue", [_types.Object])!);
 
         // var cb = partner._onEnqueue; if (cb != null) cb();
         // Wakes a bridge-driven partner (an interpreter worker that adopted this port

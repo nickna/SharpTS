@@ -836,7 +836,7 @@ public partial class RuntimeEmitter
 
         // Get enumerator
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStart);
@@ -2229,7 +2229,7 @@ public partial class RuntimeEmitter
         var dictLoopEnd = il.DefineLabel();
         il.MarkLabel(dictLoopStart);
         il.Emit(OpCodes.Ldloca, dictEnumLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DictionaryStringObjectEnumerator, "MoveNext")!);
         il.Emit(OpCodes.Brfalse, dictLoopEnd);
 
         // if (!first) sb.Append(",")
@@ -2247,7 +2247,7 @@ public partial class RuntimeEmitter
         // Get current key-value pair
         var kvpLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
         il.Emit(OpCodes.Ldloca, dictEnumLocal);
-        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DictionaryStringObjectEnumerator, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, kvpLocal);
 
         // sb.Append("\"").Append(key).Append("\":").Append(FormatAsJson(value))
@@ -2255,13 +2255,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "\"");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, _types.KeyValuePairStringObject.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Ldstr, "\":");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         // Append FormatAsJson(value)
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, _types.KeyValuePairStringObject.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, method); // Recursive call
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);

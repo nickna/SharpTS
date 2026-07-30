@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1); // DateTimeKind.Utc
-        il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [
             _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stsfld, _tsDateUnixEpochField);
@@ -148,11 +148,11 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // _utcDateTime = DateTime.UtcNow
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.DateTime.GetProperty("UtcNow")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, "UtcNow")!.GetGetMethod()!);
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
 
         // _isInvalid = false
@@ -179,15 +179,15 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // Check for NaN or Infinity
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN")!);
         il.Emit(OpCodes.Brtrue, invalidLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsInfinity")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity")!);
         il.Emit(OpCodes.Brtrue, invalidLabel);
 
         // Check range: -8640000000000000 to 8640000000000000
@@ -207,7 +207,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, epochLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMilliseconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
 
         // _isInvalid = false
@@ -244,11 +244,11 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // if (string.IsNullOrWhiteSpace(isoString)) goto invalid
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrWhiteSpace")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrWhiteSpace")!);
         il.Emit(OpCodes.Brtrue, invalidLabel);
 
         // Try DateTime.TryParse with RoundtripKind
@@ -256,13 +256,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)(DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces));
         il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("TryParse", [_types.String, typeof(IFormatProvider), typeof(DateTimeStyles), _types.DateTime.MakeByRefType()])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "TryParse", [_types.String, typeof(IFormatProvider), typeof(DateTimeStyles), _types.DateTime.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, invalidLabel);
 
         // Convert to UTC if needed: result.Kind == Utc ? result : result.ToUniversalTime()
         var notUtcLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetProperty("Kind")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, "Kind")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_1); // DateTimeKind.Utc
         il.Emit(OpCodes.Bne_Un, notUtcLabel);
 
@@ -276,7 +276,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notUtcLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToUniversalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
 
         // _isInvalid = false
@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
 
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
         // Begin try block
         il.BeginExceptionBlock();
@@ -348,7 +348,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_2); // DateTimeKind.Local
-        il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [
             _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, baseDateLocal);
@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
         // localDateTime = baseDate.AddMonths(month).AddDays(day-1).AddHours(hours).AddMinutes(minutes).AddSeconds(seconds).AddMilliseconds(milliseconds)
         il.Emit(OpCodes.Ldloca, baseDateLocal);
         il.Emit(OpCodes.Ldarg_2); // month
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMonths")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMonths")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
@@ -364,37 +364,37 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddDays")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddDays")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
         il.Emit(OpCodes.Ldarg_S, (byte)4); // hours
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddHours")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddHours")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
         il.Emit(OpCodes.Ldarg_S, (byte)5); // minutes
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMinutes")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMinutes")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
         il.Emit(OpCodes.Ldarg_S, (byte)6); // seconds
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddSeconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddSeconds")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
         il.Emit(OpCodes.Ldarg_S, (byte)7); // milliseconds
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMilliseconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
         il.Emit(OpCodes.Stloc, localDateTimeLocal);
 
         // _utcDateTime = localDateTime.ToUniversalTime()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, localDateTimeLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToUniversalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
 
         // _isInvalid = false
@@ -433,7 +433,7 @@ public partial class RuntimeEmitter
         var unixEpochLocal = il.DeclareLocal(_types.DateTime);
 
         // DateTime.UtcNow
-        il.Emit(OpCodes.Call, _types.DateTime.GetProperty("UtcNow")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, "UtcNow")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, utcNowLocal);
 
         // UnixEpoch
@@ -443,13 +443,13 @@ public partial class RuntimeEmitter
         // Subtract: utcNow - unixEpoch
         il.Emit(OpCodes.Ldloc, utcNowLocal);
         il.Emit(OpCodes.Ldloc, unixEpochLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("op_Subtraction", [_types.DateTime, _types.DateTime])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "op_Subtraction", [_types.DateTime, _types.DateTime])!);
 
         // .TotalMilliseconds
         var timeSpanLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, timeSpanLocal);
         il.Emit(OpCodes.Ldloca, timeSpanLocal);
-        il.Emit(OpCodes.Call, _types.TimeSpan.GetProperty("TotalMilliseconds")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.TimeSpan, "TotalMilliseconds")!.GetGetMethod()!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -522,7 +522,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1); // DateTimeKind.Utc
-        il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [
             _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, cur);
@@ -537,11 +537,11 @@ public partial class RuntimeEmitter
         // result = (cur - UnixEpoch).TotalMilliseconds
         il.Emit(OpCodes.Ldloc, cur);
         il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("op_Subtraction", [_types.DateTime, _types.DateTime])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "op_Subtraction", [_types.DateTime, _types.DateTime])!);
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
         il.Emit(OpCodes.Ldloca, tsLocal);
-        il.Emit(OpCodes.Call, _types.TimeSpan.GetProperty("TotalMilliseconds")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.TimeSpan, "TotalMilliseconds")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Leave, afterTry);
 
@@ -578,7 +578,7 @@ public partial class RuntimeEmitter
         }
         if (asDouble)
             il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod(addMethod)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, addMethod)!);
         il.Emit(OpCodes.Stloc, cur);
     }
 
@@ -609,7 +609,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Stloc, tmp);
         il.Emit(OpCodes.Ldloc, tmp);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
         il.Emit(OpCodes.Brfalse, nanLabel);
         il.Emit(OpCodes.Ldloc, tmp);
         il.Emit(OpCodes.Conv_I4);
@@ -664,11 +664,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Ldsfld, _tsDateUnixEpochField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("op_Subtraction", [_types.DateTime, _types.DateTime])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "op_Subtraction", [_types.DateTime, _types.DateTime])!);
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
         il.Emit(OpCodes.Ldloca, tsLocal);
-        il.Emit(OpCodes.Call, _types.TimeSpan.GetProperty("TotalMilliseconds")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.TimeSpan, "TotalMilliseconds")!.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -739,11 +739,11 @@ public partial class RuntimeEmitter
             var localTimeLocal = il.DeclareLocal(_types.DateTime);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-            il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
             il.Emit(OpCodes.Stloc, localTimeLocal);
             il.Emit(OpCodes.Ldloca, localTimeLocal);
         }
-        il.Emit(OpCodes.Call, _types.DateTime.GetProperty(propertyName)!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, propertyName)!.GetGetMethod()!);
         if (subtractAfter != 0)
         {
             il.Emit(OpCodes.Ldc_I4, subtractAfter);
@@ -781,7 +781,7 @@ public partial class RuntimeEmitter
         var tsLocal = il.DeclareLocal(_types.TimeSpan);
         il.Emit(OpCodes.Stloc, tsLocal);
         il.Emit(OpCodes.Ldloca, tsLocal);
-        il.Emit(OpCodes.Call, _types.TimeSpan.GetProperty("TotalMinutes")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.TimeSpan, "TotalMinutes")!.GetGetMethod()!);
         il.Emit(OpCodes.Neg);
         il.Emit(OpCodes.Ret);
     }
@@ -803,11 +803,11 @@ public partial class RuntimeEmitter
 
         // Check for NaN/Infinity/out of range
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN")!);
         il.Emit(OpCodes.Brtrue, invalidLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsInfinity")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity")!);
         il.Emit(OpCodes.Brtrue, invalidLabel);
 
         il.Emit(OpCodes.Ldarg_1);
@@ -826,7 +826,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, epochLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMilliseconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -898,7 +898,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-            il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
             il.Emit(OpCodes.Stloc, dtLocal);
         }
 
@@ -912,7 +912,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0); // minute
         il.Emit(OpCodes.Ldc_I4_0); // second
         il.Emit(OpCodes.Ldc_I4, kind);
-        il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [
             _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, cur);
@@ -920,7 +920,7 @@ public partial class RuntimeEmitter
         // cur = cur.AddMonths(month0)   (month0 = 0-indexed month to add)
         il.Emit(OpCodes.Ldloca, cur);
         PushDateComponentValue(il, dtLocal, settable, multi, DateComponent.Month, "Month", 1);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMonths")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMonths")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // cur = cur.AddDays(day - 1)
@@ -929,35 +929,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddDays")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddDays")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // cur = cur.AddHours(hour)
         il.Emit(OpCodes.Ldloca, cur);
         PushDateComponentValue(il, dtLocal, settable, multi, DateComponent.Hour, "Hour", 0);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddHours")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddHours")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // cur = cur.AddMinutes(minute)
         il.Emit(OpCodes.Ldloca, cur);
         PushDateComponentValue(il, dtLocal, settable, multi, DateComponent.Minute, "Minute", 0);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMinutes")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMinutes")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // cur = cur.AddSeconds(second)
         il.Emit(OpCodes.Ldloca, cur);
         PushDateComponentValue(il, dtLocal, settable, multi, DateComponent.Second, "Second", 0);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddSeconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddSeconds")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // cur = cur.AddMilliseconds(millisecond)
         il.Emit(OpCodes.Ldloca, cur);
         PushDateComponentValue(il, dtLocal, settable, multi, DateComponent.Millisecond, "Millisecond", 0);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("AddMilliseconds")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "AddMilliseconds")!);
         il.Emit(OpCodes.Stloc, cur);
 
         // _utcDateTime = utc ? cur : cur.ToUniversalTime();
@@ -969,7 +969,7 @@ public partial class RuntimeEmitter
         else
         {
             il.Emit(OpCodes.Ldloca, cur);
-            il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToUniversalTime")!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToUniversalTime")!);
         }
         il.Emit(OpCodes.Stfld, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Leave, endLabel);
@@ -1053,7 +1053,7 @@ public partial class RuntimeEmitter
     private void PushCurrentDateComponent(ILGenerator il, LocalBuilder dtLocal, string propertyName, int subtract)
     {
         il.Emit(OpCodes.Ldloca, dtLocal);
-        il.Emit(OpCodes.Call, _types.DateTime.GetProperty(propertyName)!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, propertyName)!.GetGetMethod()!);
         if (subtract != 0)
         {
             il.Emit(OpCodes.Ldc_I4, subtract);
@@ -1134,7 +1134,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Ldstr, "ddd, dd MMM yyyy HH:mm:ss 'GMT'");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1157,12 +1157,12 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
         il.Emit(OpCodes.Ldloca, localTimeLocal);
         il.Emit(OpCodes.Ldstr, format);
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("CurrentCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1190,13 +1190,13 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localTimeLocal);
         il.Emit(OpCodes.Ldstr, "ddd MMM dd yyyy HH:mm:ss");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1217,7 +1217,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsDateIsInvalidField);
         il.Emit(OpCodes.Brfalse, validLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid Date");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(validLabel);
@@ -1225,7 +1225,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Ldstr, "yyyy-MM-ddTHH:mm:ss.fffZ");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1252,13 +1252,13 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localTimeLocal);
         il.Emit(OpCodes.Ldstr, "ddd MMM dd yyyy");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1285,13 +1285,13 @@ public partial class RuntimeEmitter
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToLocalTime")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localTimeLocal);
         il.Emit(OpCodes.Ldstr, "HH:mm:ss");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 

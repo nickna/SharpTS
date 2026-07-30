@@ -71,7 +71,7 @@ public partial class RuntimeEmitter
         // _enumerator = Directory.EnumerateFileSystemEntries(path).GetEnumerator()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Directory.GetMethod("EnumerateFileSystemEntries", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "EnumerateFileSystemEntries", [_types.String])!);
         il.Emit(OpCodes.Callvirt, typeof(IEnumerable<string>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stfld, _dirEnumeratorField!);
 
@@ -249,7 +249,7 @@ public partial class RuntimeEmitter
 
         // isDir = Directory.Exists(fullPath)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Directory.GetMethod("Exists", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", [_types.String])!);
         il.Emit(OpCodes.Stloc, isDirLocal);
 
         // _isFile = isFile && !isDir
@@ -284,7 +284,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, checkAttributesLabel);
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.Directory.GetMethod("Exists", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", [_types.String])!);
         il.Emit(OpCodes.Brtrue, checkAttributesLabel);
 
         // Neither exists - not a symlink

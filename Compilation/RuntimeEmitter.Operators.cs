@@ -559,7 +559,7 @@ public partial class RuntimeEmitter
         // Walk the instance's base-type chain comparing generic definitions.
         var notGenericDefLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, classTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsGenericTypeDefinition")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericTypeDefinition")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, notGenericDefLabel);
         var walkTypeLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Ldarg_0);
@@ -571,7 +571,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
         il.Emit(OpCodes.Brfalse, falseLabel);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsGenericType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, genericWalkNext);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
@@ -579,7 +579,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, trueLabel);
         il.MarkLabel(genericWalkNext);
         il.Emit(OpCodes.Ldloc, walkTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("BaseType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, walkTypeLocal);
         il.Emit(OpCodes.Br, genericWalkLoop);
         il.MarkLabel(notGenericDefLabel);
@@ -1169,11 +1169,11 @@ public partial class RuntimeEmitter
         // Both are double — if either is NaN, return false.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.MarkLabel(notDoubleSEqLabel);
 

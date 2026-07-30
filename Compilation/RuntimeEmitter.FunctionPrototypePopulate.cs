@@ -160,7 +160,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);                                      // length
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy",
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy",
             [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(afterCallArgsLabel);
 
@@ -377,7 +377,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy",
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy",
             [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(afterBoundLabel);
 

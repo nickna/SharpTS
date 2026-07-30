@@ -478,7 +478,7 @@ public partial class RuntimeEmitter
         // Call generator.MoveNextAsync()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.GeneratorField);
-        il.Emit(OpCodes.Callvirt, _types.IAsyncEnumeratorOfObject.GetMethod("MoveNextAsync")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IAsyncEnumeratorOfObject, "MoveNextAsync")!);
 
         // Get awaiter from ValueTask<bool>
         var valueTaskLocal = il.DeclareLocal(typeof(ValueTask<bool>));

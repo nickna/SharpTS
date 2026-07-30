@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         runtime.StreamAbortCallbackCtor = ctor;
         var cil = ctor.GetILGenerator();
         cil.Emit(OpCodes.Ldarg_0);
-        cil.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        cil.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         cil.Emit(OpCodes.Ldarg_0);
         cil.Emit(OpCodes.Ldarg_1);
         cil.Emit(OpCodes.Stfld, streamField);

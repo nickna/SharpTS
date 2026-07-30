@@ -40,14 +40,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetRandomFileName"));
             il.Emit(OpCodes.Ldstr, ".");
             il.Emit(OpCodes.Ldstr, "");
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [typeof(string), typeof(string)])!);
             var randomLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Stloc, randomLocal);
 
             // suffix = prefix + random  (Node appends the random suffix to the prefix)
             il.Emit(OpCodes.Ldloc, prefixLocal);
             il.Emit(OpCodes.Ldloc, randomLocal);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [typeof(string), typeof(string)])!);
             var suffixLocal = il.DeclareLocal(_types.String);
             il.Emit(OpCodes.Stloc, suffixLocal);
 
@@ -106,7 +106,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "no such file or directory, opendir '");
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Ldstr, "'");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [typeof(string), typeof(string), typeof(string)])!);
             il.Emit(OpCodes.Newobj, typeof(DirectoryNotFoundException).GetConstructor([typeof(string)])!);
             il.Emit(OpCodes.Throw);
 
@@ -195,7 +195,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_4);
             il.Emit(OpCodes.Ldstr, "'");
             il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string[])])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [typeof(string[])])!);
             il.Emit(OpCodes.Newobj, typeof(IOException).GetConstructor([typeof(string)])!);
             il.Emit(OpCodes.Throw);
 

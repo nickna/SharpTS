@@ -269,8 +269,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         var notArrayTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notArrayTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
@@ -287,8 +287,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldtoken, runtime.TSSymbolType);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notSymbolTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
@@ -315,8 +315,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
         il.Emit(OpCodes.Brfalse, notObjectTypeLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
@@ -810,7 +810,7 @@ public partial class RuntimeEmitter
         EmitProxyInvokeCheck(il, () => il.Emit(OpCodes.Ldarg_1), () =>
         {
             il.Emit(OpCodes.Ldarg_2); // object[] args
-            il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor([typeof(IEnumerable<object>)])!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [typeof(IEnumerable<object>)])!);
         }, notProxyLabel2);
 
         il.MarkLabel(notProxyLabel2);

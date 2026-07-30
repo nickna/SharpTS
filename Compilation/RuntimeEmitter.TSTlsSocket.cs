@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argLocal);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Box, typeof(SslProtocols));
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -243,13 +243,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, protoLocal);
         il.Emit(OpCodes.Ldloca, protoLocal);
         il.Emit(OpCodes.Constrained, typeof(SslApplicationProtocol));
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
 
         // if (string.IsNullOrEmpty(str)) return null; else return str;
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("IsNullOrEmpty", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!);
         il.Emit(OpCodes.Brfalse, notEmpty);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -366,7 +366,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, eLocal);
         il.Emit(OpCodes.Ldloca, eLocal);
         il.Emit(OpCodes.Constrained, typeof(SslPolicyErrors));
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -390,8 +390,8 @@ public partial class RuntimeEmitter
         var listType = typeof(List<string>);
         var listAdd = listType.GetMethod("Add")!;
         var listCount = listType.GetProperty("Count")!.GetGetMethod()!;
-        var concat2 = _types.String.GetMethod("Concat", [_types.String, _types.String])!;
-        var joinEnum = _types.String.GetMethod("Join", [_types.String, typeof(IEnumerable<string>)])!;
+        var concat2 = _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!;
+        var joinEnum = _types.GetMethod(_types.String, "Join", [_types.String, typeof(IEnumerable<string>)])!;
 
         // ext = cert.Extensions["2.5.29.17"]; if (ext == null) return null;
         var extLocal = il.DeclareLocal(typeof(System.Security.Cryptography.X509Certificates.X509Extension));
@@ -473,7 +473,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, enumLocal);
         il.Emit(OpCodes.Callvirt, getCurrent);
         if (needsToString)
-            il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, concat2);
         il.Emit(OpCodes.Callvirt, listAdd);
         il.MarkLabel(chk);
@@ -511,7 +511,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, suiteLocal);
         il.Emit(OpCodes.Ldloca, suiteLocal);
         il.Emit(OpCodes.Constrained, typeof(System.Net.Security.TlsCipherSuite));
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, cipherLocal);
 
         // version = _ProtoString(_sslStream.SslProtocol)
@@ -618,7 +618,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dtLocal);
         il.Emit(OpCodes.Ldloca, dtLocal);
         il.Emit(OpCodes.Ldstr, "R");
-        il.Emit(OpCodes.Call, _types.DateTime.GetMethod("ToString", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String])!);
     }
 
     /// <summary>
@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, value);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, target);
     }
 
@@ -984,11 +984,11 @@ public partial class RuntimeEmitter
         var ipDone = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, hostLocal);
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, useAny);
         il.Emit(OpCodes.Ldloc, hostLocal);
         il.Emit(OpCodes.Ldstr, "::");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, useAny);
         // IPAddress.TryParse(host, out parsed)
         var parsedLocal = il.DeclareLocal(typeof(System.Net.IPAddress));
@@ -1242,7 +1242,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "listening");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, listeningLabel);
 
         il.Emit(OpCodes.Br, defaultLabel);

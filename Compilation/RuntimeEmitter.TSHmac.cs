@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         // lowerAlgorithm = algorithm.ToLowerInvariant()
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerAlgorithmLocal);
 
         // Switch on algorithm name
@@ -77,31 +77,31 @@ public partial class RuntimeEmitter
         // Check "md5"
         il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
         il.Emit(OpCodes.Ldstr, "md5");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, md5Label);
 
         // Check "sha1"
         il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
         il.Emit(OpCodes.Ldstr, "sha1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, sha1Label);
 
         // Check "sha256"
         il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
         il.Emit(OpCodes.Ldstr, "sha256");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, sha256Label);
 
         // Check "sha384"
         il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
         il.Emit(OpCodes.Ldstr, "sha384");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, sha384Label);
 
         // Check "sha512"
         il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
         il.Emit(OpCodes.Ldstr, "sha512");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, sha512Label);
 
         // Default - throw exception
@@ -109,31 +109,31 @@ public partial class RuntimeEmitter
 
         // MD5
         il.MarkLabel(md5Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("MD5")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "MD5")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, createHmacLabel);
 
         // SHA1
         il.MarkLabel(sha1Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA1")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, createHmacLabel);
 
         // SHA256
         il.MarkLabel(sha256Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA256")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA256")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, createHmacLabel);
 
         // SHA384
         il.MarkLabel(sha384Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA384")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA384")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, createHmacLabel);
 
         // SHA512
         il.MarkLabel(sha512Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA512")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA512")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, createHmacLabel);
 
@@ -141,8 +141,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldstr, "Unsupported HMAC algorithm: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Create HMAC
@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, hashNameLocal);
         il.Emit(OpCodes.Ldarg_2); // key (byte[])
-        il.Emit(OpCodes.Call, _types.IncrementalHash.GetMethod("CreateHMAC", [_types.HashAlgorithmName, _types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.IncrementalHash, "CreateHMAC", [_types.HashAlgorithmName, _types.MakeArrayType(_types.Byte)])!);
         il.Emit(OpCodes.Stfld, _tsHmacField);
 
         // _finalized = false
@@ -182,16 +182,16 @@ public partial class RuntimeEmitter
 
         // var bytes = Encoding.UTF8.GetBytes(data)
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // _hmac.AppendData(bytes)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsHmacField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Callvirt, _types.IncrementalHash.GetMethod("AppendData", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IncrementalHash, "AppendData", [_types.MakeArrayType(_types.Byte)])!);
 
         // return this
         il.Emit(OpCodes.Ldarg_0);
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
         var hmacBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsHmacField);
-        il.Emit(OpCodes.Callvirt, _types.IncrementalHash.GetMethod("GetHashAndReset", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IncrementalHash, "GetHashAndReset", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, hmacBytesLocal);
 
         // Check encoding
@@ -239,19 +239,19 @@ public partial class RuntimeEmitter
 
         // lowerEncoding = encoding.ToLowerInvariant()
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerEncodingLocal);
 
         // Check "hex"
         il.Emit(OpCodes.Ldloc, lowerEncodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkHexLabel);
 
         // Check "base64"
         il.Emit(OpCodes.Ldloc, lowerEncodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkBase64Label);
 
         // Default - return array
@@ -261,7 +261,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, hmacBytesLocal);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // Return base64 string: Convert.ToBase64String(hmacBytes)

@@ -99,32 +99,32 @@ public partial class RuntimeEmitter
         // Check "method"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "method");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, methodLabel);
 
         // Check "url"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "url");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, urlLabel);
 
         // Check "httpVersion"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "httpVersion");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, httpVersionLabel);
 
         // Check "headers"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "headers");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, headersLabel);
 
         // Check "rawHeaders"
         var rawHeadersLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "rawHeaders");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, rawHeadersLabel);
 
         // #1048 additions: version parts, complete/aborted, trailers, socket.
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, n);
-            il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
             il.Emit(OpCodes.Brtrue, lbl);
         }
         Check("httpVersionMajor", verMajorLabel);
@@ -229,7 +229,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, versionLocal);
         il.Emit(OpCodes.Callvirt, typeof(Version).GetProperty("Minor")!.GetGetMethod()!);
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Format", [_types.String, _types.Object, _types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Format", [_types.String, _types.Object, _types.Object])!);
         il.Emit(OpCodes.Ret);
 
         // "headers" - return dictionary of headers
@@ -358,11 +358,11 @@ public partial class RuntimeEmitter
         // Add to dictionary: dict[key.ToLowerInvariant()] = headers[key]
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ldloc, headersLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Callvirt, typeof(System.Collections.Specialized.NameValueCollection).GetMethod("Get", [_types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.MarkLabel(skipNull);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -425,7 +425,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         // result.Add(headers[key])
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -434,7 +434,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Callvirt, typeof(System.Collections.Specialized.NameValueCollection).GetMethod("Get", [_types.String])!);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.MarkLabel(skipNull);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -550,27 +550,27 @@ public partial class RuntimeEmitter
         // Check property names
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "statusCode");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, statusCodeLabel);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "headersSent");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, headersSentLabel);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "finished");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, finishedLabel);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "statusMessage");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, statusMessageLabel);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "sendDate");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, sendDateLabel);
 
         il.Emit(OpCodes.Br, defaultLabel);
@@ -636,13 +636,13 @@ public partial class RuntimeEmitter
         // Check "statusCode"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "statusCode");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, statusCodeLabel);
 
         // Check "statusMessage"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "statusMessage");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, statusMessageLabel);
 
         il.Emit(OpCodes.Br, endLabel);
@@ -746,7 +746,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Br, valDone);
         il.MarkLabel(valNotNull);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.MarkLabel(valDone);
         il.Emit(OpCodes.Callvirt, setHeaderMethod);
         il.Emit(OpCodes.Pop); // SetHeader returns this
@@ -788,14 +788,14 @@ public partial class RuntimeEmitter
         // Get data as string
         var dataLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Stloc, dataLocal);
 
         // Convert to bytes and add to buffer
         var bytesLocal = il.DeclareLocal(_types.ByteArray);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // _bodyBuffer.AddRange(bytes)
@@ -919,7 +919,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "Content-Type");
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notContentTypeLabel);
 
         // Set ContentType property
@@ -969,7 +969,7 @@ public partial class RuntimeEmitter
         var storeNameLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, storeNameLabel);
         il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.MarkLabel(storeNameLabel);
         il.Emit(OpCodes.Stloc, nameLocal);
 
@@ -978,7 +978,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "Content-Type");
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notContentType);
 
         // return _response.ContentType != null
@@ -1031,7 +1031,7 @@ public partial class RuntimeEmitter
         var storeNameLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, storeNameLabel);
         il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.MarkLabel(storeNameLabel);
         il.Emit(OpCodes.Stloc, nameLocal);
 
@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "Content-Type");
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notContentType);
 
         // return _response.ContentType ?? undefined
@@ -1124,8 +1124,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
-        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.MarkLabel(skipNull);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -1162,7 +1162,7 @@ public partial class RuntimeEmitter
         var storeNameLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, storeNameLabel);
         il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.MarkLabel(storeNameLabel);
         il.Emit(OpCodes.Stloc, nameLocal);
 
@@ -1171,7 +1171,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "Content-Type");
         il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Brfalse, notContentType);
 
         // _response.ContentType = null
@@ -1413,7 +1413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _httpServerIsListeningField);
         il.Emit(OpCodes.Brfalse, notListeningLabel);
         il.Emit(OpCodes.Ldstr, "Server is already listening");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notListeningLabel);
@@ -1429,9 +1429,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);  // Convert double to int (port is always an integer)
         il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ldstr, "/");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Stloc, prefixLocal);
 
         // _listener.Prefixes.Add(prefix)
@@ -1642,12 +1642,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "address");
         il.Emit(OpCodes.Ldstr, "0.0.0.0");
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "family");
         il.Emit(OpCodes.Ldstr, "IPv4");
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "port");
@@ -1655,7 +1655,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _httpServerPortField);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1679,13 +1679,13 @@ public partial class RuntimeEmitter
         // Check "listening"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "listening");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, listeningLabel);
 
         // Check "address" (returns the address() result)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "address");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Equals", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals", [_types.String])!);
         il.Emit(OpCodes.Brtrue, addressLabel);
 
         il.Emit(OpCodes.Br, defaultLabel);

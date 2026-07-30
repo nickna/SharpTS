@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         var method = _fsReadStreamType.DefineMethod("OnListenerAdded",
             MethodAttributes.Public | MethodAttributes.Virtual, _types.Void, [_types.String]);
         var il = method.GetILGenerator();
-        var strEquals = _types.String.GetMethod("op_Equality", [_types.String, _types.String])!;
+        var strEquals = _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!;
         var baseOLA = runtime.TSReadableType.GetMethod("OnListenerAdded", [_types.String])!;
 
         // base.OnListenerAdded(name)

@@ -315,7 +315,7 @@ public partial class RuntimeEmitter
         var notDoubleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notDoubleLabel);
         NameEq("MAX_VALUE"); NameEq("MIN_VALUE");
         NameEq("NaN"); NameEq("POSITIVE_INFINITY"); NameEq("NEGATIVE_INFINITY");
@@ -328,7 +328,7 @@ public partial class RuntimeEmitter
         var notStringTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notStringTypeLabel);
         NameEq("fromCharCode"); NameEq("fromCodePoint"); NameEq("raw");
         il.MarkLabel(notStringTypeLabel);
@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         var notObjectTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notObjectTypeLabel);
         NameEq("assign"); NameEq("create"); NameEq("defineProperties");
         NameEq("defineProperty"); NameEq("entries"); NameEq("freeze");
@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
         var notArrayConsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notArrayConsLabel);
         NameEq("from"); NameEq("fromAsync"); NameEq("isArray"); NameEq("of");
         il.MarkLabel(notArrayConsLabel);

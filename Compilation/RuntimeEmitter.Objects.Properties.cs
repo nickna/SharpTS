@@ -768,7 +768,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, arrayProtoValLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, arrayProtoFallbackLabel);
         il.Emit(OpCodes.Ldloc, arrayProtoValLocal);
@@ -779,7 +779,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, arrayProtoValLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue",
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, objectProtoFallbackLabel);
         il.Emit(OpCodes.Ldloc, arrayProtoValLocal);
@@ -1865,7 +1865,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Beq, defaultPromiseCtorLabel);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsGenericType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, nonGenericCtorLabel);
         il.Emit(OpCodes.Ldloc, ctorTypeLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
@@ -2002,7 +2002,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_1); // args (object[])
-        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor([typeof(IEnumerable<object>)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [typeof(IEnumerable<object>)])!);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);

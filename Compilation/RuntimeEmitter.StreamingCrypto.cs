@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notFinalizedLabel);
 
         il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notFinalizedLabel);
@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
     {
         il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldstr, value);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, targetLabel);
     }
 
@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
 
         // normalized = algorithm.ToLowerInvariant()
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, normalizedLocal);
 
         // Remove "rsa-" or "ecdsa-" prefix if present
@@ -115,11 +115,11 @@ public partial class RuntimeEmitter
         // if (normalized.StartsWith("rsa-")) normalized = normalized.Substring(4)
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "rsa-");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
         il.Emit(OpCodes.Brfalse, checkEcdsaLabel);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldc_I4_4);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, normalizedLocal);
         il.Emit(OpCodes.Br, afterPrefixLabel);
 
@@ -127,11 +127,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkEcdsaLabel);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldstr, "ecdsa-");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
         il.Emit(OpCodes.Brfalse, afterPrefixLabel);
         il.Emit(OpCodes.Ldloc, normalizedLocal);
         il.Emit(OpCodes.Ldc_I4_6);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, normalizedLocal);
 
         il.MarkLabel(afterPrefixLabel);
@@ -154,25 +154,25 @@ public partial class RuntimeEmitter
 
         // SHA1
         il.MarkLabel(sha1Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA1")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, setHashLabel);
 
         // SHA256
         il.MarkLabel(sha256Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA256")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA256")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, setHashLabel);
 
         // SHA384
         il.MarkLabel(sha384Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA384")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA384")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, setHashLabel);
 
         // SHA512
         il.MarkLabel(sha512Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA512")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA512")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashNameLocal);
         il.Emit(OpCodes.Br, setHashLabel);
 
@@ -180,8 +180,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldstr, unsupportedAlgorithmPrefix);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Set hash algorithm field
@@ -224,9 +224,9 @@ public partial class RuntimeEmitter
 
         // var bytes = Encoding.UTF8.GetBytes(data)
         var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // _data.AddRange(bytes)
@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         // _algorithm = algorithm.ToLowerInvariant()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, lowerAlgoLocal);
         il.Emit(OpCodes.Stfld, f.Algorithm);
@@ -328,8 +328,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(unsupportedLabel);
         il.Emit(OpCodes.Ldstr, "Unsupported cipher algorithm: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(afterParseLabel);
@@ -349,7 +349,7 @@ public partial class RuntimeEmitter
 
         // Key size mismatch - throw
         il.Emit(OpCodes.Ldstr, "Invalid key length for cipher algorithm");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(keySizeOkLabel);
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
 
         // IV size mismatch - throw
         il.Emit(OpCodes.Ldstr, "Invalid IV length for cipher algorithm");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(ivSizeOkLabel);
@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2); // key
         il.Emit(OpCodes.Ldc_I4, 16); // tag size
-        il.Emit(OpCodes.Newobj, _types.AesGcm.GetConstructor([_types.MakeArrayType(_types.Byte), _types.Int32])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.AesGcm, [_types.MakeArrayType(_types.Byte), _types.Int32])!);
         il.Emit(OpCodes.Stfld, f.AesGcm);
         il.Emit(OpCodes.Br, initDoneLabel);
 
@@ -429,38 +429,38 @@ public partial class RuntimeEmitter
 
         // _aes = Aes.Create()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.Aes.GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Aes, "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, f.Aes);
 
         // _aes.Key = key
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, f.Aes);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.Aes.GetProperty("Key")!.SetMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Aes, "Key")!.SetMethod!);
 
         // _aes.IV = iv
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, f.Aes);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, _types.Aes.GetProperty("IV")!.SetMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Aes, "IV")!.SetMethod!);
 
         // _aes.Mode = CipherMode.CBC
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, f.Aes);
         il.Emit(OpCodes.Ldc_I4_1); // CipherMode.CBC = 1
-        il.Emit(OpCodes.Callvirt, _types.Aes.GetProperty("Mode")!.SetMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Aes, "Mode")!.SetMethod!);
 
         // _aes.Padding = PaddingMode.PKCS7
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, f.Aes);
         il.Emit(OpCodes.Ldc_I4_2); // PaddingMode.PKCS7 = 2
-        il.Emit(OpCodes.Callvirt, _types.Aes.GetProperty("Padding")!.SetMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Aes, "Padding")!.SetMethod!);
 
         // _transform = _aes.CreateEncryptor() / CreateDecryptor()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, f.Aes);
-        il.Emit(OpCodes.Callvirt, _types.Aes.GetMethod(isEncrypt ? "CreateEncryptor" : "CreateDecryptor", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Aes, isEncrypt ? "CreateEncryptor" : "CreateDecryptor", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, f.Transform);
 
         il.MarkLabel(initDoneLabel);
@@ -487,7 +487,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var bclMethod = _types.AesGcm.GetMethod(isEncrypt ? "Encrypt" : "Decrypt",
+        var bclMethod = _types.GetMethod(_types.AesGcm, isEncrypt ? "Encrypt" : "Decrypt",
             [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte),
              _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)])!;
 
@@ -574,7 +574,7 @@ public partial class RuntimeEmitter
 
         // Default: throw
         il.Emit(OpCodes.Ldstr, "Data must be a string or Buffer");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Buffer path
@@ -593,19 +593,19 @@ public partial class RuntimeEmitter
 
         // lowerEncoding = encoding.ToLowerInvariant()
         il.Emit(OpCodes.Ldloc, encodingLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check "hex"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkHexLabel);
 
         // Check "base64"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkBase64Label);
 
         // Default UTF8
@@ -627,10 +627,10 @@ public partial class RuntimeEmitter
 
         // UTF8 default
         il.MarkLabel(utf8DefaultLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
 
         il.MarkLabel(doneLabel);
     }
@@ -670,19 +670,19 @@ public partial class RuntimeEmitter
 
         // lowerEncoding = encoding.ToLowerInvariant()
         il.Emit(OpCodes.Ldloc, encodingLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
         // Check "hex"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkHexLabel);
 
         // Check "base64"
         il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brtrue, checkBase64Label);
 
         if (supportUtf8)
@@ -690,12 +690,12 @@ public partial class RuntimeEmitter
             // Check "utf8" or "utf-8"
             il.Emit(OpCodes.Ldloc, encodingLocal);
             il.Emit(OpCodes.Ldstr, "utf8");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brtrue, checkUtf8Label);
 
             il.Emit(OpCodes.Ldloc, encodingLocal);
             il.Emit(OpCodes.Ldstr, "utf-8");
-            il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brtrue, checkUtf8Label);
         }
 
@@ -706,7 +706,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // Return base64 string
@@ -719,9 +719,9 @@ public partial class RuntimeEmitter
         {
             // Return UTF8 string
             il.MarkLabel(checkUtf8Label);
-            il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldloc, bytesLocal);
-            il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [_types.MakeArrayType(_types.Byte)])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [_types.MakeArrayType(_types.Byte)])!);
             il.Emit(OpCodes.Ret);
         }
         else
@@ -763,7 +763,7 @@ public partial class RuntimeEmitter
 
         // Fallback: throw
         il.Emit(OpCodes.Ldstr, "Expected Buffer or byte[]");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
 
         // Buffer path: call GetData()
@@ -857,7 +857,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, nullLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, field);
-            il.Emit(OpCodes.Callvirt, _types.IDisposable.GetMethod("Dispose")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
             il.MarkLabel(nullLabel);
         }
 

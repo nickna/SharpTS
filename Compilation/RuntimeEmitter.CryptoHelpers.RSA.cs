@@ -94,7 +94,7 @@ public partial class RuntimeEmitter
 
         // using var rsa = RSA.Create();
         var rsaLocal = il.DeclareLocal(_types.RSA);
-        il.Emit(OpCodes.Call, _types.RSA.GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RSA, "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
 
         // try { ... } finally { rsa?.Dispose(); }
@@ -118,10 +118,10 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_2);  // useOaep
         il.Emit(OpCodes.Brfalse, usePkcs1Label);
-        il.Emit(OpCodes.Call, _types.RSAEncryptionPadding.GetProperty("OaepSHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.RSAEncryptionPadding, "OaepSHA1")!.GetGetMethod()!);
         il.Emit(OpCodes.Br, paddingDoneLabel);
         il.MarkLabel(usePkcs1Label);
-        il.Emit(OpCodes.Call, _types.RSAEncryptionPadding.GetProperty("Pkcs1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.RSAEncryptionPadding, "Pkcs1")!.GetGetMethod()!);
         il.MarkLabel(paddingDoneLabel);
         il.Emit(OpCodes.Stloc, paddingLocal);
 
@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rsaLocal);
         il.Emit(OpCodes.Ldarg_1);  // data
         il.Emit(OpCodes.Ldloc, paddingLocal);
-        il.Emit(OpCodes.Callvirt, _types.RSA.GetMethod("Encrypt", [typeof(byte[]), typeof(RSAEncryptionPadding)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.RSA, "Encrypt", [typeof(byte[]), typeof(RSAEncryptionPadding)])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // finally block
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
 
         // using var rsa = RSA.Create();
         var rsaLocal = il.DeclareLocal(_types.RSA);
-        il.Emit(OpCodes.Call, _types.RSA.GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RSA, "Create", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, rsaLocal);
 
         // try { ... } finally { rsa?.Dispose(); }
@@ -184,10 +184,10 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_2);  // useOaep
         il.Emit(OpCodes.Brfalse, usePkcs1Label);
-        il.Emit(OpCodes.Call, _types.RSAEncryptionPadding.GetProperty("OaepSHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.RSAEncryptionPadding, "OaepSHA1")!.GetGetMethod()!);
         il.Emit(OpCodes.Br, paddingDoneLabel);
         il.MarkLabel(usePkcs1Label);
-        il.Emit(OpCodes.Call, _types.RSAEncryptionPadding.GetProperty("Pkcs1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.RSAEncryptionPadding, "Pkcs1")!.GetGetMethod()!);
         il.MarkLabel(paddingDoneLabel);
         il.Emit(OpCodes.Stloc, paddingLocal);
 
@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rsaLocal);
         il.Emit(OpCodes.Ldarg_1);  // data
         il.Emit(OpCodes.Ldloc, paddingLocal);
-        il.Emit(OpCodes.Callvirt, _types.RSA.GetMethod("Decrypt", [typeof(byte[]), typeof(RSAEncryptionPadding)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.RSA, "Decrypt", [typeof(byte[]), typeof(RSAEncryptionPadding)])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // finally block

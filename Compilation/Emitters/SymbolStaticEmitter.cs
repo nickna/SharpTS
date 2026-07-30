@@ -34,7 +34,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                     // Emit the key argument
                     emitter.EmitExpression(arguments[0]);
                     // Convert to string if needed (call ToString on object)
-                    il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString", Type.EmptyTypes)!);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.SymbolFor);
                 return true;

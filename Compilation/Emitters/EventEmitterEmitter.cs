@@ -164,7 +164,7 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[index]);
             emitter.EmitBoxIfNeeded(arguments[index]);
-            il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
         }
         else
         {

@@ -70,22 +70,22 @@ public partial class RuntimeEmitter
 
         // syscall is not null: code + ": " + syscall + ": "
         il.Emit(OpCodes.Ldstr, ": ");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldarg_3); // syscall
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, ": ");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Br, afterSyscallLabel);
 
         il.MarkLabel(noSyscallLabel);
         // syscall is null: just code + ": "
         il.Emit(OpCodes.Ldstr, ": ");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
 
         il.MarkLabel(afterSyscallLabel);
         // Now add message
         il.Emit(OpCodes.Ldarg_2); // message
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
 
         // Check if path != null
         var noPathLabel = il.DefineLabel();
@@ -95,11 +95,11 @@ public partial class RuntimeEmitter
 
         // path is not null: + " '" + path + "'"
         il.Emit(OpCodes.Ldstr, " '");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldarg_S, (byte)4); // path
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Ldstr, "'");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
         il.Emit(OpCodes.Br, afterPathLabel);
 
         il.MarkLabel(noPathLabel);
@@ -111,7 +111,7 @@ public partial class RuntimeEmitter
         // Call base(message): Exception(string)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Call, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Call, _types.GetConstructor(_types.Exception, [_types.String])!);
 
         // _code = code
         il.Emit(OpCodes.Ldarg_0);

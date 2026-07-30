@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSBufferType);
         il.Emit(OpCodes.Call, runtime.TSBufferGetData);
         // byte[] → ReadOnlySpan<byte> (implicit), then BigInteger(ROS<byte>, isUnsigned:true, isBigEndian:true)
-        il.Emit(OpCodes.Call, _types.ReadOnlySpanOfByte.GetMethod("op_Implicit", [typeof(byte[])])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newobj, biType.GetConstructor([_types.ReadOnlySpanOfByte, typeof(bool), typeof(bool)])!);

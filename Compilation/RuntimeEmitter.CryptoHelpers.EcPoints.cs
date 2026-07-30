@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, fmtDoneLabel);
         il.MarkLabel(haveFmtLabel);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, fmtLocal);
         il.MarkLabel(fmtDoneLabel);
 
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         // invalid format
         il.MarkLabel(invalidLabel);
         il.Emit(OpCodes.Ldstr, "Invalid point format (expected 'uncompressed', 'compressed', or 'hybrid')");
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 

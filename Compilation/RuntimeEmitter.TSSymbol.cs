@@ -56,7 +56,7 @@ public partial class RuntimeEmitter
         // _id = Interlocked.Increment(ref _nextId)
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldsflda, nextIdField);
-        ctorIL.Emit(OpCodes.Call, _types.Interlocked.GetMethod("Increment", [_types.Int32.MakeByRefType()])!);
+        ctorIL.Emit(OpCodes.Call, _types.GetMethod(_types.Interlocked, "Increment", [_types.Int32.MakeByRefType()])!);
         ctorIL.Emit(OpCodes.Stfld, idField);
         // _description = description
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         // Monitor.Enter(lockObj, ref lockTaken)
         forIL.Emit(OpCodes.Ldloc_2);
         forIL.Emit(OpCodes.Ldloca_S, forLockTaken);
-        forIL.Emit(OpCodes.Call, _types.Monitor.GetMethod("Enter", [_types.Object, _types.Boolean.MakeByRefType()])!);
+        forIL.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Enter", [_types.Object, _types.Boolean.MakeByRefType()])!);
 
         // if (_globalRegistry.TryGetValue(key, out existing)) return existing;
         forIL.Emit(OpCodes.Ldsfld, globalRegistryField);
@@ -171,7 +171,7 @@ public partial class RuntimeEmitter
         forIL.Emit(OpCodes.Ldloc_1);  // lockTaken
         forIL.Emit(OpCodes.Brfalse, skipExit);
         forIL.Emit(OpCodes.Ldloc_2);  // lockObj
-        forIL.Emit(OpCodes.Call, _types.Monitor.GetMethod("Exit", [_types.Object])!);
+        forIL.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Exit", [_types.Object])!);
         forIL.MarkLabel(skipExit);
         forIL.EndExceptionBlock();
 
@@ -213,7 +213,7 @@ public partial class RuntimeEmitter
         // Monitor.Enter(lockObj, ref lockTaken)
         keyForIL.Emit(OpCodes.Ldloc_2);
         keyForIL.Emit(OpCodes.Ldloca_S, keyForLockTaken);
-        keyForIL.Emit(OpCodes.Call, _types.Monitor.GetMethod("Enter", [_types.Object, _types.Boolean.MakeByRefType()])!);
+        keyForIL.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Enter", [_types.Object, _types.Boolean.MakeByRefType()])!);
 
         // _reverseRegistry.TryGetValue(symbol, out result)
         keyForIL.Emit(OpCodes.Ldsfld, reverseRegistryField);
@@ -231,7 +231,7 @@ public partial class RuntimeEmitter
         keyForIL.Emit(OpCodes.Ldloc_1);  // lockTaken
         keyForIL.Emit(OpCodes.Brfalse, keyForSkipExit);
         keyForIL.Emit(OpCodes.Ldloc_2);  // lockObj
-        keyForIL.Emit(OpCodes.Call, _types.Monitor.GetMethod("Exit", [_types.Object])!);
+        keyForIL.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Exit", [_types.Object])!);
         keyForIL.MarkLabel(keyForSkipExit);
         keyForIL.EndExceptionBlock();
 
@@ -394,7 +394,7 @@ public partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ldarg_0);
         toStringIL.Emit(OpCodes.Ldfld, descriptionField);
         toStringIL.Emit(OpCodes.Ldstr, ")");
-        toStringIL.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
+        toStringIL.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         toStringIL.MarkLabel(doneToString);
         toStringIL.Emit(OpCodes.Ret);
 

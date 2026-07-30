@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, returnDefaultLabel);
 
         // Check if value is double
@@ -347,7 +347,7 @@ public partial class RuntimeEmitter
 
         // lowerDigest = digest.ToLowerInvariant()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerDigestLocal);
 
         // Switch on digest name
@@ -380,25 +380,25 @@ public partial class RuntimeEmitter
 
         // sha1: hashAlg = HashAlgorithmName.SHA1
         il.MarkLabel(sha1Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA1")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashAlgLocal);
         il.Emit(OpCodes.Br, deriveKeyLabel);
 
         // sha256: hashAlg = HashAlgorithmName.SHA256
         il.MarkLabel(sha256Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA256")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA256")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashAlgLocal);
         il.Emit(OpCodes.Br, deriveKeyLabel);
 
         // sha384: hashAlg = HashAlgorithmName.SHA384
         il.MarkLabel(sha384Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA384")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA384")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashAlgLocal);
         il.Emit(OpCodes.Br, deriveKeyLabel);
 
         // sha512: hashAlg = HashAlgorithmName.SHA512
         il.MarkLabel(sha512Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA512")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, "SHA512")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, hashAlgLocal);
         il.Emit(OpCodes.Br, deriveKeyLabel);
 
@@ -418,7 +418,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, 4);              // keylen (outputLength)
         il.Emit(OpCodes.Ldarg_2);               // salt
         il.Emit(OpCodes.Ldarg_3);               // info
-        il.Emit(OpCodes.Call, _types.HKDF.GetMethod("DeriveKey",
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.HKDF, "DeriveKey",
             [_types.HashAlgorithmName, typeof(byte[]), typeof(int), typeof(byte[]), typeof(byte[])])!);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);

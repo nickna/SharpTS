@@ -94,11 +94,11 @@ public partial class RuntimeEmitter
             var entryLocal = il.DeclareLocal(typeof(IPHostEntry));
             il.Emit(OpCodes.Stloc, entryLocal);
 
-            il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldloc, entryLocal);
             il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("HostName")!.GetGetMethod()!);
-            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         });
         EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsPromisesReverse", reverseSync);
 
@@ -357,8 +357,8 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var dictCtor = _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!;
-        var addMethod = _types.DictionaryStringObject.GetMethod("Add", [typeof(string), typeof(object)])!;
+        var dictCtor = _types.GetConstructor(_types.DictionaryStringObject, Type.EmptyTypes)!;
+        var addMethod = _types.GetMethod(_types.DictionaryStringObject, "Add", [typeof(string), typeof(object)])!;
 
         il.Emit(OpCodes.Newobj, dictCtor);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);

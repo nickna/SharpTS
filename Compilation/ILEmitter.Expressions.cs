@@ -856,7 +856,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, listLocal);
             EmitExpression(ttl.Expressions[i]);
             EmitBoxIfNeeded(ttl.Expressions[i]);
-            IL.Emit(OpCodes.Callvirt, _ctx.Types.ListOfObject.GetMethod("Add", [_ctx.Types.Object])!);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "Add", [_ctx.Types.Object])!);
         }
         IL.Emit(OpCodes.Ldloc, listLocal);
 

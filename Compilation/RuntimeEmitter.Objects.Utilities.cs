@@ -268,7 +268,7 @@ public partial class RuntimeEmitter
         var fieldsEnumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(), _types.String, _types.Object);
         var fieldsEnumLocal = il.DeclareLocal(fieldsEnumeratorType);
         il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, fieldsEnumLocal);
         var fieldsLoopStart = il.DefineLabel();
         var fieldsLoopEnd = il.DefineLabel();
@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
 
         var gettersEnumLocal = il.DeclareLocal(fieldsEnumeratorType);
         il.Emit(OpCodes.Ldloc, gettersLocal);
-        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
         il.Emit(OpCodes.Stloc, gettersEnumLocal);
         var gLoopStart = il.DefineLabel();
         var gLoopEnd = il.DefineLabel();

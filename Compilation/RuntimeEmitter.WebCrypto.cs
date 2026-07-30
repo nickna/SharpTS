@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
     private static readonly (string Lower, string Web)[] _wcHashes =
         [("sha1", "SHA-1"), ("sha256", "SHA-256"), ("sha384", "SHA-384"), ("sha512", "SHA-512")];
 
-    private MethodInfo WcSpanFromBytes => _types.ReadOnlySpanOfByte.GetMethod("op_Implicit", [typeof(byte[])])!;
+    private MethodInfo WcSpanFromBytes => _types.GetMethod(_types.ReadOnlySpanOfByte, "op_Implicit", [typeof(byte[])])!;
 
     /// <summary>Emits all WebCrypto byte-level helpers onto $Runtime.</summary>
     private void EmitWebCryptoRuntimeHelpers(TypeBuilder tb, EmittedRuntime runtime)
@@ -183,7 +183,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(haveNameLabel);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToUpperInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToUpperInvariant")!);
         il.Emit(OpCodes.Stloc, nameLocal);
 
         foreach (var (lower, web) in _wcHashes)
@@ -238,7 +238,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(haveNameLabel);
         il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToUpperInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToUpperInvariant")!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwLabel);
@@ -332,10 +332,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.String);
             il.Emit(OpCodes.Brfalse, notString);
-            il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.String);
-            il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notString);
         }
@@ -1014,7 +1014,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldarg, 4);
-        il.Emit(OpCodes.Call, _types.HKDF.GetMethod("DeriveKey",
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.HKDF, "DeriveKey",
             [typeof(HashAlgorithmName), typeof(byte[]), typeof(int), typeof(byte[]), typeof(byte[])])!);
         il.Emit(OpCodes.Ret);
     }
@@ -1137,7 +1137,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lowerLocal);
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Ldloc, lowerLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
         (string[] Aliases, string Canonical)[] table =
@@ -1483,14 +1483,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)'=');
         il.Emit(OpCodes.Stelem_I2);
         il.Emit(OpCodes.Ldloc, charsLocal);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("TrimEnd", [typeof(char[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", [typeof(char[])])!);
 
         il.Emit(OpCodes.Ldc_I4, (int)'+');
         il.Emit(OpCodes.Ldc_I4, (int)'-');
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(char), typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [typeof(char), typeof(char)])!);
         il.Emit(OpCodes.Ldc_I4, (int)'/');
         il.Emit(OpCodes.Ldc_I4, (int)'_');
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(char), typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", [typeof(char), typeof(char)])!);
         il.Emit(OpCodes.Ret);
     }
 }

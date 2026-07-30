@@ -81,10 +81,10 @@ public partial class RuntimeEmitter
         _tsArraySparseRemove = _tsArraySparseType.GetMethod("Remove", [_types.UInt32])!;
         _tsArraySparseSetItem = _tsArraySparseType.GetMethod("set_Item", [_types.UInt32, _types.Object])!;
         _tsArrayListCountGetter = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
-        _tsArrayListAdd = _types.ListOfObject.GetMethod("Add", [_types.Object])!;
-        _tsArrayListRemoveAt = _types.ListOfObject.GetMethod("RemoveAt", [_types.Int32])!;
-        _tsArrayListGetItem = _types.ListOfObject.GetMethod("get_Item", [_types.Int32])!;
-        _tsArrayListSetItem = _types.ListOfObject.GetMethod("set_Item", [_types.Int32, _types.Object])!;
+        _tsArrayListAdd = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
+        _tsArrayListRemoveAt = _types.GetMethod(_types.ListOfObject, "RemoveAt", [_types.Int32])!;
+        _tsArrayListGetItem = _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!;
+        _tsArrayListSetItem = _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object])!;
     }
 
     private void EmitTSArrayClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -858,7 +858,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Index out of bounds.");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
 
@@ -895,7 +895,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Index out of bounds.");
-        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
         il.Emit(OpCodes.Throw);
     }
     // -----------------------------------------------------------------------
@@ -1973,7 +1973,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, ",");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ListOfObject, "ToArray"));
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Join", [_types.String, _types.ObjectArray])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", [_types.String, _types.ObjectArray])!);
         il.Emit(OpCodes.Ret);
     }
 

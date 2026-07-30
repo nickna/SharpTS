@@ -706,7 +706,7 @@ public class StateMachineEmitHelpers
         _il.Emit(OpCodes.Brfalse, aNotDoubleLabel);
         _il.Emit(OpCodes.Ldloc, aLoc);
         _il.Emit(OpCodes.Unbox_Any, _types.Double);
-        _il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         _il.Emit(OpCodes.Brtrue, returnFalseLabel);
         _il.MarkLabel(aNotDoubleLabel);
 
@@ -716,7 +716,7 @@ public class StateMachineEmitHelpers
         _il.Emit(OpCodes.Brfalse, bNotDoubleLabel);
         _il.Emit(OpCodes.Ldloc, bLoc);
         _il.Emit(OpCodes.Unbox_Any, _types.Double);
-        _il.Emit(OpCodes.Call, _types.Double.GetMethod("IsNaN", [_types.Double])!);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
         _il.Emit(OpCodes.Brtrue, returnFalseLabel);
         _il.MarkLabel(bNotDoubleLabel);
 

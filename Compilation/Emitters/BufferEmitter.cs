@@ -76,7 +76,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     emitter.EmitExpression(arguments[0]);
                     emitter.EmitBoxIfNeeded(arguments[0]);
-                    il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
                 }
                 else
                 {
@@ -227,7 +227,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     emitter.EmitExpression(arguments[3]);
                     emitter.EmitBoxIfNeeded(arguments[3]);
-                    il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
                 }
                 else
                 {
@@ -242,7 +242,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 // Emit data string
                 emitter.EmitExpression(arguments[0]);
                 emitter.EmitBoxIfNeeded(arguments[0]);
-                il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
 
                 // offset (default 0)
                 if (arguments.Count > 1)
@@ -275,7 +275,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 {
                     emitter.EmitExpression(arguments[3]);
                     emitter.EmitBoxIfNeeded(arguments[3]);
-                    il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
                 }
                 else
                 {
@@ -757,7 +757,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[2]);
             emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
         }
         else
         {
@@ -799,7 +799,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[2]);
             emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Callvirt, ctx.Types.Object.GetMethod("ToString")!);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
         }
         else
         {

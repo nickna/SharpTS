@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         // _timerQueue = new List<$VirtualTimer>();
         var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
         // Use TypeBuilder.GetConstructor for generic types containing TypeBuilder
-        var listOpenCtor = _types.ListOpen.GetConstructor(Type.EmptyTypes)!;
+        var listOpenCtor = _types.GetConstructor(_types.ListOpen, Type.EmptyTypes)!;
         var listCtor = EmitterTypeHelpers.ResolveConstructor(listType, listOpenCtor);
         il.Emit(OpCodes.Newobj, listCtor);
         il.Emit(OpCodes.Stsfld, timerQueueField);
@@ -194,11 +194,11 @@ public partial class RuntimeEmitter
         var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
 
         // Get generic methods for List<$VirtualTimer> using TypeBuilder.GetMethod
-        var listOpenCountGetter = _types.ListOpen.GetProperty("Count")!.GetGetMethod()!;
+        var listOpenCountGetter = _types.GetProperty(_types.ListOpen, "Count")!.GetGetMethod()!;
         var countGetter = EmitterTypeHelpers.ResolveMethod(listType, listOpenCountGetter);
-        var listOpenGetItem = _types.ListOpen.GetMethod("get_Item")!;
+        var listOpenGetItem = _types.GetMethod(_types.ListOpen, "get_Item")!;
         var getItem = EmitterTypeHelpers.ResolveMethod(listType, listOpenGetItem);
-        var listOpenRemoveAt = _types.ListOpen.GetMethod("RemoveAt")!;
+        var listOpenRemoveAt = _types.GetMethod(_types.ListOpen, "RemoveAt")!;
         var removeAt = EmitterTypeHelpers.ResolveMethod(listType, listOpenRemoveAt);
 
         // Process microtasks first - they always run before any macrotask (timers)
@@ -424,7 +424,7 @@ public partial class RuntimeEmitter
         var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
 
         // Get generic Add method for List<$VirtualTimer> using TypeBuilder.GetMethod
-        var listOpenAdd = _types.ListOpen.GetMethod("Add")!;
+        var listOpenAdd = _types.GetMethod(_types.ListOpen, "Add")!;
         var addMethod = EmitterTypeHelpers.ResolveMethod(listType, listOpenAdd);
 
         // EnsureTimerInitialized();

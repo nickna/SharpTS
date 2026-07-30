@@ -39,11 +39,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSBufferType);
         il.Emit(OpCodes.Brfalse, notObjLabel);
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSBufferType);
         il.Emit(OpCodes.Call, runtime.TSBufferGetData);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [typeof(byte[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", [typeof(byte[])])!);
         il.Emit(OpCodes.Ret);
 
         // $Object with a "key" field → recurse on that field
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         var notBufferLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, encLocal);
         il.Emit(OpCodes.Ldstr, "buffer");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
         il.Emit(OpCodes.Brfalse, notBufferLabel);
         il.Emit(OpCodes.Ldloc, digestLocal);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -200,7 +200,7 @@ public partial class RuntimeEmitter
         // Check for explicit RSA header
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "RSA PRIVATE KEY");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         il.Emit(OpCodes.Brtrue, rsaSignLabel);
 
         // Generic format or EC - try EC first with try/catch
@@ -287,7 +287,7 @@ public partial class RuntimeEmitter
         // Check for explicit RSA header
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "RSA PUBLIC KEY");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Contains", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
         il.Emit(OpCodes.Brtrue, rsaVerifyLabel);
 
         // Generic format or EC - try EC first with try/catch
