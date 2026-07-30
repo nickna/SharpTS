@@ -240,9 +240,15 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
     bundler's named Mach-O/signing refusal. The first tagged run remains the
     cross-platform acceptance event. ILC peak RSS on the 7 GB macOS arm64
     runner is the main operational risk.
-11. **SDK payload:** `SharpTS.Sdk/Sdk/Sdk.targets:92` drops the `dotnet`
-    prefix; `Sdk.props:28-29` RID-selects the compiler exe; package goes
-    RID-specific.
+11. **SDK payload: keep the existing managed, RID-neutral compiler.** The
+    original RID-native proposal is rejected for the default SDK: invoking
+    `SharpTS.Sdk` already means running `dotnet build`, its targets pass the
+    project's full `ReferencePath` through `-r`, and replacing that compiler
+    with the native SKU would silently lose the interop surface the SDK is
+    designed to compile. It would also turn one portable package into six
+    large payloads without removing a .NET prerequisite. A separate opt-in
+    native SDK package can be evaluated later if startup measurements justify it; the
+    standalone `sharpts-native-*` release assets remain the native distribution.
 12. *Optional:* replace `Packaging/` with ZIP + nuspec + HTTP PUT (~300
     lines); removes the NuGet.* closure.
 
