@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using ILVerify;
 
 namespace SharpTS.Compilation;
@@ -30,8 +32,18 @@ public class ILVerifier : IResolver, IDisposable
     /// </summary>
     /// <param name="assemblyStream">Stream containing the assembly to verify</param>
     /// <returns>List of verification error messages</returns>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "IL verification is a managed-host-only feature and rejects Native AOT before reflecting over ILVerify diagnostic objects.")]
     public List<string> Verify(Stream assemblyStream)
     {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+        {
+            throw new PlatformNotSupportedException(
+                "IL verification is not available in a native SharpTS build — use a managed host.");
+        }
+
         List<string> errors = [];
 
         assemblyStream.Position = 0;

@@ -350,7 +350,7 @@ public class UnionTypeGenerator
         );
 
         // Map this method to the interface's get_Value
-        var interfaceGetter = UnionTypeInterface.GetProperty("Value")?.GetGetMethod();
+        var interfaceGetter = _typeMapper.Types.TryGetProperty(UnionTypeInterface, "Value")?.GetGetMethod();
         if (interfaceGetter != null)
         {
             typeBuilder.DefineMethodOverride(getter, interfaceGetter);

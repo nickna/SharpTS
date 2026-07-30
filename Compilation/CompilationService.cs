@@ -195,6 +195,10 @@ public static class CompilationService
         "Trimming",
         "IL2026",
         Justification = "The method rejects Native AOT before loading or reflecting over emitted IL; in-process IL execution is a managed-host-only API.")]
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "The method rejects Native AOT before loading or reflecting over emitted IL; in-process IL execution is a managed-host-only API.")]
     public static RunResult Execute(byte[] assemblyBytes, TextWriter output,
         CancellationToken cancellationToken = default)
     {

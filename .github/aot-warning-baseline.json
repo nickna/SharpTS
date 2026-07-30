@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 167,
+  "total": 157,
   "codes": [
     {
       "code": "IL2026",
@@ -24,7 +24,7 @@
     },
     {
       "code": "IL2070",
-      "count": 65
+      "count": 61
     },
     {
       "code": "IL2072",
@@ -32,7 +32,7 @@
     },
     {
       "code": "IL2075",
-      "count": 74
+      "count": 68
     },
     {
       "code": "IL2077",
@@ -46,7 +46,7 @@
   "areas": [
     {
       "area": "Compilation",
-      "count": 85
+      "count": 75
     },
     {
       "area": "Declaration",
@@ -70,21 +70,6 @@
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2057",
       "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2070",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL3050",
-      "count": 2
     },
     {
       "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
@@ -147,14 +132,14 @@
       "count": 3
     },
     {
-      "file": "Runtime/RuntimeCallableDispatcher.cs",
-      "code": "IL2070",
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL3050",
       "count": 2
     },
     {
-      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
-      "code": "IL2075",
-      "count": 4
+      "file": "Runtime/RuntimeCallableDispatcher.cs",
+      "code": "IL2070",
+      "count": 2
     },
     {
       "file": "Runtime/Types/SharpTSAbortSignal.cs",
@@ -217,24 +202,24 @@
       "count": 3
     },
     {
-      "file": "Runtime/DotNet/DotNetClass.cs",
+      "file": "Runtime/Types/CompiledMessagePortBridge.cs",
       "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
-      "code": "IL2070",
       "count": 4
     },
     {
-      "file": "Runtime/DotNet/DotNetClass.cs",
-      "code": "IL2072",
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
-      "file": "Runtime/BuiltIns/Modules/Interpreter/VmModuleInterpreter.cs",
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL2070",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetClass.cs",
       "code": "IL2075",
-      "count": 1
+      "count": 2
     },
     {
       "file": "Compilation/AttributeMapper.cs",
@@ -245,16 +230,6 @@
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2070",
       "count": 1
-    },
-    {
-      "file": "Compilation/CompilationService.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Compilation/EmitterTypeHelpers.cs",
-      "code": "IL2070",
-      "count": 3
     },
     {
       "file": "Compilation/GeneratorMoveNextEmitter.Expressions.Yield.cs",
@@ -269,11 +244,6 @@
     {
       "file": "Compilation/ILCompiler.cs",
       "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Compilation/ILEmitter.Calls.Closures.cs",
-      "code": "IL2070",
       "count": 1
     },
     {
@@ -300,11 +270,6 @@
       "file": "Compilation/ILLabelValidator.cs",
       "code": "IL2075",
       "count": 10
-    },
-    {
-      "file": "Compilation/ILVerifier.cs",
-      "code": "IL2075",
-      "count": 3
     },
     {
       "file": "Compilation/RuntimeEmitter.Iterator.cs",
@@ -362,11 +327,6 @@
       "count": 1
     },
     {
-      "file": "Compilation/UnionTypeGenerator.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
       "file": "Compilation/UnionTypeHelper.cs",
       "code": "IL2075",
       "count": 1
@@ -382,9 +342,24 @@
       "count": 1
     },
     {
+      "file": "Runtime/BuiltIns/Modules/Interpreter/VmModuleInterpreter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
       "file": "Runtime/BuiltIns/ObjectBuiltIns.RuntimeDescriptors.cs",
       "code": "IL2075",
       "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetClass.cs",
+      "code": "IL2072",
+      "count": 1
+    },
+    {
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "code": "IL2070",
+      "count": 4
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

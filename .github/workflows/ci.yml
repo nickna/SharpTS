@@ -216,6 +216,17 @@ jobs:
             '--gen-decl is not available in the native SharpTS build' \
             "$scratch/gen-decl-error.txt"
 
+          if "$native" --compile Examples/AotCompileGate/main.ts --verify \
+              -o "$scratch/verify.dll" \
+              > "$scratch/verify-error.txt" 2>&1; then
+            echo "IL verification unexpectedly ran under Native AOT"
+            exit 1
+          fi
+          grep -Fq -- \
+            '--verify is not available in the native SharpTS build' \
+            "$scratch/verify-error.txt"
+          test ! -f "$scratch/verify.dll"
+
           # Exercise PE-Packer from inside SharpTS's partial-trim closure too.
           # The same empty DOTNET_ROOT used above also proves executable creation
           # comes from PE-Packer's embedded apphost rather than the runner's SDK.

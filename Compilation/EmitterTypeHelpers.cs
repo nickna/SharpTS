@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -23,6 +24,13 @@ namespace SharpTS.Compilation;
 /// </summary>
 internal static class EmitterTypeHelpers
 {
+    private const string EmittedGenericMetadataJustification =
+        "The closed generic type and open member are paired by the emitter; the selected member is persisted as an emitted IL metadata reference. Rooting every member on generic arguments would retain unrelated application metadata.";
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmittedGenericMetadataJustification)]
     public static ConstructorInfo ResolveConstructor(Type closedGeneric, ConstructorInfo openCtor)
     {
         if (ContainsTypeBuilder(closedGeneric))
@@ -34,6 +42,10 @@ internal static class EmitterTypeHelpers
                 $"No matching constructor on {closedGeneric} for open ctor {openCtor.DeclaringType}::{openCtor}");
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmittedGenericMetadataJustification)]
     public static MethodInfo ResolveMethod(Type closedGeneric, MethodInfo openMethod)
     {
         if (ContainsTypeBuilder(closedGeneric))
@@ -53,6 +65,10 @@ internal static class EmitterTypeHelpers
             $"No matching method on {closedGeneric} for open method {openMethod.DeclaringType}::{openMethod.Name}");
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = EmittedGenericMetadataJustification)]
     public static FieldInfo ResolveField(Type closedGeneric, FieldInfo openField)
     {
         if (ContainsTypeBuilder(closedGeneric))
