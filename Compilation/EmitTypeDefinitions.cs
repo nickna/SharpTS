@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.InteropServices;
 
 namespace SharpTS.Compilation;
 
@@ -66,5 +67,31 @@ internal static class EmitTypeDefinitions
         Type? baseTypeConstraint)
     {
         parameter.SetBaseTypeConstraint(baseTypeConstraint);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The P/Invoke and its primitive/string signature are serialized into a persisted generated assembly and marshalled later by CoreCLR, not the native compiler host.")]
+    internal static MethodBuilder DefinePInvokeMethod(
+        TypeBuilder typeBuilder,
+        string name,
+        string dllName,
+        MethodAttributes attributes,
+        CallingConventions callingConvention,
+        Type? returnType,
+        Type[]? parameterTypes,
+        CallingConvention nativeCallConvention,
+        CharSet nativeCharSet)
+    {
+        return typeBuilder.DefinePInvokeMethod(
+            name,
+            dllName,
+            attributes,
+            callingConvention,
+            returnType,
+            parameterTypes,
+            nativeCallConvention,
+            nativeCharSet);
     }
 }

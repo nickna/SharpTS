@@ -154,7 +154,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldsfld, storageField);
             _il.Emit(OpCodes.Ldloc, objLocal);
             _il.Emit(OpCodes.Ldloca, dictLocal);
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
             _il.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             var successLabel = _il.DefineLabel();
@@ -227,7 +227,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldsfld, storageField);
             _il.Emit(OpCodes.Ldloc, objLocal);
             _il.Emit(OpCodes.Ldloca, dictLocal);
-            var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+            var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
             _il.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
             var successLabel = _il.DefineLabel();
@@ -315,7 +315,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Ldsfld, storageField);
                 _il.Emit(OpCodes.Ldloc, objLocal);
                 _il.Emit(OpCodes.Ldloca, dictLocal);
-                var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
+                var tryGetValueMethod = Types.GetMethod(cwtType, "TryGetValue", typeof(object), dictType.MakeByRefType());
                 _il.Emit(OpCodes.Callvirt, tryGetValueMethod);
 
                 var validLabel = _il.DefineLabel();

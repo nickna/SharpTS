@@ -291,12 +291,12 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     {
         if (BuilderType == _types.AsyncTaskMethodBuilder)
         {
-            return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null)!;
+            return _types.GetMethod(BuilderType, "SetResult", BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes);
         }
         else
         {
             var innerType = BuilderType.GetGenericArguments()[0];
-            return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, [innerType], null)!;
+            return _types.GetMethod(BuilderType, "SetResult", BindingFlags.Public | BindingFlags.Instance, innerType);
         }
     }
 
@@ -312,7 +312,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     /// </summary>
     public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethodForLock()
     {
-        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var methods = _types.GetMethods(BuilderType, BindingFlags.Public | BindingFlags.Instance);
         var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
         return EmitGenerics.MakeGenericMethod(awaitMethod, typeof(TaskAwaiter), _stateMachineType);
     }

@@ -575,7 +575,7 @@ public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
     public MethodInfo GetBuilderSetResultMethod()
     {
         var innerType = BuilderType.GetGenericArguments()[0];
-        return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, [innerType], null)!;
+        return _types.GetMethod(BuilderType, "SetResult", BindingFlags.Public | BindingFlags.Instance, innerType);
     }
 
     // GetAwaiterIsCompletedGetter / GetAwaiterGetResultMethod / GetTaskGetAwaiterMethod moved to the

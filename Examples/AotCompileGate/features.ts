@@ -1,3 +1,8 @@
+// Importing this module makes the native compiler serialize the DNS late-binding
+// call targets. They need not be invoked; the compile itself exercises the
+// metadata lookup seam.
+import * as dns from "dns";
+
 class Counter {
     accessor total: number = 0;
     #step: number;

@@ -15,7 +15,8 @@ public partial class RuntimeEmitter
     private void EmitHardLinkPInvokeMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Define Windows kernel32.dll CreateHardLinkW P/Invoke
-        _kernel32CreateHardLink = typeBuilder.DefinePInvokeMethod(
+        _kernel32CreateHardLink = EmitTypeDefinitions.DefinePInvokeMethod(
+            typeBuilder,
             "CreateHardLinkW",
             "kernel32.dll",
             MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.PinvokeImpl,
@@ -28,7 +29,8 @@ public partial class RuntimeEmitter
         _kernel32CreateHardLink.SetImplementationFlags(MethodImplAttributes.PreserveSig);
 
         // Define Unix libc link P/Invoke
-        _libcLink = typeBuilder.DefinePInvokeMethod(
+        _libcLink = EmitTypeDefinitions.DefinePInvokeMethod(
+            typeBuilder,
             "link",
             "libc",
             MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.PinvokeImpl,

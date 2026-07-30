@@ -201,7 +201,7 @@ public class TypeProvider
     public Type IListOfObject => MakeGenericType(IListOpen, Object);
     public Type ICollectionOfObject => MakeGenericType(ICollectionOpen, Object);
     public Type KeyValuePairStringObject => MakeGenericType(KeyValuePairOpen, String, Object);
-    public Type DictionaryStringObjectEnumerator => DictionaryStringObject.GetMethod("GetEnumerator")!.ReturnType;
+    public Type DictionaryStringObjectEnumerator => GetMethodNoParams(DictionaryStringObject, "GetEnumerator").ReturnType;
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);
     public Type HashSetOfObject => MakeGenericType(HashSetOpen, Object);
     public Type ConditionalWeakTableObjectObject => MakeGenericType(ConditionalWeakTableOpen, Object, Object);
@@ -218,10 +218,10 @@ public class TypeProvider
 
     /// <summary>The <c>StrongBox&lt;object&gt;(object value)</c> constructor.</summary>
     public ConstructorInfo StrongBoxOfObjectCtor =>
-        StrongBoxOfObject.GetConstructors().Single(c => c.GetParameters().Length == 1);
+        GetConstructors(StrongBoxOfObject).Single(c => c.GetParameters().Length == 1);
 
     /// <summary>The public <c>StrongBox&lt;object&gt;.Value</c> field.</summary>
-    public FieldInfo StrongBoxOfObjectValueField => StrongBoxOfObject.GetField("Value")!;
+    public FieldInfo StrongBoxOfObjectValueField => GetField(StrongBoxOfObject, "Value");
 
     #endregion
 
@@ -288,7 +288,7 @@ public class TypeProvider
 
     public Type PropertyInfo => Resolve("System.Reflection.PropertyInfo");
     public Type FieldInfo => Resolve("System.Reflection.FieldInfo");
-    public Type FieldInfoArray => FieldInfo.MakeArrayType();
+    public Type FieldInfoArray => MakeArrayType(FieldInfo);
     public Type ConstructorInfo => Resolve("System.Reflection.ConstructorInfo");
     public Type ParameterInfo => Resolve("System.Reflection.ParameterInfo");
     public Type Assembly => Resolve("System.Reflection.Assembly");
@@ -459,6 +459,14 @@ public class TypeProvider
         return _typeCache.GetOrAdd(fullName, ResolveCore);
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = EmitMetadataLookupJustification)]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = EmitMetadataLookupJustification)]
     private Type ResolveCore(string fullName)
     {
         var type = Type.GetType(fullName, throwOnError: false);
@@ -505,6 +513,10 @@ public class TypeProvider
     /// <summary>
     /// Creates an array type for the specified element type.
     /// </summary>
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = EmitMetadataLookupJustification)]
     public Type MakeArrayType(Type elementType)
     {
         return elementType.MakeArrayType();
@@ -809,7 +821,7 @@ public class TypeProvider
     /// Used to convert object[] to List&lt;object?&gt; for BuiltInMethod.Call dispatch.
     /// </summary>
     public ConstructorInfo ListObjectNullableCtor_IEnumerable =>
-        _listObjectNullableCtor_IEnumerable ??= ListOfObjectNullable.GetConstructor([typeof(IEnumerable<object>)])!;
+        _listObjectNullableCtor_IEnumerable ??= GetConstructor(ListOfObjectNullable, typeof(IEnumerable<object>));
 
     #endregion
 
@@ -877,8 +889,11 @@ public class TypeProvider
     /// Gets the Dictionary&lt;string, object?&gt;.TryGetValue(string, out object?) method.
     /// </summary>
     public MethodInfo DictionaryStringObjectNullableTryGetValue =>
-        _dictionaryStringObjectNullableTryGetValue ??= MakeGenericType(DictionaryOpen, String, Object)
-            .GetMethod("TryGetValue", [String, Object.MakeByRefType()])!;
+        _dictionaryStringObjectNullableTryGetValue ??= GetMethod(
+            MakeGenericType(DictionaryOpen, String, Object),
+            "TryGetValue",
+            String,
+            Object.MakeByRefType());
 
     /// <summary>
     /// Gets the Dictionary&lt;string, object?&gt;.set_Item(string, object?) method.
@@ -1144,7 +1159,11 @@ public class TypeProvider
     /// Gets the Dictionary&lt;object, object&gt;.TryGetValue method.
     /// </summary>
     public MethodInfo DictionaryObjectObjectTryGetValue =>
-        _dictionaryObjectObjectTryGetValue ??= DictionaryObjectObject.GetMethod("TryGetValue", [Object, Object.MakeByRefType()])!;
+        _dictionaryObjectObjectTryGetValue ??= GetMethod(
+            DictionaryObjectObject,
+            "TryGetValue",
+            Object,
+            Object.MakeByRefType());
 
     /// <summary>
     /// Gets the Dictionary&lt;object, object&gt;.set_Item method.

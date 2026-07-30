@@ -485,7 +485,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, _driveContinuationMethod);
         var funcType = _types.MakeGenericType(typeof(Func<,,>), _types.Task, _types.Object, _types.TaskOfObject);
-        il.Emit(OpCodes.Newobj, funcType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, _types.Object, typeof(IntPtr)));
         il.Emit(OpCodes.Ldarg_0);  // state = this
         il.Emit(OpCodes.Ldc_I4, (int)System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, ResolveContinueWithFuncState());

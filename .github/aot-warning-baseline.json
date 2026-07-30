@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "total": 281,
+  "total": 221,
   "codes": [
     {
       "code": "IL2026",
-      "count": 46
+      "count": 18
     },
     {
       "code": "IL2055",
@@ -12,7 +12,7 @@
     },
     {
       "code": "IL2057",
-      "count": 5
+      "count": 4
     },
     {
       "code": "IL2060",
@@ -32,7 +32,7 @@
     },
     {
       "code": "IL2075",
-      "count": 135
+      "count": 106
     },
     {
       "code": "IL2077",
@@ -40,13 +40,13 @@
     },
     {
       "code": "IL3050",
-      "count": 20
+      "count": 18
     }
   ],
   "areas": [
     {
       "area": "Compilation",
-      "count": 190
+      "count": 130
     },
     {
       "area": "Declaration",
@@ -78,6 +78,26 @@
       "file": "Compilation/AssemblyReferenceLoader.cs",
       "code": "IL2026",
       "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMarshaller.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
+      "count": 2
     },
     {
       "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
@@ -130,13 +150,13 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
-    },
-    {
       "file": "Program.cs",
       "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Modules/DotNetExtensionImports.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
@@ -155,58 +175,23 @@
       "count": 3
     },
     {
+      "file": "Runtime/DotNet/DotNetMethod.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
       "file": "Compilation/UnionTypeHelper.cs",
       "code": "IL2075",
       "count": 1
     },
     {
-      "file": "Compilation/UnionTypeGenerator.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/TypeProvider.cs",
+      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
       "code": "IL3050",
-      "count": 2
-    },
-    {
-      "file": "Compilation/TypeProvider.cs",
-      "code": "IL2075",
-      "count": 6
-    },
-    {
-      "file": "Compilation/TypeProvider.cs",
-      "code": "IL2057",
       "count": 1
     },
     {
-      "file": "Compilation/TypeProvider.cs",
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
       "code": "IL2026",
-      "count": 14
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Utilities.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Modules/DotNetExtensionImports.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMarshaller.cs",
-      "code": "IL3050",
       "count": 1
     },
     {
@@ -305,23 +290,18 @@
       "count": 2
     },
     {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2026",
-      "count": 1
-    },
-    {
       "file": "Runtime/DotNet/DotNetOperatorResolver.cs",
       "code": "IL2070",
       "count": 3
     },
     {
-      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
-      "code": "IL3050",
+      "file": "Compilation/UnionTypeGenerator.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetMethod.cs",
-      "code": "IL3050",
+      "file": "Compilation/RuntimeTypes.Utilities.cs",
+      "code": "IL2075",
       "count": 1
     },
     {
@@ -330,19 +310,19 @@
       "count": 6
     },
     {
-      "file": "Compilation/RuntimeTypes.Promise.cs",
+      "file": "Compilation/ILCompiler.Functions.cs",
       "code": "IL2075",
-      "count": 3
+      "count": 4
     },
     {
-      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "file": "Compilation/ILCompiler.Functions.cs",
       "code": "IL2070",
-      "count": 3
+      "count": 1
     },
     {
-      "file": "Compilation/RuntimeTypes.Json.cs",
-      "code": "IL2075",
-      "count": 5
+      "file": "Compilation/ILCompiler.cs",
+      "code": "IL3050",
+      "count": 1
     },
     {
       "file": "Compilation/ILCompiler.Classes.Static.cs",
@@ -378,16 +358,6 @@
       "file": "Compilation/GeneratorMoveNextEmitter.Expressions.Yield.cs",
       "code": "IL2075",
       "count": 4
-    },
-    {
-      "file": "Compilation/ExpressionEmitterBase.cs",
-      "code": "IL2075",
-      "count": 5
-    },
-    {
-      "file": "Compilation/ExpressionEmitterBase.Constructors.cs",
-      "code": "IL2075",
-      "count": 3
     },
     {
       "file": "Compilation/EmitterTypeHelpers.cs",
@@ -435,49 +405,39 @@
       "count": 1
     },
     {
-      "file": "Compilation/AsyncStateMachineBuilder.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Compilation/AsyncMoveNextEmitter.Operators.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Compilation/AsyncGeneratorStateMachineBuilder.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/AsyncBuilderBase.cs",
-      "code": "IL2075",
-      "count": 7
-    },
-    {
-      "file": "Compilation/AsyncArrowStateMachineBuilder.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/ILCompiler.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
-      "code": "IL2070",
-      "count": 4
-    },
-    {
-      "file": "Compilation/ILCompiler.Functions.cs",
-      "code": "IL2070",
-      "count": 1
-    },
-    {
       "file": "Compilation/ILEmitter.Calls.Closures.cs",
       "code": "IL2070",
       "count": 1
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.Constructors.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
+      "code": "IL2070",
+      "count": 10
+    },
+    {
+      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Promise.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Objects.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Compilation/RuntimeTypes.Json.cs",
+      "code": "IL2075",
+      "count": 5
     },
     {
       "file": "Compilation/RuntimeTypes.Exceptions.cs",
@@ -500,11 +460,6 @@
       "count": 1
     },
     {
-      "file": "Compilation/RuntimeEmitter.TSHardLink.cs",
-      "code": "IL2026",
-      "count": 2
-    },
-    {
       "file": "Compilation/RuntimeEmitter.SymbolAccessors.cs",
       "code": "IL2026",
       "count": 1
@@ -515,29 +470,19 @@
       "count": 2
     },
     {
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "code": "IL2070",
+      "count": 4
+    },
+    {
       "file": "Compilation/RuntimeEmitter.Objects.Properties.cs",
       "code": "IL3050",
       "count": 1
     },
     {
-      "file": "Compilation/RuntimeEmitter.Objects.Extensibility.cs",
-      "code": "IL2075",
-      "count": 6
-    },
-    {
       "file": "Compilation/RuntimeEmitter.Iterator.cs",
       "code": "IL3050",
       "count": 1
-    },
-    {
-      "file": "Compilation/RuntimeEmitter.DnsResolver.cs",
-      "code": "IL2026",
-      "count": 6
-    },
-    {
-      "file": "Compilation/RuntimeEmitter.Dns.cs",
-      "code": "IL2026",
-      "count": 6
     },
     {
       "file": "Compilation/RuntimeEmitter.BigInt.cs",
@@ -580,24 +525,9 @@
       "count": 5
     },
     {
-      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
+      "file": "Compilation/RuntimeEmitter.Objects.Extensibility.cs",
       "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
-      "code": "IL2070",
-      "count": 10
-    },
-    {
-      "file": "Compilation/ILEmitter.Calls.Constructors.cs",
-      "code": "IL2026",
-      "count": 1
-    },
-    {
-      "file": "Compilation/ILCompiler.Functions.cs",
-      "code": "IL2075",
-      "count": 4
+      "count": 6
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

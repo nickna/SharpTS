@@ -112,9 +112,13 @@ Plan against these numbers, not the originals:
   lowered it to 382 and added 3,584 bytes (0.0038%). Fixed BCL factory and
   reflection-method metadata lookups lowered the inventory to 290. Documenting
   the already-explicit empty-location handling at single-file boundaries
-  lowered it to 281. CI pins total, per-code, per-area, and per-file/code
-  counts, so both increases and category swaps fail until the same PR updates
-  the explained baseline.
+  lowered it to 281. Routing the remaining required BCL, async-builder, emitted
+  member and P/Invoke metadata through the same seams lowered it to 221. The
+  win-arm64 image is 17,920 bytes smaller than the preceding measured
+  checkpoint and only 1,536 bytes (0.0016%) above the original 2,585-warning
+  image. CI pins total, per-code, per-area, and per-file/code counts, so both
+  increases and category swaps fail until the same PR updates the explained
+  baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -154,6 +158,45 @@ Plan against these numbers, not the originals:
   executable creation SDK-free, and the `SdkBundler` feature switch removes
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
+
+### Residual analyzer inventory (221)
+
+The cleanup tranches removed 2,364 of 2,585 warnings (91.5%) without broad
+`DynamicallyAccessedMembers` annotations. What remains is no longer one
+mechanical problem:
+
+| Analyzer | Count | Primary meaning now |
+|---|---:|---|
+| IL2075 | 106 | Reflection from a returned/derived `Type`: emitted runtime duck typing, compiler inspection of user types, and private Reflection.Emit validation |
+| IL2070 | 67 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
+| IL2026 | 18 | Assembly loading/type enumeration and other managed-only or explicitly unsupported native features |
+| IL3050 | 18 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
+| Other flow warnings | 12 | Four IL2057, two each IL2055/IL2060/IL2077, and one each IL2067/IL2072, concentrated in dynamic interop/type synthesis |
+
+The remaining work is split at three ownership boundaries:
+
+1. **Managed-only feature guards.** Gate in-process compiled-assembly execution,
+   third-party assembly loading, declaration discovery and verification before
+   their reflection calls, using the same named native-SKU errors already used
+   at the CLI boundary. These should remove or narrowly justify most IL2026
+   warnings without changing managed behavior.
+2. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
+   emitters and `Runtime/DotNet` deliberately inspect arbitrary types. Broad
+   member annotations were measured and rejected because they increased the
+   native image by 6.55%. Define the supported native BCL surface and root only
+   that surface; guard third-party and unavailable generic shapes.
+3. **Generated/runtime reflection.** `RuntimeTypes`, property descriptors and
+   object helpers reflect over SharpTS-emitted managed types. Separate code
+   that only runs later under CoreCLR from code reachable in the native
+   interpreter, then put exact suppressions or generated accessors at that
+   boundary. `ILLabelValidator` and the generator spill reader are a distinct
+   refactor: they inspect private Reflection.Emit implementation fields and
+   should eventually track their state explicitly instead.
+
+Analyzer zero is not itself the goal. The target is zero unexplained warnings:
+each residual warning should end at a tested metadata seam, a feature guard, or
+an explicit native interop limitation. Blanket class/file suppressions remain
+out of scope.
 
 ### Phase 1 — interpreter correctness and speed (~2–3 weeks; wins on JIT too)
 

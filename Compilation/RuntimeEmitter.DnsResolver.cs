@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
 
         // var type = Type.GetType("SharpTS.Compilation.RuntimeTypes, SharpTS");
         il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
-        il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetType", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Type), "GetType", typeof(string)));
         var typeLocal = il.DeclareLocal(typeof(Type));
         il.Emit(OpCodes.Stloc, typeLocal);
 

@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
                 var syncDone = il.DefineLabel();
 
                 il.Emit(OpCodes.Ldstr, "SharpTS.Compilation.RuntimeTypes, SharpTS");
-                il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetType", [_types.String])!);
+                il.Emit(OpCodes.Call, _types.GetMethod(typeof(Type), "GetType", _types.String));
                 il.Emit(OpCodes.Stloc, typeLocal);
                 il.Emit(OpCodes.Ldloc, typeLocal);
                 il.Emit(OpCodes.Brfalse, syncDone);
