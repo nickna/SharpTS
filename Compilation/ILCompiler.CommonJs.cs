@@ -237,7 +237,5 @@ public partial class ILCompiler
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);
-
-        ILLabelValidator.Validate(il, $"CJS module init {module.Path}");
     }
 }

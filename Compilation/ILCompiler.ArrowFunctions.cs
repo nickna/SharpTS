@@ -1622,13 +1622,5 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
-        // Include source line + module path in diagnostic so unmarked labels are actionable.
-        var arrowLine = arrow.Parameters.FirstOrDefault()?.Name.Line
-                        ?? arrow.Name?.Line;
-        _arrowToModule.TryGetValue(arrow, out var arrowModulePath);
-        var locHint = (arrowModulePath is not null || arrowLine is not null)
-            ? $" [{arrowModulePath ?? "?"}:{arrowLine?.ToString() ?? "?"}]"
-            : "";
-        ILLabelValidator.Validate(il, $"arrow {method.DeclaringType?.FullName}::{method.Name}{locHint}");
     }
 }

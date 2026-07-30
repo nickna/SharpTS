@@ -761,8 +761,6 @@ public partial class ILCompiler
             // Emit MoveNext body
             var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
             moveNextEmitter.EmitMoveNext(func.Body, ctx, _types.Object, func.Parameters);
-            ILLabelValidator.Validate(smBuilder.MoveNextMethod.GetILGenerator(),
-                $"async MoveNext {funcName}");
 
             // Emit async arrow MoveNext bodies
             foreach (var arrowInfo in analysis.AsyncArrows)
@@ -839,8 +837,6 @@ public partial class ILCompiler
         }
 
         arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object, arrow.Parameters);
-        ILLabelValidator.Validate(arrowBuilder.MoveNextMethod.GetILGenerator(),
-            $"async arrow MoveNext");
     }
 
     private void EmitAsyncStubMethod(
@@ -1088,8 +1084,6 @@ public partial class ILCompiler
         // so the emitter doesn't need external references to the class's lock fields
         var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
         moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object, method.Parameters);
-        ILLabelValidator.Validate(smBuilder.MoveNextMethod.GetILGenerator(),
-            $"async method MoveNext {methodBuilder.DeclaringType?.Name}::{method.Name.Lexeme}");
 
         // Emit MoveNext bodies for async arrows. Delegate to the shared EmitAsyncArrowMoveNext (the
         // same path free async functions use) rather than emitting inline. The inline path reused this
@@ -1296,8 +1290,6 @@ public partial class ILCompiler
             }
 
             arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object, arrow.Parameters);
-            ILLabelValidator.Validate(arrowBuilder.MoveNextMethod.GetILGenerator(),
-                $"standalone async arrow MoveNext");
 
             // Finalize the type
             arrowBuilder.CreateType();

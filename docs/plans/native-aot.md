@@ -132,10 +132,16 @@ Plan against these numbers, not the originals:
   the assembly-local `$IHasFields` contract, and routing recognised callable
   shapes through `RuntimeCallableDispatcher`, lowered the inventory to 116.
   The resulting image is 93,498,880 bytes: 1,536 bytes smaller than the prior
-  checkpoint and 951,296 bytes (1.01%) smaller than the original 2,585-warning
-  image. CI pins total, per-code, per-area, and per-file/code counts, so both
-  increases and category swaps fail until the same PR updates the explained
-  baseline.
+  checkpoint. Removing the disabled-by-default `ILLabelValidator` diagnostic
+  and the obsolete generator private-stack reader lowered the inventory to
+  102. The metadata writer remains the mandatory label validator; generator
+  suspension safety is now expressed by the existing `SpillBoxed` stack-neutral
+  emission contract instead of private PersistedAssemblyBuilder fields. The
+  resulting image is 93,400,064 bytes: 98,816 bytes smaller than the prior
+  checkpoint and 1,050,112 bytes (1.11%) smaller than the original
+  2,585-warning image. CI pins total, per-code, per-area, and per-file/code
+  counts, so both increases and category swaps fail until the same PR updates
+  the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -176,15 +182,15 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (116)
+### Residual analyzer inventory (102)
 
-The cleanup tranches removed 2,469 of 2,585 warnings (95.5%) without broad
+The cleanup tranches removed 2,483 of 2,585 warnings (96.1%) without broad
 `DynamicallyAccessedMembers` annotations. What remains is no longer one
 mechanical problem:
 
 | Analyzer | Count | Primary meaning now |
 |---|---:|---|
-| IL2075 | 36 | Reflection from a returned/derived `Type`: dynamic .NET interop, generic managed runtime fallbacks, and private Reflection.Emit validation |
+| IL2075 | 22 | Reflection from a returned/derived `Type`: dynamic .NET interop and generic managed runtime fallbacks |
 | IL2070 | 58 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
 | IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
 | IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
@@ -203,8 +209,9 @@ The remaining work is split at three ownership boundaries:
    member annotations were measured and rejected because they increased the
    native image by 6.55%. Define the supported native BCL surface and root only
    that surface; guard third-party and unavailable generic shapes.
-3. **Generated/runtime reflection.** Known compiler-emitted managed shapes now
-   go through `ManagedEmittedShapeReflection`. Exact-name validation covers
+3. **Generated/runtime reflection (done for the current inventory).** Known
+   compiler-emitted managed shapes now go through
+   `ManagedEmittedShapeReflection`. Exact-name validation covers
    `$Object`, callable, stream, message-port, array-buffer, date, and
    promise-rejection shapes. Arbitrarily named emitted user classes are
    validated by the `$IHasFields` interface defined in the same output assembly;
@@ -213,9 +220,13 @@ The remaining work is split at three ownership boundaries:
    it rejects Native AOT before reflection. Recognised callbacks share
    `RuntimeCallableDispatcher`; fallbacks that intentionally inspect arbitrary
    CLR shapes remain unsuppressed and belong to the dynamic interop policy.
-   `ILLabelValidator` and the generator spill reader are the remaining distinct
-   refactor: they inspect private Reflection.Emit implementation fields and
-   should eventually track their state explicitly instead.
+   The optional `ILLabelValidator` duplicate was removed rather than routing
+   2,126 `GetILGenerator()` acquisitions across 250 files through a diagnostic
+   wrapper; `PersistedAssemblyBuilder.GenerateMetadata` still rejects every
+   unmarked branch target. The generator spill reader was also removed:
+   multi-operand state-machine emission already spills operands before nested
+   suspension, and the focused yield/yield-star plus IL-verification suites
+   enforce that source-owned invariant.
 
 Analyzer zero is not itself the goal. The target is zero unexplained warnings:
 each residual warning should end at a tested metadata seam, a feature guard, or

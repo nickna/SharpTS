@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 116,
+  "total": 102,
   "codes": [
     {
       "code": "IL2026",
@@ -28,7 +28,7 @@
     },
     {
       "code": "IL2075",
-      "count": 36
+      "count": 22
     },
     {
       "code": "IL3050",
@@ -38,7 +38,7 @@
   "areas": [
     {
       "area": "Compilation",
-      "count": 55
+      "count": 41
     },
     {
       "area": "Declaration",
@@ -62,11 +62,6 @@
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2057",
       "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
     },
     {
       "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
@@ -104,14 +99,14 @@
       "count": 2
     },
     {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2057",
-      "count": 1
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2070",
+      "count": 3
     },
     {
       "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL3050",
-      "count": 3
+      "code": "IL2057",
+      "count": 1
     },
     {
       "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
@@ -149,9 +144,9 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL3050",
+      "count": 3
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",
@@ -159,24 +154,19 @@
       "count": 4
     },
     {
-      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
-      "code": "IL2075",
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
       "count": 2
     },
     {
       "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2075",
-      "count": 1
+      "code": "IL3050",
+      "count": 2
     },
     {
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2070",
       "count": 1
-    },
-    {
-      "file": "Compilation/GeneratorMoveNextEmitter.Expressions.Yield.cs",
-      "code": "IL2075",
-      "count": 4
     },
     {
       "file": "Compilation/ILEmitter.Calls.ExternalInterop.cs",
@@ -199,11 +189,6 @@
       "count": 12
     },
     {
-      "file": "Compilation/ILLabelValidator.cs",
-      "code": "IL2075",
-      "count": 10
-    },
-    {
       "file": "Compilation/RuntimeTypes.Json.cs",
       "code": "IL2075",
       "count": 1
@@ -214,14 +199,14 @@
       "count": 3
     },
     {
+      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
       "file": "Compilation/RuntimeTypes.Reflection.cs",
       "code": "IL2070",
       "count": 6
-    },
-    {
-      "file": "Compilation/UnionTypeHelper.cs",
-      "code": "IL2075",
-      "count": 1
     },
     {
       "file": "Declaration/TypeInspector.cs",
@@ -255,8 +240,13 @@
     },
     {
       "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL3050",
-      "count": 2
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Compilation/UnionTypeHelper.cs",
+      "code": "IL2075",
+      "count": 1
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

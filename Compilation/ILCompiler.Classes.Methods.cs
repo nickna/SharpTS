@@ -1156,6 +1156,5 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
-        ILLabelValidator.Validate(il, $"method {typeBuilder.Name}::{method.Name.Lexeme}");
     }
 }
