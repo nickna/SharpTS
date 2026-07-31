@@ -156,9 +156,12 @@ Plan against these numbers, not the originals:
   retains BCL, embedder, and third-party interop; the Native SKU now rejects
   dynamic .NET binding with a tested diagnostic until a closed BCL contract is
   designed and rooted. Trimming that binder closure reduced the win-arm64 image
-  by 9,216 bytes (0.0099%) to 93,394,432 bytes. CI pins total, per-code,
-  per-area, and per-file/code counts, so both increases and category swaps fail
-  until the same PR updates the explained baseline.
+  by 9,216 bytes (0.0099%) to 93,394,432 bytes. Routing the compile-time half
+  of .NET interop through that same boundary then reduced the project analyzer
+  inventory to zero. The win-arm64 image fell another 18,432 bytes (0.0197%)
+  to 93,376,000 bytes. CI pins total, per-code, per-area, and per-file/code
+  counts; the checked-in inventory is now empty, so any new project analyzer
+  warning fails the ratchet.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -199,18 +202,16 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (48)
+### Project analyzer inventory (0)
 
-The cleanup tranches removed 2,537 of 2,585 warnings (98.1%) without broad
-`DynamicallyAccessedMembers` annotations. Every remaining warning now belongs
-to the dynamic .NET interop policy:
-
-| Analyzer | Count | Primary meaning now |
-|---|---:|---|
-| IL2075 | 2 | Reflection from a returned `Type`: compiled event delegates and extension imports |
-| IL2070 | 41 | Reflection on parameters: external IL emission, declaration discovery, and type synthesis |
-| IL2057 | 1 | A compiled custom-attribute type name resolved dynamically |
-| IL3050 | 4 | Array and delegate shapes synthesized for compile-time external-type modeling |
+The cleanup tranches removed or isolated all 2,585 project warnings without
+broad `DynamicallyAccessedMembers` annotations. The structured baseline is
+empty: totals, codes, areas, and file/code entries are all zero-length. This is
+the SDK AOT/trim/single-file analyzer inventory over SharpTS source. A full
+Native AOT publish can still report separate ILCompiler and dependency
+diagnostics; those are not silently represented by this source-analyzer
+baseline and must continue to be evaluated through the native publish/smoke
+gate.
 
 The work is split at four ownership boundaries:
 
@@ -225,7 +226,7 @@ The work is split at four ownership boundaries:
    `SetProperty` now route through `ManagedStructuralClrReflection`. The seam
    remains deliberately open-world under CoreCLR for embedders and third-party
    assemblies, but rejects Native AOT before inspecting an arbitrary type.
-3. **Dynamic .NET interop policy (runtime binder done).** The open-world
+3. **Dynamic .NET interop policy (done for the current inventory).** The open-world
    `Runtime/DotNet` binder now routes type resolution, member discovery,
    construction, generic closure, array creation, marshalling, operators, and
    delegate shims through `ManagedDotNetInterop`. CoreCLR retains the complete
@@ -235,12 +236,15 @@ The work is split at four ownership boundaries:
    and root a closed Native-SKU BCL surface separately if one is worth
    supporting.
 
-   The remaining 48 warnings are the compile-time half of the same policy:
-   30 in external IL emission, nine in declaration inspection, eight in
-   external type synthesis, and one in extension imports. Broad member
-   annotations remain rejected because they increased the native image by
-   6.55%; these paths should use precise operations at the managed boundary
-   while retaining their current Managed-SKU behavior.
+   External IL emission, declaration inspection, external type synthesis,
+   extension imports, and custom CLR attributes use the same operation-level
+   boundary. Broad member annotations remain rejected because they increased
+   the native image by 6.55%. The closed `Obsolete`/`Serializable`/
+   `NonSerialized` mappings retain directly rooted constructors and remain
+   available in the native compiler; only arbitrary attribute-type discovery
+   is managed-only. Managed behavior is unchanged, and the native
+   straight-TypeScript compiler is verified not to enter the open-world
+   boundary.
 4. **Generated/runtime reflection (done for the current inventory).** Known
    compiler-emitted managed shapes now go through
    `ManagedEmittedShapeReflection`. Exact-name validation covers

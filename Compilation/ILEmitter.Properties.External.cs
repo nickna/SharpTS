@@ -2,6 +2,7 @@ using System.Reflection.Emit;
 using SharpTS.Declaration;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Runtime.DotNet;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -18,8 +19,14 @@ public partial class ILEmitter
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
 
         // Try to find a static property (first PascalCase, then original name)
-        var property = externalType.GetProperty(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                    ?? externalType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        var property = ManagedDotNetInterop.GetProperty(
+                           externalType, pascalPropertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Static)
+                       ?? ManagedDotNetInterop.GetProperty(
+                           externalType, propertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Static);
         if (property != null &&
             DotNetInteropClassifier.UnsupportedSlotReason(property.PropertyType) != null)
         {
@@ -43,8 +50,14 @@ public partial class ILEmitter
         }
 
         // Try to find a static field
-        var field = externalType.GetField(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                 ?? externalType.GetField(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        var field = ManagedDotNetInterop.GetField(
+                        externalType, pascalPropertyName,
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Static)
+                    ?? ManagedDotNetInterop.GetField(
+                        externalType, propertyName,
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Static);
         if (field != null &&
             DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) != null)
         {
@@ -282,8 +295,14 @@ public partial class ILEmitter
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
 
         // Try to find the property (first PascalCase, then original name)
-        var property = externalType.GetProperty(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                    ?? externalType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var property = ManagedDotNetInterop.GetProperty(
+                           externalType, pascalPropertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Instance)
+                       ?? ManagedDotNetInterop.GetProperty(
+                           externalType, propertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Instance);
         if (property != null &&
             DotNetInteropClassifier.UnsupportedSlotReason(property.PropertyType) != null)
         {
@@ -293,8 +312,14 @@ public partial class ILEmitter
         if (property == null)
         {
             // Try to find a field instead
-            var field = externalType.GetField(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                     ?? externalType.GetField(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var field = ManagedDotNetInterop.GetField(
+                            externalType, pascalPropertyName,
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance)
+                        ?? ManagedDotNetInterop.GetField(
+                            externalType, propertyName,
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance);
             if (field != null &&
                 DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) != null)
             {
@@ -340,8 +365,14 @@ public partial class ILEmitter
         string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
 
         // Try to find the property (first PascalCase, then original name)
-        var property = externalType.GetProperty(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                    ?? externalType.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var property = ManagedDotNetInterop.GetProperty(
+                           externalType, pascalPropertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Instance)
+                       ?? ManagedDotNetInterop.GetProperty(
+                           externalType, propertyName,
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Instance);
         if (property != null &&
             DotNetInteropClassifier.UnsupportedSlotReason(property.PropertyType) != null)
         {
@@ -351,8 +382,14 @@ public partial class ILEmitter
         if (property == null)
         {
             // Try to find a field instead
-            var field = externalType.GetField(pascalPropertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                     ?? externalType.GetField(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var field = ManagedDotNetInterop.GetField(
+                            externalType, pascalPropertyName,
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance)
+                        ?? ManagedDotNetInterop.GetField(
+                            externalType, propertyName,
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.Instance);
             if (field != null &&
                 DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) != null)
             {
