@@ -144,13 +144,13 @@ $summary = [ordered]@{
             Group-Object file, code |
             ForEach-Object {
                 $first = $_.Group[0]
-                [ordered]@{
+                [pscustomobject][ordered]@{
                     file = $first.file
                     code = $first.code
                     count = $_.Count
                 }
             } |
-            Sort-Object file, code
+            Sort-Object -Property file,code
     )
 }
 

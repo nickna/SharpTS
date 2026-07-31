@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 102,
+  "total": 91,
   "codes": [
     {
       "code": "IL2026",
@@ -20,7 +20,7 @@
     },
     {
       "code": "IL2070",
-      "count": 58
+      "count": 49
     },
     {
       "code": "IL2072",
@@ -28,7 +28,7 @@
     },
     {
       "code": "IL2075",
-      "count": 22
+      "count": 20
     },
     {
       "code": "IL3050",
@@ -38,7 +38,7 @@
   "areas": [
     {
       "area": "Compilation",
-      "count": 41
+      "count": 30
     },
     {
       "area": "Declaration",
@@ -64,106 +64,6 @@
       "count": 1
     },
     {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMarshaller.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMethod.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetOperatorResolver.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2026",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2055",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2057",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSKeyObject.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSPropertyDescriptor.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/Types/SharpTSProxy.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Runtime/Types/TSFunctionCallableAdapter.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/VmContext.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Runtime/Types/VmModule.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL3050",
-      "count": 3
-    },
-    {
-      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
-      "code": "IL2070",
-      "count": 4
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
       "file": "Compilation/AttributeMapper.cs",
       "code": "IL2070",
       "count": 1
@@ -187,26 +87,6 @@
       "file": "Compilation/ILEmitter.Properties.External.cs",
       "code": "IL2070",
       "count": 12
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Json.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Objects.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Compilation/RuntimeTypes.Reflection.cs",
-      "code": "IL2070",
-      "count": 6
     },
     {
       "file": "Declaration/TypeInspector.cs",
@@ -244,9 +124,109 @@
       "count": 1
     },
     {
-      "file": "Compilation/UnionTypeHelper.cs",
+      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2060",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
+      "code": "IL3050",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMarshaller.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMethod.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
+      "code": "IL3050",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetOperatorResolver.cs",
+      "code": "IL2070",
+      "count": 3
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2026",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2055",
+      "count": 2
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL2057",
+      "count": 1
+    },
+    {
+      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
+      "code": "IL3050",
+      "count": 3
+    },
+    {
+      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
       "code": "IL2075",
       "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSKeyObject.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/SharpTSPropertyDescriptor.cs",
+      "code": "IL2075",
+      "count": 2
+    },
+    {
+      "file": "Runtime/Types/SharpTSProxy.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Runtime/Types/TSFunctionCallableAdapter.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "Runtime/Types/VmContext.cs",
+      "code": "IL2075",
+      "count": 3
+    },
+    {
+      "file": "Runtime/Types/VmModule.cs",
+      "code": "IL2075",
+      "count": 1
+    },
+    {
+      "file": "TypeSystem/DotNetTypeSynthesizer.cs",
+      "code": "IL2070",
+      "count": 4
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

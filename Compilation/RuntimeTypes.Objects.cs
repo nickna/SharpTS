@@ -210,21 +210,24 @@ public static partial class RuntimeTypes
             var pascalName = name.Length > 0
                 ? char.ToUpperInvariant(name[0]) + name[1..]
                 : name;
-            var staticGetter = classType.GetMethod("get_" + pascalName, staticPublic);
+            var staticGetter = ManagedOutputRuntimeReflection.GetMethodByName(
+                classType, "get_" + pascalName, staticPublic);
             if (staticGetter != null)
             {
                 return ReflectionCache.GetInvoker(staticGetter).Invoke(null, default(Span<object?>));
             }
 
             // Static field with the user-declared name.
-            var staticField = classType.GetField(name, staticPublic);
+            var staticField = ManagedOutputRuntimeReflection.GetFieldByName(
+                classType, name, staticPublic);
             if (staticField != null)
             {
                 return staticField.GetValue(null);
             }
 
             // Static method — bind with null receiver so InvokeValue forwards args as-is.
-            var staticMethod = classType.GetMethod(name, staticPublic);
+            var staticMethod = ManagedOutputRuntimeReflection.GetMethodByName(
+                classType, name, staticPublic);
             if (staticMethod != null)
             {
                 return CreateBoundMethod(null!, staticMethod);
