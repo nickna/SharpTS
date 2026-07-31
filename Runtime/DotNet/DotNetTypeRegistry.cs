@@ -25,9 +25,10 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static Type? Resolve(string clrTypeName)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         if (_cache.TryGetValue(clrTypeName, out var cached)) return cached;
 
-        var type = Type.GetType(clrTypeName, throwOnError: false);
+        var type = ManagedDotNetInterop.ResolveType(clrTypeName);
         if (type == null)
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
@@ -36,7 +37,7 @@ public static class DotNetTypeRegistry
                 // missing dependency) must not poison resolution of unrelated types.
                 try
                 {
-                    type = assembly.GetType(clrTypeName, throwOnError: false);
+                    type = ManagedDotNetInterop.ResolveType(assembly, clrTypeName);
                 }
                 catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
                 {
@@ -66,6 +67,7 @@ public static class DotNetTypeRegistry
     /// </param>
     public static Type? ResolveFriendly(string friendlyName, Func<string, Type?>? resolve = null)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         ArgumentException.ThrowIfNullOrWhiteSpace(friendlyName);
         resolve ??= Resolve;
 
@@ -76,7 +78,7 @@ public static class DotNetTypeRegistry
         if (name.EndsWith("[]", StringComparison.Ordinal))
         {
             var element = ResolveFriendly(name[..^2], resolve);
-            return element?.MakeArrayType();
+            return element == null ? null : ManagedDotNetInterop.MakeArrayType(element);
         }
 
         if (name.EndsWith('?'))
@@ -84,7 +86,7 @@ public static class DotNetTypeRegistry
             var underlying = ResolveFriendly(name[..^1], resolve);
             if (underlying is not { IsValueType: true }) return null;
             var nullableDefinition = resolve("System.Nullable`1") ?? typeof(Nullable<>);
-            return nullableDefinition.MakeGenericType(underlying);
+            return ManagedDotNetInterop.MakeGenericType(nullableDefinition, underlying);
         }
 
         int genericStart = name.IndexOf('<');
@@ -118,7 +120,7 @@ public static class DotNetTypeRegistry
 
         try
         {
-            return definition.MakeGenericType(arguments);
+            return ManagedDotNetInterop.MakeGenericType(definition, arguments);
         }
         catch (ArgumentException ex)
         {
@@ -257,12 +259,13 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MethodInfo[] GetMethods(Type type, string jsName, bool isStatic)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         return _methodCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
-            return t.GetMethods(flags)
+            return ManagedDotNetInterop.GetMethods(t, flags)
                 .Where(m =>
                     (m.Name == name || m.Name == pascal) &&
                     DotNetInteropClassifier.UnsupportedMethodReason(m) == null)
@@ -275,20 +278,23 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MemberInfo? GetPropertyOrField(Type type, string jsName, bool isStatic)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         return _propertyOrFieldCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
 
-            var property = t.GetProperty(pascal, flags) ?? t.GetProperty(name, flags);
+            var property = ManagedDotNetInterop.GetProperty(t, pascal, flags) ??
+                           ManagedDotNetInterop.GetProperty(t, name, flags);
             if (property != null &&
                 DotNetInteropClassifier.UnsupportedSlotReason(property.PropertyType) == null)
             {
                 return property;
             }
 
-            var field = t.GetField(pascal, flags) ?? t.GetField(name, flags);
+            var field = ManagedDotNetInterop.GetField(t, pascal, flags) ??
+                        ManagedDotNetInterop.GetField(t, name, flags);
             return field != null &&
                    DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) == null
                 ? field
@@ -302,12 +308,14 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static EventInfo? GetEvent(Type type, string jsName, bool isStatic)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         return _eventCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
             string pascal = ToPascalCase(name);
             var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
-            return t.GetEvent(pascal, flags) ?? t.GetEvent(name, flags);
+            return ManagedDotNetInterop.GetEvent(t, pascal, flags) ??
+                   ManagedDotNetInterop.GetEvent(t, name, flags);
         });
     }
 
@@ -316,10 +324,12 @@ public static class DotNetTypeRegistry
     /// </summary>
     internal static PropertyInfo[] GetIndexers(Type type, bool writable)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         return _indexerCache.GetOrAdd((type, writable), static key =>
         {
             var (target, write) = key;
-            return target.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            return ManagedDotNetInterop.GetProperties(
+                    target, BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.GetIndexParameters().Length == 1 &&
                             (write ? p.CanWrite : p.CanRead) &&
                             DotNetInteropClassifier.UnsupportedSlotReason(

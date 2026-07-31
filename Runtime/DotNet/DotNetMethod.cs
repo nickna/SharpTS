@@ -142,7 +142,8 @@ internal sealed class DotNetMethod : ISharpTSCallable
                 interpreter);
         }
 
-        var variadic = Array.CreateInstance(elementType, Math.Max(0, variadicCount));
+        var variadic = ManagedDotNetInterop.CreateArray(
+            elementType, Math.Max(0, variadicCount));
         for (int i = 0; i < variadicCount; i++)
         {
             variadic.SetValue(DotNetMarshaller.Convert(arguments[fixedCount + i], elementType, interpreter), i);

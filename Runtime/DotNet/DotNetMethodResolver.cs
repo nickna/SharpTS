@@ -233,7 +233,7 @@ internal static class DotNetMethodResolver
                     return typeof(object[]);
                 }
             }
-            return (elementType ?? typeof(object)).MakeArrayType();
+            return ManagedDotNetInterop.MakeArrayType(elementType ?? typeof(object));
         }
         return argument is DotNetInstance instance
             ? instance.Type

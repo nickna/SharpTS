@@ -1,38 +1,22 @@
 {
   "schemaVersion": 1,
-  "total": 78,
+  "total": 48,
   "codes": [
     {
-      "code": "IL2026",
-      "count": 1
-    },
-    {
-      "code": "IL2055",
-      "count": 2
-    },
-    {
       "code": "IL2057",
-      "count": 2
-    },
-    {
-      "code": "IL2060",
-      "count": 2
+      "count": 1
     },
     {
       "code": "IL2070",
-      "count": 49
-    },
-    {
-      "code": "IL2072",
-      "count": 1
+      "count": 41
     },
     {
       "code": "IL2075",
-      "count": 7
+      "count": 2
     },
     {
       "code": "IL3050",
-      "count": 14
+      "count": 4
     }
   ],
   "areas": [
@@ -47,10 +31,6 @@
     {
       "area": "Modules",
       "count": 1
-    },
-    {
-      "area": "Runtime",
-      "count": 30
     },
     {
       "area": "TypeSystem",
@@ -97,91 +77,6 @@
       "file": "Modules/DotNetExtensionImports.cs",
       "code": "IL2075",
       "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetClass.cs",
-      "code": "IL2072",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetClass.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2070",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetDelegateShim.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetExtensionMethodResolver.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2060",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetGenericMethodInference.cs",
-      "code": "IL3050",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMarshaller.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMethod.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetMethodResolver.cs",
-      "code": "IL3050",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetOperatorResolver.cs",
-      "code": "IL2070",
-      "count": 3
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2026",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2055",
-      "count": 2
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL2057",
-      "count": 1
-    },
-    {
-      "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
-      "code": "IL3050",
-      "count": 3
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",

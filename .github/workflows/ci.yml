@@ -207,6 +207,17 @@ jobs:
             'loading .NET reference assemblies is not available in the native SharpTS build' \
             "$scratch/reference-error.txt"
 
+          # Dynamic .NET binding is deliberately Managed-SKU-only until the native
+          # SKU defines and roots a closed BCL interop contract.
+          if "$native" Examples/AotCompileGate/dotnet-interop.ts \
+              > "$scratch/dotnet-interop-error.txt" 2>&1; then
+            echo "dynamic .NET interop unexpectedly ran under Native AOT"
+            exit 1
+          fi
+          grep -Fq \
+            '.NET interop is not available in the native SharpTS build' \
+            "$scratch/dotnet-interop-error.txt"
+
           if "$native" --gen-decl System.String \
               > "$scratch/gen-decl-error.txt" 2>&1; then
             echo "declaration discovery unexpectedly ran under Native AOT"

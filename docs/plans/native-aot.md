@@ -151,9 +151,14 @@ Plan against these numbers, not the originals:
   `ManagedStructuralClrReflection` then lowered the inventory to 78. The seam
   preserves open-world CLR objects in the Managed SKU and rejects Native AOT
   before reflection. The win-arm64 image increased by 1,024 bytes (0.0011%)
-  to 93,403,648 bytes. CI pins total, per-code, per-area, and per-file/code
-  counts, so both increases and category swaps fail until the same PR updates
-  the explained baseline.
+  to 93,403,648 bytes. Moving the open-world runtime .NET binder behind
+  `ManagedDotNetInterop` then lowered the inventory to 48. The Managed SKU
+  retains BCL, embedder, and third-party interop; the Native SKU now rejects
+  dynamic .NET binding with a tested diagnostic until a closed BCL contract is
+  designed and rooted. Trimming that binder closure reduced the win-arm64 image
+  by 9,216 bytes (0.0099%) to 93,394,432 bytes. CI pins total, per-code,
+  per-area, and per-file/code counts, so both increases and category swaps fail
+  until the same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -194,19 +199,18 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (78)
+### Residual analyzer inventory (48)
 
-The cleanup tranches removed 2,507 of 2,585 warnings (97.0%) without broad
+The cleanup tranches removed 2,537 of 2,585 warnings (98.1%) without broad
 `DynamicallyAccessedMembers` annotations. Every remaining warning now belongs
 to the dynamic .NET interop policy:
 
 | Analyzer | Count | Primary meaning now |
 |---|---:|---|
-| IL2075 | 7 | Reflection from a returned/derived `Type`: dynamic .NET constructors, delegates, and extension methods |
-| IL2070 | 49 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
-| IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
-| IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
-| Other flow warnings | 7 | Two each IL2055/IL2057/IL2060 and one IL2072, concentrated in dynamic interop/type synthesis |
+| IL2075 | 2 | Reflection from a returned `Type`: compiled event delegates and extension imports |
+| IL2070 | 41 | Reflection on parameters: external IL emission, declaration discovery, and type synthesis |
+| IL2057 | 1 | A compiled custom-attribute type name resolved dynamically |
+| IL3050 | 4 | Array and delegate shapes synthesized for compile-time external-type modeling |
 
 The work is split at four ownership boundaries:
 
@@ -221,11 +225,22 @@ The work is split at four ownership boundaries:
    `SetProperty` now route through `ManagedStructuralClrReflection`. The seam
    remains deliberately open-world under CoreCLR for embedders and third-party
    assemblies, but rejects Native AOT before inspecting an arbitrary type.
-3. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
-   emitters and `Runtime/DotNet` deliberately inspect arbitrary types. Broad
-   member annotations were measured and rejected because they increased the
-   native image by 6.55%. Define the supported native BCL surface and root only
-   that surface; guard third-party and unavailable generic shapes.
+3. **Dynamic .NET interop policy (runtime binder done).** The open-world
+   `Runtime/DotNet` binder now routes type resolution, member discovery,
+   construction, generic closure, array creation, marshalling, operators, and
+   delegate shims through `ManagedDotNetInterop`. CoreCLR retains the complete
+   BCL/embedder/third-party contract. Native AOT rejects the first dynamic
+   binding operation before reflection or runtime shape construction, and CI
+   executes that diagnostic. This is an intentional interim contract: define
+   and root a closed Native-SKU BCL surface separately if one is worth
+   supporting.
+
+   The remaining 48 warnings are the compile-time half of the same policy:
+   30 in external IL emission, nine in declaration inspection, eight in
+   external type synthesis, and one in extension imports. Broad member
+   annotations remain rejected because they increased the native image by
+   6.55%; these paths should use precise operations at the managed boundary
+   while retaining their current Managed-SKU behavior.
 4. **Generated/runtime reflection (done for the current inventory).** Known
    compiler-emitted managed shapes now go through
    `ManagedEmittedShapeReflection`. Exact-name validation covers

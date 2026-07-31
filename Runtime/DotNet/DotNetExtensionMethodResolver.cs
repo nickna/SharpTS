@@ -15,8 +15,8 @@ internal static class DotNetExtensionMethodResolver
         var methods = new List<MethodInfo>();
         foreach (var container in containers)
         {
-            foreach (var method in container.GetMethods(
-                         BindingFlags.Public | BindingFlags.Static))
+            foreach (var method in ManagedDotNetInterop.GetMethods(
+                         container, BindingFlags.Public | BindingFlags.Static))
             {
                 if (!method.IsDefined(typeof(ExtensionAttribute), inherit: false) ||
                     !string.Equals(
@@ -45,8 +45,8 @@ internal static class DotNetExtensionMethodResolver
         var methods = new List<MethodInfo>();
         foreach (var container in containers)
         {
-            foreach (var method in container.GetMethods(
-                         BindingFlags.Public | BindingFlags.Static))
+            foreach (var method in ManagedDotNetInterop.GetMethods(
+                         container, BindingFlags.Public | BindingFlags.Static))
             {
                 if (!method.IsDefined(typeof(ExtensionAttribute), inherit: false) ||
                     !string.Equals(

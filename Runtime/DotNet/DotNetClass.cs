@@ -34,7 +34,8 @@ public sealed class DotNetClass : ISharpTSCallable, ITypeCategorized
 
     public int Arity()
     {
-        var ctors = Type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+        var ctors = ManagedDotNetInterop.GetConstructors(
+            Type, BindingFlags.Public | BindingFlags.Instance);
         if (ctors.Length == 0) return 0;
         int min = int.MaxValue;
         foreach (var c in ctors)
@@ -50,10 +51,11 @@ public sealed class DotNetClass : ISharpTSCallable, ITypeCategorized
         // Value type default construction: treat `new Struct()` with zero args as default(T).
         if (Type.IsValueType && arguments.Count == 0)
         {
-            return new DotNetInstance(Activator.CreateInstance(Type)!, Type);
+            return new DotNetInstance(ManagedDotNetInterop.CreateInstance(Type)!, Type);
         }
 
-        var ctors = Type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+        var ctors = ManagedDotNetInterop.GetConstructors(
+            Type, BindingFlags.Public | BindingFlags.Instance);
         if (ctors.Length == 0)
         {
             throw new Runtime.Exceptions.ThrowException(DotNetExceptionMapper.Map(
