@@ -41,7 +41,8 @@ public class UnionTypeGenerator
 
     /// <summary>
     /// Gets the implicit conversion method from a source type to a union type.
-    /// Returns the MethodBuilder if not yet finalized, or the finalized MethodInfo.
+    /// The MethodBuilder remains valid after its declaring union is finalized,
+    /// so conversion metadata is always served from the generation-time map.
     /// </summary>
     public MethodInfo? GetImplicitConversion(Type unionType, Type fromType)
     {
@@ -50,14 +51,6 @@ public class UnionTypeGenerator
         // Check if we have a stored MethodBuilder for this conversion
         if (_implicitConversions.TryGetValue((key, fromType), out var methodBuilder))
             return methodBuilder;
-
-        // If finalized, try reflection
-        if (_finalizedUnions.TryGetValue(key, out var finalized))
-        {
-            return finalized.GetMethod("op_Implicit",
-                BindingFlags.Public | BindingFlags.Static,
-                null, [fromType], null);
-        }
 
         return null;
     }

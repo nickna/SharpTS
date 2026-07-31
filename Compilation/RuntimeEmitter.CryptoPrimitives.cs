@@ -19,19 +19,27 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class RuntimeEmitter
 {
-    /// <summary>Digest table rows: name, one-shot HashData holder type, optional IsSupported gate, XOF default length.</summary>
-    private static readonly (string Name, Type Impl, bool Guarded, int XofDefault)[] _hashTable =
+    /// <summary>
+    /// Digest table rows: name, rooted one-shot HashData method, optional
+    /// IsSupported getter, and XOF default length.
+    /// </summary>
+    private static readonly (string Name, MethodInfo HashData, MethodInfo? IsSupported, int XofDefault)[] _hashTable =
     [
-        ("md5", typeof(MD5), false, -1),
-        ("sha1", typeof(SHA1), false, -1),
-        ("sha256", typeof(SHA256), false, -1),
-        ("sha384", typeof(SHA384), false, -1),
-        ("sha512", typeof(SHA512), false, -1),
-        ("sha3-256", typeof(SHA3_256), true, -1),
-        ("sha3-384", typeof(SHA3_384), true, -1),
-        ("sha3-512", typeof(SHA3_512), true, -1),
-        ("shake128", typeof(Shake128), true, 16),
-        ("shake256", typeof(Shake256), true, 32),
+        ("md5", ((Func<byte[], byte[]>)MD5.HashData).Method, null, -1),
+        ("sha1", ((Func<byte[], byte[]>)SHA1.HashData).Method, null, -1),
+        ("sha256", ((Func<byte[], byte[]>)SHA256.HashData).Method, null, -1),
+        ("sha384", ((Func<byte[], byte[]>)SHA384.HashData).Method, null, -1),
+        ("sha512", ((Func<byte[], byte[]>)SHA512.HashData).Method, null, -1),
+        ("sha3-256", ((Func<byte[], byte[]>)SHA3_256.HashData).Method,
+            typeof(SHA3_256).GetProperty(nameof(SHA3_256.IsSupported))!.GetMethod, -1),
+        ("sha3-384", ((Func<byte[], byte[]>)SHA3_384.HashData).Method,
+            typeof(SHA3_384).GetProperty(nameof(SHA3_384.IsSupported))!.GetMethod, -1),
+        ("sha3-512", ((Func<byte[], byte[]>)SHA3_512.HashData).Method,
+            typeof(SHA3_512).GetProperty(nameof(SHA3_512.IsSupported))!.GetMethod, -1),
+        ("shake128", ((Func<byte[], int, byte[]>)Shake128.HashData).Method,
+            typeof(Shake128).GetProperty(nameof(Shake128.IsSupported))!.GetMethod, 16),
+        ("shake256", ((Func<byte[], int, byte[]>)Shake256.HashData).Method,
+            typeof(Shake256).GetProperty(nameof(Shake256.IsSupported))!.GetMethod, 32),
     ];
 
     private void EmitCryptoPrimitivesClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -71,7 +79,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
-        foreach (var (name, impl, guarded, _) in _hashTable)
+        foreach (var (name, _, isSupported, _) in _hashTable)
         {
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
@@ -79,10 +87,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
             il.Emit(OpCodes.Brfalse, nextLabel);
 
-            if (guarded)
+            if (isSupported is not null)
             {
                 var supportedLabel = il.DefineLabel();
-                il.Emit(OpCodes.Call, impl.GetProperty("IsSupported")!.GetGetMethod()!);
+                il.Emit(OpCodes.Call, isSupported);
                 il.Emit(OpCodes.Brtrue, supportedLabel);
                 il.Emit(OpCodes.Ldstr, $"Unsupported hash algorithm: {name} (not supported on this platform)");
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
@@ -124,7 +132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.CryptoValidateHashName);
         il.Emit(OpCodes.Stloc, lowerLocal);
 
-        foreach (var (name, impl, _, xofDefault) in _hashTable)
+        foreach (var (name, hashData, _, xofDefault) in _hashTable)
         {
             var nextLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, lowerLocal);
@@ -146,12 +154,12 @@ public partial class RuntimeEmitter
                 il.MarkLabel(useDefaultLabel);
                 il.Emit(OpCodes.Ldc_I4, xofDefault);
                 il.MarkLabel(callLabel);
-                il.Emit(OpCodes.Call, impl.GetMethod("HashData", [typeof(byte[]), typeof(int)])!);
+                il.Emit(OpCodes.Call, hashData);
             }
             else
             {
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, impl.GetMethod("HashData", [typeof(byte[])])!);
+                il.Emit(OpCodes.Call, hashData);
             }
             il.Emit(OpCodes.Ret);
 

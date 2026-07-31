@@ -163,7 +163,10 @@ Plan against these numbers, not the originals:
   counts; the checked-in inventory is now empty, so any new project analyzer
   warning fails the ratchet. Replacing the reflection-built AST guard catalog
   with a reflection-free public catalog then removed 47 post-link ILC warning
-  lines and reduced the image another 1,024 bytes to 93,374,976 bytes.
+  lines and reduced the image another 1,024 bytes to 93,374,976 bytes. The
+  final nine project-owned ILC warnings were then eliminated without new
+  suppressions; the win-arm64 image fell another 8,192 bytes to 93,366,784
+  bytes.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -215,12 +218,12 @@ diagnostics; those are not silently represented by this source-analyzer
 baseline and must continue to be evaluated through the native publish/smoke
 gate.
 
-### Native publish inventory (25 on linux-x64)
+### Native publish inventory (16 on linux-x64)
 
 The SDK analyzer ratchet runs before linking, so it cannot see warnings
 introduced by ILC reachability or by the final dependency closure. The
-linux-x64 Native publish currently reports 25 warning lines: nine owned by
-SharpTS and 16 from the framework or package dependencies.
+linux-x64 Native publish now reports 16 warning lines, all from the framework
+or package dependencies. The project-owned inventory is empty.
 
 CI parses the publish log with `scripts/aot-publish-warning-report.ps1`.
 `.github/aot-publish-warning-baseline.json` exact-matches the SharpTS-owned
@@ -235,14 +238,20 @@ require exact declaration-order equality, preserving the automatic
 exhaustiveness guard without shipping that reflection in the Native compiler.
 This removed 47 repeated IL3050 lines without suppressions.
 
-The remaining project cleanup is bounded to nine warnings: six closed
-crypto-emitter metadata lookups, the legacy `RuntimeTypes` construction
-fallback, resource-disposal callable dispatch, and the finalized-union
-conversion lookup. Re-measure after those before considering dependency
-replacement or isolation. The 16 external lines currently come from the
-NuGet/Newtonsoft packaging closure, MetadataLoadContext, PrettyPrompt/TextCopy,
-and framework summaries. Zero external warnings is not a correctness
-requirement.
+The final project cleanup removed nine warning lines. Crypto emitters now keep
+exact `MethodInfo` values for the closed BCL `HashData` overloads and
+`IsSupported` getters instead of reflecting across algorithm `Type` values.
+The unwritten `RuntimeTypes` construction registry and its unreachable
+constructor fallback were deleted. Open-world resource-disposal callables use
+the existing managed-output reflection boundary, preserving third-party
+CoreCLR support while rejecting Native AOT before arbitrary type inspection.
+Finalized union conversions continue to use the generation-time
+`MethodBuilder` map, which remains valid after `CreateType`, so their
+unreachable reflective fallback was removed.
+
+The 16 external lines currently come from the NuGet/Newtonsoft packaging
+closure, MetadataLoadContext, PrettyPrompt/TextCopy, and framework summaries.
+Zero external warnings is not a correctness requirement.
 
 The work is split at four ownership boundaries:
 

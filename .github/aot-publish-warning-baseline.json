@@ -1,68 +1,10 @@
 {
   "schemaVersion": 1,
-  "total": 25,
+  "total": 16,
   "project": {
-    "total": 9,
-    "codes": [
-      {
-        "code": "IL2067",
-        "count": 1
-      },
-      {
-        "code": "IL2070",
-        "count": 1
-      },
-      {
-        "code": "IL2075",
-        "count": 1
-      },
-      {
-        "code": "IL2080",
-        "count": 6
-      }
-    ],
-    "subjects": [
-      {
-        "code": "IL2067",
-        "subject": "SharpTS.Compilation.RuntimeTypes.CreateInstance(Object[],String)",
-        "count": 1
-      },
-      {
-        "code": "IL2070",
-        "subject": "SharpTS.Compilation.UnionTypeGenerator.GetImplicitConversion(Type,Type)",
-        "count": 1
-      },
-      {
-        "code": "IL2075",
-        "subject": "SharpTS.Compilation.RuntimeTypes.DisposeResource(Object,Object)",
-        "count": 1
-      },
-      {
-        "code": "IL2080",
-        "subject": "SharpTS.Compilation.RuntimeEmitter.EmitCryptoGetHashes(TypeBuilder,EmittedRuntime)",
-        "count": 1
-      },
-      {
-        "code": "IL2080",
-        "subject": "SharpTS.Compilation.RuntimeEmitter.EmitCryptoHashData(TypeBuilder,EmittedRuntime)",
-        "count": 2
-      },
-      {
-        "code": "IL2080",
-        "subject": "SharpTS.Compilation.RuntimeEmitter.EmitCryptoValidateHashName(TypeBuilder,EmittedRuntime)",
-        "count": 1
-      },
-      {
-        "code": "IL2080",
-        "subject": "SharpTS.Compilation.RuntimeEmitter.EmitWcDigest(TypeBuilder)",
-        "count": 1
-      },
-      {
-        "code": "IL2080",
-        "subject": "SharpTS.Compilation.RuntimeEmitter.EmitWcHmac(TypeBuilder)",
-        "count": 1
-      }
-    ]
+    "total": 0,
+    "codes": [],
+    "subjects": []
   },
   "external": {
     "total": 16,

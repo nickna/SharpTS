@@ -323,12 +323,12 @@ public partial class RuntimeEmitter
 
         // Static family, then the platform-gated SHA-3/SHAKE members (#1062).
         // Mirrors CryptoAlgorithms.SupportedHashNames.
-        foreach (var (hash, impl, guarded, _) in _hashTable)
+        foreach (var (hash, _, isSupported, _) in _hashTable)
         {
             var skipLabel = il.DefineLabel();
-            if (guarded)
+            if (isSupported is not null)
             {
-                il.Emit(OpCodes.Call, impl.GetProperty("IsSupported")!.GetGetMethod()!);
+                il.Emit(OpCodes.Call, isSupported);
                 il.Emit(OpCodes.Brfalse, skipLabel);
             }
             il.Emit(OpCodes.Ldloc, listLocal);
