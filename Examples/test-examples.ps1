@@ -26,6 +26,10 @@
     set, the repo build step is skipped and every interpret/compile invocation runs
     through this binary.
 
+.PARAMETER NativeSku
+    Marks SharpTSExe as the Native AOT SKU. Examples that intentionally require
+    managed-only features such as dynamic .NET interop are skipped.
+
 .EXAMPLE
     .\test-examples.ps1
     Run all tests with default settings
@@ -39,7 +43,7 @@
     Test only interpreted mode and output JSON
 
 .EXAMPLE
-    .\test-examples.ps1 -SharpTSExe ..\publish\sharpts.exe
+    .\test-examples.ps1 -SharpTSExe ..\publish\sharpts.exe -NativeSku
     Drive a published binary over the full corpus (the native-SKU smoke job's entry point)
 #>
 
@@ -50,7 +54,8 @@ param(
     [ValidateSet("json", "table", "verbose")]
     [string]$OutputFormat = "table",
     [switch]$SkipCleanup,
-    [string]$SharpTSExe = ""
+    [string]$SharpTSExe = "",
+    [switch]$NativeSku
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,6 +66,10 @@ if ($SharpTSExe) {
         exit 1
     }
     $SharpTSExe = (Resolve-Path $SharpTSExe).Path
+}
+elseif ($NativeSku) {
+    Write-Host "NativeSku requires SharpTSExe." -ForegroundColor Red
+    exit 1
 }
 
 # ========== Configuration ==========
@@ -381,12 +390,13 @@ const arrow = () => 42;
 
     "dotnet-types" = @{
         File = "dotnet-types.ts"
+        ManagedOnly = $true
         Tests = @(
             @{
                 Name = "DemonstrateDotNetInterop"
                 RequiresArgs = $false
                 Args = { @() }
-                # Runs clean in both modes. Overload dispatch (#51), delegate
+                # Runs clean in every managed mode. Overload dispatch (#51), delegate
                 # wrapping (#52), and event subscription (#53) all fixed;
                 # compiled DLLs are fully standalone (no SharpTS.dll needed).
                 Assertions = @(
@@ -767,10 +777,10 @@ function Invoke-AllTests {
             TestCases = @()
         }
 
-        # Example-level skip check (e.g., "npm install not run yet")
-        $exampleSkip = $false
-        $exampleSkipReason = $null
-        if ($example.Setup -and $example.SkipIf) {
+        # Example-level skip check (e.g., managed-only feature or npm install not run yet)
+        $exampleSkip = $NativeSku -and $example.ManagedOnly
+        $exampleSkipReason = if ($exampleSkip) { "requires the managed SharpTS SKU" } else { $null }
+        if (-not $exampleSkip -and $example.Setup -and $example.SkipIf) {
             $setupCtx = & $example.Setup
             if (& $example.SkipIf $setupCtx) {
                 $exampleSkip = $true
@@ -1003,7 +1013,8 @@ try {
         $buildResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments @("build", "-c", "Debug") -Timeout $Script:BuildTimeout
         if (-not $buildResult.Success) {
             Write-Host "Build failed:" -ForegroundColor Red
-            Write-Host $buildResult.Error
+            if ($buildResult.Output) { Write-Host $buildResult.Output }
+            if ($buildResult.Error) { Write-Host $buildResult.Error }
             exit 1
         }
         Write-Host "Build completed." -ForegroundColor Green

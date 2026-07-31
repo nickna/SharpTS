@@ -1241,10 +1241,11 @@ export class URL {
 
     get searchParams(): URLSearchParams {
         if (this._searchParams == null) {
-            this._searchParams = new URLSearchParams(this._record.query || '');
-            (this._searchParams as any)._owner = this;
+            const params = new URLSearchParams(this._record.query || '');
+            this._searchParams = params;
+            (params as any)._owner = this;
         }
-        return this._searchParams;
+        return this._searchParams as any;
     }
 
     get hash(): string {
