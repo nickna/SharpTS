@@ -43,9 +43,11 @@ public static class UnionTypeHelper
                 continue;
 
             // Find implicit conversion operator
-            var implicitOp = paramType.GetMethod("op_Implicit",
+            var implicitOp = ManagedOutputRuntimeReflection.GetMethodBySignature(
+                paramType,
+                "op_Implicit",
                 BindingFlags.Public | BindingFlags.Static,
-                null, [argType], null);
+                [argType]);
 
             if (implicitOp != null)
                 args[i] = implicitOp.Invoke(null, [args[i]]);

@@ -187,7 +187,10 @@ public static partial class RuntimeTypes
         var type = value.GetType();
 
         // Check for toJSON method on the object's type
-        var toJsonMethod = type.GetMethod("toJSON", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var toJsonMethod = ManagedOutputRuntimeReflection.GetMethodByName(
+            type,
+            "toJSON",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
         if (toJsonMethod != null)
         {
             return toJsonMethod.Invoke(value, null);

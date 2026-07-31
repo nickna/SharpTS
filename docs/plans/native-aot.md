@@ -139,9 +139,16 @@ Plan against these numbers, not the originals:
   emission contract instead of private PersistedAssemblyBuilder fields. The
   resulting image is 93,400,064 bytes: 98,816 bytes smaller than the prior
   checkpoint and 1,050,112 bytes (1.11%) smaller than the original
-  2,585-warning image. CI pins total, per-code, per-area, and per-file/code
-  counts, so both increases and category swaps fail until the same PR updates
-  the explained baseline.
+  2,585-warning image. Routing reflection that belongs to the managed output
+  runtime through `ManagedOutputRuntimeReflection` then lowered the inventory
+  to 91. The boundary rejects Native AOT before reflection but deliberately
+  remains open-ended under CoreCLR, preserving user-defined and third-party
+  assembly interop in the Managed SKU. Against an exact unmodified-main
+  win-arm64 publish, the native image increased by 2,560 bytes (0.0027%) to
+  93,402,624 bytes; 2,048 bytes of that delta is the updated managed runtime
+  payload embedded in the native host. CI pins total, per-code, per-area, and
+  per-file/code counts, so both increases and category swaps fail until the
+  same PR updates the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -182,21 +189,21 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (102)
+### Residual analyzer inventory (91)
 
-The cleanup tranches removed 2,483 of 2,585 warnings (96.1%) without broad
+The cleanup tranches removed 2,494 of 2,585 warnings (96.5%) without broad
 `DynamicallyAccessedMembers` annotations. What remains is no longer one
 mechanical problem:
 
 | Analyzer | Count | Primary meaning now |
 |---|---:|---|
-| IL2075 | 22 | Reflection from a returned/derived `Type`: dynamic .NET interop and generic managed runtime fallbacks |
-| IL2070 | 58 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
+| IL2075 | 20 | Reflection from a returned/derived `Type`: dynamic .NET interop and generic managed runtime fallbacks |
+| IL2070 | 49 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
 | IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
 | IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
 | Other flow warnings | 7 | Two each IL2055/IL2057/IL2060 and one IL2072, concentrated in dynamic interop/type synthesis |
 
-The remaining work is split at three ownership boundaries:
+The remaining work is split at four ownership boundaries:
 
 1. **Managed-only feature guards (done for the current inventory).**
    In-process compiled-assembly execution, third-party executable assembly
@@ -204,12 +211,17 @@ The remaining work is split at three ownership boundaries:
    boundaries. MetadataLoadContext inspection has a narrow metadata-only
    justification. The one remaining IL2026 belongs to dynamic interop policy,
    not this bucket.
-2. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
+2. **Structural CLR fallbacks.** Thirteen warnings preserve Managed-SKU
+   compatibility for arbitrary objects that happen to expose `Invoke`,
+   `Fields`, `GetProperty`, or `SetProperty`. Keep that open-world behavior in
+   the Managed SKU, but route it through one managed-only compatibility seam
+   and reject it predictably in Native AOT.
+3. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
    emitters and `Runtime/DotNet` deliberately inspect arbitrary types. Broad
    member annotations were measured and rejected because they increased the
    native image by 6.55%. Define the supported native BCL surface and root only
    that surface; guard third-party and unavailable generic shapes.
-3. **Generated/runtime reflection (done for the current inventory).** Known
+4. **Generated/runtime reflection (done for the current inventory).** Known
    compiler-emitted managed shapes now go through
    `ManagedEmittedShapeReflection`. Exact-name validation covers
    `$Object`, callable, stream, message-port, array-buffer, date, and
@@ -218,8 +230,12 @@ The remaining work is split at three ownership boundaries:
    its public combined `Fields` view replaces private backing-field inspection.
    The boundary's exact suppressions are restricted to a closed shape enum and
    it rejects Native AOT before reflection. Recognised callbacks share
-   `RuntimeCallableDispatcher`; fallbacks that intentionally inspect arbitrary
-   CLR shapes remain unsuppressed and belong to the dynamic interop policy.
+   `RuntimeCallableDispatcher`. Reflection used by the generated managed
+   runtime is separately isolated in `ManagedOutputRuntimeReflection`: that
+   seam rejects the Native host but intentionally accepts arbitrary managed
+   output and third-party CLR types under CoreCLR. Fallbacks that intentionally
+   inspect arbitrary CLR objects outside those output-runtime helpers remain
+   unsuppressed and belong to item 2.
    The optional `ILLabelValidator` duplicate was removed rather than routing
    2,126 `GetILGenerator()` acquisitions across 250 files through a diagnostic
    wrapper; `PersistedAssemblyBuilder.GenerateMetadata` still rejects every

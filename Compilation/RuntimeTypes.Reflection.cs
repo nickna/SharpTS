@@ -44,7 +44,8 @@ public static partial class RuntimeTypes
             var cache = _getterCache.GetValue(type, _ => new ConcurrentDictionary<string, CacheEntry<MethodInfo>>());
             var entry = cache.GetOrAdd(propertyName, name => 
             {
-                var mi = type.GetMethod($"get_{char.ToUpperInvariant(name[0])}{name[1..]}");
+                var mi = ManagedOutputRuntimeReflection.GetPublicMethodByName(
+                    type, $"get_{char.ToUpperInvariant(name[0])}{name[1..]}");
                 return new CacheEntry<MethodInfo>(mi);
             });
             return entry.Value;
@@ -55,7 +56,8 @@ public static partial class RuntimeTypes
             var cache = _setterCache.GetValue(type, _ => new ConcurrentDictionary<string, CacheEntry<MethodInfo>>());
             var entry = cache.GetOrAdd(propertyName, name => 
             {
-                var mi = type.GetMethod($"set_{char.ToUpperInvariant(name[0])}{name[1..]}");
+                var mi = ManagedOutputRuntimeReflection.GetPublicMethodByName(
+                    type, $"set_{char.ToUpperInvariant(name[0])}{name[1..]}");
                 return new CacheEntry<MethodInfo>(mi);
             });
             return entry.Value;
@@ -66,7 +68,7 @@ public static partial class RuntimeTypes
             var cache = _methodCache.GetValue(type, _ => new ConcurrentDictionary<string, CacheEntry<MethodInfo>>());
             var entry = cache.GetOrAdd(methodName, name => 
             {
-                var mi = type.GetMethod(name);
+                var mi = ManagedOutputRuntimeReflection.GetPublicMethodByName(type, name);
                 return new CacheEntry<MethodInfo>(mi);
             });
             return entry.Value;
@@ -77,7 +79,11 @@ public static partial class RuntimeTypes
             var cache = _fieldCache.GetValue(type, _ => new ConcurrentDictionary<string, CacheEntry<FieldInfo>>());
             var entry = cache.GetOrAdd(fieldName, name => 
             {
-                var fi = type.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static);
+                var fi = ManagedOutputRuntimeReflection.GetFieldByName(
+                    type,
+                    name,
+                    BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.Public | BindingFlags.Static);
                 return new CacheEntry<FieldInfo>(fi);
             });
             return entry.Value;
@@ -87,8 +93,7 @@ public static partial class RuntimeTypes
         {
             var entry = _constructorCache.GetValue(type, t => 
             {
-                var ctors = t.GetConstructors();
-                var ctor = ctors.Length > 0 ? ctors[0] : null;
+                var ctor = ManagedOutputRuntimeReflection.GetFirstPublicConstructor(t);
                 return new CacheEntry<ConstructorInfo>(ctor);
             });
             return entry.Value;
@@ -96,10 +101,10 @@ public static partial class RuntimeTypes
 
         public static FieldInfo[] GetBackingFields(Type type)
         {
-            return _backingFieldsCache.GetValue(type, t => 
-                t.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
-                 .Where(f => f.Name.StartsWith("__"))
-                 .ToArray());
+            return _backingFieldsCache.GetValue(
+                type,
+                t => ManagedOutputRuntimeReflection.GetNonPublicInstanceFieldsWithPrefix(
+                    t, "__"));
         }
 
         public static MethodInvoker GetInvoker(MethodBase method)
