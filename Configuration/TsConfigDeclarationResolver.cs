@@ -142,39 +142,21 @@ internal static class TsConfigDeclarationResolver
 
     private static IEnumerable<string> FindVisibleTypeRoots(string startDirectory)
     {
-        string[] ceilings =
-            new[]
-            {
-                Path.GetTempPath(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            }
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar))
-            .ToArray();
-        bool isStartDirectory = true;
         foreach (string directory in Ancestors(startDirectory))
         {
-            string normalized = directory.TrimEnd(Path.DirectorySeparatorChar);
-            if (!isStartDirectory && ceilings.Any(ceiling =>
-                    string.Equals(normalized, ceiling, StringComparison.OrdinalIgnoreCase)))
-            {
-                yield break;
-            }
-
             string root = Path.Combine(directory, "node_modules", "@types");
             if (Directory.Exists(root))
                 yield return Path.GetFullPath(root);
-            isStartDirectory = false;
         }
     }
 
     private static IEnumerable<string> Ancestors(string startDirectory)
     {
-        string? directory = Path.GetFullPath(startDirectory);
-        while (directory is not null)
+        for (string? directory = Path.GetFullPath(startDirectory);
+             directory is not null;
+             directory = FileDiscovery.AmbientParent(directory))
         {
             yield return directory;
-            directory = Path.GetDirectoryName(directory);
         }
     }
 }
