@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using SharpTS.Execution;
 using SharpTS.Parsing;
@@ -8,13 +9,14 @@ using Xunit;
 namespace SharpTS.Tests.RegistryTests;
 
 /// <summary>
-/// Guards the convergence of the AST dispatch tables onto <see cref="AstNodeCatalog"/> (issue #1243,
-/// epic #1094). The catalog is the single source of truth for the AST node set; these tests ensure
-/// none of the hand-maintained dispatch switches — <see cref="AstVisitorBase"/>, the interpreter's
-/// (<c>Interpreter.Dispatch.cs</c>), and the type checker's (<c>TypeChecker.Dispatch.cs</c>) — can
-/// silently omit a node the catalog knows about. The latter two replaced the reflection-built
-/// NodeRegistry tables (#1324): registration is now checked by the compiler (a missing Visit*
-/// method is a build error) and exhaustiveness by these probes.
+/// Guards the convergence of the AST dispatch tables onto <see cref="AstNodeCatalog"/> (issue
+/// #1243, epic #1094). Managed tests derive the actual node set through reflection and require the
+/// production catalog to match exactly; the reflection does not ship in the Native AOT compiler.
+/// These tests then ensure none of the hand-maintained dispatch switches —
+/// <see cref="AstVisitorBase"/>, the interpreter's (<c>Interpreter.Dispatch.cs</c>), and the type
+/// checker's (<c>TypeChecker.Dispatch.cs</c>) — can silently omit a catalogued node. The latter two
+/// replaced the reflection-built NodeRegistry tables (#1324): registration is now checked by the
+/// compiler (a missing Visit* method is a build error) and exhaustiveness by these probes.
 /// </summary>
 public class AstDispatchTests
 {
@@ -28,31 +30,23 @@ public class AstDispatchTests
     private sealed record UnknownStmt : Stmt;
 
     [Fact]
-    public void Catalog_is_populated_and_excludes_non_node_records()
+    public void Catalog_exactly_matches_concrete_nested_node_types()
     {
-        Assert.NotEmpty(AstNodeCatalog.ExprTypes);
-        Assert.NotEmpty(AstNodeCatalog.StmtTypes);
-
-        // Representative nodes are present.
-        Assert.Contains(typeof(Expr.Binary), AstNodeCatalog.ExprTypes);
-        Assert.Contains(typeof(Stmt.If), AstNodeCatalog.StmtTypes);
-
-        // Every entry is a concrete subtype of its base.
-        Assert.All(AstNodeCatalog.ExprTypes, t =>
-        {
-            Assert.True(typeof(Expr).IsAssignableFrom(t));
-            Assert.False(t.IsAbstract);
-        });
-        Assert.All(AstNodeCatalog.StmtTypes, t =>
-        {
-            Assert.True(typeof(Stmt).IsAssignableFrom(t));
-            Assert.False(t.IsAbstract);
-        });
+        Assert.Equal(CollectConcreteNodes(typeof(Expr)), AstNodeCatalog.ExprTypes);
+        Assert.Equal(CollectConcreteNodes(typeof(Stmt)), AstNodeCatalog.StmtTypes);
 
         // Helper records nested under the bases that are not dispatched nodes stay out.
         Assert.DoesNotContain(typeof(Expr.Property), AstNodeCatalog.ExprTypes);
         Assert.DoesNotContain(typeof(Stmt.Parameter), AstNodeCatalog.StmtTypes);
     }
+
+    private static Type[] CollectConcreteNodes(Type baseType) =>
+        baseType.GetNestedTypes(BindingFlags.Public)
+            .Where(type =>
+                baseType.IsAssignableFrom(type) &&
+                !type.IsAbstract &&
+                type != baseType)
+            .ToArray();
 
     [Fact]
     public void AstVisitorBase_dispatches_every_Expr_node()

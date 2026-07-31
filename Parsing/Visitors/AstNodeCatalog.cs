@@ -1,22 +1,16 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
-
 namespace SharpTS.Parsing.Visitors;
 
 /// <summary>
-/// The single canonical list of concrete AST node types, derived once from the <see cref="Expr"/>
-/// and <see cref="Stmt"/> record definitions in <c>Parsing/AST.cs</c>.
+/// The single canonical list of concrete AST node types declared by <see cref="Expr"/>
+/// and <see cref="Stmt"/> in <c>Parsing/AST.cs</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is the convergence point for the AST dispatch tables (issue #1243, epic #1094). Every
-/// consumer that needs "the set of AST node kinds" reads it from here instead of re-deriving it:
-/// <see cref="NodeRegistry{TContext, TExprResult, TStmtResult}"/> uses it for exhaustiveness
-/// checks (<c>Freeze</c>/<c>FreezeAsync</c>) and handler auto-registration (<c>AutoRegister</c>),
-/// and the visitor-dispatch guard test validates <see cref="AstVisitorBase"/>'s switch against it.
-/// A new node added to <c>AST.cs</c> automatically appears here, so it cannot be silently omitted
-/// from a dispatch table without a loud failure (a startup exception from the registry, or a
-/// failing guard test for the visitor switch).
+/// This is the convergence point for the AST dispatch guard tests (issue #1243, epic #1094).
+/// Production dispatch uses compile-time switches; the managed test suite reflects the directly
+/// nested <see cref="Expr"/>/<see cref="Stmt"/> types and requires this catalog to match them
+/// exactly. A new node therefore requires an explicit catalog entry and dispatch arm in the same
+/// change, without retaining open-ended nested-type reflection in the Native AOT compiler.
 /// </para>
 /// <para>
 /// "Node type" is defined exactly as the dispatch tables historically defined it: a directly
@@ -28,15 +22,96 @@ namespace SharpTS.Parsing.Visitors;
 /// </remarks>
 public static class AstNodeCatalog
 {
-    /// <summary>Every concrete <see cref="Expr"/> node type, in reflection order.</summary>
-    public static readonly IReadOnlyList<Type> ExprTypes = CollectConcreteNodes(typeof(Expr));
+    /// <summary>Every concrete <see cref="Expr"/> node type, in declaration order.</summary>
+    public static readonly IReadOnlyList<Type> ExprTypes =
+    [
+        typeof(Expr.Comma),
+        typeof(Expr.DestructuringAssign),
+        typeof(Expr.Binary),
+        typeof(Expr.Logical),
+        typeof(Expr.NullishCoalescing),
+        typeof(Expr.Ternary),
+        typeof(Expr.Grouping),
+        typeof(Expr.Literal),
+        typeof(Expr.Unary),
+        typeof(Expr.Delete),
+        typeof(Expr.Variable),
+        typeof(Expr.Assign),
+        typeof(Expr.Call),
+        typeof(Expr.Get),
+        typeof(Expr.Set),
+        typeof(Expr.GetPrivate),
+        typeof(Expr.SetPrivate),
+        typeof(Expr.CallPrivate),
+        typeof(Expr.This),
+        typeof(Expr.New),
+        typeof(Expr.ArrayLiteral),
+        typeof(Expr.ObjectLiteral),
+        typeof(Expr.GetIndex),
+        typeof(Expr.SetIndex),
+        typeof(Expr.Super),
+        typeof(Expr.CompoundAssign),
+        typeof(Expr.CompoundSet),
+        typeof(Expr.CompoundSetIndex),
+        typeof(Expr.LogicalAssign),
+        typeof(Expr.LogicalSet),
+        typeof(Expr.LogicalSetIndex),
+        typeof(Expr.PrefixIncrement),
+        typeof(Expr.PostfixIncrement),
+        typeof(Expr.ArrowFunction),
+        typeof(Expr.TemplateLiteral),
+        typeof(Expr.TaggedTemplateLiteral),
+        typeof(Expr.Spread),
+        typeof(Expr.TypeAssertion),
+        typeof(Expr.Satisfies),
+        typeof(Expr.Await),
+        typeof(Expr.DynamicImport),
+        typeof(Expr.ImportMeta),
+        typeof(Expr.Yield),
+        typeof(Expr.RegexLiteral),
+        typeof(Expr.NonNullAssertion),
+        typeof(Expr.ClassExpr),
+    ];
 
-    /// <summary>Every concrete <see cref="Stmt"/> node type, in reflection order.</summary>
-    public static readonly IReadOnlyList<Type> StmtTypes = CollectConcreteNodes(typeof(Stmt));
-
-    private static IReadOnlyList<Type> CollectConcreteNodes(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicNestedTypes)] Type baseType) =>
-        baseType.GetNestedTypes(BindingFlags.Public)
-            .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && t != baseType)
-            .ToArray();
+    /// <summary>Every concrete <see cref="Stmt"/> node type, in declaration order.</summary>
+    public static readonly IReadOnlyList<Type> StmtTypes =
+    [
+        typeof(Stmt.Expression),
+        typeof(Stmt.Var),
+        typeof(Stmt.Const),
+        typeof(Stmt.Function),
+        typeof(Stmt.Field),
+        typeof(Stmt.Accessor),
+        typeof(Stmt.AutoAccessor),
+        typeof(Stmt.Class),
+        typeof(Stmt.StaticBlock),
+        typeof(Stmt.Interface),
+        typeof(Stmt.Block),
+        typeof(Stmt.Sequence),
+        typeof(Stmt.Return),
+        typeof(Stmt.While),
+        typeof(Stmt.For),
+        typeof(Stmt.DoWhile),
+        typeof(Stmt.ForOf),
+        typeof(Stmt.ForIn),
+        typeof(Stmt.If),
+        typeof(Stmt.Break),
+        typeof(Stmt.Continue),
+        typeof(Stmt.LabeledStatement),
+        typeof(Stmt.Switch),
+        typeof(Stmt.TryCatch),
+        typeof(Stmt.Throw),
+        typeof(Stmt.TypeAlias),
+        typeof(Stmt.Enum),
+        typeof(Stmt.Namespace),
+        typeof(Stmt.ImportAlias),
+        typeof(Stmt.ImportRequire),
+        typeof(Stmt.Import),
+        typeof(Stmt.Export),
+        typeof(Stmt.FileDirective),
+        typeof(Stmt.Directive),
+        typeof(Stmt.DeclareModule),
+        typeof(Stmt.DeclareGlobal),
+        typeof(Stmt.Using),
+    ];
 }

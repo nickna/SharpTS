@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "total": 72,
+  "total": 25,
   "project": {
-    "total": 56,
+    "total": 9,
     "codes": [
       {
         "code": "IL2067",
@@ -19,10 +19,6 @@
       {
         "code": "IL2080",
         "count": 6
-      },
-      {
-        "code": "IL3050",
-        "count": 47
       }
     ],
     "subjects": [
@@ -65,11 +61,6 @@
         "code": "IL2080",
         "subject": "SharpTS.Compilation.RuntimeEmitter.EmitWcHmac(TypeBuilder)",
         "count": 1
-      },
-      {
-        "code": "IL3050",
-        "subject": "SharpTS.Parsing.Visitors.AstNodeCatalog..cctor()",
-        "count": 47
       }
     ]
   },
