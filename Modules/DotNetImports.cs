@@ -57,6 +57,8 @@ public static class DotNetImports
     /// form is unsupported or a name cannot be resolved to a usable .NET type.</exception>
     public static void EnsureImports(ParsedModule module, Stmt.Import import)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
+
         if (import.DefaultImport != null)
         {
             throw new Exception(
@@ -109,6 +111,7 @@ public static class DotNetImports
     /// resolved to a usable public .NET type.</exception>
     public static Type ResolveExportType(string specifier, string name, Func<string, Type?>? resolve = null)
     {
+        ManagedDotNetInterop.RequireManagedRuntime();
         resolve ??= DotNetTypeRegistry.Resolve;
 
         if (specifier.Contains('/') || specifier.Contains('\\') || specifier.Contains('#') ||

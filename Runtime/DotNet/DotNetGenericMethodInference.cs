@@ -43,7 +43,8 @@ internal static class DotNetGenericMethodInference
                 return null;
             try
             {
-                return method.MakeGenericMethod(explicitTypeArguments.ToArray());
+                return ManagedDotNetInterop.MakeGenericMethod(
+                    method, explicitTypeArguments.ToArray());
             }
             catch (ArgumentException)
             {
@@ -92,7 +93,8 @@ internal static class DotNetGenericMethodInference
 
         try
         {
-            return method.MakeGenericMethod(
+            return ManagedDotNetInterop.MakeGenericMethod(
+                method,
                 genericArguments.Select(parameter => inferred[parameter]).ToArray());
         }
         catch (ArgumentException)
@@ -128,8 +130,8 @@ internal static class DotNetGenericMethodInference
 
         if (typeof(Delegate).IsAssignableFrom(pattern) &&
             typeof(Delegate).IsAssignableFrom(actual) &&
-            pattern.GetMethod("Invoke") is { } patternInvoke &&
-            actual.GetMethod("Invoke") is { } actualInvoke)
+            ManagedDotNetInterop.GetMethod(pattern, "Invoke") is { } patternInvoke &&
+            ManagedDotNetInterop.GetMethod(actual, "Invoke") is { } actualInvoke)
         {
             var patternParameters = patternInvoke.GetParameters();
             var actualParameters = actualInvoke.GetParameters();
@@ -172,7 +174,7 @@ internal static class DotNetGenericMethodInference
         if (actual.IsGenericType && actual.GetGenericTypeDefinition() == genericDefinition)
             return actual;
 
-        foreach (var interfaceType in actual.GetInterfaces())
+        foreach (var interfaceType in ManagedDotNetInterop.GetInterfaces(actual))
         {
             if (interfaceType.IsGenericType &&
                 interfaceType.GetGenericTypeDefinition() == genericDefinition)

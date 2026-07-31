@@ -17,7 +17,8 @@ internal static class DotNetOperatorResolver
             return [];
 
         return EnumerateDeclaringTypes(leftType, rightType)
-            .SelectMany(type => type.GetMethods(
+            .SelectMany(type => ManagedDotNetInterop.GetMethods(
+                type,
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy))
             .Where(method =>
                 method.IsSpecialName &&
@@ -41,7 +42,8 @@ internal static class DotNetOperatorResolver
         if (name == null)
             return [];
 
-        return operandType.GetMethods(
+        return ManagedDotNetInterop.GetMethods(
+                operandType,
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             .Where(method =>
                 method.IsSpecialName &&
@@ -62,7 +64,8 @@ internal static class DotNetOperatorResolver
         if (name == null)
             return [];
 
-        return operandType.GetMethods(
+        return ManagedDotNetInterop.GetMethods(
+                operandType,
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             .Where(method =>
                 method.IsSpecialName &&

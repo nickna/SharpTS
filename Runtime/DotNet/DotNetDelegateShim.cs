@@ -37,7 +37,7 @@ internal static class DotNetDelegateShim
                 $"Type '{delegateType.FullName}' is not a delegate type.", nameof(delegateType));
         }
 
-        var invoke = delegateType.GetMethod("Invoke")
+        var invoke = ManagedDotNetInterop.GetMethod(delegateType, "Invoke")
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' has no Invoke method.");
 
@@ -59,7 +59,7 @@ internal static class DotNetDelegateShim
                     ? (Expression)Expression.Convert(pe, typeof(object))
                     : pe)
                 .ToArray();
-            argsArray = Expression.NewArrayInit(typeof(object), boxed);
+            argsArray = ManagedDotNetInterop.NewArrayInit(typeof(object), boxed);
         }
 
         var dispatchMethod = typeof(DotNetDelegateShim).GetMethod(
@@ -83,8 +83,7 @@ internal static class DotNetDelegateShim
             body = Expression.Convert(dispatchCall, invoke.ReturnType);
         }
 
-        var lambda = Expression.Lambda(delegateType, body, paramExprs);
-        return lambda.Compile();
+        return ManagedDotNetInterop.CompileLambda(delegateType, body, paramExprs);
     }
 
     /// <summary>
@@ -145,12 +144,13 @@ internal static class DotNetDelegateShim
                 $"Type '{delegateType.FullName}' is not a delegate type.", nameof(delegateType));
         }
 
-        var tsInvoke = tsFunction.GetType().GetMethod("Invoke", new[] { typeof(object[]) })
+        var tsInvoke = ManagedDotNetInterop.GetMethod(
+            tsFunction.GetType(), "Invoke", [typeof(object[])])
             ?? throw new InvalidOperationException(
                 $"Value of type '{tsFunction.GetType().FullName}' has no 'Invoke(object[])' method — " +
                 "expected the emitted $TSFunction shape.");
 
-        var delegateInvoke = delegateType.GetMethod("Invoke")
+        var delegateInvoke = ManagedDotNetInterop.GetMethod(delegateType, "Invoke")
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' has no Invoke method.");
 
@@ -180,7 +180,7 @@ internal static class DotNetDelegateShim
                 return (Expression)Expression.Call(wrapReturn, boxed,
                     Expression.Constant(pe.Type, typeof(Type)));
             }).ToArray();
-            argsArray = Expression.NewArrayInit(typeof(object), wrapped);
+            argsArray = ManagedDotNetInterop.NewArrayInit(typeof(object), wrapped);
         }
 
         // Call: tsFunction.Invoke(argsArray) — returns object.
@@ -212,6 +212,6 @@ internal static class DotNetDelegateShim
             body = Expression.Convert(converted, delegateInvoke.ReturnType);
         }
 
-        return Expression.Lambda(delegateType, body, paramExprs).Compile();
+        return ManagedDotNetInterop.CompileLambda(delegateType, body, paramExprs);
     }
 }
