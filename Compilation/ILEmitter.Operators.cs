@@ -1836,10 +1836,12 @@ public partial class ILEmitter
         out Type valueType)
     {
         string pascalName = NamingConventions.ToPascalCase(jsName);
-        var property = ownerType.GetProperty(
-                           pascalName, BindingFlags.Public | BindingFlags.Instance)
-                       ?? ownerType.GetProperty(
-                           jsName, BindingFlags.Public | BindingFlags.Instance);
+        var property = ManagedDotNetInterop.GetProperty(
+                           ownerType, pascalName,
+                           BindingFlags.Public | BindingFlags.Instance)
+                       ?? ManagedDotNetInterop.GetProperty(
+                           ownerType, jsName,
+                           BindingFlags.Public | BindingFlags.Instance);
         if (property is { CanRead: true, CanWrite: true } &&
             property.GetIndexParameters().Length == 0 &&
             property.GetGetMethod() != null &&
@@ -1851,10 +1853,12 @@ public partial class ILEmitter
             return true;
         }
 
-        var field = ownerType.GetField(
-                        pascalName, BindingFlags.Public | BindingFlags.Instance)
-                    ?? ownerType.GetField(
-                        jsName, BindingFlags.Public | BindingFlags.Instance);
+        var field = ManagedDotNetInterop.GetField(
+                        ownerType, pascalName,
+                        BindingFlags.Public | BindingFlags.Instance)
+                    ?? ManagedDotNetInterop.GetField(
+                        ownerType, jsName,
+                        BindingFlags.Public | BindingFlags.Instance);
         if (field is { IsInitOnly: false, IsLiteral: false } &&
             DotNetInteropClassifier.UnsupportedSlotReason(field.FieldType) == null)
         {
@@ -1875,7 +1879,8 @@ public partial class ILEmitter
         out MethodInfo getter,
         out MethodCandidate getterCandidate)
     {
-        var properties = ownerType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        var properties = ManagedDotNetInterop.GetProperties(
+                ownerType, BindingFlags.Public | BindingFlags.Instance)
             .Where(candidate =>
                 candidate.CanRead &&
                 candidate.CanWrite &&

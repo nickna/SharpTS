@@ -78,6 +78,27 @@ internal static class ManagedDotNetInterop
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    internal static ConstructorInfo? GetConstructor(Type type, Type[] parameterTypes)
+    {
+        RequireManagedRuntime();
+        return type.GetConstructor(parameterTypes);
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    internal static ConstructorInfo? GetConstructor(
+        Type type,
+        BindingFlags flags,
+        Type[] parameterTypes)
+    {
+        RequireManagedRuntime();
+        return type.GetConstructor(
+            flags,
+            binder: null,
+            parameterTypes,
+            modifiers: null);
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
     internal static PropertyInfo[] GetProperties(Type type, BindingFlags flags)
     {
         RequireManagedRuntime();
@@ -99,10 +120,24 @@ internal static class ManagedDotNetInterop
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    internal static FieldInfo[] GetFields(Type type, BindingFlags flags)
+    {
+        RequireManagedRuntime();
+        return type.GetFields(flags);
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
     internal static EventInfo? GetEvent(Type type, string name, BindingFlags flags)
     {
         RequireManagedRuntime();
         return type.GetEvent(name, flags);
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
+    internal static EventInfo[] GetEvents(Type type, BindingFlags flags)
+    {
+        RequireManagedRuntime();
+        return type.GetEvents(flags);
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = TrimJustification)]
@@ -140,6 +175,20 @@ internal static class ManagedDotNetInterop
     {
         RequireManagedRuntime();
         return elementType.MakeArrayType();
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = DynamicCodeJustification)]
+    internal static Type GetActionType(params Type[] parameterTypes)
+    {
+        RequireManagedRuntime();
+        return Expression.GetActionType(parameterTypes);
+    }
+
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = DynamicCodeJustification)]
+    internal static Type GetFuncType(params Type[] parameterAndReturnTypes)
+    {
+        RequireManagedRuntime();
+        return Expression.GetFuncType(parameterAndReturnTypes);
     }
 
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = DynamicCodeJustification)]

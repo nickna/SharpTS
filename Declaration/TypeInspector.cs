@@ -1,4 +1,5 @@
 using System.Reflection;
+using SharpTS.Runtime.DotNet;
 
 namespace SharpTS.Declaration;
 
@@ -129,7 +130,8 @@ public class TypeInspector
             {
                 // Enum values are callable at runtime (toString, hasFlag, …); surface those
                 // instance methods for consumers that mirror the callable surface.
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                foreach (var method in ManagedDotNetInterop.GetMethods(
+                             type, BindingFlags.Public | BindingFlags.Instance))
                 {
                     if (ShouldIncludeMethod(method, includeInherited))
                         methods.Add(ExtractMethod(method));
@@ -158,14 +160,16 @@ public class TypeInspector
         // Extract constructors
         if (!type.IsAbstract && !type.IsInterface)
         {
-            foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var ctor in ManagedDotNetInterop.GetConstructors(
+                         type, BindingFlags.Public | BindingFlags.Instance))
             {
                 constructors.Add(ExtractConstructor(ctor));
             }
         }
 
         // Extract instance methods
-        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | declaredOnly))
+        foreach (var method in ManagedDotNetInterop.GetMethods(
+                     type, BindingFlags.Public | BindingFlags.Instance | declaredOnly))
         {
             if (ShouldIncludeMethod(method, includeInherited))
             {
@@ -174,7 +178,8 @@ public class TypeInspector
         }
 
         // Extract static methods
-        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static | declaredOnly))
+        foreach (var method in ManagedDotNetInterop.GetMethods(
+                     type, BindingFlags.Public | BindingFlags.Static | declaredOnly))
         {
             if (ShouldIncludeMethod(method, includeInherited))
             {
@@ -183,24 +188,28 @@ public class TypeInspector
         }
 
         // Extract instance properties
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | declaredOnly))
+        foreach (var prop in ManagedDotNetInterop.GetProperties(
+                     type, BindingFlags.Public | BindingFlags.Instance | declaredOnly))
         {
             properties.Add(ExtractProperty(prop));
         }
 
         // Extract static properties
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Static | declaredOnly))
+        foreach (var prop in ManagedDotNetInterop.GetProperties(
+                     type, BindingFlags.Public | BindingFlags.Static | declaredOnly))
         {
             staticProperties.Add(ExtractProperty(prop));
         }
 
         // Extract public fields (e.g. Guid.Empty, TimeSpan.Zero). The runtime member lookup
         // (DotNetTypeRegistry.GetPropertyOrField) resolves fields alongside properties.
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance | declaredOnly))
+        foreach (var field in ManagedDotNetInterop.GetFields(
+                     type, BindingFlags.Public | BindingFlags.Instance | declaredOnly))
         {
             fields.Add(ExtractField(field));
         }
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static | declaredOnly))
+        foreach (var field in ManagedDotNetInterop.GetFields(
+                     type, BindingFlags.Public | BindingFlags.Static | declaredOnly))
         {
             staticFields.Add(ExtractField(field));
         }
@@ -225,7 +234,9 @@ public class TypeInspector
             DeclaringTypeName: type.DeclaringType?.Name,
             Fields: fields,
             StaticFields: staticFields,
-            HasEvents: type.GetEvents(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Length > 0
+            HasEvents: ManagedDotNetInterop.GetEvents(
+                type,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Length > 0
         );
     }
 

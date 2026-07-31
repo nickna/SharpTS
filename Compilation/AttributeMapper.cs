@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Runtime.DotNet;
 
 namespace SharpTS.Compilation;
 
@@ -55,7 +56,7 @@ public static class AttributeMapper
             call.Arguments[0] is Expr.Literal literal &&
             literal.Value is string typeName)
         {
-            var type = Type.GetType(typeName);
+            var type = ManagedDotNetInterop.ResolveType(typeName);
             if (type != null && typeof(Attribute).IsAssignableFrom(type))
             {
                 return CreateAttributeBuilder(type, decorator);
@@ -88,7 +89,7 @@ public static class AttributeMapper
         var args = GetDecoratorArguments(decorator);
 
         // Try to find a matching constructor
-        var constructors = attributeType.GetConstructors();
+        var constructors = GetAttributeConstructors(attributeType);
 
         // First, try parameterless constructor
         var defaultCtor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
@@ -136,6 +137,44 @@ public static class AttributeMapper
 
         // Can't create attribute - return null
         return null;
+    }
+
+    /// <summary>
+    /// Keeps the closed built-in attribute set usable in the native compiler.
+    /// Arbitrary <c>@attribute("Type.Name")</c> types remain part of managed
+    /// open-world interop and use the guarded reflection boundary.
+    /// </summary>
+    private static ConstructorInfo[] GetAttributeConstructors(Type attributeType)
+    {
+        if (attributeType == typeof(ObsoleteAttribute))
+        {
+            return
+            [
+                typeof(ObsoleteAttribute).GetConstructor(Type.EmptyTypes)!,
+                typeof(ObsoleteAttribute).GetConstructor([typeof(string)])!,
+                typeof(ObsoleteAttribute).GetConstructor(
+                    [typeof(string), typeof(bool)])!,
+            ];
+        }
+
+        if (attributeType == typeof(SerializableAttribute))
+        {
+            return
+            [
+                typeof(SerializableAttribute).GetConstructor(Type.EmptyTypes)!,
+            ];
+        }
+
+        if (attributeType == typeof(NonSerializedAttribute))
+        {
+            return
+            [
+                typeof(NonSerializedAttribute).GetConstructor(Type.EmptyTypes)!,
+            ];
+        }
+
+        return ManagedDotNetInterop.GetConstructors(
+            attributeType, BindingFlags.Public | BindingFlags.Instance);
     }
 
     /// <summary>

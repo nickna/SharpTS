@@ -22,8 +22,10 @@ public static class DotNetExtensionImports
         if (!(container.IsAbstract && container.IsSealed))
             throw new Exception(
                 $"Module Error: extension container '{typeName}' must be a static class.");
-        if (!container.GetMethods(System.Reflection.BindingFlags.Public |
-                                  System.Reflection.BindingFlags.Static)
+        if (!ManagedDotNetInterop.GetMethods(
+                container,
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.Static)
                 .Any(m => m.IsDefined(typeof(ExtensionAttribute), inherit: false)))
         {
             throw new Exception(

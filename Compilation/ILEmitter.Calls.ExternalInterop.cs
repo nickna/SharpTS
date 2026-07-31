@@ -58,7 +58,8 @@ public partial class ILEmitter
     /// <summary>Emits a direct call to a public single-parameter CLR indexer getter.</summary>
     private bool TryEmitExternalIndexerGet(Expr receiver, Type externalType, Expr index)
     {
-        var getters = externalType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        var getters = ManagedDotNetInterop.GetProperties(
+                externalType, BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanRead &&
                         p.GetIndexParameters().Length == 1 &&
                         DotNetInteropClassifier.UnsupportedSlotReason(
@@ -88,7 +89,8 @@ public partial class ILEmitter
     /// <summary>Emits a direct call to a public single-parameter CLR indexer setter.</summary>
     private bool TryEmitExternalIndexerSet(Expr receiver, Type externalType, Expr index, Expr value)
     {
-        var setters = externalType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        var setters = ManagedDotNetInterop.GetProperties(
+                externalType, BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanWrite &&
                         p.GetIndexParameters().Length == 1 &&
                         DotNetInteropClassifier.UnsupportedSlotReason(
@@ -149,7 +151,8 @@ public partial class ILEmitter
 
         // Try to find the instance method - first with original name, then with PascalCase
         string pascalMethodName = NamingConventions.ToPascalCase(methodName);
-        var methods = externalType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        var methods = ManagedDotNetInterop.GetMethods(
+                externalType, BindingFlags.Public | BindingFlags.Instance)
             .Where(m => m.Name == methodName || m.Name == pascalMethodName)
             .ToArray();
 
@@ -256,7 +259,8 @@ public partial class ILEmitter
     private void EmitExternalTypeConstruction(Type externalType, List<Expr> arguments)
     {
         // Find a constructor matching the argument count
-        var ctors = externalType.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+        var ctors = ManagedDotNetInterop.GetConstructors(
+            externalType, BindingFlags.Public | BindingFlags.Instance);
 
         if (ctors.Length == 0)
         {
@@ -297,7 +301,8 @@ public partial class ILEmitter
 
         // Try to find the static method - first with original name, then with PascalCase
         string pascalMethodName = NamingConventions.ToPascalCase(methodName);
-        var methods = externalType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+        var methods = ManagedDotNetInterop.GetMethods(
+                externalType, BindingFlags.Public | BindingFlags.Static)
             .Where(m => m.Name == methodName || m.Name == pascalMethodName)
             .ToArray();
 
@@ -591,7 +596,10 @@ public partial class ILEmitter
             if (_stackType is StackType.Double or StackType.Boolean)
             {
                 EmitExternalTypeConversion(nullableUnderlying);
-                IL.Emit(OpCodes.Newobj, targetType.GetConstructor([nullableUnderlying])!);
+                IL.Emit(
+                    OpCodes.Newobj,
+                    ManagedDotNetInterop.GetConstructor(
+                        targetType, [nullableUnderlying])!);
                 SetStackUnknown();
                 return;
             }
@@ -601,7 +609,10 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Brfalse, nullValue);
             EmitExternalTypeConversion(nullableUnderlying);
-            IL.Emit(OpCodes.Newobj, targetType.GetConstructor([nullableUnderlying])!);
+            IL.Emit(
+                OpCodes.Newobj,
+                ManagedDotNetInterop.GetConstructor(
+                    targetType, [nullableUnderlying])!);
             IL.Emit(OpCodes.Br, converted);
 
             IL.MarkLabel(nullValue);
@@ -1047,9 +1058,10 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSFunctionType);
             IL.Emit(OpCodes.Newobj, adapter.Ctor);
             IL.Emit(OpCodes.Ldftn, adapter.Invoke);
-            var delegateCtor = handlerDelegateType.GetConstructor(
+            var delegateCtor = ManagedDotNetInterop.GetConstructor(
+                handlerDelegateType,
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                null, [typeof(object), typeof(IntPtr)], null)
+                [typeof(object), typeof(IntPtr)])
                 ?? throw new CompileException(
                     $"Delegate type '{handlerDelegateType.FullName}' lacks the standard (object, IntPtr) constructor.");
             IL.Emit(OpCodes.Newobj, delegateCtor);
@@ -1152,14 +1164,14 @@ public partial class ILEmitter
     private static EventInfo? ResolveExternalEvent(Type externalType, string eventName)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static;
-        var evt = externalType.GetEvent(eventName, flags);
+        var evt = ManagedDotNetInterop.GetEvent(externalType, eventName, flags);
         if (evt != null) return evt;
 
         // PascalCase fallback.
         if (eventName.Length > 0 && char.IsLower(eventName[0]))
         {
             var pascal = char.ToUpperInvariant(eventName[0]) + eventName[1..];
-            evt = externalType.GetEvent(pascal, flags);
+            evt = ManagedDotNetInterop.GetEvent(externalType, pascal, flags);
             if (evt != null) return evt;
         }
 
@@ -1292,11 +1304,10 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldftn, adapter.Invoke);
 
         // new TDelegate(object target, IntPtr method) — every Delegate has this ctor.
-        var delegateCtor = delegateType.GetConstructor(
+        var delegateCtor = ManagedDotNetInterop.GetConstructor(
+            delegateType,
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-            null,
-            [typeof(object), typeof(IntPtr)],
-            null)
+            [typeof(object), typeof(IntPtr)])
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' lacks the standard (object, IntPtr) constructor.");
         IL.Emit(OpCodes.Newobj, delegateCtor);

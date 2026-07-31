@@ -85,7 +85,8 @@ public static class DotNetTypeSynthesizer
                 TypeInfo.BooleanLiteral => typeof(bool),
             TypeInfo.String or TypeInfo.StringLiteral => typeof(string),
             TypeInfo.Array array when TryGetClrArgumentType(
-                array.ElementType, out var element) => element.MakeArrayType(),
+                array.ElementType, out var element) =>
+                    ManagedDotNetInterop.MakeArrayType(element),
             TypeInfo.Tuple tuple => HomogeneousClrType(
                 tuple.ElementTypes.Concat(
                     tuple.RestElementType != null
@@ -118,7 +119,7 @@ public static class DotNetTypeSynthesizer
         Type first = resolved[0];
         if (resolved.Any(type => type != first))
             return null;
-        return asArray ? first.MakeArrayType() : first;
+        return asArray ? ManagedDotNetInterop.MakeArrayType(first) : first;
     }
 
     private static Type? GetDelegateType(TypeInfo.Function function)
@@ -134,13 +135,11 @@ public static class DotNetTypeSynthesizer
         try
         {
             if (function.ReturnType is TypeInfo.Void)
-                return System.Linq.Expressions.Expression.GetActionType(
-                    parameterTypes.ToArray());
+                return ManagedDotNetInterop.GetActionType(parameterTypes.ToArray());
             if (!TryGetClrArgumentType(function.ReturnType, out var returnType))
                 return null;
             parameterTypes.Add(returnType);
-            return System.Linq.Expressions.Expression.GetFuncType(
-                parameterTypes.ToArray());
+            return ManagedDotNetInterop.GetFuncType(parameterTypes.ToArray());
         }
         catch (ArgumentException)
         {
@@ -408,8 +407,10 @@ public static class DotNetTypeSynthesizer
         // A CLR indexer maps directly to the corresponding TypeScript class index signature.
         // TypeScript bracket syntax carries one key, so multi-parameter CLR indexers remain
         // unavailable (call their get_Item/set_Item accessor explicitly if needed).
-        foreach (var indexer in type.GetProperties(
-                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        foreach (var indexer in ManagedDotNetInterop.GetProperties(
+                     type,
+                     System.Reflection.BindingFlags.Public |
+                     System.Reflection.BindingFlags.Instance))
         {
             var indexParameters = indexer.GetIndexParameters();
             if (indexParameters.Length != 1 || !indexer.CanRead) continue;
@@ -480,7 +481,7 @@ public static class DotNetTypeSynthesizer
                         ? System.Reflection.BindingFlags.Static
                         : System.Reflection.BindingFlags.Instance);
         var target = isStatic ? mc.StaticMethods : mc.Methods;
-        foreach (var group in self.GetMethods(flags)
+        foreach (var group in ManagedDotNetInterop.GetMethods(self, flags)
                      .Where(m => m.IsGenericMethodDefinition && !m.IsSpecialName)
                      .GroupBy(
                          m => DotNetTypeMapper.ToTypeScriptMethodName(m.Name),
@@ -623,7 +624,7 @@ public static class DotNetTypeSynthesizer
                 MapGenericSlot(clrType.GetElementType()!, self, mc, substitutions));
         }
         if (typeof(Delegate).IsAssignableFrom(clrType) &&
-            clrType.GetMethod("Invoke") is { } genericInvoke)
+            ManagedDotNetInterop.GetMethod(clrType, "Invoke") is { } genericInvoke)
         {
             return new TypeInfo.Function(
                 genericInvoke.GetParameters()
@@ -792,7 +793,7 @@ public static class DotNetTypeSynthesizer
         if (clrType == self) return new TypeInfo.Instance(mc);
 
         if (typeof(Delegate).IsAssignableFrom(clrType) &&
-            clrType.GetMethod("Invoke") is { } invoke)
+            ManagedDotNetInterop.GetMethod(clrType, "Invoke") is { } invoke)
         {
             return new TypeInfo.Function(
                 invoke.GetParameters()
