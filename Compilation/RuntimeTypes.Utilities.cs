@@ -167,8 +167,14 @@ public static partial class RuntimeTypes
         }
         else
         {
-            // Try reflection for other function types
-            var invokeMethod = disposeMethod.GetType().GetMethod("Invoke", [typeof(object?[])]);
+            // Compiled output and third-party managed callables remain
+            // open-world under CoreCLR. The boundary rejects Native AOT
+            // before inspecting an arbitrary runtime type.
+            var invokeMethod = ManagedOutputRuntimeReflection.GetMethodBySignature(
+                disposeMethod.GetType(),
+                "Invoke",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                [typeof(object?[])]);
             invokeMethod?.Invoke(disposeMethod, [Array.Empty<object?>()]);
         }
     }

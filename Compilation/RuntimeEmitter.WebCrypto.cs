@@ -499,9 +499,14 @@ public partial class RuntimeEmitter
         var il = _wcDigest.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        (string Lower, Type Impl)[] impls =
-            [("sha1", typeof(SHA1)), ("sha256", typeof(SHA256)), ("sha384", typeof(SHA384)), ("sha512", typeof(SHA512))];
-        foreach (var (lower, impl) in impls)
+        (string Lower, MethodInfo HashData)[] impls =
+        [
+            ("sha1", ((Func<byte[], byte[]>)SHA1.HashData).Method),
+            ("sha256", ((Func<byte[], byte[]>)SHA256.HashData).Method),
+            ("sha384", ((Func<byte[], byte[]>)SHA384.HashData).Method),
+            ("sha512", ((Func<byte[], byte[]>)SHA512.HashData).Method),
+        ];
+        foreach (var (lower, hashData) in impls)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -509,7 +514,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, strEq);
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, impl.GetMethod("HashData", [typeof(byte[])])!);
+            il.Emit(OpCodes.Call, hashData);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
         }
@@ -525,9 +530,14 @@ public partial class RuntimeEmitter
         var il = _wcHmac.GetILGenerator();
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        (string Lower, Type Impl)[] impls =
-            [("sha1", typeof(HMACSHA1)), ("sha256", typeof(HMACSHA256)), ("sha384", typeof(HMACSHA384)), ("sha512", typeof(HMACSHA512))];
-        foreach (var (lower, impl) in impls)
+        (string Lower, MethodInfo HashData)[] impls =
+        [
+            ("sha1", ((Func<byte[], byte[], byte[]>)HMACSHA1.HashData).Method),
+            ("sha256", ((Func<byte[], byte[], byte[]>)HMACSHA256.HashData).Method),
+            ("sha384", ((Func<byte[], byte[], byte[]>)HMACSHA384.HashData).Method),
+            ("sha512", ((Func<byte[], byte[], byte[]>)HMACSHA512.HashData).Method),
+        ];
+        foreach (var (lower, hashData) in impls)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -536,7 +546,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Call, impl.GetMethod("HashData", [typeof(byte[]), typeof(byte[])])!);
+            il.Emit(OpCodes.Call, hashData);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
         }

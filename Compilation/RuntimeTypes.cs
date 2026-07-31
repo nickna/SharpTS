@@ -152,7 +152,6 @@ public class TSFunction
 public static partial class RuntimeTypes
 {
     private static readonly System.Random _random = System.Random.Shared;
-    private static readonly Dictionary<string, Type> _compiledTypes = [];
 
     // Symbol-keyed property storage: object -> (symbol -> value)
     private static readonly ConditionalWeakTable<object, Dictionary<object, object?>> _symbolStorage = new();

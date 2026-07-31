@@ -68,42 +68,4 @@ public static partial class RuntimeTypes
     }
 
     #endregion
-
-    #region Instantiation
-
-    public static object? CreateInstance(object?[] args, string className)
-    {
-        if (_compiledTypes.TryGetValue(className, out var type))
-        {
-            try
-            {
-                // Find the constructor and pad args with nulls for default parameters
-                var ctor = ReflectionCache.GetConstructor(type);
-                if (ctor != null)
-                {
-                    var paramCount = ctor.GetParameters().Length;
-                    var invoker = ReflectionCache.GetInvoker(ctor);
-
-                    if (args.Length < paramCount)
-                    {
-                        var paddedArgs = new object?[paramCount];
-                        Array.Copy(args, paddedArgs, args.Length);
-                        return invoker.Invoke(null, new Span<object?>(paddedArgs));
-                    }
-                    
-                    // Invoker for constructor handles "obj" as null (for static ctors) or unused?
-                    // Actually for ConstructorInfo, invoker.Invoke returns the new instance
-                    return invoker.Invoke(null, new Span<object?>(args));
-                }
-                return Activator.CreateInstance(type);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    #endregion
 }
