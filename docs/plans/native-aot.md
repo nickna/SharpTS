@@ -146,9 +146,14 @@ Plan against these numbers, not the originals:
   assembly interop in the Managed SKU. Against an exact unmodified-main
   win-arm64 publish, the native image increased by 2,560 bytes (0.0027%) to
   93,402,624 bytes; 2,048 bytes of that delta is the updated managed runtime
-  payload embedded in the native host. CI pins total, per-code, per-area, and
-  per-file/code counts, so both increases and category swaps fail until the
-  same PR updates the explained baseline.
+  payload embedded in the native host. Routing the remaining arbitrary
+  `Invoke`/`Fields`/`GetProperty`/`SetProperty` compatibility paths through
+  `ManagedStructuralClrReflection` then lowered the inventory to 78. The seam
+  preserves open-world CLR objects in the Managed SKU and rejects Native AOT
+  before reflection. The win-arm64 image increased by 1,024 bytes (0.0011%)
+  to 93,403,648 bytes. CI pins total, per-code, per-area, and per-file/code
+  counts, so both increases and category swaps fail until the same PR updates
+  the explained baseline.
 - **Ship the managed SKU:** `dotnet publish -r <rid> --self-contained
   -p:PublishSingleFile=true`. Prerequisite (~30 min): confirm embedded
   resources (stdlib modules, `lib.*.d.ts`) load under single-file extraction.
@@ -189,21 +194,21 @@ Plan against these numbers, not the originals:
   its reflected SDK path from SharpTS's native image. SharpTS pins 1.0.6 and
   sets the switch only for Native AOT.
 
-### Residual analyzer inventory (91)
+### Residual analyzer inventory (78)
 
-The cleanup tranches removed 2,494 of 2,585 warnings (96.5%) without broad
-`DynamicallyAccessedMembers` annotations. What remains is no longer one
-mechanical problem:
+The cleanup tranches removed 2,507 of 2,585 warnings (97.0%) without broad
+`DynamicallyAccessedMembers` annotations. Every remaining warning now belongs
+to the dynamic .NET interop policy:
 
 | Analyzer | Count | Primary meaning now |
 |---|---:|---|
-| IL2075 | 20 | Reflection from a returned/derived `Type`: dynamic .NET interop and generic managed runtime fallbacks |
+| IL2075 | 7 | Reflection from a returned/derived `Type`: dynamic .NET constructors, delegates, and extension methods |
 | IL2070 | 49 | Reflection on parameters: external .NET interop, declaration discovery, and dynamic runtime dispatch |
 | IL2026 | 1 | The dynamic .NET type registry resolving a user-supplied type name |
 | IL3050 | 14 | Runtime generic/array/delegate construction where Native AOT needs a precompiled shape |
 | Other flow warnings | 7 | Two each IL2055/IL2057/IL2060 and one IL2072, concentrated in dynamic interop/type synthesis |
 
-The remaining work is split at four ownership boundaries:
+The work is split at four ownership boundaries:
 
 1. **Managed-only feature guards (done for the current inventory).**
    In-process compiled-assembly execution, third-party executable assembly
@@ -211,11 +216,11 @@ The remaining work is split at four ownership boundaries:
    boundaries. MetadataLoadContext inspection has a narrow metadata-only
    justification. The one remaining IL2026 belongs to dynamic interop policy,
    not this bucket.
-2. **Structural CLR fallbacks.** Thirteen warnings preserve Managed-SKU
-   compatibility for arbitrary objects that happen to expose `Invoke`,
-   `Fields`, `GetProperty`, or `SetProperty`. Keep that open-world behavior in
-   the Managed SKU, but route it through one managed-only compatibility seam
-   and reject it predictably in Native AOT.
+2. **Structural CLR fallbacks (done for the current inventory).** Arbitrary
+   objects that happen to expose `Invoke`, `Fields`, `GetProperty`, or
+   `SetProperty` now route through `ManagedStructuralClrReflection`. The seam
+   remains deliberately open-world under CoreCLR for embedders and third-party
+   assemblies, but rejects Native AOT before inspecting an arbitrary type.
 3. **Dynamic .NET interop policy.** `TypeInspector`, the external-property/call
    emitters and `Runtime/DotNet` deliberately inspect arbitrary types. Broad
    member annotations were measured and rejected because they increased the
@@ -233,9 +238,8 @@ The remaining work is split at four ownership boundaries:
    `RuntimeCallableDispatcher`. Reflection used by the generated managed
    runtime is separately isolated in `ManagedOutputRuntimeReflection`: that
    seam rejects the Native host but intentionally accepts arbitrary managed
-   output and third-party CLR types under CoreCLR. Fallbacks that intentionally
-   inspect arbitrary CLR objects outside those output-runtime helpers remain
-   unsuppressed and belong to item 2.
+   output and third-party CLR types under CoreCLR. Other arbitrary CLR
+   structural shapes route through the separate item 2 seam.
    The optional `ILLabelValidator` duplicate was removed rather than routing
    2,126 `GetILGenerator()` acquisitions across 250 files through a diagnostic
    wrapper; `PersistedAssemblyBuilder.GenerateMetadata` still rejects every

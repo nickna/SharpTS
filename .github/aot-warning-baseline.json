@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "total": 91,
+  "total": 78,
   "codes": [
     {
       "code": "IL2026",
@@ -28,7 +28,7 @@
     },
     {
       "code": "IL2075",
-      "count": 20
+      "count": 7
     },
     {
       "code": "IL3050",
@@ -50,7 +50,7 @@
     },
     {
       "area": "Runtime",
-      "count": 43
+      "count": 30
     },
     {
       "area": "TypeSystem",
@@ -95,11 +95,6 @@
     },
     {
       "file": "Modules/DotNetExtensionImports.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/BuiltIns/Modules/Interpreter/VmModuleInterpreter.cs",
       "code": "IL2075",
       "count": 1
     },
@@ -187,41 +182,6 @@
       "file": "Runtime/DotNet/DotNetTypeRegistry.cs",
       "code": "IL3050",
       "count": 3
-    },
-    {
-      "file": "Runtime/Types/SharpTSAsyncLocalStorage.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSKeyObject.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/SharpTSPropertyDescriptor.cs",
-      "code": "IL2075",
-      "count": 2
-    },
-    {
-      "file": "Runtime/Types/SharpTSProxy.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Runtime/Types/TSFunctionCallableAdapter.cs",
-      "code": "IL2075",
-      "count": 1
-    },
-    {
-      "file": "Runtime/Types/VmContext.cs",
-      "code": "IL2075",
-      "count": 3
-    },
-    {
-      "file": "Runtime/Types/VmModule.cs",
-      "code": "IL2075",
-      "count": 1
     },
     {
       "file": "TypeSystem/DotNetTypeSynthesizer.cs",
