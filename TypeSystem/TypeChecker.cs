@@ -1038,11 +1038,12 @@ public partial class TypeChecker
 
     private readonly Dictionary<string, ActiveLabel> _activeLabels = [];
 
-    // Track pending overload signatures for top-level functions
-    private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
+    // Track pending overload signatures per lexical environment. Function names can repeat
+    // independently in the global scope, modules, and nested scopes.
+    private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo.Function>> _pendingOverloadSignatures = [];
 
     // Track type parameters for generic overloaded functions
-    private readonly Dictionary<string, List<TypeInfo.TypeParameter>> _pendingOverloadTypeParams = [];
+    private readonly Dictionary<(TypeEnvironment Environment, string Name), List<TypeInfo.TypeParameter>> _pendingOverloadTypeParams = [];
 
     // Decorator mode configuration
     private DecoratorMode _decoratorMode = DecoratorMode.None;

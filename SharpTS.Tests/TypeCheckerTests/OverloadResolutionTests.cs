@@ -72,6 +72,35 @@ public class OverloadResolutionTests
 
     #endregion
 
+    #region Overload Scope Isolation
+
+    [Fact]
+    public void ModuleFunctions_DoNotConsumeSameNamedGlobalAmbientOverloads()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                export function open(path: string): void {
+                    console.log(path);
+                }
+
+                export function close(fd: number, callback: () => void): void {
+                    console.log(fd);
+                    callback();
+                }
+
+                open("file.txt");
+                close(42, () => console.log("closed"));
+                """,
+        };
+
+        var result = TestHarness.RunModulesInterpreted(files, "main.ts");
+
+        Assert.Equal("file.txt\n42\nclosed\n", result);
+    }
+
+    #endregion
+
     #region Most Specific Overload Selection
 
     [Fact]

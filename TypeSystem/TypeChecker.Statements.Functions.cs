@@ -106,7 +106,8 @@ public partial class TypeChecker
         // each call site, so a call preceding the declaration types precisely instead of `any`.
         if (funcStmt.ReturnType != null || funcStmt.Body == null) return;
         string funcName = funcStmt.Name.Lexeme;
-        if (_pendingOverloadSignatures.ContainsKey(funcName)) return;
+        var overloadKey = (_environment, funcName);
+        if (_pendingOverloadSignatures.ContainsKey(overloadKey)) return;
         if (!_environment.IsDefinedLocally(funcName)) return;
 
         // Recognize our hoisted `any`-return placeholder: a non-generic function hoists as a plain
@@ -570,22 +571,23 @@ public partial class TypeChecker
         }
 
         var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType, paramNames);
+        var overloadKey = (_environment, funcName);
 
         // Check if this is an overload signature (no body)
         if (funcStmt.Body == null)
         {
             // This is an overload signature - save for later
-            if (!_pendingOverloadSignatures.TryGetValue(funcName, out var signatures))
+            if (!_pendingOverloadSignatures.TryGetValue(overloadKey, out var signatures))
             {
                 signatures = [];
-                _pendingOverloadSignatures[funcName] = signatures;
+                _pendingOverloadSignatures[overloadKey] = signatures;
             }
             signatures.Add(thisFuncType);
 
             // Also save type parameters if this is a generic overload
             if (typeParams != null && typeParams.Count > 0)
             {
-                _pendingOverloadTypeParams[funcName] = typeParams;
+                _pendingOverloadTypeParams[overloadKey] = typeParams;
             }
 
             // Ambient (`declare function`): there is no implementation to come — the declaration
@@ -611,7 +613,7 @@ public partial class TypeChecker
         TypeInfo funcType;
 
         // Check if there are pending overload signatures for this function
-        if (_pendingOverloadSignatures.TryGetValue(funcName, out var pendingSignatures))
+        if (_pendingOverloadSignatures.TryGetValue(overloadKey, out var pendingSignatures))
         {
             // Validate implementation is compatible with all signatures
             foreach (var sig in pendingSignatures)
@@ -623,11 +625,11 @@ public partial class TypeChecker
             }
 
             // Check if we have type parameters (generic overloaded function)
-            if (_pendingOverloadTypeParams.TryGetValue(funcName, out var overloadTypeParams))
+            if (_pendingOverloadTypeParams.TryGetValue(overloadKey, out var overloadTypeParams))
             {
                 // Create generic overloaded function type
                 funcType = new TypeInfo.GenericOverloadedFunction(overloadTypeParams, pendingSignatures, thisFuncType);
-                _pendingOverloadTypeParams.Remove(funcName);
+                _pendingOverloadTypeParams.Remove(overloadKey);
             }
             else
             {
@@ -636,7 +638,7 @@ public partial class TypeChecker
             }
 
             // Clear pending signatures
-            _pendingOverloadSignatures.Remove(funcName);
+            _pendingOverloadSignatures.Remove(overloadKey);
         }
         else if (typeParams != null && typeParams.Count > 0)
         {

@@ -268,6 +268,15 @@ jobs:
           "$scratch/modules" > "$scratch/bundled.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/bundled.txt"
 
+      - name: Drive Examples corpus from the native host
+        shell: pwsh
+        run: |
+          ./Examples/test-examples.ps1 `
+            -SharpTSExe "$PWD/artifacts/native-aot/SharpTS" `
+            -NativeSku `
+            -Mode all `
+            -OutputFormat table
+
       - name: Upload Native AOT publish diagnostics
         if: always()
         uses: actions/upload-artifact@v4

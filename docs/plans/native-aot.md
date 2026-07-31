@@ -338,6 +338,11 @@ out of scope.
 ### The gate — passed
 
 `-SharpTSExe` was added to `Examples/test-examples.ps1` in Phase 1.
+`-NativeSku` now excludes only examples that deliberately exercise a
+Managed-SKU-only feature. The broader corpus is a permanent CI gate over all
+three paths: interpreted TypeScript, compiled DLL, and bundled executable.
+The local win-x64 baseline is 22 passed / 0 failed in each path; the two
+intentional skips are dynamic .NET interop and the uninstalled npm fixture.
 
 Results from the win-arm64 native probe, now preserved by the
 `native-aot-compile-smoke` linux-x64 CI job:
@@ -441,8 +446,8 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
   (`TestHarness.cs:357,610,959,1023`; `Test262Runner.cs:538,543`) — **they can
   never run AOT; keep them managed forever.**
 - The native SKU is gated by a subprocess smoke job: publish native, drive
-  `Examples/test-examples.ps1 -SharpTSExe <native>` over interpret + compile
-  modes, assert compiled DLLs run correctly under JIT.
+  `Examples/test-examples.ps1 -SharpTSExe <native> -NativeSku` over interpret,
+  compiled-DLL, and bundled-executable modes, and assert outputs in each path.
 - PE-Packer adds: an `IReferenceAssemblyIndex` fixture (no filesystem),
   runtimeconfig version/rollForward assertions, and its own native smoke job.
   Note its `MetadataRoundTripTests.cs:400` passes

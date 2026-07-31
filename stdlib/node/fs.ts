@@ -297,13 +297,17 @@ export function readdirSync(path: string, options?: any): any {
 const __S_IFMT = 0xf000, __S_IFREG = 0x8000, __S_IFDIR = 0x4000, __S_IFLNK = 0xa000,
     __S_IFBLK = 0x6000, __S_IFCHR = 0x2000, __S_IFIFO = 0x1000, __S_IFSOCK = 0xc000;
 
+function __trunc(x: number): number {
+    return x < 0 ? Math.ceil(x) : Math.floor(x);
+}
+
 class Stats {
     dev: any; ino: any; mode: any; nlink: any; uid: any; gid: any; rdev: any;
     size: any; blksize: any; blocks: any;
     atimeMs: any; mtimeMs: any; ctimeMs: any; birthtimeMs: any;
     atime: any; mtime: any; ctime: any; birthtime: any;
     constructor(r: any, big: boolean) {
-        const n = (x: number): any => big ? BigInt(Math.trunc(x)) : x;
+        const n = (x: number): any => big ? BigInt(__trunc(x)) : x;
         this.dev = n(r.dev); this.ino = n(r.ino); this.mode = n(r.mode);
         this.nlink = n(r.nlink); this.uid = n(r.uid); this.gid = n(r.gid); this.rdev = n(r.rdev);
         this.size = n(r.size); this.blksize = n(r.blksize); this.blocks = n(r.blocks);
@@ -312,10 +316,10 @@ class Stats {
         this.atime = new Date(r.atimeMs); this.mtime = new Date(r.mtimeMs);
         this.ctime = new Date(r.ctimeMs); this.birthtime = new Date(r.birthtimeMs);
         if (big) {
-            (this as any).atimeNs = BigInt(Math.trunc(r.atimeMs)) * 1000000n;
-            (this as any).mtimeNs = BigInt(Math.trunc(r.mtimeMs)) * 1000000n;
-            (this as any).ctimeNs = BigInt(Math.trunc(r.ctimeMs)) * 1000000n;
-            (this as any).birthtimeNs = BigInt(Math.trunc(r.birthtimeMs)) * 1000000n;
+            (this as any).atimeNs = BigInt(__trunc(r.atimeMs)) * 1000000n;
+            (this as any).mtimeNs = BigInt(__trunc(r.mtimeMs)) * 1000000n;
+            (this as any).ctimeNs = BigInt(__trunc(r.ctimeMs)) * 1000000n;
+            (this as any).birthtimeNs = BigInt(__trunc(r.birthtimeMs)) * 1000000n;
         }
     }
     isFile(): boolean { return (Number(this.mode) & __S_IFMT) === __S_IFREG; }
@@ -529,7 +533,7 @@ export function writevSync(fd: number, buffers: any[], position?: any): number {
 function __shapeStatfs(raw: any, options: any): any {
     const big = typeof options === 'object' && options !== null && !!options.bigint;
     if (!big) return raw;
-    const b = (x: number): any => BigInt(Math.trunc(x));
+    const b = (x: number): any => BigInt(__trunc(x));
     return {
         type: b(raw.type), bsize: b(raw.bsize), blocks: b(raw.blocks), bfree: b(raw.bfree),
         bavail: b(raw.bavail), files: b(raw.files), ffree: b(raw.ffree),
@@ -543,7 +547,7 @@ export function statfsSync(path: string, options?: any): any { return __shapeSta
 // `**` across segments. Matching walks the directory tree under cwd. ---
 
 /** Compiles one glob path-segment (`*`/`?`/literals) to an anchored RegExp. */
-function __globSegRegex(seg: string): RegExp {
+function __globSegRegex(seg: string): any {
     let re = '^';
     for (const ch of seg) {
         if (ch === '*') re += '[^/]*';
