@@ -81,7 +81,8 @@ public class TSFunctionCallableAdapter : ISharpTSCallable
         {
             _target = target;
             // Try to find an Invoke method
-            _invokeMethod = target.GetType().GetMethod("Invoke");
+            _invokeMethod = ManagedStructuralClrReflection.GetPublicMethodByName(
+                target.GetType(), "Invoke");
         }
 
         public int Arity() => 2;

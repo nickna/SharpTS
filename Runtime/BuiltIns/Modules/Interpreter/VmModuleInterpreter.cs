@@ -532,7 +532,7 @@ public static class VmModuleInterpreter
                         type, ManagedEmittedShape.HasFields)
                     ? ManagedEmittedShapeReflection.GetPublicProperty(
                         type, ManagedEmittedShape.HasFields, "Fields")
-                    : type.GetProperty("Fields");
+                    : ManagedStructuralClrReflection.GetPublicPropertyByName(type, "Fields");
                 if (fieldsProp?.GetValue(options) is IEnumerable<KeyValuePair<string, object?>> fields)
                 {
                     foreach (var kv in fields)

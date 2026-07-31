@@ -243,9 +243,10 @@ public abstract class VmModuleBase
         }
 
         // Managed .NET interop also accepts an arbitrary object exposing
-        // Invoke(object[]). Keep that reflection visible to the analyzer until
-        // the native interop policy is defined.
-        var invoke = type.GetMethod("Invoke", [typeof(object[])]);
+        // Invoke(object[]) through the managed-only structural compatibility
+        // seam.
+        var invoke = ManagedStructuralClrReflection.GetPublicMethodBySignature(
+            type, "Invoke", [typeof(object[])]);
         if (invoke != null)
             return invoke.Invoke(callable, [args]);
         throw new Exception("TypeError: callback is not a function");

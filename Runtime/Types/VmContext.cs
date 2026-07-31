@@ -67,14 +67,14 @@ public static class VmContext
         else if (contextObject != null)
         {
             // Compiler-emitted $Object uses the managed-shape boundary. Preserve
-            // the existing arbitrary CLR "Fields" fallback for .NET interop;
-            // that path remains part of the separate native interop policy.
+            // the existing arbitrary CLR "Fields" fallback for managed interop
+            // through the structural compatibility seam.
             var type = contextObject.GetType();
             var fieldsProp = ManagedEmittedShapeReflection.IsShape(
                     type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicProperty(
                     type, ManagedEmittedShape.HasFields, "Fields")
-                : type.GetProperty("Fields");
+                : ManagedStructuralClrReflection.GetPublicPropertyByName(type, "Fields");
             if (fieldsProp?.GetValue(contextObject) is IEnumerable<KeyValuePair<string, object?>> fields)
             {
                 foreach (var kv in fields)
@@ -101,14 +101,15 @@ public static class VmContext
                 continue;
 
             // Compiler-emitted functions use the managed-shape boundary. Keep
-            // accepting arbitrary CLR Invoke(object[]) objects for managed
-            // interop until the native interop surface is defined.
+            // accepting arbitrary CLR Invoke(object[]) objects through the
+            // managed-only structural compatibility seam.
             var type = value.GetType();
             var invokeMethod = ManagedEmittedShapeReflection.IsShape(
                     type, ManagedEmittedShape.Function)
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
                     type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
-                : type.GetMethod("Invoke", [typeof(object[])]);
+                : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                    type, "Invoke", [typeof(object[])]);
             if (invokeMethod != null)
             {
                 props[key] = new CompiledCallableAdapter(value, invokeMethod);
@@ -147,7 +148,8 @@ public static class VmContext
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
                     type, ManagedEmittedShape.HasFields, "SetProperty",
                     [typeof(string), typeof(object)])
-                : type.GetMethod("SetProperty", [typeof(string), typeof(object)]);
+                : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                    type, "SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)
             {
                 foreach (var name in originalProperties.Keys)

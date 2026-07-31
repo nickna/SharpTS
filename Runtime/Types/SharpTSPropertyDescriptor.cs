@@ -194,7 +194,9 @@ public class SharpTSPropertyDescriptor
         var type = obj.GetType();
 
         // Try to get the GetProperty method
-        var getPropertyMethod = type.GetMethod("GetProperty", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null, [typeof(string)], null);
+        var getPropertyMethod =
+            ManagedStructuralClrReflection.GetPublicInstanceMethodBySignature(
+                type, "GetProperty", [typeof(string)]);
         if (getPropertyMethod == null)
         {
             return new SharpTSPropertyDescriptor();
@@ -202,9 +204,9 @@ public class SharpTSPropertyDescriptor
 
         // Probe presence via HasProperty(string) when the type exposes it, so an
         // explicit `value: undefined` is distinguished from an omitted value (#801).
-        var hasPropertyMethod = type.GetMethod("HasProperty",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
-            null, [typeof(string)], null);
+        var hasPropertyMethod =
+            ManagedStructuralClrReflection.GetPublicInstanceMethodBySignature(
+                type, "HasProperty", [typeof(string)]);
 
         return Populate(
             name => hasPropertyMethod?.Invoke(obj, [name]) is bool b && b,

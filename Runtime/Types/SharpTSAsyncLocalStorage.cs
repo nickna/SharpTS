@@ -139,9 +139,11 @@ public class SharpTSAsyncLocalStorage
             return RuntimeCallableDispatcher.Invoke(interpreter, callback, args.ToArray());
 
         // Preserve the managed .NET interop fallback for arbitrary objects
-        // exposing Invoke(object[]). Its warning remains until that native
-        // interop surface is defined.
-        var invokeMethod = callback?.GetType().GetMethod("Invoke", [typeof(object?[])]);
+        // exposing Invoke(object[]) through the managed-only structural seam.
+        var invokeMethod = callback == null
+            ? null
+            : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                callback.GetType(), "Invoke", [typeof(object?[])]);
         if (invokeMethod != null)
             return invokeMethod.Invoke(callback, [args.ToArray()]);
 
