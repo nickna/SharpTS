@@ -51,11 +51,12 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      # Same exclusion as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
-      # calls and can false-red on runner network hiccups — which here would block
-      # a tagged release after build but before pack/push.
+      # Same exclusions as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
+      # calls and npm tests run a real `npm install`; both can false-red on runner
+      # network hiccups — which here would block a tagged release after build but
+      # before pack/push.
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
 
       - name: Publish SharpTS for SDK bundling
         run: dotnet publish SharpTS.csproj --configuration Release --no-build

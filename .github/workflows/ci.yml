@@ -68,8 +68,13 @@ jobs:
       # carries the tag — every known load-flake was fixed at the product level
       # (#1211/#1212/#1213) — but any future inherently-timing-dependent test gets
       # [Trait("Category","LoadSensitive")] and is excluded here automatically.
+      #
+      # Category!=npm excludes tests that run a real `npm install` against
+      # registry.npmjs.org (RealPackageSmokeTests) — same hermeticity policy as
+      # LiveNetwork; the host-literal guardrail can't see package-name installs.
+      # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
   # AOT-compatibility ratchet (#1324 Track 0). Builds SharpTS.csproj with the
