@@ -11,11 +11,25 @@ namespace SharpTS.Compilation;
 /// Provides type resolution for IL compilation using runtime types.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Uses typeof() directly for fast compilation. The AssemblyReferenceRewriter (from the
 /// NickNa.PEPacker package) is used as a post-processing step to rewrite System.Private.CoreLib
 /// references to SDK reference assemblies. It runs when --ref-asm is enabled, and also whenever the
 /// emitted assembly references SharpTS regardless of that flag — see the `_useReferenceAssemblies ||
 /// hasSharpTsReference` condition in <see cref="ILCompiler.SaveArtifacts"/>.
+/// </para>
+/// <para>
+/// This class is also a named Native AOT reflection seam, alongside
+/// <c>ManagedDotNetInterop</c>, <c>ManagedStructuralClrReflection</c>,
+/// <c>ManagedEmittedShapeReflection</c>, and <c>ManagedOutputRuntimeReflection</c> — but with a
+/// deliberately different policy: it carries suppressions and <em>no</em>
+/// IsDynamicCodeSupported guard, because its lookups run in the native compiler by design. The
+/// invariant that makes that safe is stated in <see cref="EmitMetadataLookupJustification"/>:
+/// every result is serialized into emitted IL as a metadata token, never invoked through
+/// reflection in the native host, and IlcGenerateCompleteTypeMetadata (mandatory, owned by
+/// SharpTS.csproj) keeps name-based lookups resolvable. Do not copy this suppression pattern to
+/// code whose reflection results are invoked — that belongs behind one of the guarded seams.
+/// </para>
 /// </remarks>
 public class TypeProvider
 {

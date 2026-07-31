@@ -136,15 +136,14 @@ jobs:
             -p:DebugSymbols=false \
             -o artifacts/managed-runtime
 
+      # TrimMode/IlcTrimMetadata/IlcGenerateCompleteTypeMetadata/StackTraceSupport
+      # are owned by SharpTS.csproj behind PublishAot=true so local publishes get
+      # the same mandatory configuration as CI.
       - name: Publish Native AOT SharpTS
         run: |
           set -o pipefail
           dotnet publish SharpTS.csproj --configuration Release -r linux-x64 \
             -p:PublishAot=true \
-            -p:TrimMode=partial \
-            -p:IlcTrimMetadata=false \
-            -p:IlcGenerateCompleteTypeMetadata=true \
-            -p:StackTraceSupport=true \
             -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:SharpTSManagedRuntimePayloadPath="$PWD/artifacts/managed-runtime/SharpTS.dll" \
@@ -180,12 +179,15 @@ jobs:
           dotnet "$scratch/modules.dll" > "$scratch/modules.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/modules.txt"
 
-          # Accessors + sync/async generators exercise raw custom-attribute blobs,
-          # TypeBuilderInstantiation and MethodBuilderInstantiation.
+          # Accessors + sync/async generators exercise raw custom-attribute blobs
+          # and MethodBuilderInstantiation (async builder Start<TStateMachine>).
+          # The generic class/array/Promise<UserClass> section closes runtime open
+          # generics over TypeBuilder args, forcing the TypeBuilderInstantiation
+          # fallback — without it, only the async path's fallback ever executes.
           "$native" --compile Examples/AotCompileGate/features.ts --ref-asm \
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" > "$scratch/features.txt"
-          grep -qx '2 2 33' "$scratch/features.txt"
+          grep -qx '2 2 33 7 11' "$scratch/features.txt"
 
           # Known CLR attribute mappings use closed constructor metadata and remain
           # available in the native compiler; only arbitrary @attribute("Type")
@@ -268,6 +270,9 @@ jobs:
           "$scratch/modules" > "$scratch/bundled.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/bundled.txt"
 
+      # MinimumExecuted: the corpus currently executes ~22 cases per path × 3
+      # paths; 50 fails the job if a whole path (or most of the corpus) starts
+      # silently skipping, while leaving headroom for deliberate corpus edits.
       - name: Drive Examples corpus from the native host
         shell: pwsh
         run: |
@@ -275,6 +280,7 @@ jobs:
             -SharpTSExe "$PWD/artifacts/native-aot/SharpTS" `
             -NativeSku `
             -Mode all `
+            -MinimumExecuted 50 `
             -OutputFormat table
 
       - name: Upload Native AOT publish diagnostics

@@ -216,7 +216,8 @@ public class CliDeclarationEmitTests
             dir.Path);
 
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("is not portable to TypeScript consumers", result.StandardOutput);
+        // Compile errors print to stderr (release smokes and MSBuild both parse it there).
+        Assert.Contains("is not portable to TypeScript consumers", result.StandardError);
         Assert.False(File.Exists(dir.GetPath("main.d.ts")));
     }
 }

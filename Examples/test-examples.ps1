@@ -55,7 +55,12 @@ param(
     [string]$OutputFormat = "table",
     [switch]$SkipCleanup,
     [string]$SharpTSExe = "",
-    [switch]$NativeSku
+    [switch]$NativeSku,
+    # Fail unless at least this many test cases actually executed (passed or
+    # failed — skips don't count). The exit code otherwise reflects only
+    # failures, so a refactor that silently mass-skips the corpus would read as
+    # green. CI gates set this to just below the expected executed count.
+    [int]$MinimumExecuted = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -1039,6 +1044,11 @@ try {
 
     # Exit with appropriate code
     if ($results.FailedTests -gt 0) {
+        exit 1
+    }
+    $executed = $results.PassedTests + $results.FailedTests
+    if ($MinimumExecuted -gt 0 -and $executed -lt $MinimumExecuted) {
+        Write-Host "Only $executed test case(s) executed (minimum $MinimumExecuted); $($results.SkippedTests) skipped. A mass-skip must not pass the gate." -ForegroundColor Red
         exit 1
     }
     exit 0

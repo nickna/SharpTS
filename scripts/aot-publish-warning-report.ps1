@@ -172,18 +172,37 @@ if ($EnforceBaseline)
     }
 
     $baseline = Get-Content -LiteralPath $baselineFullPath -Raw | ConvertFrom-Json
+
+    # Parse-sanity floor: an empty parse is indistinguishable from a clean
+    # publish, so a localized runner or a diagnostic-format change would
+    # otherwise read as green. When the committed baseline says warnings must
+    # exist, parsing zero lines means the parser saw nothing it understood —
+    # fail loudly instead of silently matching the empty project inventory.
+    $baselineExpectsWarnings = ([int]$baseline.project.total + [int]$baseline.external.total) -gt 0
+    if ($parsedWarnings.Count -eq 0 -and $baselineExpectsWarnings)
+    {
+        throw (
+            "Parsed zero 'warning ILnnnn:' lines from '$logFullPath', but the committed baseline " +
+            "expects $([int]$baseline.project.total + [int]$baseline.external.total). Either the log is not a " +
+            "Native AOT publish log, the publish output is localized (set DOTNET_CLI_UI_LANGUAGE=en), " +
+            "or the diagnostic format changed and the parser needs updating.")
+    }
+
     $expectedProject = ConvertTo-ComparisonRecords $baseline.project
     $actualProject = ConvertTo-ComparisonRecords ([pscustomobject]$summary.project)
     $projectDifferences = @(Compare-Object $expectedProject $actualProject)
     if ($projectDifferences.Count -ne 0)
     {
-        Write-Error "SharpTS-owned Native AOT publish warnings differ from the committed baseline."
+        # Write-Host, not Write-Error: under ErrorActionPreference=Stop the first
+        # Write-Error would terminate before the per-record diff prints, leaving
+        # only the headline in the job log.
+        Write-Host "SharpTS-owned Native AOT publish warnings differ from the committed baseline:"
         foreach ($difference in $projectDifferences)
         {
             $meaning = if ($difference.SideIndicator -eq "=>") { "actual" } else { "baseline" }
-            Write-Error "  [$meaning] $($difference.InputObject)"
+            Write-Host "  [$meaning] $($difference.InputObject)"
         }
-        throw "Update the baseline only in the PR that explains the project warning changes."
+        throw "SharpTS-owned Native AOT publish warnings differ from the committed baseline. Update the baseline only in the PR that explains the project warning changes."
     }
 
     Write-Host "SharpTS-owned publish inventory matches '$baselineFullPath'."

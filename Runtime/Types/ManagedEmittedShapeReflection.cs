@@ -27,6 +27,14 @@ internal static class ManagedEmittedShapeReflection
     internal static bool IsShape(Type type, ManagedEmittedShape shape)
     {
         ArgumentNullException.ThrowIfNull(type);
+
+        // Native AOT cannot load an emitted output assembly, so no value in a native
+        // process is ever a compiler-emitted shape. Answering false here keeps every
+        // IsShape-gated probe consistent with the Get* methods (which reject native):
+        // the predicate must never say "yes" where the action would throw.
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return false;
+
         return shape switch
         {
             ManagedEmittedShape.Object => type.Name == "$Object",
@@ -121,18 +129,21 @@ internal static class ManagedEmittedShapeReflection
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        if (!IsShape(type, shape))
-        {
-            throw new ArgumentException(
-                $"Type '{type.FullName}' is not the expected compiler-emitted {DisplayName(shape)} shape.",
-                nameof(type));
-        }
-
+        // Checked before the shape test: under native, IsShape answers false for
+        // everything, and an unguarded caller should get this named diagnostic
+        // rather than a confusing "not the expected shape" argument error.
         if (!RuntimeFeature.IsDynamicCodeSupported)
         {
             throw new PlatformNotSupportedException(
                 $"Bridging compiler-emitted {DisplayName(shape)} objects is not available " +
                 "in the native SharpTS build — use the managed build.");
+        }
+
+        if (!IsShape(type, shape))
+        {
+            throw new ArgumentException(
+                $"Type '{type.FullName}' is not the expected compiler-emitted {DisplayName(shape)} shape.",
+                nameof(type));
         }
     }
 

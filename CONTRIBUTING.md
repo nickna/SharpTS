@@ -156,9 +156,14 @@ public record MyNewExpr(Token Operator, Expr Operand) : Expr;
 public record MyNewStmt(Expr Value, Token Keyword) : Stmt;
 ```
 
-A registry (`Parsing/Visitors/NodeRegistry` + `AstNodeCatalog`) derives the
-node set by reflection and fails fast at startup if a visitor misses a node —
-so adding a node immediately tells you every dispatch site to extend.
+Dispatch is reflection-free (a Native AOT requirement): the node universe is
+the explicit, declaration-ordered list in `Parsing/Visitors/AstNodeCatalog.cs`,
+and each phase dispatches through a hand-ordered type switch
+(`AstVisitorBase`, `Interpreter.Dispatch.cs`, `TypeChecker.Dispatch.cs`).
+`SharpTS.Tests/RegistryTests/AstDispatchTests.cs` reflectively re-derives the
+true node set and drives every switch — so adding a node without extending the
+catalog and each dispatch site fails those tests with a message naming exactly
+what to edit.
 
 ### Error Messages
 

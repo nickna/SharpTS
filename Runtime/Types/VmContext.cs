@@ -74,7 +74,7 @@ public static class VmContext
                     type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicProperty(
                     type, ManagedEmittedShape.HasFields, "Fields")
-                : ManagedStructuralClrReflection.GetPublicPropertyByName(type, "Fields");
+                : ManagedStructuralClrReflection.TryGetPublicPropertyByName(type, "Fields");
             if (fieldsProp?.GetValue(contextObject) is IEnumerable<KeyValuePair<string, object?>> fields)
             {
                 foreach (var kv in fields)
@@ -108,7 +108,7 @@ public static class VmContext
                     type, ManagedEmittedShape.Function)
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
                     type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
-                : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
                     type, "Invoke", [typeof(object[])]);
             if (invokeMethod != null)
             {
@@ -148,7 +148,7 @@ public static class VmContext
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
                     type, ManagedEmittedShape.HasFields, "SetProperty",
                     [typeof(string), typeof(object)])
-                : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
                     type, "SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)
             {
