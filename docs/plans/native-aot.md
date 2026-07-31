@@ -213,6 +213,34 @@ diagnostics; those are not silently represented by this source-analyzer
 baseline and must continue to be evaluated through the native publish/smoke
 gate.
 
+### Native publish inventory (72 on linux-x64)
+
+The SDK analyzer ratchet runs before linking, so it cannot see warnings
+introduced by ILC reachability or by the final dependency closure. The
+linux-x64 Native publish currently reports 72 warning lines: 56 owned by
+SharpTS and 16 from the framework or package dependencies.
+
+CI parses the publish log with `scripts/aot-publish-warning-report.ps1`.
+`.github/aot-publish-warning-baseline.json` exact-matches the SharpTS-owned
+code, subject, and count inventory. External diagnostics are summarized and
+archived but are informational: the workflow intentionally uses `10.0.x`, so
+SDK servicing can change framework and dependency diagnostics independently of
+SharpTS source.
+
+The next cleanup tranches are bounded:
+
+1. Replace the production reflection-backed `AstNodeCatalog` with a
+   reflection-free canonical list while retaining reflective exhaustiveness
+   validation in managed tests. This owns 47 repeated IL3050 lines.
+2. Resolve the remaining nine SharpTS warnings at their exact seams: six
+   closed crypto-emitter metadata lookups, the legacy `RuntimeTypes`
+   construction fallback, resource-disposal callable dispatch, and the
+   finalized-union conversion lookup.
+3. Re-measure before considering dependency replacement or isolation. The 16
+   external lines currently come from the NuGet/Newtonsoft packaging closure,
+   MetadataLoadContext, PrettyPrompt/TextCopy, and framework summaries. Zero
+   external warnings is not a correctness requirement.
+
 The work is split at four ownership boundaries:
 
 1. **Managed-only feature guards (done for the current inventory).**

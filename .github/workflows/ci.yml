@@ -138,6 +138,7 @@ jobs:
 
       - name: Publish Native AOT SharpTS
         run: |
+          set -o pipefail
           dotnet publish SharpTS.csproj --configuration Release -r linux-x64 \
             -p:PublishAot=true \
             -p:TrimMode=partial \
@@ -147,7 +148,19 @@ jobs:
             -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:SharpTSManagedRuntimePayloadPath="$PWD/artifacts/managed-runtime/SharpTS.dll" \
-            -o artifacts/native-aot
+            -o artifacts/native-aot 2>&1 | tee artifacts/native-aot-publish.log
+
+      # SDK analyzers run before linking and therefore cannot see warnings
+      # introduced by ILC reachability or dependency closures. Exact-match only
+      # SharpTS-owned subjects; external diagnostics remain visible without
+      # making 10.0.x servicing changes fail the build.
+      - name: Enforce Native AOT publish warning inventory
+        shell: pwsh
+        run: |
+          ./scripts/aot-publish-warning-report.ps1 `
+            -LogPath artifacts/native-aot-publish.log `
+            -SummaryPath artifacts/native-aot-publish-warning-summary.json `
+            -EnforceBaseline
 
       - name: Compile and execute from the native host
         shell: bash
@@ -254,3 +267,13 @@ jobs:
             -o "$scratch/modules"
           "$scratch/modules" > "$scratch/bundled.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/bundled.txt"
+
+      - name: Upload Native AOT publish diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-aot-publish-diagnostics
+          if-no-files-found: ignore
+          path: |
+            artifacts/native-aot-publish.log
+            artifacts/native-aot-publish-warning-summary.json
