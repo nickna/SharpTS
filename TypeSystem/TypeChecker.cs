@@ -1108,6 +1108,9 @@ public partial class TypeChecker
         // This ensures types are available when parsing function signatures during hoisting
         PreRegisterTypeDeclarations(statements);
 
+        // Hoist class declarations (as Any for forward references in function bodies)
+        HoistClassDeclarations(statements);
+
         // Hoist function declarations (now type references will resolve correctly)
         HoistFunctionDeclarations(statements);
 
