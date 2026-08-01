@@ -84,6 +84,7 @@ coverage*.xml
 
 # AI tools
 .claude/
+.codex/
 .agents/
 /.cursor/
 /.cursorrules/

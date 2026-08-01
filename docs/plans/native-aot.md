@@ -265,7 +265,14 @@ The work is split at four ownership boundaries:
    objects that happen to expose `Invoke`, `Fields`, `GetProperty`, or
    `SetProperty` now route through `ManagedStructuralClrReflection`. The seam
    remains deliberately open-world under CoreCLR for embedders and third-party
-   assemblies, but rejects Native AOT before inspecting an arbitrary type.
+   assemblies. Under Native AOT its `TryGet*` probes answer `null` (the open
+   structural universe is empty there by construction — arbitrary CLR objects
+   can only enter through the .NET interop boundary, which rejects native
+   first), so interpreter fall-through paths raise their ordinary guest-level
+   "not a function"-style errors instead of a reflection
+   PlatformNotSupportedException. `ManagedEmittedShapeReflection.IsShape` is
+   consistent with this: it answers false for every shape under native, so a
+   predicate can never say "yes" where the action would throw.
 3. **Dynamic .NET interop policy (done for the current inventory).** The open-world
    `Runtime/DotNet` binder now routes type resolution, member discovery,
    construction, generic closure, array creation, marshalling, operators, and
@@ -314,14 +321,16 @@ out of scope.
 
 ### Phase 1 — interpreter correctness and speed (~2–3 weeks; wins on JIT too)
 
-1. **Source-generate the `NodeRegistry` dispatch table**
-   (`Parsing/Visitors/NodeRegistry.cs:385-412` `Expression.Lambda().Compile()`;
-   reflective auto-registration at :344/:360 and
-   `AstNodeCatalog.cs:31-40`; consumers `TypeCheckerRegistry.cs:19`,
-   `InterpreterRegistry.cs:27`). Measured: 16.8 ns / 0 B per dispatch vs
-   31.6 ns on today's JIT and 173.2 ns / 248 B under AOT — a strict win
-   regardless of AOT. Also removes the `TrimmerRootAssembly` need and the
-   47→80 MB trim inflation.
+1. **Replace the `NodeRegistry` dispatch table. Shipped as hand-written type
+   switches, not a source generator:** `NodeRegistry` was deleted; the node
+   universe is the explicit declaration-ordered `AstNodeCatalog` list and each
+   phase dispatches via a hot-first type switch (`AstVisitorBase`,
+   `Interpreter.Dispatch.cs`, `TypeChecker.Dispatch.cs`), with exhaustiveness
+   pinned by `SharpTS.Tests/RegistryTests/AstDispatchTests.cs` (reflective
+   re-derivation + order-sensitive equality + all-switch probes). Measured at
+   decision time: 16.8 ns / 0 B per dispatch vs 31.6 ns on the old JIT path
+   and 173.2 ns / 248 B under AOT — a strict win regardless of AOT. Also
+   removed the `TrimmerRootAssembly` need and the 47→80 MB trim inflation.
 2. **JSON:** four `JsonSerializerContext`s (`TsConfigJson`, `SharpTsManifest`,
    `PackageJson`, `ProjectBuildState`); hand-rolled ECMA-262 §25.5.2.2 string
    escaper for `Runtime/BuiltIns/JSONBuiltIns.cs:287,464`; `Utf8JsonWriter`
@@ -349,7 +358,9 @@ Results from the win-arm64 native probe, now preserved by the
 
 1. **Both compiler pipelines pass.** A native SharpTS host compiles and runs
    single-file input plus a two-file module graph. The focused fixture covers
-   accessors, generators and async generators, producing `2 2 33`.
+   accessors, generators, async generators, a `Promise<UserClass>` and a typed
+   user-class array (the runtime-open-generic-over-`TypeBuilder` shapes that
+   force the `TypeBuilderInstantiation` fallback), producing `2 2 33 7 11`.
 2. **No deps.json is required** for root-flat additional assemblies. Measured
    and recorded in PE-Packer issue #18.
 3. **PE-Packer passes inside SharpTS's partial-trim closure.** Native SharpTS
@@ -362,15 +373,19 @@ Results from the win-arm64 native probe, now preserved by the
    ECMA-335 blob consumed by the supported `SetCustomAttribute(ConstructorInfo,
    byte[])` overloads; every `CustomAttributeBuilder` emit site is converted.
 5. **Generic emit seams: done.** Every emit-path `MakeGenericType` and
-   `MakeGenericMethod` routes through `EmitGenerics`. Native AOT falls back to
-   the targeted, rooted `TypeBuilderInstantiation` and
-   `MethodBuilderInstantiation` factories; the native smoke fixture exercises
-   both on every CI run.
-6. **Build config:** `-p:TrimMode=partial -p:IlcTrimMetadata=false
-   -p:IlcGenerateCompleteTypeMetadata=true` (mandatory — TypeProvider's name
-   lookups return null otherwise), plus `[DynamicDependency]` keep-alives for
-   `AsyncTaskMethodBuilder<>` (`TypeProvider.cs:242-251`), `MethodInvoker`
-   (:141), `ManualResetValueTaskSourceCore<>` (:265-274).
+   `MakeGenericMethod` routes through `EmitGenerics` (routing pinned by
+   `SharpTS.Tests/Architecture/AotSeamArchitectureTests.cs`). Native AOT falls
+   back to the targeted, rooted `TypeBuilderInstantiation` and
+   `MethodBuilderInstantiation` factories; `features.ts` exercises both on
+   every CI run (`Promise<UserClass>`/typed-array shapes for the former, the
+   async builder's `Start<TStateMachine>` for the latter).
+6. **Build config: owned by `SharpTS.csproj`.** `TrimMode=partial`,
+   `IlcTrimMetadata=false`, `IlcGenerateCompleteTypeMetadata=true`, and
+   `StackTraceSupport=true` are set behind `PublishAot=true` in the project
+   file (mandatory — TypeProvider's name lookups return null otherwise), so a
+   local `dotnet publish -p:PublishAot=true` matches CI. The reflection-emit
+   internals the fallbacks reach are kept alive by `AotTrimmerRoots.xml`
+   (a targeted `TrimmerRootDescriptor`, not `[DynamicDependency]`).
 7. **Grind the remaining phases.** This is where the schedule slack goes.
 
 **Exit criterion:** native exe compiles the `Examples/` corpus; every output
@@ -401,14 +416,19 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
    permanent and release smokes create executables with `DOTNET_ROOT` empty.
    The built-in bundler stays Windows/Linux-only until Mach-O adjustment +
    ad-hoc signing exist.
-10. **Release matrix: wired.** Tagged releases build six Native AOT assets
-    (win-x64/arm64, linux-x64/arm64, osx-x64/arm64) on matching-architecture
-    GitHub runners. Every artifact runs interpret, managed compile, and embedded
-    runtime extraction smokes before upload. Windows/Linux also create and run a
-    PE-Packer executable with `DOTNET_ROOT` empty; macOS asserts the built-in
-    bundler's named Mach-O/signing refusal. The first tagged run remains the
-    cross-platform acceptance event. ILC peak RSS on the 7 GB macOS arm64
-    runner is the main operational risk.
+10. **Release matrix: wired, and it gates the publish.** Tagged releases build
+    six Native AOT assets (win-x64/arm64, linux-x64/arm64, osx-x64/arm64) on
+    matching-architecture GitHub runners. Every artifact runs interpret,
+    managed compile, embedded runtime extraction, the five Managed-SKU-only
+    refusal assertions, and the per-RID publish-warning ratchet. Windows/Linux
+    also create and run a PE-Packer executable with `DOTNET_ROOT` empty; macOS
+    asserts the built-in bundler's named Mach-O/signing refusal. The NuGet push
+    and GitHub Release run in a final job that requires every managed and
+    native artifact job to succeed — a failing RID blocks the release rather
+    than leaving a missing asset behind a published package. `publish.yml`
+    also accepts `workflow_dispatch` as a no-publish dry run of the full
+    matrix; run it before the first real tag to validate the runner labels.
+    ILC peak RSS on the 7 GB macOS arm64 runner is the main operational risk.
 11. **SDK payload: keep the existing managed, RID-neutral compiler.** The
     original RID-native proposal is rejected for the default SDK: invoking
     `SharpTS.Sdk` already means running `dotnet build`, its targets pass the
@@ -458,7 +478,7 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
 
 | # | Unknown | Status / next step |
 |---|---|---|
-| 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. The six-RID release matrix is wired; its first tagged run is the remaining acceptance event. |
+| 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. The six-RID release matrix is wired and gates the publish; validate it with a `workflow_dispatch` dry run, then the first tagged run is the remaining acceptance event. |
 | 2 | BCL interop preservation | Targeted roots work for the emit internals; define and test the supported `@DotNetType` surface, including the known dynamic-event edge. |
 | 3 | MLC-types-into-TypeBuilder latent JIT limitation | Conceded for the native SKU; file upstream separately. |
 | 4 | Native-emitted output metadata parity | Executed output and PE-Packer rewriting pass. Add a `MetadataDiffer` fixture if byte/table-level parity becomes release-blocking. |

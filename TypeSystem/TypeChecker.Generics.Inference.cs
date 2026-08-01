@@ -73,13 +73,13 @@ public partial class TypeChecker
                         {
                             if (!actualRecord.Fields.ContainsKey(fieldName))
                             {
-                                throw new TypeCheckException($" Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}' - missing required property '{fieldName}'.", tsCode: "TS2344");
+                                throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}' - missing required property '{fieldName}'.", tsCode: "TS2344");
                             }
                         }
                     }
                     else if (!IsCompatible(substitutedConstraint, inferredType))
                     {
-                        throw new TypeCheckException($" Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.", tsCode: "TS2344");
+                        throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.", tsCode: "TS2344");
                     }
                 }
                 result.Add(inferredType);

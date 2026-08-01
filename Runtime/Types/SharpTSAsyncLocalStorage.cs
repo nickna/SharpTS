@@ -142,7 +142,7 @@ public class SharpTSAsyncLocalStorage
         // exposing Invoke(object[]) through the managed-only structural seam.
         var invokeMethod = callback == null
             ? null
-            : ManagedStructuralClrReflection.GetPublicMethodBySignature(
+            : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
                 callback.GetType(), "Invoke", [typeof(object?[])]);
         if (invokeMethod != null)
             return invokeMethod.Invoke(callback, [args.ToArray()]);

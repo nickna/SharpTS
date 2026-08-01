@@ -73,7 +73,7 @@ public class SharpTSProxy : ISharpTSCallable
 
         // Preserve the managed .NET interop fallback for arbitrary callable
         // objects. Known compiler-emitted functions are handled above.
-        var invokeMethod = ManagedStructuralClrReflection.GetPublicMethodByName(
+        var invokeMethod = ManagedStructuralClrReflection.TryGetPublicMethodByName(
             value.GetType(), "Invoke");
         if (invokeMethod != null)
             return value;
@@ -92,7 +92,7 @@ public class SharpTSProxy : ISharpTSCallable
         // Managed .NET interop fallback for arbitrary Invoke-shaped objects.
         // The emitted function path above no longer needs to inspect its
         // private _method field because InvokeWithThis owns that contract.
-        var invokeMethod = ManagedStructuralClrReflection.GetPublicMethodByName(
+        var invokeMethod = ManagedStructuralClrReflection.TryGetPublicMethodByName(
             trap.GetType(), "Invoke");
         if (invokeMethod != null)
             return invokeMethod.Invoke(trap, [args.ToArray()]);
@@ -217,7 +217,7 @@ public class SharpTSProxy : ISharpTSCallable
             // Compiled mode: target is a TSFunction, not ISharpTSCallable
             if (interp == null)
             {
-                var invokeMethod = ManagedStructuralClrReflection.GetPublicMethodByName(
+                var invokeMethod = ManagedStructuralClrReflection.TryGetPublicMethodByName(
                     _target.GetType(), "Invoke");
                 if (invokeMethod != null)
                     return invokeMethod.Invoke(_target, [args.ToArray()]);

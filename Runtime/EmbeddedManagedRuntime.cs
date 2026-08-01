@@ -21,6 +21,13 @@ internal static class EmbeddedManagedRuntime
             return false;
         }
 
+        return TryExtractTo(payload, destinationPath, out error);
+    }
+
+    // Split from the resource lookup so the atomic-write behavior is unit-testable:
+    // ordinary managed test builds carry no embedded payload.
+    internal static bool TryExtractTo(Stream payload, string destinationPath, out string? error)
+    {
         string fullDestination = Path.GetFullPath(destinationPath);
         string? destinationDirectory = Path.GetDirectoryName(fullDestination);
         if (destinationDirectory is null)

@@ -382,7 +382,7 @@ public class SharpTSKeyObject : ISharpTSPropertyAccessor
             options is not IDictionary<string, object?>)
         {
             var getPropertyMethod =
-                ManagedStructuralClrReflection.GetPublicMethodBySignature(
+                ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
                     options.GetType(), "GetProperty", [typeof(string)]);
             if (getPropertyMethod != null)
             {

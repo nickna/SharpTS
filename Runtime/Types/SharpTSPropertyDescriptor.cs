@@ -195,7 +195,7 @@ public class SharpTSPropertyDescriptor
 
         // Try to get the GetProperty method
         var getPropertyMethod =
-            ManagedStructuralClrReflection.GetPublicInstanceMethodBySignature(
+            ManagedStructuralClrReflection.TryGetPublicInstanceMethodBySignature(
                 type, "GetProperty", [typeof(string)]);
         if (getPropertyMethod == null)
         {
@@ -205,7 +205,7 @@ public class SharpTSPropertyDescriptor
         // Probe presence via HasProperty(string) when the type exposes it, so an
         // explicit `value: undefined` is distinguished from an omitted value (#801).
         var hasPropertyMethod =
-            ManagedStructuralClrReflection.GetPublicInstanceMethodBySignature(
+            ManagedStructuralClrReflection.TryGetPublicInstanceMethodBySignature(
                 type, "HasProperty", [typeof(string)]);
 
         return Populate(

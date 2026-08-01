@@ -32,6 +32,15 @@ async function* asyncSequence(count: number) {
     }
 }
 
+// A runtime open generic closed over a user class (Task<Counter> from
+// Promise<Counter>) is the exact shape whose MakeGenericType throws
+// PlatformNotSupportedException under Native AOT — this function forces the
+// EmitGenerics TypeBuilderInstantiation fallback on every CI run. The async
+// machinery above only forces the MethodBuilderInstantiation fallback.
+async function make(step: number): Promise<Counter> {
+    return new Counter(step);
+}
+
 async function main() {
     const counter = new Counter();
     counter.bump();
@@ -44,7 +53,20 @@ async function main() {
         sum += value;
     }
 
-    console.log(counter.total, counter.step, sum);
+    const made = await make(7);
+
+    // A typed user-class array (List<Counter> from Counter[]) closes the other
+    // runtime open generic over a TypeBuilder argument.
+    const items: Counter[] = [new Counter(5), new Counter(6)];
+    for (const c of items) {
+        c.bump();
+    }
+    let totals = 0;
+    for (const c of items) {
+        totals += c.total;
+    }
+
+    console.log(counter.total, counter.step, sum, made.step, totals);
 }
 
 main();

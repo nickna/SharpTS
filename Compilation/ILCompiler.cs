@@ -1515,7 +1515,7 @@ public partial class ILCompiler
         byte[] image;
         if (rewritingReferences)
         {
-            // PE-Packer 1.0.5 ships the complete net10 CoreLib-to-facade map as a compact
+            // PE-Packer (since 1.0.5) ships the complete net10 CoreLib-to-facade map as a compact
             // embedded index, so the normal path no longer needs an SDK/reference pack on disk.
             // Preserve --sdk-path as an explicit override for callers intentionally targeting a
             // particular reference pack.

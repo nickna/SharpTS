@@ -207,13 +207,16 @@ if ($EnforceBaseline)
     $differences = @(Compare-Object $expectedRecords $actualRecords)
     if ($differences.Count -ne 0)
     {
-        Write-Error "AOT analyzer inventory differs from the committed baseline."
+        # Write-Host, not Write-Error: under ErrorActionPreference=Stop the first
+        # Write-Error would terminate before the per-record diff prints, leaving
+        # only the headline in the job log.
+        Write-Host "AOT analyzer inventory differs from the committed baseline:"
         foreach ($difference in $differences)
         {
             $meaning = if ($difference.SideIndicator -eq "=>") { "actual" } else { "baseline" }
-            Write-Error "  [$meaning] $($difference.InputObject)"
+            Write-Host "  [$meaning] $($difference.InputObject)"
         }
-        throw "Run scripts/aot-analyzer-report.ps1 -UpdateBaseline only in the PR that explains the warning changes."
+        throw "AOT analyzer inventory differs from the committed baseline. Run scripts/aot-analyzer-report.ps1 -UpdateBaseline only in the PR that explains the warning changes."
     }
 
     Write-Host "Analyzer inventory matches '$baselineFullPath'."

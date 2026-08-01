@@ -33,6 +33,22 @@
   </ItemGroup>
 
   <!--
+    Mandatory Native AOT metadata configuration (#1324). These are not tuning
+    knobs: TypeProvider resolves framework members by name at compile time, and
+    without partial trim + complete, untrimmed type metadata those lookups
+    return null inside the native compiler ("Could not resolve type: …").
+    Owning them here means any `dotnet publish -p:PublishAot=true` — local or
+    CI — produces a working native SKU; workflows must not re-specify them.
+  -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <TrimMode>partial</TrimMode>
+    <IlcTrimMetadata>false</IlcTrimMetadata>
+    <IlcGenerateCompleteTypeMetadata>true</IlcGenerateCompleteTypeMetadata>
+    <!-- file:line guest stack traces are part of the native SKU's contract. -->
+    <StackTraceSupport>true</StackTraceSupport>
+  </PropertyGroup>
+
+  <!--
     PE-Packer's reflected Microsoft.NET.HostModel SDK path cannot run under
     Native AOT. Its feature switch is application-level so the managed SKU
     keeps SDK detection; the native SKU makes it a trim-time false constant
@@ -62,7 +78,61 @@
           Condition="'$(SharpTSManagedRuntimePayloadPath)' != ''">
     <Error Condition="!Exists('$(SharpTSManagedRuntimePayloadPath)')"
            Text="SharpTSManagedRuntimePayloadPath does not exist: $(SharpTSManagedRuntimePayloadPath)" />
+    <ValidateAnyCpuAssembly AssemblyPath="$(SharpTSManagedRuntimePayloadPath)" />
   </Target>
+
+  <!--
+    The embedded payload is the ONLY soft-dependency mechanism the native SKU
+    has (there is no Assembly.Location to copy from), so a native publish
+    without it would produce a compiler whose soft-dep outputs throw at
+    runtime. Fail the publish instead; probing builds can opt out explicitly.
+  -->
+  <Target Name="RequireManagedRuntimePayloadForNativeAot"
+          BeforeTargets="PrepareResources"
+          Condition="'$(PublishAot)' == 'true' and '$(SharpTSManagedRuntimePayloadPath)' == '' and '$(SharpTSAllowMissingManagedRuntimePayload)' != 'true'">
+    <Error Text="A Native AOT publish requires -p:SharpTSManagedRuntimePayloadPath=&lt;path to an AnyCPU SharpTS.dll&gt; (build it first: dotnet publish SharpTS.csproj -c Release -p:PlatformTarget=AnyCPU -o &lt;dir&gt;). Compiled soft-dependency programs (eval, Proxy, Intl, vm) extract this payload at compile time. Pass -p:SharpTSAllowMissingManagedRuntimePayload=true to build a probe binary without it." />
+  </Target>
+
+  <!--
+    An arch-stamped payload (PE Machine AMD64/ARM64 instead of AnyCPU's I386)
+    loads only under a matching-architecture CoreCLR — a reproduced failure:
+    x64-stamped SharpTS.dll co-located next to compiled output fails with
+    "SharpTS runtime not present" under an arm64 dotnet. Catch it at embed time.
+  -->
+  <UsingTask TaskName="ValidateAnyCpuAssembly"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <AssemblyPath ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        using (var stream = File.OpenRead(AssemblyPath))
+        using (var reader = new BinaryReader(stream))
+        {
+            stream.Position = 0x3C;
+            stream.Position = reader.ReadUInt32(); // e_lfanew -> "PE\0\0"
+            if (reader.ReadUInt32() != 0x00004550)
+            {
+                Log.LogError("SharpTSManagedRuntimePayloadPath is not a PE file: {0}", AssemblyPath);
+            }
+            else
+            {
+                ushort machine = reader.ReadUInt16();
+                // AnyCPU managed assemblies are stamped IMAGE_FILE_MACHINE_I386.
+                if (machine != 0x014C)
+                {
+                    Log.LogError(
+                        "SharpTSManagedRuntimePayloadPath must be an AnyCPU assembly (PE Machine I386), " +
+                        "but '{0}' has Machine 0x{1:X4}. Rebuild the payload with -p:PlatformTarget=AnyCPU.",
+                        AssemblyPath, machine);
+                }
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
 
   <!-- White-box test access: a handful of regression tests drive internal
        runtime seams directly (e.g. WebStreamsHelpers.PipeTo + the event-loop

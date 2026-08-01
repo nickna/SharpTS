@@ -245,7 +245,7 @@ public abstract class VmModuleBase
         // Managed .NET interop also accepts an arbitrary object exposing
         // Invoke(object[]) through the managed-only structural compatibility
         // seam.
-        var invoke = ManagedStructuralClrReflection.GetPublicMethodBySignature(
+        var invoke = ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
             type, "Invoke", [typeof(object[])]);
         if (invoke != null)
             return invoke.Invoke(callable, [args]);

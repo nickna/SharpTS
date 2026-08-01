@@ -60,8 +60,17 @@ internal static class CustomAttributeEncoder
 
         if (parameterType == typeof(Type))
         {
-            WriteSerString(w, SerializedTypeName((Type)value!));
+            // A null Type argument serializes as the null SerString (0xFF), like null strings.
+            WriteSerString(w, value is null ? null : SerializedTypeName((Type)value));
             return;
+        }
+
+        if (value is null)
+        {
+            // Value-type fixed args have no null encoding; the unboxing casts below
+            // would NRE with no context. Name the problem instead.
+            throw new ArgumentException(
+                $"CustomAttributeEncoder: null is not a valid fixed-arg value for parameter type '{parameterType}'.");
         }
 
         switch (Type.GetTypeCode(parameterType))

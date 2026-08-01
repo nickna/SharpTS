@@ -624,7 +624,9 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         }
         else
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            // Errors belong on stderr: release smokes (publish.yml) assert bundler
+            // refusals there, and compiled-output diffs must not see error text on stdout.
+            Console.Error.WriteLine($"Error: {ex.Message}");
         }
         Environment.Exit(1);
     }
@@ -786,8 +788,8 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
             {
                 var bundlerName = bundlerMode == BundlerMode.Sdk ? "SDK" : "built-in";
-                Console.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
-                Console.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
+                Console.Error.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
+                Console.Error.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
                 Environment.Exit(1);
             }
         }
@@ -907,6 +909,18 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
         }
         else if (!SharpTS.Runtime.EmbeddedManagedRuntime.TryExtractTo(destPath, out string? extractionError))
         {
+            // The native SKU has no Assembly.Location fallback — the embedded payload is
+            // the only soft-dependency mechanism. Silently shipping an output whose
+            // eval/Proxy/Intl/vm paths throw at runtime would be the one native-SKU
+            // limitation that doesn't fail fast; treat it like the others instead.
+            if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+            {
+                Console.Error.WriteLine(
+                    $"Error: the compiled output requires the SharpTS runtime ({reasonList}), but the " +
+                    $"embedded SharpTS.dll could not be extracted ({extractionError}). " +
+                    "The output will not run until SharpTS.dll is placed next to it.");
+                Environment.Exit(1);
+            }
             if (!outputOptions.QuietMode)
                 Console.WriteLine(
                     $"Warning: could not extract the embedded SharpTS.dll ({extractionError}); " +
