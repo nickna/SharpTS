@@ -496,7 +496,7 @@ See [Language server setup](docs/language-server.md) and
 | Overload resolution | ✅ | Identity → widening → narrowing → object cost scale; same semantics in both modes |
 | Generic type instantiation | ✅ | Closed generics via string specifier (e.g., `"System.Collections.Generic.List<string>"`) |
 | Delegate parameters | ✅ | TS functions auto-marshaled to .NET delegates (`Action`, `Func<...>`, custom delegates) via `DotNetDelegateShim` |
-| Event subscription (`+=` / `-=`) | ✅ | `obj.on(e)` / `obj.off(e)` style plus direct `+=` compound assignment in compiled mode; main-thread-only |
+| Event subscription | ✅ | `addEventListener(name, handler)` / `removeEventListener(name, handler)` pseudo-methods on instances and classes (no C#-style `+=`/`-=` — not TS syntax); both modes; main-thread-only |
 | Exception mapping | ✅ | .NET exceptions surface as JS-catchable errors with message preservation (`DotNetExceptionMapper`) |
 | Value / reference type marshaling | ✅ | Primitives, strings, arrays, dictionaries; `DotNetMarshaller` centralizes conversion |
 | External assembly discovery | ✅ | `TryResolveExternalType` scans loaded AppDomain assemblies; `sharpts.json`/`-r` assemblies load at startup so every seam sees them; compiled output co-locates used reference DLLs (+ closure) next to the output |
