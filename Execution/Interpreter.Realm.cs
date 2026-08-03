@@ -45,7 +45,8 @@ public partial class Interpreter
     /// <summary>
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
-    internal static IEnumerable<string> GlobalNames => _globalConstants.Keys;
+    internal static IEnumerable<string> GlobalNames
+        => _globalConstants.Keys.Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -80,16 +81,6 @@ public partial class Interpreter
         foreach (var typedArrayName in BuiltInNames.TypedArrayNames)
         {
             globals[typedArrayName] = WorkerBuiltIns.GetTypedArrayConstructor(typedArrayName);
-        }
-
-        // Add Error constructors as global class variables
-        // This enables typeof Error, class MyError extends Error, const E = Error, etc.
-        var errorClass = new Runtime.Types.SharpTSErrorClass("Error", null);
-        globals[BuiltInNames.Error] = errorClass;
-        foreach (var errorTypeName in BuiltInNames.ErrorTypeNames)
-        {
-            if (errorTypeName != "Error")
-                globals[errorTypeName] = new Runtime.Types.SharpTSErrorClass(errorTypeName, errorClass);
         }
 
         // Bare `Array` reference — needed for Array.prototype.X.apply() patterns
@@ -295,6 +286,11 @@ public partial class Interpreter
     /// </summary>
     internal bool TryGetRealmIntrinsic(string name, out object? value)
     {
+        if (BuiltInNames.IsErrorTypeName(name))
+        {
+            value = GetErrorClass(name);
+            return true;
+        }
         if (name == "Object")
         {
             value = GetObjectNamespace();
@@ -337,7 +333,8 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean";
+        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean"
+            || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
     // object carrying a guest-writable _extras bag, so — like Math and
@@ -362,6 +359,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSNumberNamespace? _numberNamespace;
     private Runtime.Types.SharpTSBooleanNamespace? _booleanNamespace;
     private Runtime.Types.SharpTSPromisePrototype? _promisePrototype;
+    private Dictionary<string, Runtime.Types.SharpTSErrorClass>? _errorClasses;
     // Each prototype is linked back to this realm's constructor object on creation, so
     // `String.prototype.constructor === String` holds — both sides resolve per-realm.
     internal Runtime.Types.SharpTSStringPrototype GetStringPrototype()
@@ -379,6 +377,31 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSBooleanNamespace GetBooleanNamespace() => _booleanNamespace ??= new();
     internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
 
+    /// <summary>
+    /// Returns this realm's Error constructor. Error constructors and their prototype
+    /// objects are ordinary mutable objects, so sharing them through the process-wide
+    /// globals table lets one program's prototype writes leak into every later program
+    /// hosted by the same Test262 worker.
+    /// </summary>
+    internal Runtime.Types.SharpTSErrorClass GetErrorClass(string errorTypeName)
+    {
+        if (_errorClasses is null)
+        {
+            var errorClass = new Runtime.Types.SharpTSErrorClass(BuiltInNames.Error, null);
+            _errorClasses = new Dictionary<string, Runtime.Types.SharpTSErrorClass>(StringComparer.Ordinal)
+            {
+                [BuiltInNames.Error] = errorClass,
+            };
+            foreach (var name in BuiltInNames.ErrorTypeNames)
+            {
+                if (name != BuiltInNames.Error)
+                    _errorClasses[name] = new Runtime.Types.SharpTSErrorClass(name, errorClass);
+            }
+        }
+
+        return _errorClasses[errorTypeName];
+    }
+
     // Per-realm globalThis. The global object holds guest-assigned properties
     // (`globalThis.x = …`), which must stay realm-local and not race across
     // worker threads, so each Interpreter owns its own — like RegExp.prototype
@@ -389,7 +412,9 @@ public partial class Interpreter
     // `global` alias resolve here (see LookupVariableRV), and sloppy-mode `this`
     // binds to it.
     private Runtime.Types.SharpTSGlobalThis? _globalThis;
-    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??= new Runtime.Types.SharpTSGlobalThis();
+    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??=
+        new Runtime.Types.SharpTSGlobalThis(name =>
+            TryGetRealmIntrinsic(name, out var intrinsic) ? intrinsic : null);
 
     /// <summary>
     /// Resolves <c>String</c>/<c>Number</c>/<c>Boolean</c><c>.prototype</c> to

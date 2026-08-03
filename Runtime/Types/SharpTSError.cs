@@ -15,6 +15,13 @@ public class SharpTSError : ITypeCategorized
     public TypeCategory RuntimeCategory => TypeCategory.Error;
 
     /// <summary>
+    /// The immutable built-in brand used for constructor/prototype identity.
+    /// Unlike the guest-visible <see cref="Name"/>, assigning <c>error.name</c>
+    /// must not change which intrinsic constructor created the error.
+    /// </summary>
+    internal string ErrorTypeName { get; }
+
+    /// <summary>
     /// The name of the error type (e.g., "Error", "TypeError", "RangeError").
     /// </summary>
     public string Name { get; set; }
@@ -69,6 +76,7 @@ public class SharpTSError : ITypeCategorized
     /// <param name="message">The error message.</param>
     protected SharpTSError(string name, string? message)
     {
+        ErrorTypeName = name;
         Name = name;
         Message = message ?? "";
         Stack = CaptureStackTrace();

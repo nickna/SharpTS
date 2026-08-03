@@ -27,10 +27,14 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// User-assigned properties on globalThis.
     /// </summary>
     private readonly Dictionary<string, object?> _properties = new();
+    private readonly Func<string, object?>? _realmIntrinsicResolver;
 
     // internal (not private) so each Interpreter can construct its own realm
     // global object; only the _properties bag differs between instances.
-    internal SharpTSGlobalThis() { }
+    internal SharpTSGlobalThis(Func<string, object?>? realmIntrinsicResolver = null)
+    {
+        _realmIntrinsicResolver = realmIntrinsicResolver;
+    }
 
     /// <summary>
     /// True if guest code has assigned an own (user) property with this name.
@@ -62,6 +66,13 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (_properties.TryGetValue(name, out var value))
         {
             return value;
+        }
+
+        // An Interpreter-backed global object resolves mutable intrinsics from
+        // its owning realm so bare `Error` and `globalThis.Error` share identity.
+        if (_realmIntrinsicResolver?.Invoke(name) is { } realmIntrinsic)
+        {
+            return realmIntrinsic;
         }
 
         // Delegate to BuiltInRegistry for built-in namespaces (Math, JSON, etc.)
@@ -163,6 +174,8 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (name == "globalThis") return true;
         if (_properties.ContainsKey(name)) return true;
 
+        if (_realmIntrinsicResolver?.Invoke(name) is not null) return true;
+
         // Check if it's a built-in singleton
         var singleton = BuiltInRegistry.Instance.GetSingleton(name);
         if (singleton != null) return true;
@@ -196,6 +209,8 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
             yield return "Number";
             yield return "String";
             yield return "Boolean";
+            foreach (var errorTypeName in BuiltInNames.ErrorTypeNames)
+                yield return errorTypeName;
             yield return "Symbol";
             yield return "Promise";
             yield return "process";
