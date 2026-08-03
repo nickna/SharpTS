@@ -825,6 +825,13 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateGetOnBuiltInRV(TypeCategory category, object obj, string memberName)
     {
+        // Native errors created by runtime helpers carry their built-in name but
+        // not a constructor reference. Resolve `constructor` through this realm;
+        // the old process-static SharpTSErrorClass registry leaked the latest
+        // interpreter's constructor into every other interpreter in the process.
+        if (obj is SharpTSError nativeError && memberName == "constructor")
+            return RuntimeValue.FromObject(GetErrorClass(nativeError.ErrorTypeName));
+
         // JS functions are objects — surface user-set properties before
         // falling through to built-in members (e.g. `bind`, `call`).
         if (obj is SharpTSFunction fn)

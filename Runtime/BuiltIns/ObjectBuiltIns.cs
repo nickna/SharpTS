@@ -1507,7 +1507,7 @@ public static partial class ObjectBuiltIns
         SharpTSInstance inst => inst.RuntimeClass.Prototype,
         // Native errors raised from C# carry only their type name; resolve it back to the
         // same constructor the global `TypeError` identifier yields so the prototypes match.
-        SharpTSError err => SharpTSErrorClass.GetBuiltInClass(err.Name)?.Prototype,
+        SharpTSError err => interp?.GetErrorClass(err.ErrorTypeName).Prototype,
         // ECMA-262 §23.1.3: ordinary Array exotic objects have Array.prototype as their
         // [[Prototype]]. Subclass instances keep their class chain instead.
         SharpTSArraySubclassInstance sub => sub.Klass,

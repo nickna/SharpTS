@@ -3179,8 +3179,8 @@ test/built-ins/Error/prototype/toString/S15.11.4.4_A2.js Pass
 test/built-ins/Error/prototype/toString/called-as-function.js RuntimeError
 test/built-ins/Error/prototype/toString/invalid-receiver.js Fail
 test/built-ins/Error/prototype/toString/length.js Pass
-test/built-ins/Error/prototype/toString/name.js Fail
-test/built-ins/Error/prototype/toString/not-a-constructor.js Fail
+test/built-ins/Error/prototype/toString/name.js Pass
+test/built-ins/Error/prototype/toString/not-a-constructor.js Pass
 test/built-ins/Error/prototype/toString/prop-desc.js Fail
 test/built-ins/Error/prototype/toString/tostring-get-throws.js Fail
 test/built-ins/Error/prototype/toString/tostring-message-throws-symbol.js Fail

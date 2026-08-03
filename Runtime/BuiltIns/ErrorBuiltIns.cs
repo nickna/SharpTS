@@ -59,13 +59,10 @@ public static class ErrorBuiltIns
             "cause" => receiver.HasCause ? receiver.Cause : Types.SharpTSUndefined.Instance,
             "code" when receiver.Code is not null => receiver.Code,
             "syscall" when receiver.Syscall is not null => receiver.Syscall,
-            // err.constructor must be === to the global Error/TypeError/... class
-            // so Test262's assert.throws identity check passes. Native
-            // SharpTSError instances (thrown from C# runtime code) don't track
-            // their class ref directly — look it up by name in the registry
-            // populated when SharpTSErrorClass instances are created at
-            // interpreter startup.
-            "constructor" => Types.SharpTSErrorClass.GetBuiltInClass(receiver.Name),
+            // Native SharpTSError instances need the current Interpreter to
+            // resolve their realm-owned constructor. Interpreter.Properties
+            // handles this member before entering the process-wide registry.
+            "constructor" => null,
             "toString" => BuiltInMethod.CreateV2("toString", 0, static (_, recv, _) =>
                 RuntimeValue.FromString(((SharpTSError)recv.ToObject()!).ToString())),
 

@@ -1190,7 +1190,7 @@ public partial class Interpreter
         if (left is SharpTSError error && targetClass is SharpTSErrorClass)
         {
             // Walk the error type hierarchy: TypeError extends Error, etc.
-            var errorName = error.Name; // e.g. "TypeError"
+            var errorName = error.ErrorTypeName; // e.g. "TypeError"
             var targetName = targetClass.Name; // e.g. "Error"
             if (errorName == targetName) return true;
             // All built-in error subtypes extend Error

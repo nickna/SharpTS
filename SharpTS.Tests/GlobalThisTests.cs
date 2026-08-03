@@ -171,11 +171,10 @@ public class GlobalThisTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", result);
     }
 
-    // Compiled-only: the runtime sentinel routes constructor reads to real .NET
-    // Type tokens, so `root.Error === Error` holds (#271). The interpreter's
-    // SharpTSGlobalThis returns a distinct Error representation for this identity,
-    // which is an independent pre-existing quirk outside this fix's scope.
-    [Theory, CompiledOnlyData]
+    // Error constructors are realm-owned in interpreted mode and runtime type
+    // tokens in compiled mode; either way globalThis and the bare identifier
+    // must resolve to the same constructor object (#271, #1326).
+    [Theory, ModeData]
     public void GlobalThis_ValuePosition_ResolvesErrorConstructorIdentity(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

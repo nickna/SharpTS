@@ -790,6 +790,44 @@ public sealed class Issue1279ParityTests
     public void Built_in_metadata_deletion_does_not_outlive_the_program(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Issue #1326: Error constructors used to live in the process-static globals table.
+    /// A test that replaced Error.prototype.toString therefore changed the callable and
+    /// descriptor observed by later Interpreter instances in the same persistent worker.
+    /// </summary>
+    [Fact]
+    public void Error_prototype_mutation_does_not_outlive_the_program()
+    {
+        var root = Test262Paths.TryFindRoot();
+        if (root is null)
+        {
+            _output.WriteLine("external/test262 not initialized");
+            return;
+        }
+
+        var testDir = Test262Paths.TestDir(root);
+        var runner = new Test262Runner(
+            root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
+        string[] relativePaths =
+        [
+            "built-ins/Error/prototype/S15.11.4_A2.js",
+            "built-ins/Error/prototype/toString/length.js",
+            "built-ins/Error/prototype/toString/name.js",
+            "built-ins/Error/prototype/toString/not-a-constructor.js",
+            "built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-169.js",
+        ];
+
+        foreach (var relativePath in relativePaths)
+        {
+            var result = runner.RunOne(
+                Path.Combine(testDir, relativePath), Test262ExecutionMode.Interpreted);
+            _output.WriteLine($"Interpreted {relativePath} -> {result.Outcome}: {result.Message}");
+            Assert.True(
+                result.Outcome == Test262Outcome.Pass,
+                $"Interpreted {relativePath} -> {result.Outcome}: {result.Message}");
+        }
+    }
+
     private void AssertPassInBothModes(string relativePath)
     {
         foreach (var mode in new[]
