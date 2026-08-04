@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <SharpTSNativeInteropEnabled Condition="'$(SharpTSNativeInteropEnabled)' == ''">true</SharpTSNativeInteropEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(SharpTSNativeInteropEnabled)' == 'true' and '$(PublishAot)' == 'true'">
+    <TrimMode>partial</TrimMode>
+    <IlcTrimMetadata>false</IlcTrimMetadata>
+    <IlcGenerateCompleteTypeMetadata>true</IlcGenerateCompleteTypeMetadata>
+    <StackTraceSupport>true</StackTraceSupport>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(SharpTSNativeInteropEnabled)' == 'true' and '$(PublishAot)' == 'true'">
+    <RuntimeHostConfigurationOption Include="PEPacker.EnableSdkBundler"
+                                    Value="false"
+                                    Trim="true" />
+  </ItemGroup>
+</Project>

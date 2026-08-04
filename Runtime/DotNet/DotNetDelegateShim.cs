@@ -37,6 +37,17 @@ internal static class DotNetDelegateShim
                 $"Type '{delegateType.FullName}' is not a delegate type.", nameof(delegateType));
         }
 
+        // Native AOT cannot synthesize an arbitrary delegate shape. The official
+        // catalog carries direct adapters for the callback shapes exposed by its
+        // BCL profile; generated custom hosts add equivalent strongly typed thunks.
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            if (TryCreateCatalogedDelegate(delegateType, callable, interpreter, out Delegate? cataloged))
+                return cataloged;
+            throw new PlatformNotSupportedException(
+                $"Delegate shape '{delegateType.FullName}' is not present in this native SharpTS catalog.");
+        }
+
         var invoke = ManagedDotNetInterop.GetMethod(delegateType, "Invoke")
             ?? throw new InvalidOperationException(
                 $"Delegate type '{delegateType.FullName}' has no Invoke method.");
@@ -84,6 +95,37 @@ internal static class DotNetDelegateShim
         }
 
         return ManagedDotNetInterop.CompileLambda(delegateType, body, paramExprs);
+    }
+
+    private static bool TryCreateCatalogedDelegate(
+        Type delegateType,
+        ISharpTSCallable callable,
+        Interpreter interpreter,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Delegate? result)
+    {
+        if (delegateType == typeof(Action))
+            result = (Action)(() => Dispatch(callable, interpreter, typeof(void), []));
+        else if (delegateType == typeof(Action<string>))
+            result = (Action<string>)(value => Dispatch(callable, interpreter, typeof(void), [value]));
+        else if (delegateType == typeof(Action<double>))
+            result = (Action<double>)(value => Dispatch(callable, interpreter, typeof(void), [value]));
+        else if (delegateType == typeof(Func<string>))
+            result = (Func<string>)(() => (string)Dispatch(callable, interpreter, typeof(string), [])!);
+        else if (delegateType == typeof(Predicate<double>))
+            result = (Predicate<double>)(value =>
+                (bool)Dispatch(callable, interpreter, typeof(bool), [value])!);
+        else if (delegateType == typeof(Comparison<double>))
+            result = (Comparison<double>)((left, right) =>
+                (int)Dispatch(callable, interpreter, typeof(int), [left, right])!);
+        else if (delegateType == typeof(EventHandler))
+            result = (EventHandler)((sender, eventArgs) =>
+                Dispatch(callable, interpreter, typeof(void), [sender, eventArgs]));
+        else if (delegateType == typeof(UnhandledExceptionEventHandler))
+            result = (UnhandledExceptionEventHandler)((sender, eventArgs) =>
+                Dispatch(callable, interpreter, typeof(void), [sender, eventArgs]));
+        else
+            result = null;
+        return result != null;
     }
 
     /// <summary>

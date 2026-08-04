@@ -13,15 +13,24 @@ internal static class EmbeddedManagedRuntime
 
     internal static bool TryExtractTo(string destinationPath, out string? error)
     {
-        using Stream? payload = typeof(EmbeddedManagedRuntime).Assembly
-            .GetManifestResourceStream(ResourceName);
+        Assembly sharpTsAssembly = typeof(EmbeddedManagedRuntime).Assembly;
+        Stream? payload = sharpTsAssembly.GetManifestResourceStream(ResourceName);
         if (payload is null)
         {
-            error = $"embedded resource '{ResourceName}' is not present";
-            return false;
+            Assembly? entryAssembly = Assembly.GetEntryAssembly();
+            if (entryAssembly != null && entryAssembly != sharpTsAssembly)
+                payload = entryAssembly.GetManifestResourceStream(ResourceName);
         }
+        using (payload)
+        {
+            if (payload is null)
+            {
+                error = $"embedded resource '{ResourceName}' is not present";
+                return false;
+            }
 
-        return TryExtractTo(payload, destinationPath, out error);
+            return TryExtractTo(payload, destinationPath, out error);
+        }
     }
 
     // Split from the resource lookup so the atomic-write behavior is unit-testable:

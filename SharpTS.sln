@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpTS.Sdk.Tasks", "SharpT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpTS.LanguageServer", "SharpTS.LanguageServer\SharpTS.LanguageServer.csproj", "{D421D97E-1F18-4707-92D4-D0CEDA62838F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpTS.Hosting", "SharpTS.Hosting\SharpTS.Hosting.csproj", "{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,6 +113,18 @@ Global
 		{D421D97E-1F18-4707-92D4-D0CEDA62838F}.Release|x64.Build.0 = Release|Any CPU
 		{D421D97E-1F18-4707-92D4-D0CEDA62838F}.Release|x86.ActiveCfg = Release|Any CPU
 		{D421D97E-1F18-4707-92D4-D0CEDA62838F}.Release|x86.Build.0 = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|x64.Build.0 = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Debug|x86.Build.0 = Debug|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|x64.ActiveCfg = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|x64.Build.0 = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|x86.ActiveCfg = Release|Any CPU
+		{A06A2ECD-7B23-4F02-B7A1-D52EC9FBE11B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

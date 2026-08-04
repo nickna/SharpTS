@@ -57,8 +57,6 @@ public static class DotNetImports
     /// form is unsupported or a name cannot be resolved to a usable .NET type.</exception>
     public static void EnsureImports(ParsedModule module, Stmt.Import import)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
-
         if (import.DefaultImport != null)
         {
             throw new Exception(
@@ -111,7 +109,6 @@ public static class DotNetImports
     /// resolved to a usable public .NET type.</exception>
     public static Type ResolveExportType(string specifier, string name, Func<string, Type?>? resolve = null)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
         resolve ??= DotNetTypeRegistry.Resolve;
 
         if (specifier.Contains('/') || specifier.Contains('\\') || specifier.Contains('#') ||
@@ -172,6 +169,17 @@ public static class DotNetImports
         // Namespace form: resolve each named import as Namespace.Name.
         var type = ResolvePublic($"{specifier}.{name}", resolve);
         if (type != null) return type;
+
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported &&
+            NativeDotNetInterop.Catalog != null)
+        {
+            string requestedType = specifier.EndsWith($".{name}", StringComparison.Ordinal)
+                ? specifier
+                : $"{specifier}.{name}";
+            throw new Exception(
+                $"Module Error: {ManagedDotNetInterop.NativeCatalogRequiredMessage} " +
+                $"Requested type: '{requestedType}'.");
+        }
 
         throw new Exception(
             $"Module Error: cannot resolve '{name}' from 'dotnet:{specifier}': neither a type " +

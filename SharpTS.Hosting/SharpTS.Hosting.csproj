@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>true</IsPackable>
+    <PackageId>SharpTS.Hosting</PackageId>
+    <Description>Native AOT hosting support for SharpTS with build-time generated, closed-world .NET interop catalogs.</Description>
+    <PackageTags>typescript;nativeaot;hosting;interop;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+  </PropertyGroup>
+
+  <!-- SharpTS is a tool package, so the hosting package carries its managed
+       assembly as a normal compile-time library instead of depending on the
+       tool package's tools/ layout. -->
+  <ItemGroup>
+    <None Include="..\bin\$(Configuration)\net10.0\SharpTS.dll"
+          Pack="true"
+          PackagePath="lib\net10.0\"
+          Condition="Exists('..\bin\$(Configuration)\net10.0\SharpTS.dll')" />
+    <None Include="buildTransitive\**" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Runtime dependencies of the carried SharpTS.dll. -->
+  <ItemGroup>
+    <PackageReference Include="NickNa.PEPacker" />
+    <PackageReference Include="System.Reflection.MetadataLoadContext" />
+    <PackageReference Include="Microsoft.ILVerification" />
+    <PackageReference Include="NuGet.Packaging" />
+    <PackageReference Include="NuGet.Protocol" />
+    <PackageReference Include="PrettyPrompt" />
+    <PackageReference Include="ZstdSharp.Port" />
+  </ItemGroup>
+
+  <Target Name="EnsureHostingPayloadPresent" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('..\bin\$(Configuration)\net10.0\SharpTS.dll')"
+           Text="SharpTS.Hosting pack: SharpTS.dll is missing. Build SharpTS.csproj first." />
+  </Target>
+</Project>

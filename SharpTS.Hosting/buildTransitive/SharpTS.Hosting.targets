@@ -1,0 +1,143 @@
+<Project>
+  <!-- buildTransitive props are imported before the consuming project body, so
+       PublishAot may be declared too late for a props-time condition. Targets
+       are imported after the body and own the final Native AOT defaults. -->
+  <PropertyGroup Condition="'$(SharpTSNativeInteropEnabled)' == 'true' and '$(PublishAot)' == 'true'">
+    <TrimMode>partial</TrimMode>
+    <IlcTrimMetadata>false</IlcTrimMetadata>
+    <IlcGenerateCompleteTypeMetadata>true</IlcGenerateCompleteTypeMetadata>
+    <StackTraceSupport>true</StackTraceSupport>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(SharpTSNativeInteropEnabled)' == 'true' and '$(PublishAot)' == 'true'">
+    <RuntimeHostConfigurationOption Include="PEPacker.EnableSdkBundler"
+                                    Value="false"
+                                    Trim="true" />
+    <TrimmerRootDescriptor Include="$(MSBuildThisFileDirectory)SharpTS.Hosting.AotTrimmerRoots.xml" />
+  </ItemGroup>
+
+  <UsingTask TaskName="ResolveSharpTSNativeInteropPayloads"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <RootAssemblyNames ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="false" />
+      <ReferencePaths ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Payloads ParameterType="Microsoft.Build.Framework.ITaskItem[]" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Reference Include="$(MSBuildToolsPath)\Sdks\Microsoft.NET.Sdk\tools\net472\System.Reflection.Metadata.dll" />
+      <Reference Include="$(MSBuildToolsPath)\Sdks\Microsoft.NET.Sdk\tools\net472\System.Collections.Immutable.dll" />
+      <Using Namespace="System" />
+      <Using Namespace="System.Collections.Generic" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Reflection.Metadata" />
+      <Using Namespace="System.Reflection.PortableExecutable" />
+      <Using Namespace="Microsoft.Build.Framework" />
+      <Using Namespace="Microsoft.Build.Utilities" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var available = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (ITaskItem item in ReferencePaths ?? Array.Empty<ITaskItem>())
+        {
+            string path = item.GetMetadata("FullPath");
+            if (string.IsNullOrEmpty(path)) path = item.ItemSpec;
+            if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
+                available[Path.GetFileNameWithoutExtension(path)] = path;
+        }
+
+        var rootNames = (RootAssemblyNames ?? Array.Empty<ITaskItem>())
+            .Select(item => item.ItemSpec)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToArray();
+        var roots = new HashSet<string>(rootNames, StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>(rootNames);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var payloads = new List<ITaskItem>();
+
+        while (queue.Count != 0)
+        {
+            string name = queue.Dequeue();
+            if (!seen.Add(name)) continue;
+            bool frameworkAssembly = name.Equals("mscorlib", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("netstandard", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Microsoft.CSharp", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("System.", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("System", StringComparison.OrdinalIgnoreCase);
+            if (frameworkAssembly && !roots.Contains(name)) continue;
+            if (!available.TryGetValue(name, out string path))
+            {
+                Log.LogError("SharpTS native interop assembly '{0}' was not found in the copy-local reference closure.", name);
+                continue;
+            }
+
+            var payload = new TaskItem(path);
+            payload.SetMetadata("LogicalName", "SharpTS.NativeInterop.Assembly." + Path.GetFileName(path));
+            payloads.Add(payload);
+
+            using (var stream = File.OpenRead(path))
+            using (var pe = new PEReader(stream))
+            {
+                if (!pe.HasMetadata) continue;
+                MetadataReader reader = pe.GetMetadataReader();
+                foreach (AssemblyReferenceHandle handle in reader.AssemblyReferences)
+                {
+                    string dependency = reader.GetString(reader.GetAssemblyReference(handle).Name);
+                    if (available.ContainsKey(dependency)) queue.Enqueue(dependency);
+                }
+            }
+        }
+
+        Payloads = payloads.ToArray();
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="PrepareSharpTSNativeInteropHost"
+          BeforeTargets="AssignTargetPaths;CoreCompile"
+          DependsOnTargets="ResolveReferences"
+          Condition="'$(SharpTSNativeInteropEnabled)' == 'true'">
+    <ItemGroup>
+      <_SharpTSNativeInteropRoot Include="@(SharpTSNativeInteropType)"
+                                 Condition="'%(SharpTSNativeInteropType.Assembly)' != ''" />
+    </ItemGroup>
+
+    <ResolveSharpTSNativeInteropPayloads
+        RootAssemblyNames="@(_SharpTSNativeInteropRoot->'%(Assembly)')"
+        ReferencePaths="@(ReferenceCopyLocalPaths)">
+      <Output TaskParameter="Payloads" ItemName="_SharpTSNativeInteropPayload" />
+    </ResolveSharpTSNativeInteropPayloads>
+
+    <ItemGroup>
+      <!-- A custom host can embed its referenced SharpTS.dll because it is not
+           compiling that assembly itself. This preserves compiler soft deps. -->
+      <_SharpTSManagedRuntime Include="@(ReferenceCopyLocalPaths)"
+                              Condition="'%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)' == 'SharpTS.dll'" />
+      <EmbeddedResource Include="@(_SharpTSManagedRuntime)"
+                        LogicalName="SharpTS.ManagedRuntime.dll" />
+      <EmbeddedResource Include="@(_SharpTSNativeInteropPayload)"
+                        LogicalName="%(_SharpTSNativeInteropPayload.LogicalName)" />
+
+      <_SharpTSNativeInteropCatalogLine Include="// &lt;auto-generated /&gt;" />
+      <_SharpTSNativeInteropCatalogLine Include="namespace SharpTS.Generated%3B" />
+      <_SharpTSNativeInteropCatalogLine Include="public static class GeneratedNativeDotNetCatalog" />
+      <_SharpTSNativeInteropCatalogLine Include="{" />
+      <_SharpTSNativeInteropCatalogLine Include="    public static global::SharpTS.Runtime.DotNet.INativeDotNetCatalog Instance { get%3B } = Create()%3B" />
+      <_SharpTSNativeInteropCatalogLine Include="    private static global::SharpTS.Runtime.DotNet.INativeDotNetCatalog Create() =&gt;" />
+      <_SharpTSNativeInteropCatalogLine Include="        new global::SharpTS.Runtime.DotNet.NativeDotNetCatalogBuilder()" />
+      <_SharpTSNativeInteropCatalogLine Include="            .AddDefaultTypes()" />
+      <_SharpTSNativeInteropCatalogLine Include="            .Add(typeof(global::%(SharpTSNativeInteropType.Identity)), &quot;%(SharpTSNativeInteropType.Alias)&quot;)" />
+      <_SharpTSNativeInteropCatalogLine Include="            .AddAssemblyPayload(&quot;%(_SharpTSNativeInteropPayload.Filename)%(_SharpTSNativeInteropPayload.Extension)&quot;, &quot;%(_SharpTSNativeInteropPayload.LogicalName)&quot;)" />
+      <_SharpTSNativeInteropCatalogLine Include="            .Build()%3B" />
+      <_SharpTSNativeInteropCatalogLine Include="}" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(IntermediateOutputPath)SharpTS.NativeInterop.g.cs"
+                      Lines="@(_SharpTSNativeInteropCatalogLine)"
+                      Overwrite="true"
+                      Encoding="UTF-8" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)SharpTS.NativeInterop.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)SharpTS.NativeInterop.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

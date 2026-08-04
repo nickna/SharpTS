@@ -1,3 +1,8 @@
-import { StringBuilder } from "dotnet:System.Text.StringBuilder";
+import { StringBuilder } from "dotnet:System.Text";
+import { List } from "dotnet:System.Collections.Generic.List<number>";
 
-console.log(new StringBuilder().append("unexpected").toString());
+const text = new StringBuilder().append("native-dotnet-");
+const values = new List();
+values.add(40);
+values.add(42);
+console.log(text.append(values[1]).toString());

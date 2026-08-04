@@ -77,6 +77,7 @@ jobs:
           ls -lh ./nupkg/
           test -f "./nupkg/SharpTS.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS package not found"; exit 1; }
           test -f "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Sdk package not found"; exit 1; }
+          test -f "./nupkg/SharpTS.Hosting.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Hosting package not found"; exit 1; }
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
           echo "✓ All packages created successfully"
 
@@ -352,13 +353,21 @@ jobs:
             'loading .NET reference assemblies is not available in the native SharpTS build' \
             "$scratch/reference-error.txt"
 
-          if "$native" Examples/AotCompileGate/dotnet-interop.ts \
+          "$native" Examples/AotCompileGate/dotnet-interop.ts \
+            | tr -d '\r' > "$scratch/dotnet-interop.txt"
+          grep -qx 'native-dotnet-42' "$scratch/dotnet-interop.txt"
+          "$native" --compile Examples/AotCompileGate/dotnet-interop.ts --ref-asm \
+            -o "$scratch/dotnet-interop.dll"
+          dotnet "$scratch/dotnet-interop.dll" | tr -d '\r' \
+            > "$scratch/dotnet-interop-compiled.txt"
+          diff -u "$scratch/dotnet-interop.txt" "$scratch/dotnet-interop-compiled.txt"
+
+          if "$native" Examples/AotCompileGate/dotnet-interop-unknown.ts \
               > "$scratch/dotnet-interop-error.txt" 2>&1; then
-            echo "dynamic .NET interop unexpectedly ran under Native AOT"
+            echo "an unregistered .NET type unexpectedly ran under Native AOT"
             exit 1
           fi
-          grep -Fq \
-            '.NET interop is not available in the native SharpTS build' \
+          grep -Fq 'not present in this native SharpTS catalog' \
             "$scratch/dotnet-interop-error.txt"
 
           if "$native" --gen-decl System.String \
