@@ -273,15 +273,20 @@ The work is split at four ownership boundaries:
    PlatformNotSupportedException. `ManagedEmittedShapeReflection.IsShape` is
    consistent with this: it answers false for every shape under native, so a
    predicate can never say "yes" where the action would throw.
-3. **Dynamic .NET interop policy (done for the current inventory).** The open-world
+3. **Dynamic .NET interop policy (closed-world Native support shipped).** The open-world
    `Runtime/DotNet` binder now routes type resolution, member discovery,
    construction, generic closure, array creation, marshalling, operators, and
    delegate shims through `ManagedDotNetInterop`. CoreCLR retains the complete
-   BCL/embedder/third-party contract. Native AOT rejects the first dynamic
-   binding operation before reflection or runtime shape construction, and CI
-   executes that diagnostic. This is an intentional interim contract: define
-   and root a closed Native-SKU BCL surface separately if one is worth
-   supporting.
+   BCL/embedder/third-party contract. Native AOT now resolves through an
+   immutable `INativeDotNetCatalog`: the official binary carries a curated BCL
+   profile, while `SharpTS.Hosting` generates a custom profile from
+   `SharpTSNativeInteropType` MSBuild items. The catalog roots public interop
+   metadata, records closed generics/arrays, and rejects unregistered types
+   before arbitrary reflection. Selected custom class-library DLLs and their
+   non-framework copy-local closure are embedded in the native host and
+   extracted beside `--compile` output. CI exercises constructors, methods,
+   properties, fields, events, a closed generic, interpretation, compilation,
+   deployment extraction, and the unknown-type refusal.
 
    External IL emission, declaration inspection, external type synthesis,
    extension imports, and custom CLR attributes use the same operation-level
@@ -447,7 +452,7 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
 | Lost | Why | Disposition |
 |---|---|---|
 | `-r foo.dll` / sharpts.json `references` in the interpreter | no IL engine in a native process | by design — route to managed SKU with a clear error |
-| Third-party refs in `--compile` | MLC-types-into-`TypeBuilder` limitation (`ILCompiler.cs:426-431`), pre-existing on JIT | error now; recoverable iff the upstream limitation is fixed |
+| Ad-hoc third-party refs loaded with `-r` | Native AOT is closed-world and cannot load new executable code | use a `SharpTS.Hosting` custom build; its declared library types work in interpretation and `--compile` |
 | Value-type generic instantiation in BCL interop | `MethodInfo.Invoke` needs JIT for new value-type instantiations | document; reference-type instantiations work |
 | `--verify` | `ILVerifier.cs:154` needs `typeof(object).Assembly.Location`; no BCL on disk | hard-disable with named error |
 | `--gen-decl` | `DiscoveryGenerator.cs:68` `Assembly.LoadFrom`; by-name fallback returns truncated metadata | hard-disable with named error |
@@ -479,7 +484,7 @@ workers, MSBuild SDK (subprocess-only by design, verified), JSX.
 | # | Unknown | Status / next step |
 |---|---|---|
 | 1 | Cross-platform native compiler | win-arm64 passes locally and linux-x64 passes CI, including managed-payload extraction. The six-RID release matrix is wired and gates the publish; validate it with a `workflow_dispatch` dry run, then the first tagged run is the remaining acceptance event. |
-| 2 | BCL interop preservation | Targeted roots work for the emit internals; define and test the supported `@DotNetType` surface, including the known dynamic-event edge. |
+| 2 | BCL interop preservation | Closed: the official catalog and custom generated-host path are tested in both execution modes, including events and closed generics. Unknown types retain an explicit closed-world refusal. |
 | 3 | MLC-types-into-TypeBuilder latent JIT limitation | Conceded for the native SKU; file upstream separately. |
 | 4 | Native-emitted output metadata parity | Executed output and PE-Packer rewriting pass. Add a `MetadataDiffer` fixture if byte/table-level parity becomes release-blocking. |
 | 5 | SDK-free `--target exe` | Closed by PE-Packer 1.0.6. Both the permanent and release smokes require bundle creation with an empty `DOTNET_ROOT`. |

@@ -53,7 +53,20 @@ using SharpTS.Packaging;
 using SharpTS.Parsing;
 using SharpTS.Projects;
 using SharpTS.References;
+using SharpTS.Runtime.DotNet;
 using SharpTS.TypeSystem;
+
+return SharpTSCli.Run(args);
+
+/// <summary>Reusable SharpTS command-line host used by the stock and custom Native AOT executables.</summary>
+public static class SharpTSCli
+{
+public static int Run(string[] args, INativeDotNetCatalog? nativeInteropCatalog = null)
+{
+if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+{
+    NativeDotNetInterop.Configure(nativeInteropCatalog ?? DefaultNativeDotNetCatalog.Instance);
+}
 
 // Initialize fork IPC if this process was spawned via child_process.fork()
 SharpTS.Runtime.Types.ForkIpcClient.TryInitialize();
@@ -66,18 +79,17 @@ switch (command)
 {
     case ParsedCommand.Help:
         PrintHelp();
-        return;
+        return 0;
 
     case ParsedCommand.Version:
         Console.WriteLine($"sharpts {GetVersion()}");
-        return;
+        return 0;
 
     case ParsedCommand.Error error:
         Console.WriteLine(error.Message);
         if (error.ShowCompileUsage)
             PrintCompileUsage();
-        Environment.Exit(error.ExitCode);
-        break;
+        return error.ExitCode;
 
     case ParsedCommand.Project project:
         try
@@ -89,7 +101,7 @@ switch (command)
                 var (resolvedOptions, _) = ApplyTsConfig(
                     project.Options, Path.GetDirectoryName(projectPath) ?? ".");
                 PrintResolvedConfig(resolvedOptions, project.Options.Strictness, projectConfig);
-                return;
+                return Environment.ExitCode;
             }
 
             Environment.ExitCode = project.Options.Watch
@@ -128,7 +140,7 @@ switch (command)
         if (replOptions.ShowConfig)
         {
             PrintResolvedConfig(replOptions, repl.Options.Strictness, replConfig);
-            return;
+            return Environment.ExitCode;
         }
         var replRefs = LoadDotNetReferences(Environment.CurrentDirectory, replOptions.References);
         if (replRefs.ManifestPath != null)
@@ -146,7 +158,7 @@ switch (command)
         if (scriptOptions.ShowConfig)
         {
             PrintResolvedConfig(scriptOptions, script.Options.Strictness, scriptConfig);
-            return;
+            return Environment.ExitCode;
         }
         RunFile(script.ScriptPath, scriptOptions, script.ScriptArgs, scriptConfig);
         break;
@@ -157,7 +169,7 @@ switch (command)
         if (compileOptions.ShowConfig)
         {
             PrintResolvedConfig(compileOptions, compile.GlobalOptions.Strictness, compileConfig);
-            return;
+            return Environment.ExitCode;
         }
         if (compile.CompileOptions.VerifyIL)
             RequireManagedBuild("--verify"); // ILVerifier resolves the BCL from typeof(object).Assembly.Location — no BCL on disk in a native build
@@ -185,6 +197,9 @@ switch (command)
         RequireManagedBuild("--gen-decl"); // DiscoveryGenerator needs Assembly.LoadFrom; the by-name fallback returns truncated metadata
         GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json, genDecl.References);
         break;
+}
+
+return Environment.ExitCode;
 }
 
 /// <summary>
@@ -988,14 +1003,38 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
     Justification = "Native AOT rejects third-party reference loading before compilation; this dependency walk is reachable only after a managed host loaded those assemblies.")]
 static void CopyExternalReferencesIfNeeded(ILCompiler compiler, ReferenceSet externalRefs, string outputPath, OutputOptions outputOptions)
 {
-    if (externalRefs.IsEmpty)
-        return;
-
     if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
     {
-        RequireManagedBuild(".NET references in compiled output");
+        if (compiler.ExternalInteropAssemblies.Count == 0)
+            return;
+
+        string? outputDirectory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+        if (outputDirectory is null)
+            throw new InvalidOperationException($"Could not resolve the output directory for '{outputPath}'.");
+
+        if (outputOptions.Standalone)
+        {
+            if (!outputOptions.QuietMode)
+                Console.WriteLine(
+                    "Note: output uses native-host .NET interop assemblies; --standalone set, " +
+                    "so their managed payloads were not extracted.");
+            return;
+        }
+
+        INativeDotNetCatalog catalog = NativeDotNetInterop.Catalog
+            ?? throw new PlatformNotSupportedException(ManagedDotNetInterop.ManagedBuildRequiredMessage);
+        IReadOnlyList<string> extracted = catalog.ExtractAssemblyPayloads(outputDirectory);
+        if (extracted.Count > 0 && !outputOptions.QuietMode)
+        {
+            Console.WriteLine(
+                $"Extracted {extracted.Count} native-host .NET interop " +
+                $"assembl{(extracted.Count == 1 ? "y" : "ies")} next to output");
+        }
         return;
     }
+
+    if (externalRefs.IsEmpty)
+        return;
 
     // Which reference DLLs did the compilation actually bind types from?
     var used = new List<ResolvedReference>();
@@ -1431,3 +1470,4 @@ static void PrintCompileUsage()
 }
 
 record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false);
+}

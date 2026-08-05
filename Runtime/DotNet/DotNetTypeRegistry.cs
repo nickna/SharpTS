@@ -25,11 +25,10 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static Type? Resolve(string clrTypeName)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
         if (_cache.TryGetValue(clrTypeName, out var cached)) return cached;
 
         var type = ManagedDotNetInterop.ResolveType(clrTypeName);
-        if (type == null)
+        if (type == null && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -67,11 +66,18 @@ public static class DotNetTypeRegistry
     /// </param>
     public static Type? ResolveFriendly(string friendlyName, Func<string, Type?>? resolve = null)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
         ArgumentException.ThrowIfNullOrWhiteSpace(friendlyName);
-        resolve ??= Resolve;
 
         string name = friendlyName.Trim();
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported &&
+            NativeDotNetInterop.Catalog is { } nativeCatalog)
+        {
+            return nativeCatalog.TryResolveType(name, out Type? catalogType)
+                ? catalogType
+                : null;
+        }
+
+        resolve ??= Resolve;
         if (TryResolveAlias(name, out var alias))
             return resolve(alias.FullName!) ?? alias;
 
@@ -259,7 +265,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MethodInfo[] GetMethods(Type type, string jsName, bool isStatic)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
+        ManagedDotNetInterop.RequireManagedRuntime(type);
         return _methodCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
@@ -278,7 +284,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MemberInfo? GetPropertyOrField(Type type, string jsName, bool isStatic)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
+        ManagedDotNetInterop.RequireManagedRuntime(type);
         return _propertyOrFieldCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
@@ -308,7 +314,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static EventInfo? GetEvent(Type type, string jsName, bool isStatic)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
+        ManagedDotNetInterop.RequireManagedRuntime(type);
         return _eventCache.GetOrAdd((type, jsName, isStatic), static key =>
         {
             var (t, name, stat) = key;
@@ -324,7 +330,7 @@ public static class DotNetTypeRegistry
     /// </summary>
     internal static PropertyInfo[] GetIndexers(Type type, bool writable)
     {
-        ManagedDotNetInterop.RequireManagedRuntime();
+        ManagedDotNetInterop.RequireManagedRuntime(type);
         return _indexerCache.GetOrAdd((type, writable), static key =>
         {
             var (target, write) = key;

@@ -186,6 +186,8 @@
     <None Remove="SharpTS.Sdk/**" />
     <Compile Remove="SharpTS.Sdk.Tasks/**" />
     <None Remove="SharpTS.Sdk.Tasks/**" />
+    <Compile Remove="SharpTS.Hosting/**" />
+    <None Remove="SharpTS.Hosting/**" />
     <Compile Remove="scripts/**" />
     <None Remove="scripts/**" />
     <Compile Remove="external/**" />

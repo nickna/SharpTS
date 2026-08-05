@@ -86,9 +86,11 @@ SharpTS supports two execution modes:
   full feature set, including third-party DLL/NuGet interop, `@DotNetType`,
   `dotnet:` imports, `--verify`, and `--gen-decl`.
 - `sharpts-native-<version>-<rid>` is the Native AOT SKU. It starts faster and
-  does not extract a runtime, but has a frozen type universe: use the managed
-  SKU for third-party interop, verification/declaration generation, or compiled
-  `child_process.fork`. Built-in `--target exe` is Windows/Linux-only.
+  does not extract a runtime. Its frozen type universe includes a curated BCL
+  interop profile; use `SharpTS.Hosting` to publish a custom native executable
+  with application types. Verification/declaration generation and compiled
+  `child_process.fork` remain managed-only. Built-in `--target exe` is
+  Windows/Linux-only.
 
 **Install CLI tool from NuGet (recommended):**
 
@@ -133,6 +135,38 @@ sharpts script.ts
 sharpts --compile script.ts
 dotnet script.dll
 ```
+
+### Native AOT .NET interop
+
+The official native binaries support a closed BCL profile (including strings,
+`StringBuilder`, dates/times, `Guid`, numeric conversion/math, environment and
+console APIs, tasks, selected enums, and closed numeric list/dictionary shapes).
+An import outside that catalog fails with a named error instead of attempting
+open-world reflection.
+
+For application or third-party types, create a small Native AOT host with the
+`SharpTS.Hosting` package and declare the exact closed types at build time:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="SharpTS.Hosting" Version="..." />
+  <ProjectReference Include="MyCompany.Library.csproj" />
+  <SharpTSNativeInteropType Include="MyCompany.Widget"
+                            Assembly="MyCompany.Library"
+                            Alias="Widget" />
+</ItemGroup>
+```
+
+```csharp
+return SharpTSCli.Run(
+    args,
+    SharpTS.Generated.GeneratedNativeDotNetCatalog.Instance);
+```
+
+The generated catalog roots constructors, methods, properties, fields, events,
+and declared closed generics. The selected managed assembly and its non-framework
+copy-local dependency closure are embedded so both interpretation and
+`--compile` work. See `Examples/NativeInteropHost` for a complete project.
 
 Add `-g` to emit a portable PDB and debug the original `.ts` source. See
 [Debugging compiled TypeScript](docs/debugging-typescript.md).

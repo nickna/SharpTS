@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>NativeInteropExample</AssemblyName>
+  </PropertyGroup>
+</Project>

@@ -235,15 +235,23 @@ jobs:
             'loading .NET reference assemblies is not available in the native SharpTS build' \
             "$scratch/reference-error.txt"
 
-          # Dynamic .NET binding is deliberately Managed-SKU-only until the native
-          # SKU defines and roots a closed BCL interop contract.
-          if "$native" Examples/AotCompileGate/dotnet-interop.ts \
+          # The official native SKU exposes a curated, linker-rooted BCL catalog
+          # through both execution paths. The universe remains closed: an import
+          # outside that catalog must fail before arbitrary reflection.
+          "$native" Examples/AotCompileGate/dotnet-interop.ts \
+            > "$scratch/dotnet-interop.txt"
+          grep -qx 'native-dotnet-42' "$scratch/dotnet-interop.txt"
+          "$native" --compile Examples/AotCompileGate/dotnet-interop.ts --ref-asm \
+            -o "$scratch/dotnet-interop.dll"
+          dotnet "$scratch/dotnet-interop.dll" > "$scratch/dotnet-interop-compiled.txt"
+          diff -u "$scratch/dotnet-interop.txt" "$scratch/dotnet-interop-compiled.txt"
+
+          if "$native" Examples/AotCompileGate/dotnet-interop-unknown.ts \
               > "$scratch/dotnet-interop-error.txt" 2>&1; then
-            echo "dynamic .NET interop unexpectedly ran under Native AOT"
+            echo "an unregistered .NET type unexpectedly ran under Native AOT"
             exit 1
           fi
-          grep -Fq \
-            '.NET interop is not available in the native SharpTS build' \
+          grep -Fq 'not present in this native SharpTS catalog' \
             "$scratch/dotnet-interop-error.txt"
 
           if "$native" --gen-decl System.String \
@@ -287,6 +295,29 @@ jobs:
             -Mode all `
             -MinimumExecuted 50 `
             -OutputFormat table
+
+      - name: Publish and exercise a custom native interop host
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          dotnet publish Examples/NativeInteropHost/NativeInteropHost.csproj \
+            --configuration Release -r linux-x64 \
+            -o "$scratch/host"
+          "$scratch/host/NativeInteropHost" \
+            Examples/NativeInteropHost/custom-interop.ts > "$scratch/interpreted.txt"
+          grep -qx 'changed' "$scratch/interpreted.txt"
+          grep -qx '42 42 counter' "$scratch/interpreted.txt"
+          grep -qx '3' "$scratch/interpreted.txt"
+
+          mkdir "$scratch/output"
+          "$scratch/host/NativeInteropHost" --compile \
+            Examples/NativeInteropHost/custom-interop.ts --ref-asm \
+            -o "$scratch/output/custom.dll"
+          test -f "$scratch/output/NativeInteropExample.dll"
+          test ! -f "$scratch/output/System.Runtime.dll"
+          dotnet "$scratch/output/custom.dll" > "$scratch/compiled.txt"
+          diff -u "$scratch/interpreted.txt" "$scratch/compiled.txt"
 
       - name: Upload Native AOT publish diagnostics
         if: always()
