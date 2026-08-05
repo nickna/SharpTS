@@ -94,6 +94,12 @@ public partial class ILCompiler
         _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     /// <summary>
+    /// Stable deployment capabilities required by the emitted SharpTS runtime bridges.
+    /// </summary>
+    public SharpTSRuntimeRequirements RequiredSharpTSRuntimeRequirements =>
+        _runtime?.RequiredSharpTSRuntimeRequirements ?? SharpTSRuntimeRequirements.None;
+
+    /// <summary>
     /// Non-fatal compilation warnings (e.g. an unresolvable external .NET type).
     /// Collected instead of written to Console so embedders observe them and the
     /// compiler never interleaves with the compiled program's own output; the

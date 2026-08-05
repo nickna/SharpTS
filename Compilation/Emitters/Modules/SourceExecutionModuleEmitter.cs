@@ -60,10 +60,10 @@ public sealed class SourceExecutionModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        if (propertyName is not ("runSourceJson" or "configureUntrustedProcess"))
-            return false;
-        emitter.Context.IL.Emit(OpCodes.Ldnull);
-        return true;
+        // Both exports are methods. Returning false lets module initialization create a
+        // TSFunction wrapper around the registered runtime helper, so named imports,
+        // namespace imports, require(), aliases, and callback usage all remain first-class.
+        return false;
     }
 
     public bool IsExportedProperty(string memberName) => false;

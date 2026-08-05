@@ -17,7 +17,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Text.RegularExpressions;
 using SharpTS.Diagnostics;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
@@ -46,7 +45,7 @@ namespace SharpTS.Compilation;
 public sealed record CompileOptions(
     DecoratorMode DecoratorMode = DecoratorMode.None,
     string? AssemblyName = null,
-    string FileName = "input.ts",
+    string FileName = CompilationService.DefaultSourceFileName,
     JsxParseOptions? Jsx = null);
 
 /// <summary>
@@ -71,7 +70,13 @@ public sealed record CompileResult(
     IReadOnlyList<Diagnostic> Diagnostics,
     byte[]? AssemblyBytes,
     long CompileTimeMs,
-    IReadOnlyCollection<string> RequiredSharpTSRuntimeReasons);
+    IReadOnlyCollection<string> RequiredSharpTSRuntimeReasons)
+{
+    /// <summary>
+    /// Stable deployment capabilities for hosts that persist <see cref="AssemblyBytes"/>.
+    /// </summary>
+    public SharpTSRuntimeRequirements RuntimeRequirements { get; init; }
+}
 
 /// <summary>
 /// Result of <see cref="CompilationService.Execute"/>.
@@ -89,13 +94,18 @@ public sealed record RunResult(
 /// </summary>
 public static class CompilationService
 {
+    /// <summary>Logical file name used for in-memory TypeScript source by default.</summary>
+    public const string DefaultSourceFileName = "input.ts";
+
     /// <summary>
     /// Compiles a TypeScript source string to an in-memory .NET assembly.
     /// Never writes to <see cref="Console"/>, never calls <see cref="Environment.Exit"/>,
     /// never touches the file system. All source-input problems (lex, parse, type,
     /// compile) are returned as <see cref="CompileResult.Diagnostics"/>, with the same
     /// multi-error recovery behavior as the CLI (<c>CheckWithRecovery</c>) and the same
-    /// <c>// @ts-ignore</c> / <c>// @ts-expect-error</c> line-directive handling.
+    /// <c>// @ts-ignore</c> / <c>// @ts-expect-error</c> line-directive handling. This API has
+    /// no module resolver, so all static, dynamic, and CommonJS module-loading forms are rejected
+    /// with a module diagnostic; use the module compilation pipeline for dependency graphs.
     /// </summary>
     public static CompileResult Compile(string source, CompileOptions? options = null)
     {
@@ -108,55 +118,32 @@ public static class CompilationService
 
         try
         {
-            // Lex. The Lexer reports errors by throwing raw Exceptions with the line
-            // embedded in the message ("... at line N") — convert to a ParseError
-            // diagnostic instead of letting it escape.
-            bool isTsx = options.FileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase)
-                || options.FileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase)
-                || options.Jsx is not null;
-            Lexer lexer;
-            List<Token> tokens;
-            try
-            {
-                lexer = new Lexer(source) { JsxTolerant = isTsx };
-                tokens = lexer.ScanTokens();
-            }
-            catch (Exception ex)
-            {
-                return Fail([LexErrorToDiagnostic(ex.Message, options.FileName)]);
-            }
+            var analysis = SingleSourceAnalyzer.Analyze(
+                source,
+                new SingleSourceAnalysisOptions(
+                    options.DecoratorMode,
+                    options.FileName,
+                    options.Jsx));
+            if (!analysis.Success)
+                return Fail(analysis.Diagnostics);
 
-            // Parse, with recovery — surfaces all parse errors, not just the first.
-            var parser = new Parser(tokens, options.DecoratorMode)
-                .WithFilePath(options.FileName);
-            if (isTsx)
-                parser.WithJsx(source, (options.Jsx ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
-            var parseResult = parser.Parse();
-            if (!parseResult.IsSuccess)
-                return Fail(parseResult.Diagnostics);
-
-            // Type check, with recovery, honoring // @ts-ignore / @ts-expect-error.
-            var checker = new TypeChecker().WithFilePath(options.FileName);
-            checker.SetDecoratorMode(options.DecoratorMode);
-            var typeResult = checker.CheckWithRecovery(parseResult.Statements);
-            var diagnostics = TypeCheckPolicy.ApplyLineDirectives(typeResult.Diagnostics, lexer.Pragmas);
-            if (diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
-                return Fail(diagnostics);
-
-            var deadCodeInfo = new DeadCodeAnalyzer(typeResult.TypeMap).Analyze(parseResult.Statements);
+            var deadCodeInfo = new DeadCodeAnalyzer(analysis.TypeMap!).Analyze(analysis.Statements);
 
             var compiler = new ILCompiler(assemblyName);
             compiler.SetDecoratorMode(options.DecoratorMode);
-            compiler.Compile(parseResult.Statements, typeResult.TypeMap, deadCodeInfo);
+            compiler.Compile(analysis.Statements, analysis.TypeMap!, deadCodeInfo);
             var bytes = compiler.SaveToBytes();
 
             stopwatch.Stop();
             return new CompileResult(
                 Success: true,
-                Diagnostics: diagnostics,
+                Diagnostics: analysis.Diagnostics,
                 AssemblyBytes: bytes,
                 CompileTimeMs: stopwatch.ElapsedMilliseconds,
-                RequiredSharpTSRuntimeReasons: compiler.RequiredSharpTSRuntimeReasons);
+                RequiredSharpTSRuntimeReasons: compiler.RequiredSharpTSRuntimeReasons)
+            {
+                RuntimeRequirements = compiler.RequiredSharpTSRuntimeRequirements
+            };
         }
         catch (SharpTSException ex)
         {
@@ -280,16 +267,4 @@ public static class CompilationService
         }
     }
 
-    /// <summary>
-    /// Converts a thrown Lexer message into a ParseError diagnostic, recovering the
-    /// line number from the conventional "... at line N" message suffix when present.
-    /// </summary>
-    private static Diagnostic LexErrorToDiagnostic(string message, string fileName)
-    {
-        var match = Regex.Match(message, @"\bat line (\d+)\b");
-        SourceLocation? location = match.Success && int.TryParse(match.Groups[1].Value, out var line)
-            ? new SourceLocation(fileName, line)
-            : null;
-        return Diagnostic.ParseError(message, location);
-    }
 }

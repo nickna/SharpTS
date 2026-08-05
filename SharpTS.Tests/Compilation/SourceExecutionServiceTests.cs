@@ -68,27 +68,52 @@ public class SourceExecutionServiceTests
     [InlineData(true)]
     public void Execution_CapsOutput(bool compile)
     {
-        const int limit = 16;
+        const int limit = 32;
         var result = compile
-            ? SourceExecutionService.CompileAndExecute("console.log('abcdefghijklmnopqrstuvwxyz');", limit)
-            : SourceExecutionService.Interpret("console.log('abcdefghijklmnopqrstuvwxyz');", limit);
+            ? SourceExecutionService.CompileAndExecute("console.log('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');", limit)
+            : SourceExecutionService.Interpret("console.log('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');", limit);
 
         Assert.True(result.Success);
-        Assert.Equal("\n[Output truncated]\n", Normalize(result.Output));
+        Assert.Equal("abcdefghijkl\n[Output truncated]\n", Normalize(result.Output));
+        Assert.True(result.Output.Length <= limit);
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Execution_RejectsModuleImports(bool compile)
+    [InlineData(false, "import { readFileSync } from 'fs';")]
+    [InlineData(true, "import { readFileSync } from 'fs';")]
+    [InlineData(false, "import fs = require('fs');")]
+    [InlineData(true, "import fs = require('fs');")]
+    [InlineData(false, "require('fs');")]
+    [InlineData(true, "require('fs');")]
+    [InlineData(false, "import('fs');")]
+    [InlineData(true, "import('fs');")]
+    [InlineData(false, "export { readFileSync } from 'fs';")]
+    [InlineData(true, "export { readFileSync } from 'fs';")]
+    public void Execution_RejectsEveryModuleLoadingForm(bool compile, string source)
     {
-        const string source = "import { readFileSync } from 'fs'; console.log(readFileSync('/etc/passwd'));";
         var result = compile
             ? SourceExecutionService.CompileAndExecute(source)
             : SourceExecutionService.Interpret(source);
 
         Assert.False(result.Success);
-        Assert.NotEmpty(result.Errors);
+        Assert.Contains(result.Errors, error =>
+            error.Contains("Module loading is not available", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Execution_HonorsTypeScriptLineDirectives(bool compile)
+    {
+        const string source = "// @ts-ignore\nlet value: number = 'x'; console.log('ok');";
+
+        var result = compile
+            ? SourceExecutionService.CompileAndExecute(source)
+            : SourceExecutionService.Interpret(source);
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Errors);
+        Assert.Equal("ok\n", Normalize(result.Output));
     }
 
     [Fact]
@@ -126,6 +151,23 @@ public class SourceExecutionServiceTests
         Assert.Contains("\"Errors\":[]", json);
         Assert.Contains("\"ExecutionTimeMs\":", json);
         Assert.Contains("\"CompileTimeMs\":null", json);
+    }
+
+    [Fact]
+    public async Task CompileAndExecute_ConcurrentCalls_DoNotCrossWireOutput()
+    {
+        var tasks = Enumerable.Range(0, 3)
+            .Select(index => Task.Run(() =>
+                SourceExecutionService.CompileAndExecute($"console.log('run-{index}');")))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        for (var index = 0; index < results.Length; index++)
+        {
+            Assert.True(results[index].Success);
+            Assert.Equal($"run-{index}\n", Normalize(results[index].Output));
+        }
     }
 
     private static string Normalize(string value) => value.Replace("\r\n", "\n");

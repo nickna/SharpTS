@@ -1,5 +1,7 @@
 using SharpTS.Compilation;
+using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -96,5 +98,42 @@ public class RuntimeDependencySignalTests
             """);
         Assert.DoesNotContain("AbortSignal.any", reasons);
         Assert.Empty(reasons);
+    }
+
+    [Fact]
+    public void SourceExecution_RequiresManagedHostAndFullDependencyClosure()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_execution_dep_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var entryPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(entryPath, """
+                import { runSourceJson } from "sharpts:execution";
+                console.log(runSourceJson("console.log(1);", "interpret", 1024));
+                """);
+
+            var resolver = new ModuleResolver(entryPath);
+            var entryModule = resolver.LoadModule(entryPath);
+            var modules = resolver.GetModulesInOrder(entryModule);
+            var typeMap = TestHarness.CheckModulesOrThrow(new TypeChecker(), modules, resolver);
+            var statements = modules.SelectMany(module => module.Statements).ToList();
+            var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(statements);
+
+            var compiler = new ILCompiler("source_execution_dependency_test");
+            compiler.CompileModules(modules, resolver, typeMap, deadCodeInfo);
+
+            Assert.Contains("sharpts:execution module", compiler.RequiredSharpTSRuntimeReasons);
+            Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+                SharpTSRuntimeRequirements.RuntimeAssembly));
+            Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+                SharpTSRuntimeRequirements.FullDependencyClosure));
+            Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+                SharpTSRuntimeRequirements.ManagedCompilerHost));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
     }
 }

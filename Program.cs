@@ -866,16 +866,18 @@ static void PrintCompilerWarnings(ILCompiler compiler)
 }
 
 /// <summary>
-/// Rejects compiled features whose runtime model cannot work in the Native AOT SKU.
-/// <c>child_process.fork</c> starts a separate <c>dotnet exec SharpTS.dll</c> compiler
-/// process, so extracting the in-process managed soft-dependency is not sufficient.
+/// Rejects compiled features whose typed deployment capabilities require the managed compiler
+/// SKU. Human-readable reason strings are diagnostic text only and never drive this decision.
 /// </summary>
 static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
 {
-    if (compiler.RequiredSharpTSRuntimeReasons.Contains("child_process.fork"))
-        RequireManagedBuild("child_process.fork in compiled output");
-    if (compiler.RequiredSharpTSRuntimeReasons.Contains("sharpts:execution module"))
-        RequireManagedBuild("sharpts:execution in compiled output");
+    if (compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+            SharpTSRuntimeRequirements.ManagedCompilerHost))
+    {
+        RequireManagedBuild(
+            $"compiled output requiring the managed SharpTS host " +
+            $"({string.Join(", ", compiler.RequiredSharpTSRuntimeReasons)})");
+    }
 }
 
 /// <summary>
@@ -949,8 +951,8 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
         // sharpts:execution embeds its compile-and-run facade in the current process.
         // Both execute compiler paths backed by SharpTS's managed dependency closure,
         // so co-locate the runtime files rather than copying only SharpTS.dll.
-        bool requiresFullRuntime = reasons.Contains("child_process.fork")
-            || reasons.Contains("sharpts:execution module");
+        bool requiresFullRuntime = compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+            SharpTSRuntimeRequirements.FullDependencyClosure);
         if (requiresFullRuntime)
         {
             // Native builds are rejected before Save by ValidateCompiledRuntimeRequirements.

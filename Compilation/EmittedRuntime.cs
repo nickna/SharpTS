@@ -34,10 +34,24 @@ public class EmittedRuntime
     public SortedSet<string> RequiredSharpTSRuntimeReasons { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Stable deployment capabilities corresponding to
+    /// <see cref="RequiredSharpTSRuntimeReasons"/>. Build logic must use these flags rather than
+    /// comparing human-readable reason strings.
+    /// </summary>
+    public SharpTSRuntimeRequirements RequiredSharpTSRuntimeRequirements { get; private set; }
+
+    /// <summary>
     /// Records that <paramref name="reason"/> emitted a SharpTS-runtime late-binding path that a
     /// normal execution will hit. Idempotent.
     /// </summary>
-    public void RequireSharpTSRuntime(string reason) => RequiredSharpTSRuntimeReasons.Add(reason);
+    public void RequireSharpTSRuntime(
+        string reason,
+        SharpTSRuntimeRequirements requirements = SharpTSRuntimeRequirements.RuntimeAssembly)
+    {
+        RequiredSharpTSRuntimeReasons.Add(reason);
+        RequiredSharpTSRuntimeRequirements |=
+            requirements | SharpTSRuntimeRequirements.RuntimeAssembly;
+    }
 
     /// <summary>
     /// Per-site hoisted regex-literal static fields (compiled-mode optimization),

@@ -4,8 +4,8 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using SharpTS.Compilation;
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
-using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
@@ -30,10 +30,14 @@ public sealed record SourceExecutionResult(
 /// <remarks>
 /// This service performs no file I/O and does not enforce a hard timeout. Untrusted-code hosts
 /// should invoke it inside an isolated child process and terminate that process when their wall
-/// clock or memory limit is reached.
+/// clock or memory limit is reached. Calls through this facade are serialized because compiled
+/// execution temporarily redirects process-wide console writers. Static imports, dynamic imports,
+/// re-exports, and CommonJS <c>require()</c> are rejected explicitly.
 /// </remarks>
 public static class SourceExecutionService
 {
+    private static readonly object ExecutionGate = new();
+
     /// <summary>The default maximum number of captured characters.</summary>
     public const int DefaultMaxOutputLength = 100 * 1024;
 
@@ -46,11 +50,14 @@ public static class SourceExecutionService
         if (blockedProxyUri is not string proxyUri || string.IsNullOrWhiteSpace(proxyUri))
             throw new ArgumentException("A blocked proxy URI is required.", nameof(blockedProxyUri));
 
-        AppContext.SetSwitch("SharpTS.RestrictProcessControl", true);
-        HttpClient.DefaultProxy = new WebProxy(proxyUri)
+        lock (ExecutionGate)
         {
-            BypassProxyOnLocal = false
-        };
+            AppContext.SetSwitch("SharpTS.RestrictProcessControl", true);
+            HttpClient.DefaultProxy = new WebProxy(proxyUri)
+            {
+                BypassProxyOnLocal = false
+            };
+        }
     }
 
     /// <summary>
@@ -63,32 +70,29 @@ public static class SourceExecutionService
         ArgumentNullException.ThrowIfNull(source);
         ValidateMaxOutputLength(maxOutputLength);
 
+        lock (ExecutionGate)
+            return InterpretCore(source, maxOutputLength);
+    }
+
+    private static SourceExecutionResult InterpretCore(string source, int maxOutputLength)
+    {
         using var output = new CappedTextWriter(maxOutputLength);
         var errors = new List<string>();
         long executionTimeMs = 0;
 
         try
         {
-            var lexer = new Lexer(source);
-            var tokens = lexer.ScanTokens();
-
-            var parser = new Parser(tokens, DecoratorMode.None);
-            var parseResult = parser.Parse();
-            if (!parseResult.IsSuccess)
+            var analysis = SingleSourceAnalyzer.Analyze(
+                source,
+                new SingleSourceAnalysisOptions(
+                    DecoratorMode.None,
+                    CompilationService.DefaultSourceFileName));
+            if (!analysis.Success)
             {
-                errors.AddRange(parseResult.Diagnostics.Select(diagnostic => diagnostic.ToString()));
-                if (parseResult.HitErrorLimit)
-                    errors.Add("Too many errors, stopping.");
-                return Result(false, output, errors, 0);
-            }
-
-            var checker = new TypeChecker();
-            checker.SetDecoratorMode(DecoratorMode.None);
-            var typeResult = checker.CheckWithRecovery(parseResult.Statements);
-            if (!typeResult.IsSuccess)
-            {
-                errors.AddRange(typeResult.Diagnostics.Select(diagnostic => diagnostic.ToString()));
-                if (typeResult.HitErrorLimit)
+                errors.AddRange(analysis.Diagnostics
+                    .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                    .Select(diagnostic => diagnostic.ToString()));
+                if (analysis.HitErrorLimit)
                     errors.Add("Too many errors, stopping.");
                 return Result(false, output, errors, 0);
             }
@@ -97,10 +101,10 @@ public static class SourceExecutionService
             interpreter.SetDecoratorMode(DecoratorMode.None);
 
             var resolver = new VariableResolver(interpreter);
-            resolver.Resolve(parseResult.Statements);
+            resolver.Resolve(analysis.Statements);
 
             var stopwatch = Stopwatch.StartNew();
-            interpreter.Interpret(parseResult.Statements, typeResult.TypeMap);
+            interpreter.Interpret(analysis.Statements, analysis.TypeMap!);
             stopwatch.Stop();
             executionTimeMs = stopwatch.ElapsedMilliseconds;
 
@@ -129,6 +133,12 @@ public static class SourceExecutionService
         ArgumentNullException.ThrowIfNull(source);
         ValidateMaxOutputLength(maxOutputLength);
 
+        lock (ExecutionGate)
+            return CompileAndExecuteCore(source, maxOutputLength);
+    }
+
+    private static SourceExecutionResult CompileAndExecuteCore(string source, int maxOutputLength)
+    {
         using var output = new CappedTextWriter(maxOutputLength);
         var errors = new List<string>();
 
@@ -187,7 +197,9 @@ public static class SourceExecutionService
                 ? Interpret(sourceText, limit)
                 : throw new ArgumentException("Mode must be 'interpret' or 'compile'.", nameof(mode));
 
-        return JsonSerializer.Serialize(result);
+        return JsonSerializer.Serialize(
+            result,
+            SourceExecutionJsonContext.Default.SourceExecutionResult);
     }
 
     private static SourceExecutionResult Result(
@@ -208,7 +220,7 @@ public static class SourceExecutionService
     }
 
     /// <summary>
-    /// A synchronized writer that stops retaining guest output after the configured limit.
+    /// A synchronized writer that never retains more than the configured number of characters.
     /// Deriving directly from TextWriter ensures every WriteLine overload flows through the cap.
     /// </summary>
     private sealed class CappedTextWriter(int maxLength) : TextWriter
@@ -228,17 +240,9 @@ public static class SourceExecutionService
 
         public override void Write(char value)
         {
-            lock (_gate)
-            {
-                if (_capped)
-                    return;
-                if (_buffer.Length >= maxLength)
-                {
-                    Cap();
-                    return;
-                }
-                _buffer.Append(value);
-            }
+            Span<char> buffer = stackalloc char[1];
+            buffer[0] = value;
+            Write(buffer);
         }
 
         public override void Write(string? value)
@@ -261,21 +265,39 @@ public static class SourceExecutionService
             {
                 if (_capped)
                     return;
-                if (_buffer.Length + buffer.Length > maxLength)
+                if (buffer.Length > maxLength - _buffer.Length)
                 {
-                    Cap();
+                    Cap(buffer);
                     return;
                 }
                 _buffer.Append(buffer);
             }
         }
 
-        private void Cap()
+        private void Cap(ReadOnlySpan<char> overflow)
         {
             if (_capped)
                 return;
+
             _capped = true;
-            _buffer.Append(TruncationMarker);
+
+            // Keep the result at or below maxLength. When the limit can hold the marker,
+            // preserve the earliest output prefix and replace its tail with the marker. For
+            // very small limits, retaining guest output is more useful than a partial marker.
+            bool includeMarker = maxLength >= TruncationMarker.Length;
+            int contentLimit = includeMarker
+                ? maxLength - TruncationMarker.Length
+                : maxLength;
+
+            if (_buffer.Length > contentLimit)
+                _buffer.Length = contentLimit;
+
+            int remaining = contentLimit - _buffer.Length;
+            if (remaining > 0)
+                _buffer.Append(overflow[..Math.Min(remaining, overflow.Length)]);
+
+            if (includeMarker)
+                _buffer.Append(TruncationMarker);
         }
     }
 }

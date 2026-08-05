@@ -1253,7 +1253,10 @@ public partial class RuntimeEmitter
 
         if (_features.UsesSourceExecution)
         {
-            runtime.RequireSharpTSRuntime("sharpts:execution module");
+            runtime.RequireSharpTSRuntime(
+                "sharpts:execution module",
+                SharpTSRuntimeRequirements.FullDependencyClosure |
+                SharpTSRuntimeRequirements.ManagedCompilerHost);
             EmitSourceExecutionMethods(typeBuilder, runtime);
         }
 
