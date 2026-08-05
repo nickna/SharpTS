@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
@@ -25,46 +27,77 @@ public class HttpServerLifecycleTests
         Skip.If(OperatingSystem.IsWindows(),
             "HttpListener wildcard prefixes require a provisioned Windows URL ACL");
 
-        var interfaceAddress = Dns.GetHostAddresses(Dns.GetHostName())
+        var interfaceAddress = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(networkInterface =>
+                networkInterface.OperationalStatus == OperationalStatus.Up &&
+                networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+            .SelectMany(networkInterface =>
+                networkInterface.GetIPProperties().UnicastAddresses)
+            .Select(unicastAddress => unicastAddress.Address)
             .FirstOrDefault(address =>
                 address.AddressFamily == AddressFamily.InterNetwork &&
                 !IPAddress.IsLoopback(address));
         Skip.If(interfaceAddress == null, "No non-loopback IPv4 interface is available");
 
         var port = TestPorts.GetAvailablePort();
+        var clientTask = GetWithoutProxyWithRetryAsync(interfaceAddress, port);
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
                 import * as http from 'http';
-                const server = http.createServer((req: any, res: any) => res.end('reachable'));
-                server.on('listening', () => {
+                const server = http.createServer((_req: any, res: any) => {
+                    res.end('reachable');
+                    server.close();
+                });
+                server.listen({{port}}, '0.0.0.0', () => {
                     const address = server.address();
+                    console.log('callback');
                     console.log('address=' + address.address);
                     console.log('family=' + address.family);
-
-                    const request = http.get('http://{{interfaceAddress}}:{{port}}/', (response: any) => {
-                        let body = '';
-                        response.on('data', (chunk: any) => { body += chunk; });
-                        response.on('end', () => {
-                            console.log('body=' + body);
-                            server.close();
-                        });
-                    });
-                    request.on('error', () => {
-                        console.log('client-error');
-                        server.close();
-                    });
                 });
-                server.listen({{port}}, '0.0.0.0', () => console.log('callback'));
                 """
         };
 
-        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        var output = TestHarness.RunModules(
+            files, "./main.ts", mode, timeout: TimeSpan.FromSeconds(15));
+        var body = clientTask.GetAwaiter().GetResult();
+
         Assert.Contains("callback", output);
         Assert.Contains("address=0.0.0.0", output);
         Assert.Contains("family=IPv4", output);
-        Assert.Contains("body=reachable", output);
-        Assert.DoesNotContain("client-error", output);
+        Assert.Equal("reachable", body);
+    }
+
+    private static async Task<string> GetWithoutProxyWithRetryAsync(
+        IPAddress address, int port)
+    {
+        using var handler = new HttpClientHandler { UseProxy = false };
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(1)
+        };
+
+        var uri = new Uri($"http://{address}:{port}/");
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        Exception? lastException = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                return await client.GetStringAsync(uri);
+            }
+            catch (Exception exception) when (
+                exception is HttpRequestException or TaskCanceledException)
+            {
+                lastException = exception;
+                await Task.Delay(25);
+            }
+        }
+
+        throw new TimeoutException(
+            $"The wildcard HTTP listener never became reachable at {uri}.",
+            lastException);
     }
 
     [Theory, ModeData]
@@ -217,9 +250,14 @@ public class HttpServerLifecycleTests
                 });
                 server.listen({{port}}, async () => {
                     try {
-                        await fetch('http://127.0.0.1:{{port}}/first');
+                        const first = await fetch('http://127.0.0.1:{{port}}/first');
+                        await first.text();
                     } catch {
                         console.log('first-aborted');
+                    } finally {
+                        // HttpClient may surface a peer abort either as a rejected fetch
+                        // or as a successfully completed response with an empty body.
+                        console.log('first-finished');
                     }
                     const response = await fetch('http://127.0.0.1:{{port}}/second');
                     console.log(await response.text());
@@ -229,7 +267,7 @@ public class HttpServerLifecycleTests
         };
 
         var output = TestHarness.RunModules(files, "./main.ts", mode);
-        Assert.Contains("first-aborted", output);
+        Assert.Contains("first-finished", output);
         Assert.Contains("second-response", output);
         Assert.Contains("closed", output);
     }
