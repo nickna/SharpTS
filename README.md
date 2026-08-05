@@ -476,6 +476,7 @@ string greeting = person.greet();        // Typed return values
 
 - [**Using .NET Types**](docs/dotnet-types.md) - Use .NET BCL and libraries from TypeScript
 - [**.NET Integration**](docs/dotnet-integration.md) - Consume compiled TypeScript from C#
+- [**Embedding SharpTS**](docs/embedding.md) - Run bounded source strings from managed or trusted TypeScript hosts
 - [**MSBuild SDK Guide**](docs/msbuild-sdk.md) - Integrate SharpTS into your .NET build process
 - [**Code Samples**](docs/code-samples.md) - Task-oriented snippets across both modes
 - [**Execution Modes**](docs/execution-modes.md) - Interpreter vs compiled: differences and trade-offs

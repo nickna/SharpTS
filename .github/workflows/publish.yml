@@ -338,9 +338,8 @@ jobs:
             echo "child_process.fork unexpectedly compiled under Native AOT"
             exit 1
           fi
-          grep -Fq \
-            'child_process.fork in compiled output is not available in the native SharpTS build' \
-            "$scratch/fork-error.txt"
+          bash scripts/assert-managed-build-required.sh \
+            "$scratch/fork-error.txt" 'child_process.fork'
           test ! -f "$scratch/fork.dll"
 
           if "$native" Examples/AotCompileGate/main.ts \
@@ -349,9 +348,8 @@ jobs:
             echo "third-party reference loading unexpectedly ran under Native AOT"
             exit 1
           fi
-          grep -Fq \
-            'loading .NET reference assemblies is not available in the native SharpTS build' \
-            "$scratch/reference-error.txt"
+          bash scripts/assert-managed-build-required.sh \
+            "$scratch/reference-error.txt" 'loading .NET reference assemblies'
 
           "$native" Examples/AotCompileGate/dotnet-interop.ts \
             | tr -d '\r' > "$scratch/dotnet-interop.txt"
@@ -375,9 +373,8 @@ jobs:
             echo "declaration discovery unexpectedly ran under Native AOT"
             exit 1
           fi
-          grep -Fq -- \
-            '--gen-decl is not available in the native SharpTS build' \
-            "$scratch/gen-decl-error.txt"
+          bash scripts/assert-managed-build-required.sh \
+            "$scratch/gen-decl-error.txt" '--gen-decl'
 
           if "$native" --compile Examples/AotCompileGate/main.ts --verify \
               -o "$scratch/verify.dll" \
@@ -385,9 +382,8 @@ jobs:
             echo "IL verification unexpectedly ran under Native AOT"
             exit 1
           fi
-          grep -Fq -- \
-            '--verify is not available in the native SharpTS build' \
-            "$scratch/verify-error.txt"
+          bash scripts/assert-managed-build-required.sh \
+            "$scratch/verify-error.txt" '--verify'
           test ! -f "$scratch/verify.dll"
 
           case "$rid" in

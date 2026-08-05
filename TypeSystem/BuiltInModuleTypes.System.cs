@@ -766,6 +766,19 @@ public static partial class BuiltInModuleTypes
     // GetAsyncHooksModuleTypes removed — "async_hooks" is now implemented in
     // stdlib/node/async_hooks.ts; types flow from the TS source. See
     // GetAsyncHooksPrimitiveTypes for primitive:async_hooks.
+    public static Dictionary<string, TypeInfo> GetSourceExecutionModuleTypes()
+    {
+        return new Dictionary<string, TypeInfo>
+        {
+            ["runSourceJson"] = new TypeInfo.Function(
+                [TypeInfo.String.Shared, TypeInfo.String.Shared, TypeInfo.Primitive.Number],
+                TypeInfo.String.Shared),
+            ["configureUntrustedProcess"] = new TypeInfo.Function(
+                [TypeInfo.String.Shared],
+                TypeInfo.Void.Shared)
+        };
+    }
+
     public static Dictionary<string, TypeInfo> GetVmModuleTypes()
     {
         var anyType = TypeInfo.Any.Shared;

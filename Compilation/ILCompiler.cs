@@ -94,6 +94,12 @@ public partial class ILCompiler
         _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     /// <summary>
+    /// Stable deployment capabilities required by the emitted SharpTS runtime bridges.
+    /// </summary>
+    public SharpTSRuntimeRequirements RequiredSharpTSRuntimeRequirements =>
+        _runtime?.RequiredSharpTSRuntimeRequirements ?? SharpTSRuntimeRequirements.None;
+
+    /// <summary>
     /// Non-fatal compilation warnings (e.g. an unresolvable external .NET type).
     /// Collected instead of written to Console so embedders observe them and the
     /// compiler never interleaves with the compiled program's own output; the
@@ -1056,6 +1062,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new DgramModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ClusterModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new VmModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new SourceExecutionModuleEmitter());
         // "async_hooks" migrated to stdlib/node/async_hooks.ts (TS class over primitive:async_hooks).
         _builtInModuleEmitterRegistry.Register(new AsyncHooksPrimitiveEmitter());
         // "tty" migrated to stdlib/node/tty.ts (pure-TS over primitive:tty).

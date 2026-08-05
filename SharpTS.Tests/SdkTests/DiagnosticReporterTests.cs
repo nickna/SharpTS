@@ -1,4 +1,5 @@
 using SharpTS.Diagnostics;
+using SharpTS.Diagnostics.Exceptions;
 using Xunit;
 
 namespace SharpTS.Tests.SdkTests;
@@ -86,6 +87,25 @@ public class DiagnosticReporterTests
             reporter.ReportError(DiagnosticCode.General, "Unknown error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS000", output);
+    }
+
+    [Fact]
+    public void DiagnosticCode_ManagedBuildRequired_HasStableIdentifier()
+    {
+        Assert.Equal("SHARPTS007", DiagnosticCode.ManagedBuildRequired.ToSharpTSCode());
+    }
+
+    [Fact]
+    public void ManagedBuildRequired_HumanFormat_IncludesStableIdentifier()
+    {
+        var diagnostic = ManagedBuildRequiredException.CreateDiagnostic(
+            "loading .NET reference assemblies",
+            "Requested reference: 'Example.dll'.");
+
+        Assert.Equal(DiagnosticCode.ManagedBuildRequired, diagnostic.Code);
+        Assert.StartsWith("Error SHARPTS007:", diagnostic.ToHumanFormat());
+        Assert.Contains("loading .NET reference assemblies", diagnostic.ToHumanFormat());
+        Assert.Contains("Example.dll", diagnostic.ToHumanFormat());
     }
 
     [Fact]

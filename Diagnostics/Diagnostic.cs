@@ -65,7 +65,7 @@ public record Diagnostic(
             DiagnosticSeverity.Info => "message",
             _ => "error"
         };
-        var code = $"SHARPTS{(int)Code:D3}";
+        var code = Code.ToSharpTSCode();
 
         return $"{file}({Line},{Column}): {severity} {code}: {Message}";
     }
@@ -116,6 +116,11 @@ public record Diagnostic(
             DiagnosticCode.CompileError => "Compile Error",
 
             DiagnosticCode.ConfigError => "Config Error",
+
+            // Unlike category-only diagnostics, this code is an automation contract: Native AOT
+            // workflows and embedders must be able to recognize it without parsing the message.
+            DiagnosticCode.ManagedBuildRequired =>
+                $"Error {DiagnosticCode.ManagedBuildRequired.ToSharpTSCode()}",
 
             _ => "Error"
         };

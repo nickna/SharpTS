@@ -1251,6 +1251,15 @@ public partial class RuntimeEmitter
             EmitVmMethods(typeBuilder, runtime);
         }
 
+        if (_features.UsesSourceExecution)
+        {
+            runtime.RequireSharpTSRuntime(
+                "sharpts:execution module",
+                SharpTSRuntimeRequirements.FullDependencyClosure |
+                SharpTSRuntimeRequirements.ManagedCompilerHost);
+            EmitSourceExecutionMethods(typeBuilder, runtime);
+        }
+
         // Web Streams API (stream/web) is now fully pure-IL emitted via
         // RuntimeEmitter.QueuingStrategy.cs / WritableStream.cs /
         // ReadableStream.cs / TransformStream.cs. No late-binding helper

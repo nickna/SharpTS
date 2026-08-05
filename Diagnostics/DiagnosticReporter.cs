@@ -12,6 +12,7 @@
 //   SHARPTS004 - Compile Error (IL emission failures)
 //   SHARPTS005 - Config Error (invalid configuration, missing files)
 //   SHARPTS006 - Runtime Error (interpreter errors)
+//   SHARPTS007 - Managed build required (runtime SKU lacks the requested capability)
 //   SHARPTS000 - General Error (unclassified errors)
 //
 // =============================================================================
