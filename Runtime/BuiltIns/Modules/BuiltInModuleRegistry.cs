@@ -47,6 +47,7 @@ public static class BuiltInModuleRegistry
         "dgram",
         "cluster",
         "vm",
+        "sharpts:execution",
         // "async_hooks" — migrated to stdlib/node/async_hooks.ts (TS class over primitive:async_hooks).
         // "tty" — migrated to stdlib/node/tty.ts (pure-TS over primitive:tty).
     ];

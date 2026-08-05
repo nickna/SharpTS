@@ -57,6 +57,7 @@ public static class BuiltInModuleValues
             "dgram" => DgramModuleInterpreter.GetExports(),
             "cluster" => ClusterModuleInterpreter.GetExports(),
             "vm" => VmModuleInterpreter.GetExports(),
+            "sharpts:execution" => SourceExecutionModuleInterpreter.GetExports(),
             // "async_hooks" — migrated to stdlib/node/async_hooks.ts (TS class over primitive:async_hooks).
             // "tty" — migrated to stdlib/node/tty.ts (pure-TS over primitive:tty).
             _ => throw new Exception($"Unknown built-in module: {moduleName}")

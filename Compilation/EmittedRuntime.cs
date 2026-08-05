@@ -2668,6 +2668,10 @@ public class EmittedRuntime
     public MethodBuilder VmNewSourceTextModule { get; set; } = null!;
     public MethodBuilder VmNewSyntheticModule { get; set; } = null!;
 
+    // sharpts:execution trusted-host bridge
+    public MethodBuilder SourceExecutionRunJson { get; set; } = null!;
+    public MethodBuilder SourceExecutionConfigureUntrustedProcess { get; set; } = null!;
+
     // Pure-IL Web Streams emitted types. The original late-binding helpers
     // (CreateReadableStream/CreateWritableStream/etc.) were removed when
     // all five stream classes were migrated to pure IL.

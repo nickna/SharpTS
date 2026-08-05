@@ -874,6 +874,8 @@ static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
 {
     if (compiler.RequiredSharpTSRuntimeReasons.Contains("child_process.fork"))
         RequireManagedBuild("child_process.fork in compiled output");
+    if (compiler.RequiredSharpTSRuntimeReasons.Contains("sharpts:execution module"))
+        RequireManagedBuild("sharpts:execution in compiled output");
 }
 
 /// <summary>
@@ -943,12 +945,13 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
             return;
         }
 
-        // child_process.fork() spawns a SEPARATE `dotnet exec SharpTS.dll <module>` process
-        // (unlike Worker/eval which load SharpTS.dll in-process). That child needs SharpTS's
-        // full runtime closure — its runtimeconfig.json, deps.json, and dependency DLLs — so
-        // co-locate the whole SharpTS bin directory next to the output. Other soft-deps only
-        // need SharpTS.dll loaded in-process.
-        if (reasons.Contains("child_process.fork"))
+        // child_process.fork() starts SharpTS as a separate compiler process, while
+        // sharpts:execution embeds its compile-and-run facade in the current process.
+        // Both execute compiler paths backed by SharpTS's managed dependency closure,
+        // so co-locate the runtime files rather than copying only SharpTS.dll.
+        bool requiresFullRuntime = reasons.Contains("child_process.fork")
+            || reasons.Contains("sharpts:execution module");
+        if (requiresFullRuntime)
         {
             // Native builds are rejected before Save by ValidateCompiledRuntimeRequirements.
             // This closure copy is retained for the managed SKU.
@@ -973,7 +976,7 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
 
         if (!outputOptions.QuietMode)
         {
-            var what = reasons.Contains("child_process.fork") ? "SharpTS runtime" : "SharpTS.dll";
+            var what = requiresFullRuntime ? "SharpTS runtime" : "SharpTS.dll";
             var action = copiedFromManagedBuild ? "Copied" : "Extracted embedded";
             Console.WriteLine($"{action} {what} next to output — required at runtime by: {reasonList}");
         }

@@ -1056,6 +1056,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new DgramModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ClusterModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new VmModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new SourceExecutionModuleEmitter());
         // "async_hooks" migrated to stdlib/node/async_hooks.ts (TS class over primitive:async_hooks).
         _builtInModuleEmitterRegistry.Register(new AsyncHooksPrimitiveEmitter());
         // "tty" migrated to stdlib/node/tty.ts (pure-TS over primitive:tty).

@@ -55,6 +55,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesOs { get; set; } = true;                // 'os' module — os.freemem, os.loadavg, os.networkInterfaces
     public bool UsesChildProcess { get; set; } = true;      // 'child_process' module — spawn, exec, fork, execSync, etc.
     public bool UsesVm { get; set; } = true;                // 'vm' module — vm.runInNewContext, vm.compileFunction, etc.
+    public bool UsesSourceExecution { get; set; } = true;   // 'sharpts:execution' trusted-host bridge
     public bool UsesTty { get; set; } = true;               // 'tty' module / process.stdout.isTTY — just isatty(fd)
     public bool UsesPerf { get; set; } = true;              // performance.now() / performance.timeOrigin (host-tied primitive)
     public bool UsesAbortController { get; set; } = true;   // AbortController / AbortSignal identifiers

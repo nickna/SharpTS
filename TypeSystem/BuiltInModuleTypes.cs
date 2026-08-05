@@ -531,6 +531,7 @@ public static partial class BuiltInModuleTypes
             "dgram" => GetDgramModuleTypes(),
             "cluster" => GetClusterModuleTypes(),
             "vm" => GetVmModuleTypes(),
+            "sharpts:execution" => GetSourceExecutionModuleTypes(),
             // "async_hooks" — migrated to stdlib/node/async_hooks.ts; types flow from the TS source.
             //   Primitive-layer types for primitive:async_hooks are in GetAsyncHooksPrimitiveTypes.
             "worker_threads" => GetWorkerThreadsModuleTypes(),

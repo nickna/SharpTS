@@ -64,6 +64,7 @@ public sealed class RuntimeFeatureDetector
             UsesOs = false,
             UsesChildProcess = false,
             UsesVm = false,
+            UsesSourceExecution = false,
             UsesTty = false,
             UsesPerf = false,
             UsesAbortController = false,
@@ -212,6 +213,8 @@ public sealed class RuntimeFeatureDetector
                 break;
             case "vm":
                 _set.UsesVm = true; break;
+            case "sharpts:execution":
+                _set.UsesSourceExecution = true; break;
             case "tty":
                 _set.UsesTty = true; break;
             case "perf_hooks":
