@@ -11,6 +11,26 @@ namespace SharpTS.Tests.CompilerTests;
 public class ILVerificationTests
 {
     [Fact]
+    public void HttpServerLifecycleRuntime_PassesILVerification()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as http from 'http';
+                const server: any = http.createServer((_req: any, res: any) => {
+                    res.end('ok');
+                });
+                server.closeAllConnections();
+                console.log(typeof server.listen);
+                """
+        };
+
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
     public void BasicArithmetic_PassesILVerification()
     {
         var source = """

@@ -1752,6 +1752,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, pidLocal);
 
+        // AppContext switch used by sandboxed hosts: reject all cross-process
+        // signaling before even performing a signal-0 existence check.
+        var processControlAllowed = il.DefineLabel();
+        var restrictedLocal = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldstr, "SharpTS.RestrictProcessControl");
+        il.Emit(OpCodes.Ldloca, restrictedLocal);
+        il.Emit(OpCodes.Call, typeof(AppContext).GetMethod("TryGetSwitch",
+            [_types.String, _types.Boolean.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, processControlAllowed);
+        il.Emit(OpCodes.Ldloc, restrictedLocal);
+        il.Emit(OpCodes.Brfalse, processControlAllowed);
+        il.Emit(OpCodes.Ldloc, pidLocal);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessId"));
+        il.Emit(OpCodes.Beq, processControlAllowed);
+        ThrowGuestError("kill EPERM: cross-process signaling is disabled by the host", "EPERM");
+        il.MarkLabel(processControlAllowed);
+
         // EnsureExists inline: Process.GetProcessById(pid) → target (throws ESRCH)
         void EmitEnsureExists()
         {

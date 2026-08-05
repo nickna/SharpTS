@@ -280,6 +280,20 @@ public class TimerTests
     }
 
     [Theory, ModeData]
+    public void ClearTimeout_AfterTimeoutFired_DoesNotReleaseAnotherLiveHandle(ExecutionMode mode)
+    {
+        var source = @"
+            let fired: any = setTimeout(() => {}, 0);
+            setTimeout(() => {
+                clearTimeout(fired);
+                setTimeout(() => console.log('survived'), 20);
+            }, 20);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("survived\n", output);
+    }
+
+    [Theory, ModeData]
     public void Timeout_MethodChaining(ExecutionMode mode)
     {
         // ref/unref should support method chaining

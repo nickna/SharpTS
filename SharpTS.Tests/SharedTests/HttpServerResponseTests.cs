@@ -14,6 +14,31 @@ namespace SharpTS.Tests.SharedTests;
 public class HttpServerResponseTests
 {
     [Theory, ModeData]
+    public void HttpResponseEnd_WritesBufferBytes(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                import { Buffer } from 'buffer';
+                const server: any = http.createServer((req: any, res: any) => {
+                    res.end(Buffer.from('buffer-body'));
+                });
+                server.listen({{port}}, async () => {
+                    const response = await fetch('http://127.0.0.1:{{port}}/');
+                    console.log(await response.text());
+                    server.close();
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("buffer-body", output);
+        Assert.DoesNotContain("$Buffer", output);
+    }
+
+    [Theory, ModeData]
     public void ServerResponse_StatusMessage_Writable(ExecutionMode mode)
     {
         var port = TestPorts.GetAvailablePort();
@@ -112,5 +137,33 @@ public class HttpServerResponseTests
         };
         var output = TestHarness.RunModules(files, "./main.ts", mode);
         Assert.Contains("body=Hello World!", output);
+    }
+
+    [Theory, ModeData]
+    public void ServerResponse_ProbeConnection_WritesJsonSafeWhitespace(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server: any = http.createServer((req: any, res: any) => {
+                    res.setHeader('Content-Type', 'application/json');
+                    console.log('probe=' + res.probeConnection());
+                    res.end('{"ok":true}');
+                    console.log('probe-after-end=' + res.probeConnection());
+                });
+                server.listen({{port}}, async () => {
+                    const r = await fetch('http://127.0.0.1:{{port}}/');
+                    const value = await r.json();
+                    console.log('ok=' + value.ok);
+                    server.close();
+                });
+                """
+        };
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("probe=true", output);
+        Assert.Contains("probe-after-end=false", output);
+        Assert.Contains("ok=true", output);
     }
 }

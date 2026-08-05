@@ -129,6 +129,11 @@ public class SharpTSHttpResponse : SharpTSWritable
                 FlushHeaders();
                 return RuntimeValue.Null;
             }).Bind(this),
+            // Internal-friendly connection probe used by long-running JSON endpoints:
+            // a single JSON-whitespace byte is flushed and false is returned if the
+            // peer has gone away. The final JSON body remains standards-compliant.
+            "probeConnection" => BuiltInMethod.CreateV2("probeConnection", 0, (_, _, _) =>
+                RuntimeValue.FromBoolean(ProbeConnection())).Bind(this),
             // 100 Continue / 102 Processing — HttpListener auto-sends 100-continue when the
             // request body is read and cannot send 1xx interim responses, so these are no-ops
             // exposed for API compatibility.
@@ -334,6 +339,22 @@ public class SharpTSHttpResponse : SharpTSWritable
             null => Array.Empty<byte>(),
             var other => Encoding.UTF8.GetBytes(other.ToString() ?? "")
         };
+    }
+
+    private bool ProbeConnection()
+    {
+        if (_finished) return false;
+        try
+        {
+            EnsureHeadersCommitted(forceChunked: true);
+            _streaming = true;
+            _response.OutputStream.WriteByte((byte)' ');
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

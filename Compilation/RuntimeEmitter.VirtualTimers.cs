@@ -359,6 +359,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, timerQueueField);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, removeAt);
+        // Mark completed one-shot handles terminal so ref() cannot resurrect a
+        // timer that is no longer present in the queue.
+        il.Emit(OpCodes.Ldloc, timerLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, runtime.VirtualTimerIsCancelled);
         // Don't increment i
 
         // if (timer.HasRef) { timer.HasRef = false; EventLoop.GetInstance().Unref(); }

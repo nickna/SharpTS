@@ -34,6 +34,8 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     private Interpreter? _interpreter;
     private bool _isClusterWorker;
     private int _port;
+    private string _address = "0.0.0.0";
+    private string _family = "IPv4";
 
     // Server-management surface (#1045). HttpListener does not expose per-connection
     // control, so these timeouts/limits are stored as observable Node-compatible config
@@ -54,6 +56,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     private readonly object _stateLock = new();
     private bool _closeRequested;
     private int _inFlightRequests;
+    private readonly HashSet<HttpListenerResponse> _activeResponses = [];
     private ISharpTSCallable? _pendingCloseCallback;
 
     /// <summary>
@@ -162,15 +165,24 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     }
 
     /// <summary>
-    /// Forcibly closes the server, tearing down the listener immediately rather than draining
-    /// in-flight requests (Node's <c>closeAllConnections</c>).
+    /// Forcibly closes the currently active HTTP connections without stopping the listener
+    /// (Node's <c>closeAllConnections</c>). Completion is idempotent because each response is
+    /// removed from <see cref="_activeResponses"/> before its in-flight reservation is released.
     /// </summary>
     private void CloseAllConnections()
     {
-        if (!_isListening) return;
-        lock (_stateLock) { _closeRequested = true; }
-        _cts?.Cancel();
-        FinishClose();
+        List<HttpListenerResponse> responses;
+        lock (_stateLock)
+        {
+            if (!_isListening || _activeResponses.Count == 0) return;
+            responses = [.. _activeResponses];
+        }
+
+        foreach (var response in responses)
+        {
+            try { response.Abort(); } catch { /* peer may already have closed */ }
+            DecrementInFlight(response);
+        }
     }
 
     /// <summary>
@@ -186,21 +198,41 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
 
         _port = (int)args[0].AsNumberUnsafe();
         ISharpTSCallable? callback = null;
+        var hostSpecified = false;
+        var prefixHost = "+";
+        _address = "0.0.0.0";
+        _family = "IPv4";
 
-        // Second argument can be hostname (ignored for now) or callback
+        // Node overloads: listen(port, callback) and listen(port, host, callback).
         if (args.Length > 1)
         {
-            if (args[1].ToObject() is ISharpTSCallable cb)
+            var hostOrCallback = args[1].ToObject();
+            if (hostOrCallback is string host)
+            {
+                hostSpecified = true;
+                (prefixHost, _address, _family) = NormalizeListenHost(host);
+
+                if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb2)
+                    callback = cb2;
+            }
+            else if (hostOrCallback is ISharpTSCallable cb)
             {
                 callback = cb;
-            }
-            else if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb2)
-            {
-                callback = cb2;
             }
         }
 
         _interpreter = interpreter;
+
+        // A Server can listen again after its close event. A normal close only
+        // reaches FinishClose after the active-response set drains, so resetting
+        // this per-listen state cannot strand an older request.
+        lock (_stateLock)
+        {
+            _closeRequested = false;
+            _inFlightRequests = 0;
+            _activeResponses.Clear();
+            _pendingCloseCallback = null;
+        }
 
         // Cluster worker mode: register with shared listener
         if (ClusterContext.IsWorker)
@@ -216,18 +248,25 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
             _port = ProbeFreePort();
 
         _listener = new HttpListener();
-        _listener.Prefixes.Add($"http://+:{_port}/");
+        _listener.Prefixes.Add($"http://{prefixHost}:{_port}/");
 
         try
         {
             _listener.Start();
         }
-        catch (HttpListenerException)
+        catch (HttpListenerException) when (!hostSpecified)
         {
-            // Try localhost only if wildcard fails (requires admin on Windows)
+            // An omitted host follows Node's all-interface default. Some Windows
+            // configurations require a URL ACL for wildcard HttpListener prefixes,
+            // so retain the historical loopback fallback only for that implicit case.
+            // An explicit 0.0.0.0 request must fail rather than silently becoming
+            // unreachable from outside the process/container.
+            _listener.Close();
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
             _listener.Start();
+            _address = "127.0.0.1";
+            _family = "IPv4";
         }
 
         _isListening = true;
@@ -249,6 +288,30 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         EmitEvent("listening", new List<object?>());
 
         return RuntimeValue.FromObject(this);
+    }
+
+    /// <summary>
+    /// Converts a Node-style listen host into an HttpListener prefix host and
+    /// the address metadata returned by server.address().
+    /// </summary>
+    private static (string PrefixHost, string Address, string Family) NormalizeListenHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            throw new Exception("Runtime Error: listen host must be a non-empty hostname or IP address");
+
+        if (host == "0.0.0.0")
+            return ("+", host, "IPv4");
+
+        if (host == "::")
+            return ("+", host, "IPv6");
+
+        if (Uri.CheckHostName(host) == UriHostNameType.Unknown)
+            throw new Exception($"Runtime Error: Invalid listen host '{host}'");
+
+        if (host.Contains(':'))
+            return ($"[{host}]", host, "IPv6");
+
+        return (host, host, "IPv4");
     }
 
     /// <summary>
@@ -285,7 +348,12 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
             lock (_stateLock)
             {
                 if (_closeRequested) { accepted = false; }
-                else { _inFlightRequests++; accepted = true; }
+                else
+                {
+                    _inFlightRequests++;
+                    _activeResponses.Add(context.Response);
+                    accepted = true;
+                }
             }
             if (!accepted)
             {
@@ -396,11 +464,11 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         {
             interp.ScheduleTimer(0, 0, () =>
             {
+                EmitEvent("close", new List<object?>());
                 if (callback != null)
                 {
                     interp.InvokeGuestCallback(callback, new List<object?>());
                 }
-                EmitEvent("close", new List<object?>());
             }, isInterval: false);
         }
     }
@@ -426,8 +494,8 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         {
             return new SharpTSObject(new Dictionary<string, object?>
             {
-                ["address"] = "0.0.0.0",
-                ["family"] = "IPv4",
+                ["address"] = _address,
+                ["family"] = _family,
                 ["port"] = (double)_port
             });
         }
@@ -443,8 +511,8 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         // ephemeral port before HttpListener starts (#214).
         return new SharpTSObject(new Dictionary<string, object?>
         {
-            ["address"] = "0.0.0.0",
-            ["family"] = "IPv4",
+            ["address"] = _address,
+            ["family"] = _family,
             ["port"] = (double)_port
         });
     }
@@ -473,6 +541,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
                     else
                     {
                         _inFlightRequests++;
+                        _activeResponses.Add(context.Response);
                         accepted = true;
                     }
                 }
@@ -514,7 +583,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     {
         if (_interpreter == null)
         {
-            DecrementInFlight();
+            DecrementInFlight(context.Response);
             return;
         }
 
@@ -618,7 +687,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
                 }
             }
 
-            DecrementInFlight();
+            DecrementInFlight(context.Response);
         }
     }
 
@@ -626,11 +695,14 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     /// Drops an in-flight reservation. If this is the last in-flight request
     /// and close() has been requested, completes the deferred teardown.
     /// </summary>
-    private void DecrementInFlight()
+    private void DecrementInFlight(HttpListenerResponse response)
     {
         bool finishNow;
         lock (_stateLock)
         {
+            // closeAllConnections() and response completion can race. Only the
+            // winner that removes the response owns the in-flight decrement.
+            if (!_activeResponses.Remove(response)) return;
             _inFlightRequests--;
             finishNow = _inFlightRequests == 0 && _closeRequested && _isListening;
         }

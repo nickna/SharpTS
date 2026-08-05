@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
@@ -17,13 +18,26 @@ public partial class RuntimeEmitter
     private FieldBuilder _httpServerIsListeningField = null!;
     private FieldBuilder _httpServerCtsField = null!;
     private FieldBuilder _httpServerPortField = null!;
+    private FieldBuilder _httpServerAddressField = null!;
+    private FieldBuilder _httpServerFamilyField = null!;
+    private FieldBuilder _httpServerCloseRequestedField = null!;
+    private FieldBuilder _httpServerCloseFinishedField = null!;
+    private FieldBuilder _httpServerInFlightField = null!;
+    private FieldBuilder _httpServerActiveResponsesField = null!;
+    private FieldBuilder _httpServerPendingCloseCallbackField = null!;
+    private MethodBuilder _httpServerFinishCloseMethod = null!;
+    private MethodBuilder _httpServerRequestCompletedMethod = null!;
 
     private FieldBuilder _httpRequestRequestField = null!;
+    private FieldBuilder _httpRequestCompleteField = null!;
+    private FieldBuilder _httpRequestAbortedField = null!;
 
     private FieldBuilder _httpResponseResponseField = null!;
     private FieldBuilder _httpResponseHeadersSentField = null!;
     private FieldBuilder _httpResponseFinishedField = null!;
     private FieldBuilder _httpResponseBodyBufferField = null!;
+    private FieldBuilder _httpResponseCompletionField = null!;
+    private FieldBuilder _httpResponseStreamingField = null!;
     private MethodBuilder _httpResponseWriteMethod = null!;
     private MethodBuilder _httpAcceptWorkerMethod = null!;
 
@@ -54,6 +68,8 @@ public partial class RuntimeEmitter
 
         // Field: private HttpListenerRequest _request
         _httpRequestRequestField = typeBuilder.DefineField("_request", httpListenerRequestType, FieldAttributes.Private);
+        _httpRequestCompleteField = typeBuilder.DefineField("_complete", _types.Boolean, FieldAttributes.Assembly);
+        _httpRequestAbortedField = typeBuilder.DefineField("_aborted", _types.Boolean, FieldAttributes.Assembly);
 
         // Constructor: public $HttpRequest(HttpListenerRequest request)
         var ctor = typeBuilder.DefineConstructor(
@@ -73,6 +89,7 @@ public partial class RuntimeEmitter
 
         // GetMember method
         EmitHttpRequestGetMember(typeBuilder, runtime, httpListenerRequestType);
+        EmitHttpRequestDestroy(typeBuilder, runtime, httpListenerRequestType);
 
         typeBuilder.CreateType();
     }
@@ -147,6 +164,7 @@ public partial class RuntimeEmitter
         Check("httpVersionMinor", verMinorLabel);
         Check("complete", completeLabel);
         Check("aborted", abortedLabel);
+        Check("destroyed", abortedLabel);
         Check("trailers", trailersLabel);
         Check("rawTrailers", rawTrailersLabel);
         Check("socket", socketLabel);
@@ -169,13 +187,15 @@ public partial class RuntimeEmitter
         EmitVersionPart(verMajorLabel, "Major");
         EmitVersionPart(verMinorLabel, "Minor");
 
-        // complete / aborted → false (server request lifecycle not tracked in compiled)
+        // complete / aborted reflect the request body lifecycle.
         il.MarkLabel(completeLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpRequestCompleteField);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(abortedLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -245,6 +265,83 @@ public partial class RuntimeEmitter
         // default - return undefined
         il.MarkLabel(defaultLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits IncomingMessage.destroy(error?): marks the request aborted, closes
+    /// its body stream so the accept worker stops reading, and emits lifecycle
+    /// events. This lets user code enforce streaming body limits without the
+    /// runtime continuing to consume an arbitrarily large upload.
+    /// </summary>
+    private void EmitHttpRequestDestroy(TypeBuilder typeBuilder, EmittedRuntime runtime, Type httpListenerRequestType)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Destroy",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.Object]
+        );
+
+        var il = method.GetILGenerator();
+        var firstDestroyLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+        il.Emit(OpCodes.Brfalse, firstDestroyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(firstDestroyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, _httpRequestAbortedField);
+
+        // Closing InputStream interrupts the worker's next Read. Teardown is
+        // best-effort because a peer disconnect may already have closed it.
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpRequestRequestField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(httpListenerRequestType, "InputStream")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Close", Type.EmptyTypes)!);
+        var streamClosedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Leave, streamClosedLabel);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, streamClosedLabel);
+        il.EndExceptionBlock();
+        il.MarkLabel(streamClosedLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "aborted");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+
+        var noErrorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, noErrorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "error");
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(noErrorLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "close");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
 
@@ -454,6 +551,7 @@ public partial class RuntimeEmitter
     private void EmitHttpResponseClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var httpListenerResponseType = typeof(HttpListenerResponse);
+        var completionType = typeof(Action<HttpListenerResponse>);
 
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$HttpResponse",
@@ -467,12 +565,14 @@ public partial class RuntimeEmitter
         _httpResponseHeadersSentField = typeBuilder.DefineField("_headersSent", _types.Boolean, FieldAttributes.Private);
         _httpResponseFinishedField = typeBuilder.DefineField("_finished", _types.Boolean, FieldAttributes.Private);
         _httpResponseBodyBufferField = typeBuilder.DefineField("_bodyBuffer", typeof(List<byte>), FieldAttributes.Private);
+        _httpResponseCompletionField = typeBuilder.DefineField("_completion", completionType, FieldAttributes.Private);
+        _httpResponseStreamingField = typeBuilder.DefineField("_streaming", _types.Boolean, FieldAttributes.Private);
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [httpListenerResponseType]
+            [httpListenerResponseType, completionType]
         );
         runtime.TSHttpResponseCtor = ctor;
 
@@ -485,6 +585,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Newobj, typeof(List<byte>).GetConstructor(Type.EmptyTypes)!);
         ctorIL.Emit(OpCodes.Stfld, _httpResponseBodyBufferField);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_2);
+        ctorIL.Emit(OpCodes.Stfld, _httpResponseCompletionField);
         ctorIL.Emit(OpCodes.Ret);
 
         // Methods. SetHeader is emitted before WriteHead so WriteHead can call it to apply
@@ -499,7 +602,7 @@ public partial class RuntimeEmitter
         EmitHttpResponseRemoveHeader(typeBuilder, runtime, httpListenerResponseType);
         EmitHttpResponseGetMember(typeBuilder, runtime, httpListenerResponseType);
         EmitHttpResponseSetMember(typeBuilder, runtime, httpListenerResponseType);
-        EmitHttpResponseExtraMembers(typeBuilder, runtime);
+        EmitHttpResponseExtraMembers(typeBuilder, runtime, httpListenerResponseType);
 
         typeBuilder.CreateType();
     }
@@ -510,7 +613,8 @@ public partial class RuntimeEmitter
     /// auto-sends 100-continue and has no trailer/1xx API, so these are compatibility no-ops
     /// (matching the interpreter).
     /// </summary>
-    private void EmitHttpResponseExtraMembers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitHttpResponseExtraMembers(TypeBuilder typeBuilder, EmittedRuntime runtime,
+        Type httpListenerResponseType)
     {
         void EmitUndefMethod(string name, int argCount)
         {
@@ -526,6 +630,64 @@ public partial class RuntimeEmitter
         EmitUndefMethod("WriteProcessing", 0);
         EmitUndefMethod("AddTrailers", 1);
         EmitUndefMethod("FlushHeaders", 0);
+
+        // public object ProbeConnection(): commit a chunked response, write one
+        // JSON-whitespace byte, and return false if the peer disconnected.
+        var probe = typeBuilder.DefineMethod("ProbeConnection",
+            MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        var pil = probe.GetILGenerator();
+        var probeFailed = pil.DefineLabel();
+        var probeDone = pil.DefineLabel();
+
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldfld, _httpResponseFinishedField);
+        pil.Emit(OpCodes.Brtrue, probeFailed);
+
+        pil.BeginExceptionBlock();
+        var headersAlreadySent = pil.DefineLabel();
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldfld, _httpResponseHeadersSentField);
+        pil.Emit(OpCodes.Brtrue, headersAlreadySent);
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldfld, _httpResponseResponseField);
+        pil.Emit(OpCodes.Ldc_I4_1);
+        pil.Emit(OpCodes.Callvirt, _types.GetProperty(httpListenerResponseType, "SendChunked")!.GetSetMethod()!);
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldc_I4_1);
+        pil.Emit(OpCodes.Stfld, _httpResponseHeadersSentField);
+        pil.MarkLabel(headersAlreadySent);
+
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldc_I4_1);
+        pil.Emit(OpCodes.Stfld, _httpResponseStreamingField);
+
+        var outputStreamGetter = _types.GetProperty(httpListenerResponseType, "OutputStream")!.GetGetMethod()!;
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldfld, _httpResponseResponseField);
+        pil.Emit(OpCodes.Callvirt, outputStreamGetter);
+        pil.Emit(OpCodes.Ldc_I4, (int)' ');
+        pil.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("WriteByte", [_types.Byte])!);
+        // Compiled servers perform the blocking network write on their event-loop
+        // thread; flushing here makes a closed peer observable promptly instead
+        // of waiting for several bytes of HttpListener buffering.
+        pil.Emit(OpCodes.Ldarg_0);
+        pil.Emit(OpCodes.Ldfld, _httpResponseResponseField);
+        pil.Emit(OpCodes.Callvirt, outputStreamGetter);
+        pil.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Flush", Type.EmptyTypes)!);
+        pil.Emit(OpCodes.Leave, probeDone);
+        pil.BeginCatchBlock(_types.Exception);
+        pil.Emit(OpCodes.Pop);
+        pil.Emit(OpCodes.Leave, probeFailed);
+        pil.EndExceptionBlock();
+
+        pil.MarkLabel(probeDone);
+        pil.Emit(OpCodes.Ldc_I4_1);
+        pil.Emit(OpCodes.Box, _types.Boolean);
+        pil.Emit(OpCodes.Ret);
+        pil.MarkLabel(probeFailed);
+        pil.Emit(OpCodes.Ldc_I4_0);
+        pil.Emit(OpCodes.Box, _types.Boolean);
+        pil.Emit(OpCodes.Ret);
     }
 
     private void EmitHttpResponseGetMember(TypeBuilder typeBuilder, EmittedRuntime runtime, Type httpListenerResponseType)
@@ -785,18 +947,36 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(hasDataLabel);
 
-        // Get data as string
+        var bytesLocal = il.DeclareLocal(_types.ByteArray);
+        var encodeStringLabel = il.DefineLabel();
+        var bytesReadyLabel = il.DefineLabel();
+
+        // Preserve binary bodies. fs.readFileSync() and request chunks are
+        // emitted $Buffer instances; stringifying one produced the literal
+        // "$Buffer" instead of its contents.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, encodeStringLabel);
+        il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Stloc, bytesLocal);
+        il.Emit(OpCodes.Br, bytesReadyLabel);
+
+        il.MarkLabel(encodeStringLabel);
+        il.Emit(OpCodes.Pop);
+
+        // Otherwise use Node-style string coercion and UTF-8 encoding.
         var dataLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
         il.Emit(OpCodes.Stloc, dataLocal);
 
-        // Convert to bytes and add to buffer
-        var bytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
+
+        il.MarkLabel(bytesReadyLabel);
 
         // _bodyBuffer.AddRange(bytes)
         il.Emit(OpCodes.Ldarg_0);
@@ -861,13 +1041,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(List<byte>).GetMethod("ToArray")!);
         il.Emit(OpCodes.Stloc, bufferLocal);
 
-        // Set content length
+        // Set content length unless probeConnection() already committed a
+        // chunked response for disconnect detection.
+        var skipContentLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpResponseStreamingField);
+        il.Emit(OpCodes.Brtrue, skipContentLengthLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _httpResponseResponseField);
         il.Emit(OpCodes.Ldloc, bufferLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(httpListenerResponseType, "ContentLength64")!.GetSetMethod()!);
+        il.MarkLabel(skipContentLengthLabel);
 
         // Write bytes if any
         var noBodyLabel = il.DefineLabel();
@@ -897,6 +1083,22 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
         il.EndExceptionBlock();
+
+        // Release the server's in-flight reservation exactly once, after the
+        // response has finished (including an output error).
+        var noCompletionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpResponseCompletionField);
+        il.Emit(OpCodes.Brfalse, noCompletionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpResponseCompletionField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpResponseResponseField);
+        il.Emit(OpCodes.Callvirt, typeof(Action<HttpListenerResponse>).GetMethod("Invoke")!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _httpResponseCompletionField);
+        il.MarkLabel(noCompletionLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -1217,6 +1419,14 @@ public partial class RuntimeEmitter
         _httpServerIsListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
         _httpServerCtsField = typeBuilder.DefineField("_cts", typeof(CancellationTokenSource), FieldAttributes.Private);
         _httpServerPortField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
+        _httpServerAddressField = typeBuilder.DefineField("_address", _types.String, FieldAttributes.Private);
+        _httpServerFamilyField = typeBuilder.DefineField("_family", _types.String, FieldAttributes.Private);
+        _httpServerCloseRequestedField = typeBuilder.DefineField("_closeRequested", _types.Int32, FieldAttributes.Private);
+        _httpServerCloseFinishedField = typeBuilder.DefineField("_closeFinished", _types.Int32, FieldAttributes.Private);
+        _httpServerInFlightField = typeBuilder.DefineField("_inFlight", _types.Int32, FieldAttributes.Private);
+        var activeResponsesType = typeof(ConcurrentDictionary<HttpListenerResponse, byte>);
+        _httpServerActiveResponsesField = typeBuilder.DefineField("_activeResponses", activeResponsesType, FieldAttributes.Private);
+        _httpServerPendingCloseCallbackField = typeBuilder.DefineField("_pendingCloseCallback", _types.Object, FieldAttributes.Private);
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -1232,6 +1442,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Stfld, _httpServerCallbackField);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Newobj, activeResponsesType.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Stfld, _httpServerActiveResponsesField);
         ctorIL.Emit(OpCodes.Ret);
 
         // Methods
@@ -1278,14 +1491,56 @@ public partial class RuntimeEmitter
         EmitConstDoubleProperty("MaxHeadersCount", 2000);
         EmitConstDoubleProperty("MaxRequestsPerSocket", 0);
 
-        // CloseAllConnections() → forcibly close (reuse Close); returns this.
+        // CloseAllConnections() → abort active responses but keep listening.
+        // RequestCompleted(response) owns the idempotent dictionary removal and
+        // in-flight decrement, so a racing res.end() cannot release twice.
         var closeAll = typeBuilder.DefineMethod("CloseAllConnections",
             MethodAttributes.Public, _types.Object, Type.EmptyTypes);
         var cail = closeAll.GetILGenerator();
+
+        var responseType = typeof(HttpListenerResponse);
+        var kvpType = typeof(KeyValuePair<HttpListenerResponse, byte>);
+        var enumeratorType = typeof(IEnumerator<KeyValuePair<HttpListenerResponse, byte>>);
+        var enumeratorLocal = cail.DeclareLocal(enumeratorType);
+        var responseLocal = cail.DeclareLocal(responseType);
+        var loopCheckLabel = cail.DefineLabel();
+        var loopBodyLabel = cail.DefineLabel();
+
         cail.Emit(OpCodes.Ldarg_0);
-        cail.Emit(OpCodes.Ldnull);
-        cail.Emit(OpCodes.Callvirt, runtime.TSHttpServerClose);
+        cail.Emit(OpCodes.Ldfld, _httpServerActiveResponsesField);
+        cail.Emit(OpCodes.Callvirt, typeof(ConcurrentDictionary<HttpListenerResponse, byte>)
+            .GetMethod("GetEnumerator", Type.EmptyTypes)!);
+        cail.Emit(OpCodes.Stloc, enumeratorLocal);
+        cail.Emit(OpCodes.Br, loopCheckLabel);
+
+        cail.MarkLabel(loopBodyLabel);
+        cail.Emit(OpCodes.Ldloc, enumeratorLocal);
+        cail.Emit(OpCodes.Callvirt, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        var kvpLocal = cail.DeclareLocal(kvpType);
+        cail.Emit(OpCodes.Stloc, kvpLocal);
+        cail.Emit(OpCodes.Ldloca, kvpLocal);
+        cail.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        cail.Emit(OpCodes.Stloc, responseLocal);
+
+        cail.BeginExceptionBlock();
+        cail.Emit(OpCodes.Ldloc, responseLocal);
+        cail.Emit(OpCodes.Callvirt, responseType.GetMethod("Abort", Type.EmptyTypes)!);
+        var responseAbortedLabel = cail.DefineLabel();
+        cail.Emit(OpCodes.Leave, responseAbortedLabel);
+        cail.BeginCatchBlock(_types.Exception);
         cail.Emit(OpCodes.Pop);
+        cail.Emit(OpCodes.Leave, responseAbortedLabel);
+        cail.EndExceptionBlock();
+        cail.MarkLabel(responseAbortedLabel);
+
+        cail.Emit(OpCodes.Ldarg_0);
+        cail.Emit(OpCodes.Ldloc, responseLocal);
+        cail.Emit(OpCodes.Call, _httpServerRequestCompletedMethod);
+
+        cail.MarkLabel(loopCheckLabel);
+        cail.Emit(OpCodes.Ldloc, enumeratorLocal);
+        cail.Emit(OpCodes.Callvirt, typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!);
+        cail.Emit(OpCodes.Brtrue, loopBodyLabel);
         cail.Emit(OpCodes.Ldarg_0);
         cail.Emit(OpCodes.Ret);
 
@@ -1379,16 +1634,105 @@ public partial class RuntimeEmitter
     {
         var probeFreePort = EmitHttpServerProbeFreePort(typeBuilder);
 
-        // public object Listen(double port, object? callback)
+        // public object Listen(double port, object? hostOrCallback, object? callback)
         var method = typeBuilder.DefineMethod(
             "Listen",
             MethodAttributes.Public,
             _types.Object,
-            [_types.Double, _types.Object]
+            [_types.Double, _types.Object, _types.Object]
         );
         _ = method;
 
         var il = method.GetILGenerator();
+        var callbackLocal = il.DeclareLocal(_types.Object);
+        var addressLocal = il.DeclareLocal(_types.String);
+        var familyLocal = il.DeclareLocal(_types.String);
+        var prefixHostLocal = il.DeclareLocal(_types.String);
+        var hostSpecifiedLocal = il.DeclareLocal(_types.Boolean);
+
+        // Defaults match Node: omitted host listens on all available interfaces.
+        // The callback occupies arg2 unless arg2 is a host string.
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, callbackLocal);
+        il.Emit(OpCodes.Ldstr, "0.0.0.0");
+        il.Emit(OpCodes.Stloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, "IPv4");
+        il.Emit(OpCodes.Stloc, familyLocal);
+        il.Emit(OpCodes.Ldstr, "+");
+        il.Emit(OpCodes.Stloc, prefixHostLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hostSpecifiedLocal);
+
+        var hostParsedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, hostParsedLabel);
+
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hostSpecifiedLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Stloc, addressLocal);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Stloc, callbackLocal);
+
+        // Reject empty/invalid hosts before handing a prefix to HttpListener.
+        var nonEmptyHostLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrWhiteSpace", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, nonEmptyHostLabel);
+        il.Emit(OpCodes.Ldstr, "listen host must be a non-empty hostname or IP address");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(nonEmptyHostLabel);
+
+        // 0.0.0.0 and :: map to HttpListener's strong wildcard prefix. Preserve
+        // the requested address/family for server.address().
+        var notIpv4AnyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, "0.0.0.0");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Brfalse, notIpv4AnyLabel);
+        il.Emit(OpCodes.Br, hostParsedLabel);
+        il.MarkLabel(notIpv4AnyLabel);
+
+        var notIpv6AnyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, "::");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Brfalse, notIpv6AnyLabel);
+        il.Emit(OpCodes.Ldstr, "IPv6");
+        il.Emit(OpCodes.Stloc, familyLocal);
+        il.Emit(OpCodes.Br, hostParsedLabel);
+        il.MarkLabel(notIpv6AnyLabel);
+
+        var validHostLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Call, typeof(Uri).GetMethod(nameof(Uri.CheckHostName), [_types.String])!);
+        il.Emit(OpCodes.Brtrue, validHostLabel); // UriHostNameType.Unknown == 0
+        il.Emit(OpCodes.Ldstr, "Invalid listen host");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(validHostLabel);
+
+        var nonIpv6HostLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, ":");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, nonIpv6HostLabel);
+        il.Emit(OpCodes.Ldstr, "[");
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, "]");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Stloc, prefixHostLocal);
+        il.Emit(OpCodes.Ldstr, "IPv6");
+        il.Emit(OpCodes.Stloc, familyLocal);
+        il.Emit(OpCodes.Br, hostParsedLabel);
+
+        il.MarkLabel(nonIpv6HostLabel);
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Stloc, prefixHostLocal);
+        il.MarkLabel(hostParsedLabel);
 
         // listen(0): substitute an OS-assigned ephemeral port before any
         // use of the port argument (#214).
@@ -1418,14 +1762,35 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notListeningLabel);
 
+        // Reset drain state for a fresh listen cycle.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _httpServerCloseRequestedField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _httpServerCloseFinishedField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, _httpServerInFlightField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerActiveResponsesField);
+        il.Emit(OpCodes.Callvirt, typeof(ConcurrentDictionary<HttpListenerResponse, byte>)
+            .GetMethod("Clear", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _httpServerPendingCloseCallbackField);
+
         // _listener = new HttpListener()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(httpListenerType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stfld, _httpServerListenerField);
 
-        // Build prefix string: "http://127.0.0.1:{port}/"
+        // Build prefix string: "http://{prefixHost}:{port}/".
         var prefixLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldstr, "http://127.0.0.1:");
+        il.Emit(OpCodes.Ldstr, "http://");
+        il.Emit(OpCodes.Ldloc, prefixHostLocal);
+        il.Emit(OpCodes.Ldstr, ":");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Conv_I4);  // Convert double to int (port is always an integer)
         il.Emit(OpCodes.Box, _types.Int32);
@@ -1441,10 +1806,64 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, prefixLocal);
         il.Emit(OpCodes.Callvirt, typeof(HttpListenerPrefixCollection).GetMethod("Add", [_types.String])!);
 
-        // _listener.Start()
+        // _listener.Start(). If the default wildcard is unavailable (notably a
+        // Windows URL ACL restriction), preserve the historical loopback fallback.
+        // Never hide failure for an explicit host such as 0.0.0.0.
+        var listenerStartedLabel = il.DefineLabel();
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _httpServerListenerField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Start")!);
+        il.Emit(OpCodes.Leave, listenerStartedLabel);
+
+        il.BeginCatchBlock(typeof(HttpListenerException));
+        il.Emit(OpCodes.Pop);
+        var implicitHostFallbackLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hostSpecifiedLocal);
+        il.Emit(OpCodes.Brfalse, implicitHostFallbackLabel);
+        il.Emit(OpCodes.Rethrow);
+
+        il.MarkLabel(implicitHostFallbackLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Close")!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(httpListenerType, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stfld, _httpServerListenerField);
+
+        il.Emit(OpCodes.Ldstr, "http://127.0.0.1:");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldstr, "/");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Stloc, prefixLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(httpListenerType, "Prefixes")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, prefixLocal);
+        il.Emit(OpCodes.Callvirt, typeof(HttpListenerPrefixCollection).GetMethod("Add", [_types.String])!);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Start")!);
+        il.Emit(OpCodes.Ldstr, "127.0.0.1");
+        il.Emit(OpCodes.Stloc, addressLocal);
+        il.Emit(OpCodes.Ldstr, "IPv4");
+        il.Emit(OpCodes.Stloc, familyLocal);
+        il.Emit(OpCodes.Leave, listenerStartedLabel);
+        il.EndExceptionBlock();
+        il.MarkLabel(listenerStartedLabel);
+
+        // Store the effective address metadata used by server.address().
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, addressLocal);
+        il.Emit(OpCodes.Stfld, _httpServerAddressField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, familyLocal);
+        il.Emit(OpCodes.Stfld, _httpServerFamilyField);
 
         // _isListening = true
         il.Emit(OpCodes.Ldarg_0);
@@ -1475,15 +1894,15 @@ public partial class RuntimeEmitter
 
         // Call listening callback if provided
         var noCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Brfalse, noCallbackLabel);
 
         // Check if callback is TSFunction
         var notTSFunc = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, notTSFunc);
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -1494,10 +1913,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(notTSFunc);
         // Check BoundTSFunction
         var notBound = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brfalse, notBound);
-        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -1513,6 +1932,152 @@ public partial class RuntimeEmitter
 
     private void EmitHttpServerClose(TypeBuilder typeBuilder, EmittedRuntime runtime, Type httpListenerType)
     {
+        var interlockedExchange = typeof(Interlocked).GetMethod("Exchange",
+            [typeof(int).MakeByRefType(), typeof(int)])!;
+        var interlockedDecrement = typeof(Interlocked).GetMethod("Decrement",
+            [typeof(int).MakeByRefType()])!;
+        var volatileRead = typeof(Volatile).GetMethod("Read",
+            [typeof(int).MakeByRefType()])!;
+
+        // private void FinishClose(): one-shot listener teardown after drain.
+        _httpServerFinishCloseMethod = typeBuilder.DefineMethod(
+            "_FinishClose",
+            MethodAttributes.Private,
+            _types.Void,
+            Type.EmptyTypes
+        );
+        var finishIl = _httpServerFinishCloseMethod.GetILGenerator();
+        var finishCallbackLocal = finishIl.DeclareLocal(_types.Object);
+
+        // if (Interlocked.Exchange(ref _closeFinished, 1) != 0) return;
+        var firstFinishLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldflda, _httpServerCloseFinishedField);
+        finishIl.Emit(OpCodes.Ldc_I4_1);
+        finishIl.Emit(OpCodes.Call, interlockedExchange);
+        finishIl.Emit(OpCodes.Brfalse, firstFinishLabel);
+        finishIl.Emit(OpCodes.Ret);
+        finishIl.MarkLabel(firstFinishLabel);
+
+        finishIl.BeginExceptionBlock();
+        var noCtsLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerCtsField);
+        finishIl.Emit(OpCodes.Brfalse, noCtsLabel);
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerCtsField);
+        finishIl.Emit(OpCodes.Callvirt, typeof(CancellationTokenSource).GetMethod("Cancel", Type.EmptyTypes)!);
+        finishIl.MarkLabel(noCtsLabel);
+
+        var noListenerLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        finishIl.Emit(OpCodes.Brfalse, noListenerLabel);
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        finishIl.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Stop")!);
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerListenerField);
+        finishIl.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Close")!);
+        finishIl.MarkLabel(noListenerLabel);
+        finishIl.BeginCatchBlock(_types.Exception);
+        finishIl.Emit(OpCodes.Pop);
+        finishIl.EndExceptionBlock();
+
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldc_I4_0);
+        finishIl.Emit(OpCodes.Stfld, _httpServerIsListeningField);
+        finishIl.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        finishIl.Emit(OpCodes.Call, runtime.EventLoopUnref);
+
+        // Capture and clear the callback before emitting 'close'. A close
+        // listener is allowed to call listen() again, which resets per-listen
+        // state; keeping the callback in a local prevents that re-entry from
+        // losing or replacing the callback for the completed cycle.
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldfld, _httpServerPendingCloseCallbackField);
+        finishIl.Emit(OpCodes.Stloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldnull);
+        finishIl.Emit(OpCodes.Stfld, _httpServerPendingCloseCallbackField);
+
+        finishIl.Emit(OpCodes.Ldarg_0);
+        finishIl.Emit(OpCodes.Ldstr, "close");
+        finishIl.Emit(OpCodes.Ldc_I4_0);
+        finishIl.Emit(OpCodes.Newarr, _types.Object);
+        finishIl.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        finishIl.Emit(OpCodes.Pop);
+
+        // Invoke the pending close callback after the close event.
+        var noFinishCallbackLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Brfalse, noFinishCallbackLabel);
+
+        var finishNotTsFuncLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        finishIl.Emit(OpCodes.Brfalse, finishNotTsFuncLabel);
+        finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        finishIl.Emit(OpCodes.Ldc_I4_0);
+        finishIl.Emit(OpCodes.Newarr, _types.Object);
+        finishIl.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        finishIl.Emit(OpCodes.Pop);
+        finishIl.Emit(OpCodes.Br, noFinishCallbackLabel);
+
+        finishIl.MarkLabel(finishNotTsFuncLabel);
+        var finishNotBoundLabel = finishIl.DefineLabel();
+        finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        finishIl.Emit(OpCodes.Brfalse, finishNotBoundLabel);
+        finishIl.Emit(OpCodes.Ldloc, finishCallbackLocal);
+        finishIl.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        finishIl.Emit(OpCodes.Ldc_I4_0);
+        finishIl.Emit(OpCodes.Newarr, _types.Object);
+        finishIl.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        finishIl.Emit(OpCodes.Pop);
+        finishIl.MarkLabel(finishNotBoundLabel);
+        finishIl.MarkLabel(noFinishCallbackLabel);
+        finishIl.Emit(OpCodes.Ret);
+
+        // public void RequestCompleted(HttpListenerResponse response): remove one
+        // active response exactly once, release its reservation, and finish a
+        // pending close when the last response ends.
+        _httpServerRequestCompletedMethod = typeBuilder.DefineMethod(
+            "RequestCompleted",
+            MethodAttributes.Public,
+            _types.Void,
+            [typeof(HttpListenerResponse)]
+        );
+        var completedIl = _httpServerRequestCompletedMethod.GetILGenerator();
+        var remainingLocal = completedIl.DeclareLocal(_types.Int32);
+        var removedValueLocal = completedIl.DeclareLocal(_types.Byte);
+        var responseWasActiveLabel = completedIl.DefineLabel();
+        completedIl.Emit(OpCodes.Ldarg_0);
+        completedIl.Emit(OpCodes.Ldfld, _httpServerActiveResponsesField);
+        completedIl.Emit(OpCodes.Ldarg_1);
+        completedIl.Emit(OpCodes.Ldloca, removedValueLocal);
+        completedIl.Emit(OpCodes.Callvirt, typeof(ConcurrentDictionary<HttpListenerResponse, byte>)
+            .GetMethod("TryRemove", [typeof(HttpListenerResponse), _types.Byte.MakeByRefType()])!);
+        completedIl.Emit(OpCodes.Brtrue, responseWasActiveLabel);
+        completedIl.Emit(OpCodes.Ret);
+        completedIl.MarkLabel(responseWasActiveLabel);
+        completedIl.Emit(OpCodes.Ldarg_0);
+        completedIl.Emit(OpCodes.Ldflda, _httpServerInFlightField);
+        completedIl.Emit(OpCodes.Call, interlockedDecrement);
+        completedIl.Emit(OpCodes.Stloc, remainingLocal);
+        var completedReturnLabel = completedIl.DefineLabel();
+        completedIl.Emit(OpCodes.Ldloc, remainingLocal);
+        completedIl.Emit(OpCodes.Brtrue, completedReturnLabel);
+        completedIl.Emit(OpCodes.Ldarg_0);
+        completedIl.Emit(OpCodes.Ldflda, _httpServerCloseRequestedField);
+        completedIl.Emit(OpCodes.Call, volatileRead);
+        completedIl.Emit(OpCodes.Brfalse, completedReturnLabel);
+        completedIl.Emit(OpCodes.Ldarg_0);
+        completedIl.Emit(OpCodes.Call, _httpServerFinishCloseMethod);
+        completedIl.MarkLabel(completedReturnLabel);
+        completedIl.Emit(OpCodes.Ret);
+
         var method = typeBuilder.DefineMethod(
             "Close",
             MethodAttributes.Public,
@@ -1533,82 +2098,30 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(isListeningLabel);
 
-        // Cancel and stop
-        il.BeginExceptionBlock();
+        // Record the callback before publishing _closeRequested.
+        var noCallbackToStoreLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, noCallbackToStoreLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, _httpServerPendingCloseCallbackField);
+        il.MarkLabel(noCallbackToStoreLabel);
 
-        var noCtsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _httpServerCtsField);
-        il.Emit(OpCodes.Brfalse, noCtsLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _httpServerCtsField);
-        il.Emit(OpCodes.Callvirt, typeof(CancellationTokenSource).GetMethod("Cancel", Type.EmptyTypes)!);
-        il.MarkLabel(noCtsLabel);
-
-        var noListenerLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
-        il.Emit(OpCodes.Brfalse, noListenerLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Stop")!);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _httpServerListenerField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(httpListenerType, "Close")!);
-        il.MarkLabel(noListenerLabel);
-
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
-        il.EndExceptionBlock();
-
-        // _isListening = false
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stfld, _httpServerIsListeningField);
-
-        // EventLoop.Unref()
-        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, runtime.EventLoopUnref);
-
-        // Emit 'close' event
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "close");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Ldflda, _httpServerCloseRequestedField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, interlockedExchange);
         il.Emit(OpCodes.Pop);
 
-        // Call callback if provided
-        var noCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, noCallbackLabel);
-
-        var notTSFunc = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, notTSFunc);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Br, noCallbackLabel);
-
-        il.MarkLabel(notTSFunc);
-        var notBound = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Brfalse, notBound);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(notBound);
-        il.MarkLabel(noCallbackLabel);
+        // No in-flight responses means teardown can complete immediately.
+        var waitForResponsesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, _httpServerInFlightField);
+        il.Emit(OpCodes.Call, volatileRead);
+        il.Emit(OpCodes.Brtrue, waitForResponsesLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _httpServerFinishCloseMethod);
+        il.MarkLabel(waitForResponsesLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
@@ -1641,12 +2154,14 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "address");
-        il.Emit(OpCodes.Ldstr, "0.0.0.0");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerAddressField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "family");
-        il.Emit(OpCodes.Ldstr, "IPv4");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _httpServerFamilyField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
 
         il.Emit(OpCodes.Dup);
@@ -1774,6 +2289,52 @@ public partial class RuntimeEmitter
         wil.EndExceptionBlock();
 
         wil.MarkLabel(afterAccept);
+
+        // Reserve the response before dispatch. Re-check closeRequested after
+        // incrementing to close the accept/close race: if close won, abort this
+        // context and release the reservation without invoking user code.
+        wil.Emit(OpCodes.Ldarg_0);
+        wil.Emit(OpCodes.Ldflda, _httpServerInFlightField);
+        wil.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Increment",
+            [typeof(int).MakeByRefType()])!);
+        wil.Emit(OpCodes.Pop);
+
+        // Register the concrete response so closeAllConnections() can abort it
+        // without stopping the listener, and completion can be idempotent.
+        wil.Emit(OpCodes.Ldarg_0);
+        wil.Emit(OpCodes.Ldfld, _httpServerActiveResponsesField);
+        wil.Emit(OpCodes.Ldloc, ctxLocal);
+        wil.Emit(OpCodes.Callvirt, httpListenerContextType.GetProperty("Response")!.GetGetMethod()!);
+        wil.Emit(OpCodes.Ldc_I4_0);
+        wil.Emit(OpCodes.Callvirt, typeof(ConcurrentDictionary<HttpListenerResponse, byte>)
+            .GetMethod("TryAdd", [typeof(HttpListenerResponse), _types.Byte])!);
+        wil.Emit(OpCodes.Pop);
+
+        var dispatchAcceptedContextLabel = wil.DefineLabel();
+        wil.Emit(OpCodes.Ldarg_0);
+        wil.Emit(OpCodes.Ldflda, _httpServerCloseRequestedField);
+        wil.Emit(OpCodes.Call, typeof(Volatile).GetMethod("Read",
+            [typeof(int).MakeByRefType()])!);
+        wil.Emit(OpCodes.Brfalse, dispatchAcceptedContextLabel);
+
+        wil.BeginExceptionBlock();
+        wil.Emit(OpCodes.Ldloc, ctxLocal);
+        wil.Emit(OpCodes.Callvirt, httpListenerContextType.GetProperty("Response")!.GetGetMethod()!);
+        wil.Emit(OpCodes.Callvirt, typeof(HttpListenerResponse).GetMethod("Abort", Type.EmptyTypes)!);
+        var contextAbortedLabel = wil.DefineLabel();
+        wil.Emit(OpCodes.Leave, contextAbortedLabel);
+        wil.BeginCatchBlock(_types.Exception);
+        wil.Emit(OpCodes.Pop);
+        wil.Emit(OpCodes.Leave, contextAbortedLabel);
+        wil.EndExceptionBlock();
+        wil.MarkLabel(contextAbortedLabel);
+        wil.Emit(OpCodes.Ldarg_0);
+        wil.Emit(OpCodes.Ldloc, ctxLocal);
+        wil.Emit(OpCodes.Callvirt, httpListenerContextType.GetProperty("Response")!.GetGetMethod()!);
+        wil.Emit(OpCodes.Call, _httpServerRequestCompletedMethod);
+        wil.Emit(OpCodes.Br, loopExit);
+
+        wil.MarkLabel(dispatchAcceptedContextLabel);
 
         // Schedule the accept closure on the EventLoop for single-threaded dispatch.
         // This is safe because Fetch is now non-blocking (uses Task.Run + Promise).

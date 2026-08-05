@@ -17,6 +17,81 @@ namespace SharpTS.Tests.SharedTests;
 /// </remarks>
 public class HttpServerLifecycleTests
 {
+    [SkippableTheory, ModeData]
+    public void Server_ListenHost_BindsAllInterfacesAndInvokesThirdArgumentCallback(ExecutionMode mode)
+    {
+        // HttpListener wildcard prefixes require a separately provisioned URL ACL
+        // on Windows. Linux (including the production container) exercises this path.
+        Skip.If(OperatingSystem.IsWindows(),
+            "HttpListener wildcard prefixes require a provisioned Windows URL ACL");
+
+        var interfaceAddress = Dns.GetHostAddresses(Dns.GetHostName())
+            .FirstOrDefault(address =>
+                address.AddressFamily == AddressFamily.InterNetwork &&
+                !IPAddress.IsLoopback(address));
+        Skip.If(interfaceAddress == null, "No non-loopback IPv4 interface is available");
+
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server = http.createServer((req: any, res: any) => res.end('reachable'));
+                server.on('listening', () => {
+                    const address = server.address();
+                    console.log('address=' + address.address);
+                    console.log('family=' + address.family);
+
+                    const request = http.get('http://{{interfaceAddress}}:{{port}}/', (response: any) => {
+                        let body = '';
+                        response.on('data', (chunk: any) => { body += chunk; });
+                        response.on('end', () => {
+                            console.log('body=' + body);
+                            server.close();
+                        });
+                    });
+                    request.on('error', () => {
+                        console.log('client-error');
+                        server.close();
+                    });
+                });
+                server.listen({{port}}, '0.0.0.0', () => console.log('callback'));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("callback", output);
+        Assert.Contains("address=0.0.0.0", output);
+        Assert.Contains("family=IPv4", output);
+        Assert.Contains("body=reachable", output);
+        Assert.DoesNotContain("client-error", output);
+    }
+
+    [Theory, ModeData]
+    public void Server_ListenHost_UsesThirdArgumentCallbackAndReportsAddress(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server = http.createServer((req: any, res: any) => res.end('ok'));
+                server.listen({{port}}, '127.0.0.1', () => {
+                    const address = server.address();
+                    console.log('callback');
+                    console.log('address=' + address.address);
+                    console.log('family=' + address.family);
+                    server.close();
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("callback", output);
+        Assert.Contains("address=127.0.0.1", output);
+        Assert.Contains("family=IPv4", output);
+    }
+
     [Theory, ModeData]
     public void Server_DefaultConfig_IsReadable(ExecutionMode mode)
     {
@@ -60,7 +135,7 @@ public class HttpServerLifecycleTests
     }
 
     [Theory, ModeData]
-    public void Server_CloseAllConnections_StopsServer(ExecutionMode mode)
+    public void Server_CloseAllConnections_DoesNotStopServer(ExecutionMode mode)
     {
         var port = TestPorts.GetAvailablePort();
         var files = new Dictionary<string, string>
@@ -71,13 +146,167 @@ public class HttpServerLifecycleTests
                 server.listen({{port}}, () => {
                     console.log('listening=' + server.listening);
                     server.closeAllConnections();
-                    console.log('done');
+                    console.log('still-listening=' + server.listening);
+                    server.close(() => console.log('done'));
                 });
                 """
         };
         var output = TestHarness.RunModules(files, "./main.ts", mode);
         Assert.Contains("listening=true", output);
+        Assert.Contains("still-listening=true", output);
         Assert.Contains("done", output);
+    }
+
+    [Theory, ModeData]
+    public void Server_CloseAllConnections_BeforeListen_IsANoOp(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as http from 'http';
+                const server: any = http.createServer((_req: any, res: any) => res.end('ok'));
+                server.on('close', () => console.log('unexpected-close'));
+                setTimeout(() => console.log('timer-survived'), 10);
+                server.closeAllConnections();
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("timer-survived", output);
+        Assert.DoesNotContain("unexpected-close", output);
+    }
+
+    [Theory, ModeData]
+    public void Server_CloseAllConnections_KeepsListenerOpen(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server: any = http.createServer((_req: any, res: any) => res.end('still-open'));
+                server.listen({{port}}, async () => {
+                    server.closeAllConnections();
+                    const response = await fetch('http://127.0.0.1:{{port}}/');
+                    console.log(await response.text());
+                    server.close();
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("still-open", output);
+    }
+
+    [Theory, ModeData]
+    public void Server_CloseAllConnections_AbortsActiveResponseWithoutDoubleCompletion(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                let requests = 0;
+                const server: any = http.createServer((_req: any, res: any) => {
+                    requests++;
+                    if (requests === 1) {
+                        server.closeAllConnections();
+                        return;
+                    }
+                    res.end('second-response');
+                });
+                server.listen({{port}}, async () => {
+                    try {
+                        await fetch('http://127.0.0.1:{{port}}/first');
+                    } catch {
+                        console.log('first-aborted');
+                    }
+                    const response = await fetch('http://127.0.0.1:{{port}}/second');
+                    console.log(await response.text());
+                    server.close(() => console.log('closed'));
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("first-aborted", output);
+        Assert.Contains("second-response", output);
+        Assert.Contains("closed", output);
+    }
+
+    [Theory, ModeData]
+    public void Server_Close_DrainsInFlightRequestBeforeCloseEventAndCallback(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server: any = http.createServer((req: any, res: any) => {
+                    server.close(() => console.log('close-callback'));
+                    req.on('data', () => {});
+                    req.on('end', () => {
+                        console.log('request-end');
+                        res.end('drained');
+                    });
+                });
+                server.on('close', () => console.log('close-event'));
+                server.listen({{port}}, async () => {
+                    const response = await fetch('http://127.0.0.1:{{port}}/', {
+                        method: 'POST',
+                        body: 'x'.repeat(50000)
+                    });
+                    console.log('client=' + await response.text());
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("close-event", output);
+        Assert.Contains("close-callback", output);
+        Assert.True(output.IndexOf("request-end", StringComparison.Ordinal) <
+                    output.IndexOf("close-event", StringComparison.Ordinal));
+        Assert.True(output.IndexOf("request-end", StringComparison.Ordinal) <
+                    output.IndexOf("close-callback", StringComparison.Ordinal));
+        Assert.True(output.IndexOf("close-event", StringComparison.Ordinal) <
+                    output.IndexOf("close-callback", StringComparison.Ordinal));
+    }
+
+    [Theory, ModeData]
+    public void Server_CanRelistenFromCloseEventWithoutLosingCallback(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                let closeCount = 0;
+                const server: any = http.createServer((_req: any, res: any) => res.end('second-cycle'));
+                server.on('close', () => {
+                    closeCount++;
+                    console.log('close-event-' + closeCount);
+                    if (closeCount === 1) {
+                        server.listen({{port}}, async () => {
+                            console.log('relistened');
+                            const response = await fetch('http://127.0.0.1:{{port}}/');
+                            console.log(await response.text());
+                            server.close(() => console.log('close-callback-2'));
+                        });
+                    }
+                });
+                server.listen({{port}}, () => {
+                    server.close(() => console.log('close-callback-1'));
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("close-event-1", output);
+        Assert.Contains("close-callback-1", output);
+        Assert.Contains("relistened", output);
+        Assert.Contains("second-cycle", output);
+        Assert.Contains("close-event-2", output);
+        Assert.Contains("close-callback-2", output);
     }
 
     [Theory, InterpretedOnlyData]
