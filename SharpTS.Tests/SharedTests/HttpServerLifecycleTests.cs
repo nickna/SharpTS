@@ -40,7 +40,13 @@ public class HttpServerLifecycleTests
         Skip.If(interfaceAddress == null, "No non-loopback IPv4 interface is available");
 
         var port = TestPorts.GetAvailablePort();
-        var clientTask = GetWithoutProxyWithRetryAsync(interfaceAddress, port);
+        // The full suite compiles thousands of snippets concurrently. Use a dedicated
+        // worker so thread-pool pressure cannot prevent the host-side probe from running.
+        var clientTask = Task.Factory.StartNew(
+            () => GetWithoutProxyWithRetry(interfaceAddress, port),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
@@ -59,7 +65,7 @@ public class HttpServerLifecycleTests
         };
 
         var output = TestHarness.RunModules(
-            files, "./main.ts", mode, timeout: TimeSpan.FromSeconds(15));
+            files, "./main.ts", mode, timeout: TimeSpan.FromSeconds(75));
         var body = clientTask.GetAwaiter().GetResult();
 
         Assert.Contains("callback", output);
@@ -68,7 +74,7 @@ public class HttpServerLifecycleTests
         Assert.Equal("reachable", body);
     }
 
-    private static async Task<string> GetWithoutProxyWithRetryAsync(
+    private static string GetWithoutProxyWithRetry(
         IPAddress address, int port)
     {
         using var handler = new HttpClientHandler { UseProxy = false };
@@ -78,20 +84,22 @@ public class HttpServerLifecycleTests
         };
 
         var uri = new Uri($"http://{address}:{port}/");
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        // This budget includes any compilation that occurs before server.listen().
+        // Keep it below the harness timeout so a genuine bind failure stays bounded.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         Exception? lastException = null;
 
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                return await client.GetStringAsync(uri);
+                return client.GetStringAsync(uri).GetAwaiter().GetResult();
             }
             catch (Exception exception) when (
                 exception is HttpRequestException or TaskCanceledException)
             {
                 lastException = exception;
-                await Task.Delay(25);
+                Thread.Sleep(25);
             }
         }
 
