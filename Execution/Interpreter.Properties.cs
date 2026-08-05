@@ -538,6 +538,51 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// ECMA-262 Get(O, P) for built-in algorithms. Unlike expression member
+    /// access, reading a callable data property does not bind it to its owner;
+    /// the exact stored function identity is returned. Accessor getters still
+    /// run with the original receiver as <c>this</c>.
+    /// </summary>
+    internal object? GetPropertyValue(object? obj, string name)
+    {
+        object? receiver = obj;
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            if (current is SharpTSArray array)
+            {
+                if (name == "length") return (double)array.LongLength;
+                if (long.TryParse(name, System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out long index)
+                    && index >= 0 && array.HasIndex(index))
+                {
+                    return GetArrayIndexValue(array, index).ToObject();
+                }
+                if (array.HasNamedProperty(name))
+                    return array.GetNamedProperty(name);
+                if (GetArrayPrototype().GetExtraGetter(name) is { } arrayGetter)
+                    return BindAccessorToObject(arrayGetter, receiver!).CallBoxed(this, []);
+                if (GetArrayPrototype().HasExtra(name))
+                    return GetArrayPrototype().TryGetExtra(name);
+                return GetProperty(current, name);
+            }
+
+            if (current is SharpTSObject record)
+            {
+                if (record.GetGetter(name) is { } getter)
+                    return BindAccessorToObject(getter, receiver!).CallBoxed(this, []);
+                if (record.HasSetter(name)) return SharpTSUndefined.Instance;
+                if (record.Fields.TryGetValue(name, out var value)) return value;
+                current = GetRecordPrototype(record);
+                continue;
+            }
+
+            return GetProperty(current, name);
+        }
+        return SharpTSUndefined.Instance;
+    }
+
+    /// <summary>
     /// ECMA-262 §7.3.11 HasProperty(O, P): true when <paramref name="obj"/> or
     /// anything on its prototype chain has an own data field OR an accessor
     /// (getter or setter) named <paramref name="name"/>. Unlike the type-specific
@@ -551,6 +596,12 @@ public partial class Interpreter
     {
         for (int depth = 0; depth < 64 && obj is not (null or SharpTSUndefined); depth++)
         {
+            if (obj is SharpTSArray array)
+            {
+                if (array.HasOwnProperty(name)) return true;
+                if (GetArrayPrototype().HasExtra(name)) return true;
+                return GetProperty(array, name) is not (null or SharpTSUndefined);
+            }
             if (obj is SharpTSObject so)
             {
                 // SharpTSObject.HasProperty covers own fields + getters; add setters
@@ -1018,6 +1069,21 @@ public partial class Interpreter
                 return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(classMethod, subclassArray));
         }
 
+        // Numeric-string index on $Array — `arr["0"]` is equivalent to
+        // `arr[0]` per JS semantics. ECMA-262 §10.4.2 (Array exotic objects)
+        // makes string-coerced canonical numeric indices behave like ordinary
+        // index access. Built-in spec algorithms (e.g. RegExp Symbol.match's
+        // `Get(result, "0")`) rely on this — without it, numeric-string Get
+        // returns undefined and the algorithm reads the wrong value.
+        if (obj is SharpTSArray arrIdx
+            && long.TryParse(memberName, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out long idx)
+            && idx >= 0 && idx < arrIdx.Length
+            && arrIdx.HasIndex(idx))
+        {
+            return GetArrayIndexValue(arrIdx, idx);
+        }
+
         if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
             return BindAccessorToObject(prototypeGetter, obj).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);
@@ -1032,20 +1098,6 @@ public partial class Interpreter
             && GetArrayPrototype().GetMember(memberName) is { } arrayConstructor)
         {
             return RuntimeValue.FromBoxed(arrayConstructor);
-        }
-
-        // Numeric-string index on $Array — `arr["0"]` is equivalent to
-        // `arr[0]` per JS semantics. ECMA-262 §10.4.2 (Array exotic objects)
-        // makes string-coerced canonical numeric indices behave like ordinary
-        // index access. Built-in spec algorithms (e.g. RegExp Symbol.match's
-        // `Get(result, "0")`) rely on this — without it, numeric-string Get
-        // returns undefined and the algorithm reads the wrong value.
-        if (obj is SharpTSArray arrIdx
-            && int.TryParse(memberName, System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out int idx)
-            && idx >= 0 && idx < arrIdx.Length)
-        {
-            return GetArrayIndexValue(arrIdx, idx);
         }
 
         // Standard array built-in members via category dispatch

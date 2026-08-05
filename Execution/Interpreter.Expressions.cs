@@ -849,6 +849,12 @@ public partial class Interpreter
                 && idx <= SharpTSArray.MaxWriteIndex
                 && Math.Truncate(idx) == idx
             => new IndexTarget.Array(array, (long)idx),
+        (SharpTSArray array, string idx)
+            when long.TryParse(idx, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out long parsed)
+                && parsed >= 0
+                && parsed <= SharpTSArray.MaxWriteIndex
+            => new IndexTarget.Array(array, parsed),
         (SharpTSArray array, _) => new IndexTarget.ArrayString(
             array, PropertyKeyConverter.ToPropertyKeyString(index)),
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
@@ -1110,6 +1116,17 @@ public partial class Interpreter
 
     private RuntimeValue GetArrayIndexValue(SharpTSArray array, long index)
     {
+        // Arguments objects are array-like, not Array exotic objects. Adding an
+        // index beyond their initial argument count creates an ordinary indexed
+        // property without changing the independent `length` data property.
+        if (array is SharpTSArguments
+            && !array.HasIndex(index)
+            && array.HasNamedProperty(index.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)))
+        {
+            return RuntimeValue.FromBoxed(array.GetNamedProperty(index.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)));
+        }
         if (array.TryGetIndexAccessor(index, out var getter, out _))
         {
             if (getter == null) return RuntimeValue.Undefined;
@@ -1332,6 +1349,12 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
+                if (t.Target is SharpTSArguments && t.Index >= t.Target.LongLength)
+                {
+                    t.Target.SetNamedProperty(t.Index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture), value);
+                    break;
+                }
                 if (t.Target.TryGetIndexAccessor(
                     t.Index, out _, out var indexSetter))
                 {

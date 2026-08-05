@@ -208,6 +208,15 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         // not the bare `"ab"`. Objects/arrays are returned unchanged. (#454)
         object? receiver = BuiltIns.BuiltInConstructorFactory.ToObject(_receiver);
 
+        // indexOf/lastIndexOf are deliberately not routed through the eager
+        // materialization below. Their HasProperty/Get steps must observe
+        // mutations caused by fromIndex coercion and by earlier indexed getters.
+        if (_name is "indexOf" or "lastIndexOf")
+        {
+            return BuiltIns.ArrayBuiltIns.SearchArrayLike(
+                interpreter, receiver!, arguments, fromEnd: _name == "lastIndexOf");
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         if (receiver is SharpTSArray arr)
             return _inner.Bind(arr).Call(interpreter, arguments);

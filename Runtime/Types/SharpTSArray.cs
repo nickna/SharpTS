@@ -892,7 +892,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (name == "length") return true;
         if (uint.TryParse(name, out uint index) && index < uint.MaxValue)
-            return HasIndex(index);
+            return HasIndex(index) || HasNamedProperty(name);
         return HasNamedProperty(name);
     }
 
@@ -929,9 +929,42 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public void SetNamedProperty(string name, object? value)
     {
         if (IsFrozen) return;
+        if (!IsExtensible && !HasNamedProperty(name)) return;
 
         _namedProperties ??= new Dictionary<string, object?>();
         _namedProperties[name] = value;
+    }
+
+    /// <summary>
+    /// Deletes an own indexed or named property while enforcing its
+    /// configurable descriptor flag.
+    /// </summary>
+    internal bool DeletePropertyStrict(string name, bool strictMode)
+    {
+        var descriptor = GetOwnPropertyDescriptor(name);
+        if (descriptor is null) return true;
+        if (!descriptor.Configurable)
+        {
+            if (strictMode)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot delete property '{name}' of array"));
+            }
+            return false;
+        }
+
+        if (uint.TryParse(name, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out uint index)
+            && index < uint.MaxValue)
+        {
+            DeleteAt(index);
+        }
+        else
+        {
+            _namedProperties?.Remove(name);
+        }
+        _descriptors?.Remove(name);
+        return true;
     }
 
     /// <summary>

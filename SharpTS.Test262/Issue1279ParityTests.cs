@@ -299,6 +299,68 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    public static TheoryData<string> ArrayIndexSearchCases => new()
+    {
+        "built-ins/Array/prototype/indexOf/15.4.4.14-2-17.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-19.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-23.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-24.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-25.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-26.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-5-27.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-10.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-a-2.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-a-3.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-a-5.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-a-6.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-b-ii-4.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-b-ii-5.js",
+        "built-ins/Array/prototype/indexOf/call-with-boolean.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-5.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-17.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-19.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-21.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-22.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-23.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-24.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-25.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-26.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-27.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-10.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-11.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-13.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-15.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-2.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-3.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-7.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-i-29.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-ii-4.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-ii-5.js",
+        "built-ins/Array/prototype/lastIndexOf/call-with-boolean.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ArrayIndexSearchCases))]
+    public void Array_index_searches_observe_live_properties_and_coercion_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-2-4.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-4.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-12.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-16.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-9.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-7-6.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-7-5.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-8-6.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-7-6.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-11.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-4.js")]
+    public void Interpreted_array_traversal_preserves_length_prototypes_and_sparse_indices(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Array/prototype/every/15.4.4.16-4-1.js")]
     [InlineData("built-ins/Array/prototype/some/15.4.4.17-4-1.js")]

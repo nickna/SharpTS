@@ -866,6 +866,7 @@ public partial class Interpreter
 
         return obj switch
         {
+            SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
             SharpTSMath math => math.DeleteExtra(name),
@@ -917,6 +918,7 @@ public partial class Interpreter
 
         return obj switch
         {
+            SharpTSArray array => array.DeletePropertyStrict(keyStr, strictMode),
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
             SharpTSMath math => math.DeleteExtra(keyStr),

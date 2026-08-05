@@ -419,78 +419,111 @@ public static class ArrayBuiltIns
         return RuntimeValue.False;
     }
 
-    private static RuntimeValue IndexOfV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        // ECMA-262 23.1.3.17: skips holes. Uses strict equality (===) which never
-        // matches a hole. Optional `fromIndex` clamps the starting index; negative
-        // values are relative to length.
-        var searchElement = args[0].ToObject();
-        int len = arr.Length;
-        int start = 0;
-        if (args.Length > 1)
-        {
-            double fromIndex = ToIntegerOrInfinity(args[1].ToObject());
-            if (double.IsPositiveInfinity(fromIndex)) return RuntimeValue.FromNumber(-1);
-            if (double.IsNegativeInfinity(fromIndex)) start = 0;
-            else if (fromIndex >= 0) start = (int)Math.Min(fromIndex, len);
-            else start = (int)Math.Max(len + fromIndex, 0);
-        }
-        for (int idx = start; idx < len; idx++)
-        {
-            if (!arr.HasIndex(idx)) continue;
-            if (IsEqual(arr[idx], searchElement))
-                return RuntimeValue.FromNumber(idx);
-        }
-        return RuntimeValue.FromNumber(-1);
-    }
+    private static RuntimeValue IndexOfV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromNumber(SearchArrayLike(
+            interpreter,
+            arr,
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance,
+            args.Length > 1,
+            args.Length > 1 ? args[1].ToObject() : null,
+            fromEnd: false));
 
-    private static RuntimeValue LastIndexOfV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue LastIndexOfV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromNumber(SearchArrayLike(
+            interpreter,
+            arr,
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance,
+            args.Length > 1,
+            args.Length > 1 ? args[1].ToObject() : null,
+            fromEnd: true));
+
+    /// <summary>
+    /// ECMA-262 23.1.3.17/18 generic array-like search. Length is captured once,
+    /// but HasProperty/Get are performed for every visited index so getters and
+    /// mutations caused by <c>fromIndex</c> coercion or an earlier indexed getter
+    /// remain observable.
+    /// </summary>
+    internal static double SearchArrayLike(
+        Interpreter interpreter,
+        object receiver,
+        IReadOnlyList<object?> args,
+        bool fromEnd)
+        => SearchArrayLike(
+            interpreter,
+            receiver,
+            args.Count > 0 ? args[0] : SharpTSUndefined.Instance,
+            args.Count > 1,
+            args.Count > 1 ? args[1] : null,
+            fromEnd);
+
+    private static double SearchArrayLike(
+        Interpreter interpreter,
+        object receiver,
+        object? searchElement,
+        bool hasFromIndex,
+        object? fromIndexValue,
+        bool fromEnd)
     {
-        // ECMA-262 23.1.3.18: skips holes. Searches backwards from `fromIndex`
-        // (default: length - 1). Negative fromIndex is relative to length;
-        // NaN becomes 0 → returns -1.
-        var searchElement = args[0].ToObject();
-        int len = arr.Length;
-        int start;
-        if (args.Length > 1)
+        long len = ToLength(interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (len == 0) return -1;
+
+        double fromIndex = hasFromIndex
+            ? ToIntegerOrInfinity(interpreter, fromIndexValue)
+            : fromEnd ? len - 1 : 0;
+
+        long index;
+        if (fromEnd)
         {
-            double fromIndex = ToIntegerOrInfinity(args[1].ToObject());
-            if (double.IsNegativeInfinity(fromIndex)) return RuntimeValue.FromNumber(-1);
-            if (fromIndex >= 0) start = (int)Math.Min(fromIndex, len - 1);
-            else start = (int)(len + fromIndex);
+            if (double.IsNegativeInfinity(fromIndex) || fromIndex < -len) return -1;
+            index = double.IsPositiveInfinity(fromIndex) || fromIndex >= len
+                ? len - 1
+                : fromIndex >= 0
+                    ? (long)fromIndex
+                    : (long)(len + fromIndex);
         }
         else
         {
-            start = len - 1;
+            if (double.IsPositiveInfinity(fromIndex) || fromIndex >= len) return -1;
+            index = double.IsNegativeInfinity(fromIndex) || fromIndex < -len
+                ? 0
+                : fromIndex >= 0
+                    ? (long)fromIndex
+                    : (long)(len + fromIndex);
         }
-        for (int idx = start; idx >= 0; idx--)
+
+        long step = fromEnd ? -1 : 1;
+        for (; index >= 0 && index < len; index += step)
         {
-            if (!arr.HasIndex(idx)) continue;
-            if (IsEqual(arr[idx], searchElement))
-                return RuntimeValue.FromNumber(idx);
+            string key = index.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (!interpreter.HasProperty(receiver, key)) continue;
+            if (IsStrictlyEqual(interpreter.GetPropertyValue(receiver, key), searchElement))
+                return index;
         }
-        return RuntimeValue.FromNumber(-1);
+        return -1;
+    }
+
+    private static long ToLength(object? value, Interpreter interpreter)
+    {
+        double number = interpreter.ToNumberWithPrimitive(value);
+        if (double.IsNaN(number) || number <= 0) return 0;
+        const long MaxSafeInteger = (1L << 53) - 1;
+        if (double.IsPositiveInfinity(number)) return MaxSafeInteger;
+        return (long)Math.Min(Math.Truncate(number), MaxSafeInteger);
     }
 
     /// <summary>
-    /// ECMA-262 7.1.5 ToIntegerOrInfinity — coerces to integer, keeping
-    /// ±Infinity and mapping NaN to 0.
+    /// ECMA-262 7.1.5 ToIntegerOrInfinity. Full ToNumber coercion is required:
+    /// strings may be hexadecimal and objects may run valueOf/toString or throw.
     /// </summary>
-    private static double ToIntegerOrInfinity(object? value)
+    private static double ToIntegerOrInfinity(Interpreter interpreter, object? value)
     {
-        double d = value switch
-        {
-            double n => n,
-            bool b => b ? 1.0 : 0.0,
-            string s => double.TryParse(s, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN,
-            null => 0,
-            SharpTSUndefined => double.NaN,
-            _ => double.NaN,
-        };
-        if (double.IsNaN(d)) return 0;
-        if (double.IsInfinity(d)) return d;
-        return Math.Truncate(d);
+        double number = interpreter.ToNumberWithPrimitive(value);
+        if (double.IsNaN(number)) return 0;
+        if (double.IsInfinity(number)) return number;
+        return Math.Truncate(number);
     }
 
     private static RuntimeValue JoinV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -706,8 +739,8 @@ public static class ArrayBuiltIns
         List<object?> result = new(len);
         for (int i = 0; i < len; i++)
         {
-            if (arr.HasIndex(i))
-                result.Add(iter.Invoke(interp, arr[i], i));
+            if (TryGetPresentElement(interp, arr, i, out var element))
+                result.Add(iter.Invoke(interp, element, i));
             else
                 result.Add(ArrayHole.Instance);  // preserve hole
         }
@@ -722,9 +755,9 @@ public static class ArrayBuiltIns
         int len = arr.Length;
         for (int i = 0; i < len; i++)
         {
-            if (!arr.HasIndex(i)) continue;
-            if (iter.InvokeRV(interp, arr[i], i).IsTruthy())
-                result.Add(arr[i]);
+            if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
+            if (iter.InvokeRV(interp, element, i).IsTruthy())
+                result.Add(element);
         }
         return RuntimeValue.FromObject(new SharpTSArray(result));
     }
@@ -736,8 +769,8 @@ public static class ArrayBuiltIns
         int len = arr.Length;
         for (int i = 0; i < len; i++)
         {
-            if (!arr.HasIndex(i)) continue;
-            iter.InvokeRV(interp, arr[i], i);
+            if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
+            iter.InvokeRV(interp, element, i);
         }
         return RuntimeValue.Undefined;
     }
@@ -775,8 +808,8 @@ public static class ArrayBuiltIns
         int len = arr.Length;
         for (int i = 0; i < len; i++)
         {
-            if (!arr.HasIndex(i)) continue;
-            if (iter.InvokeRV(interp, arr[i], i).IsTruthy())
+            if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
+            if (iter.InvokeRV(interp, element, i).IsTruthy())
                 return RuntimeValue.True;
         }
         return RuntimeValue.False;
@@ -789,8 +822,8 @@ public static class ArrayBuiltIns
         int len = arr.Length;
         for (int i = 0; i < len; i++)
         {
-            if (!arr.HasIndex(i)) continue;
-            if (!iter.InvokeRV(interp, arr[i], i).IsTruthy())
+            if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
+            if (!iter.InvokeRV(interp, element, i).IsTruthy())
                 return RuntimeValue.False;
         }
         return RuntimeValue.True;
@@ -815,13 +848,18 @@ public static class ArrayBuiltIns
         {
             // Find first present index.
             int firstPresent = -1;
+            object? firstValue = null;
             for (int i = 0; i < len; i++)
             {
-                if (arr.HasIndex(i)) { firstPresent = i; break; }
+                if (TryGetPresentElement(interp, arr, i, out firstValue))
+                {
+                    firstPresent = i;
+                    break;
+                }
             }
             if (firstPresent < 0)
                 throw TypeError("Reduce of empty array with no initial value");
-            accumulator = arr[firstPresent];
+            accumulator = firstValue;
             startIndex = firstPresent + 1;
         }
 
@@ -834,9 +872,9 @@ public static class ArrayBuiltIns
             callbackArgs.Add(arr);
             for (int i = startIndex; i < len; i++)
             {
-                if (!arr.HasIndex(i)) continue;
+                if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
                 callbackArgs[0] = accumulator;
-                callbackArgs[1] = arr[i];
+                callbackArgs[1] = element;
                 callbackArgs[2] = (double)i;
                 accumulator = callback.Call(interp, callbackArgs);
             }
@@ -865,13 +903,18 @@ public static class ArrayBuiltIns
         else
         {
             int lastPresent = -1;
+            object? lastValue = null;
             for (int i = len - 1; i >= 0; i--)
             {
-                if (arr.HasIndex(i)) { lastPresent = i; break; }
+                if (TryGetPresentElement(interp, arr, i, out lastValue))
+                {
+                    lastPresent = i;
+                    break;
+                }
             }
             if (lastPresent < 0)
                 throw TypeError("Reduce of empty array with no initial value");
-            accumulator = arr[lastPresent];
+            accumulator = lastValue;
             startIndex = lastPresent - 1;
         }
 
@@ -884,9 +927,9 @@ public static class ArrayBuiltIns
             callbackArgs.Add(arr);
             for (int i = startIndex; i >= 0; i--)
             {
-                if (!arr.HasIndex(i)) continue;
+                if (!TryGetPresentElement(interp, arr, i, out var element)) continue;
                 callbackArgs[0] = accumulator;
-                callbackArgs[1] = arr[i];
+                callbackArgs[1] = element;
                 callbackArgs[2] = (double)i;
                 accumulator = callback.Call(interp, callbackArgs);
             }
@@ -945,6 +988,34 @@ public static class ArrayBuiltIns
     {
         if (a == null && b == null) return true;
         if (a == null) return false;
+        return a.Equals(b);
+    }
+
+    private static bool TryGetPresentElement(
+        Interpreter interpreter, SharpTSArray array, int index, out object? value)
+    {
+        string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (!interpreter.HasProperty(array, key))
+        {
+            value = null;
+            return false;
+        }
+        value = interpreter.GetPropertyValue(array, key);
+        return true;
+    }
+
+    private static bool IsStrictlyEqual(object? a, object? b)
+    {
+        if (a == null && b == null) return true;
+        if (a is SharpTSUndefined && b is SharpTSUndefined) return true;
+        if (a == null || b == null || a is SharpTSUndefined || b is SharpTSUndefined)
+            return false;
+        if (a.GetType() != b.GetType()) return false;
+        if (a is double da && b is double db
+            && (double.IsNaN(da) || double.IsNaN(db)))
+        {
+            return false;
+        }
         return a.Equals(b);
     }
 
