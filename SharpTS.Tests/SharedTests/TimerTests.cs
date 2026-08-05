@@ -112,6 +112,25 @@ public class TimerTests
     }
 
     [Theory, ModeData]
+    public void SetTimeout_CallbackCallingDateNow_DoesNotReenterTimerProcessing(ExecutionMode mode)
+    {
+        var source = @"
+            let calls = 0;
+            setTimeout(() => {
+                calls++;
+                console.log(Date.now() >= 0);
+            }, 0);
+
+            const started = Date.now();
+            while (calls === 0 && Date.now() - started < 5000) { }
+            console.log(calls);
+        ";
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n1\n", output);
+    }
+
+    [Theory, ModeData]
     public void SetTimeout_Unref_AllowsExit_Interpreted(ExecutionMode mode)
     {
         // unref() drops a timer's hold on the event loop: the program exits once

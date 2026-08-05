@@ -85,10 +85,19 @@ public partial class RuntimeEmitter
         );
         _ = initializedField;
 
+        // Static field: int _processingTimers. Date.now() cooperatively pumps
+        // timers, so callbacks that call Date.now() can otherwise recursively
+        // enter ProcessPendingTimers and remove the same timer twice.
+        var processingTimersField = runtimeType.DefineField(
+            "_processingTimers",
+            _types.Int32,
+            FieldAttributes.Private | FieldAttributes.Static
+        );
+
         // Emit helper methods
         EmitEnsureTimerInitialized(runtimeType, runtime, timerQueueField, startTicksField, initializedField);
         EmitGetCurrentTimeMs(runtimeType, runtime, startTicksField, initializedField);
-        EmitProcessPendingTimers(runtimeType, runtime, timerQueueField);
+        EmitProcessPendingTimers(runtimeType, runtime, timerQueueField, processingTimersField);
         EmitAddVirtualTimer(runtimeType, runtime, timerQueueField);
     }
 
@@ -180,7 +189,8 @@ public partial class RuntimeEmitter
     private void EmitProcessPendingTimers(
         TypeBuilder runtimeType,
         EmittedRuntime runtime,
-        FieldBuilder timerQueueField)
+        FieldBuilder timerQueueField,
+        FieldBuilder processingTimersField)
     {
         var method = runtimeType.DefineMethod(
             "ProcessPendingTimers",
@@ -192,6 +202,24 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var resultLocal = il.DeclareLocal(_types.Int32);
+        var processTimersLabel = il.DefineLabel();
+        var returnLabel = il.DefineLabel();
+
+        // if (Interlocked.Exchange(ref _processingTimers, 1) != 0) return -1;
+        // Date.now() calls this method, including from inside timer callbacks.
+        // A nested pass must not observe and remove the timer being fired by the
+        // outer pass. The finally block below always releases the guard.
+        il.Emit(OpCodes.Ldsflda, processingTimersField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Exchange",
+            [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.Emit(OpCodes.Brfalse, processTimersLabel);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(processTimersLabel);
+        il.BeginExceptionBlock();
 
         // Get generic methods for List<$VirtualTimer> using TypeBuilder.GetMethod
         var listOpenCountGetter = _types.GetProperty(_types.ListOpen, "Count")!.GetGetMethod()!;
@@ -390,7 +418,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I8, long.MaxValue);
         il.Emit(OpCodes.Bne_Un, hasTimers);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Leave, returnLabel);
 
         il.MarkLabel(hasTimers);
         // Re-read current time for accurate delay (callbacks may have taken time)
@@ -404,6 +433,18 @@ public partial class RuntimeEmitter
         // return Math.Max(0, delay)
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldsflda, processingTimersField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, typeof(Volatile).GetMethod("Write",
+            [typeof(int).MakeByRefType(), typeof(int)])!);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
 
