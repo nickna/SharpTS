@@ -18,15 +18,15 @@
 
   <UsingTask TaskName="ResolveSharpTSNativeInteropPayloads"
              TaskFactory="RoslynCodeTaskFactory"
-             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+             AssemblyFile="$([MSBuild]::NormalizePath('$(MSBuildToolsPath)', 'Microsoft.Build.Tasks.Core.dll'))">
     <ParameterGroup>
       <RootAssemblyNames ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="false" />
       <ReferencePaths ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
       <Payloads ParameterType="Microsoft.Build.Framework.ITaskItem[]" Output="true" />
     </ParameterGroup>
     <Task>
-      <Reference Include="$(MSBuildToolsPath)\Sdks\Microsoft.NET.Sdk\tools\net472\System.Reflection.Metadata.dll" />
-      <Reference Include="$(MSBuildToolsPath)\Sdks\Microsoft.NET.Sdk\tools\net472\System.Collections.Immutable.dll" />
+      <Reference Include="$([MSBuild]::NormalizePath('$(MSBuildToolsPath)', 'Sdks/Microsoft.NET.Sdk/tools/net472/System.Reflection.Metadata.dll'))" />
+      <Reference Include="$([MSBuild]::NormalizePath('$(MSBuildToolsPath)', 'Sdks/Microsoft.NET.Sdk/tools/net472/System.Collections.Immutable.dll'))" />
       <Using Namespace="System" />
       <Using Namespace="System.Collections.Generic" />
       <Using Namespace="System.IO" />
