@@ -89,6 +89,12 @@ public class DiagnosticReporterTests
     }
 
     [Fact]
+    public void DiagnosticCode_ManagedBuildRequired_HasStableIdentifier()
+    {
+        Assert.Equal("SHARPTS007", DiagnosticCode.ManagedBuildRequired.ToSharpTSCode());
+    }
+
+    [Fact]
     public void DiagnosticCode_TypeError_FormatsAs001()
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };

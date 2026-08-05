@@ -9,6 +9,16 @@ namespace SharpTS.Tests.IntegrationTests;
 public class CliErrorTests
 {
     [Fact]
+    public void ManagedBuildRequiredError_UsesStableCodeAndFeatureContext()
+    {
+        var error = SharpTSCli.FormatManagedBuildRequiredError(
+            "compiled output requiring the managed SharpTS host (child_process.fork)");
+
+        Assert.StartsWith("Error SHARPTS007:", error);
+        Assert.Contains("child_process.fork", error);
+    }
+
+    [Fact]
     public void StandardFormat_OutputsErrorPrefix()
     {
         using var tempDir = CliTestHelper.CreateTempDirectory();

@@ -65,7 +65,7 @@ public record Diagnostic(
             DiagnosticSeverity.Info => "message",
             _ => "error"
         };
-        var code = $"SHARPTS{(int)Code:D3}";
+        var code = Code.ToSharpTSCode();
 
         return $"{file}({Line},{Column}): {severity} {code}: {Message}";
     }

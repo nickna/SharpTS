@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using SharpTS.Diagnostics;
 using Xunit;
 
 namespace SharpTS.Tests.Architecture;
@@ -81,6 +82,24 @@ public class AotSeamArchitectureTests
         Assert.True(offenders.Count == 0,
             "CustomAttributeBuilder usage found; emit attribute blobs through " +
             "CustomAttributeEncoder instead:\n" + string.Join('\n', offenders));
+    }
+
+    [Fact]
+    public void NativeAot_workflows_use_the_stable_managed_build_diagnostic_guard()
+    {
+        string root = FindRepoRoot();
+        string guardPath = Path.Combine(root, "scripts", "assert-managed-build-required.sh");
+        string guard = File.ReadAllText(guardPath);
+        Assert.Contains(DiagnosticCode.ManagedBuildRequired.ToSharpTSCode(), guard);
+
+        foreach (string workflowName in new[] { "ci.yml", "publish.yml" })
+        {
+            string workflow = File.ReadAllText(
+                Path.Combine(root, ".github", "workflows", workflowName));
+            Assert.Contains("scripts/assert-managed-build-required.sh", workflow);
+            Assert.DoesNotContain(
+                "child_process.fork in compiled output is not available", workflow);
+        }
     }
 
     /// <summary>

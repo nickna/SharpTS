@@ -29,6 +29,12 @@ public enum DiagnosticCode
     /// <summary>General/unclassified error.</summary>
     General = 0,
 
+    /// <summary>
+    /// The requested operation is unavailable in the current runtime SKU and requires the
+    /// managed SharpTS build.
+    /// </summary>
+    ManagedBuildRequired = 7,
+
     // Type errors (1XX)
     /// <summary>Type checking error (general).</summary>
     TypeError = 1,
@@ -56,4 +62,11 @@ public enum DiagnosticCode
     // Runtime errors (6XX)
     /// <summary>Runtime error (general).</summary>
     RuntimeError = 6,
+}
+
+/// <summary>Formatting helpers for SharpTS's stable diagnostic identifiers.</summary>
+public static class DiagnosticCodeExtensions
+{
+    /// <summary>Formats a diagnostic code as its stable <c>SHARPTS###</c> identifier.</summary>
+    public static string ToSharpTSCode(this DiagnosticCode code) => $"SHARPTS{(int)code:D3}";
 }

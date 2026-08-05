@@ -212,11 +212,18 @@ static void RequireManagedBuild(string feature)
 {
     if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
     {
-        Console.Error.WriteLine(
-            $"Error: {feature} is not available in the native SharpTS build — use the managed build.");
+        Console.Error.WriteLine(FormatManagedBuildRequiredError(feature));
         Environment.Exit(1);
     }
 }
+
+/// <summary>
+/// Formats the stable CLI diagnostic used when a runtime SKU cannot provide a managed-only
+/// capability. Automation must match the code and feature context, not the mutable prose.
+/// </summary>
+internal static string FormatManagedBuildRequiredError(string feature) =>
+    $"Error {DiagnosticCode.ManagedBuildRequired.ToSharpTSCode()}: " +
+    $"{feature} is not available in the native SharpTS build — use the managed build.";
 
 /// <summary>
 /// Discovers tsconfig.json (or loads the one named by -p/--project) and folds it under the
