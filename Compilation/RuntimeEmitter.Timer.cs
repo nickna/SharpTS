@@ -204,14 +204,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, runtime.VirtualTimerIsCancelled);
 
-        // if (_hasRef) { _hasRef = false; _virtualTimer.HasRef = false; EventLoop.Unref(); }
+        // The virtual timer owns the live loop ref. A one-shot timer can already
+        // have fired while its public handle still reports _hasRef=true; checking
+        // the virtual timer prevents clearTimeout(firedHandle) from Unref'ing a
+        // different live handle (for example, an HTTP server).
         var skipUnref = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, hasRefField);
-        il.Emit(OpCodes.Brfalse, skipUnref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, hasRefField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, virtualTimerField);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Brfalse, skipUnref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, virtualTimerField);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -241,6 +245,12 @@ public partial class RuntimeEmitter
         // if (!_hasRef) { _hasRef = true; _virtualTimer.HasRef = true; EventLoop.Ref(); }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, hasRefField);
+        il.Emit(OpCodes.Brtrue, alreadyRef);
+
+        // A cancelled or completed one-shot timer cannot become live again.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, virtualTimerField);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
         il.Emit(OpCodes.Brtrue, alreadyRef);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -273,7 +283,8 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var alreadyUnref = il.DefineLabel();
 
-        // if (_hasRef) { _hasRef = false; _virtualTimer.HasRef = false; EventLoop.Unref(); }
+        // Update the public handle state, but only release the loop when the
+        // virtual timer still owns a ref. This is idempotent after firing.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, hasRefField);
         il.Emit(OpCodes.Brfalse, alreadyUnref);
@@ -281,6 +292,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, hasRefField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, virtualTimerField);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Brfalse, alreadyUnref);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, virtualTimerField);
         il.Emit(OpCodes.Ldc_I4_0);

@@ -1025,10 +1025,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, runtime.TSHttpRequestCtor);
             il.Emit(OpCodes.Stloc, reqLocal);
 
-            // var res = new $HttpResponse(ctx.Response)
+            // var res = new $HttpResponse(ctx.Response, _server.RequestCompleted)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, ctxField);
             il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Response")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, serverField);
+            il.Emit(OpCodes.Ldftn, _httpServerRequestCompletedMethod);
+            il.Emit(OpCodes.Newobj, typeof(Action<HttpListenerResponse>).GetConstructor(
+                [_types.Object, typeof(IntPtr)])!);
             il.Emit(OpCodes.Newobj, runtime.TSHttpResponseCtor);
             il.Emit(OpCodes.Stloc, resLocal);
 
@@ -1080,57 +1085,122 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(noCb);
 
-            // Read the request body and emit 'data' before 'end' (#1048 on-demand body),
-            // so req.on('data') receives the posted payload as a $Buffer. Listeners were
-            // attached synchronously by the handler above.
-            var bodyBytesLocal = il.DeclareLocal(typeof(byte[]));
-            il.BeginExceptionBlock();
-            {
-                var msLocal = il.DeclareLocal(typeof(System.IO.MemoryStream));
-                il.Emit(OpCodes.Newobj, typeof(System.IO.MemoryStream).GetConstructor(Type.EmptyTypes)!);
-                il.Emit(OpCodes.Stloc, msLocal);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, ctxField);
-                il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Request")!.GetGetMethod()!);
-                il.Emit(OpCodes.Callvirt, typeof(HttpListenerRequest).GetProperty("InputStream")!.GetGetMethod()!);
-                il.Emit(OpCodes.Ldloc, msLocal);
-                il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("CopyTo", [typeof(System.IO.Stream)])!);
-                il.Emit(OpCodes.Ldloc, msLocal);
-                il.Emit(OpCodes.Callvirt, typeof(System.IO.MemoryStream).GetMethod("ToArray", Type.EmptyTypes)!);
-                il.Emit(OpCodes.Stloc, bodyBytesLocal);
-            }
-            il.BeginCatchBlock(typeof(Exception));
-            il.Emit(OpCodes.Pop);
-            il.EndExceptionBlock();
+            // Stream the request body in bounded chunks. The previous CopyTo(MemoryStream)
+            // buffered an attacker-controlled upload in full before emitting one data event,
+            // which prevented user code from enforcing a body limit. Listeners were attached
+            // synchronously by the handler above, so each chunk can be delivered immediately.
+            var bodyBufferLocal = il.DeclareLocal(typeof(byte[]));
+            var bodyChunkLocal = il.DeclareLocal(typeof(byte[]));
+            var bodyStreamLocal = il.DeclareLocal(typeof(System.IO.Stream));
+            var bodyReadLocal = il.DeclareLocal(_types.Int32);
+            var bodyReadSucceededLocal = il.DeclareLocal(_types.Boolean);
 
-            // if (bytes != null && bytes.Length > 0) req.Emit("data", [ new $Buffer(bytes) ])
-            var skipData = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, bodyBytesLocal);
-            il.Emit(OpCodes.Brfalse, skipData);
-            il.Emit(OpCodes.Ldloc, bodyBytesLocal);
+            il.Emit(OpCodes.Ldc_I4, 16384);
+            il.Emit(OpCodes.Newarr, _types.Byte);
+            il.Emit(OpCodes.Stloc, bodyBufferLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, ctxField);
+            il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Request")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, typeof(HttpListenerRequest).GetProperty("InputStream")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, bodyStreamLocal);
+
+            var bodyLoopLabel = il.DefineLabel();
+            var bodyLoopCompleteLabel = il.DefineLabel();
+            var bodyReadFinishedLabel = il.DefineLabel();
+
+            il.BeginExceptionBlock();
+            il.MarkLabel(bodyLoopLabel);
+
+            // destroy() can be called from a data listener to stop consumption.
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Brtrue, bodyLoopCompleteLabel);
+
+            il.Emit(OpCodes.Ldloc, bodyStreamLocal);
+            il.Emit(OpCodes.Ldloc, bodyBufferLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, bodyBufferLocal);
             il.Emit(OpCodes.Ldlen);
             il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Brfalse, skipData);
+            il.Emit(OpCodes.Callvirt, typeof(System.IO.Stream).GetMethod("Read", [typeof(byte[]), _types.Int32, _types.Int32])!);
+            il.Emit(OpCodes.Stloc, bodyReadLocal);
+            il.Emit(OpCodes.Ldloc, bodyReadLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ble, bodyLoopCompleteLabel);
+
+            // Copy the valid bytes so each Buffer has stable contents after the
+            // reusable read buffer is filled again.
+            il.Emit(OpCodes.Ldloc, bodyReadLocal);
+            il.Emit(OpCodes.Newarr, _types.Byte);
+            il.Emit(OpCodes.Stloc, bodyChunkLocal);
+            il.Emit(OpCodes.Ldloc, bodyBufferLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, bodyChunkLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, bodyReadLocal);
+            il.Emit(OpCodes.Call, typeof(Buffer).GetMethod(nameof(Buffer.BlockCopy),
+                [typeof(Array), _types.Int32, typeof(Array), _types.Int32, _types.Int32])!);
+
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldstr, "data");
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldloc, bodyBytesLocal);
+            il.Emit(OpCodes.Ldloc, bodyChunkLocal);
             il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
             il.Emit(OpCodes.Pop);
-            il.MarkLabel(skipData);
+            il.Emit(OpCodes.Br, bodyLoopLabel);
 
-            // Emit 'end' event on request so req.on('end', ...) works
+            il.MarkLabel(bodyLoopCompleteLabel);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, bodyReadSucceededLocal);
+            il.Emit(OpCodes.Leave, bodyReadFinishedLabel);
+
+            il.BeginCatchBlock(typeof(Exception));
+            il.Emit(OpCodes.Pop);
+
+            // A peer disconnect is an abort, not a clean end. destroy() already
+            // emitted the event, so avoid emitting it twice in that path.
+            var abortAlreadyMarkedLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Brtrue, abortAlreadyMarkedLabel);
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldstr, "aborted");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(abortAlreadyMarkedLabel);
+            il.Emit(OpCodes.Leave, bodyReadFinishedLabel);
+            il.EndExceptionBlock();
+
+            il.MarkLabel(bodyReadFinishedLabel);
+
+            // Emit a clean end only after EOF, and make complete observable from
+            // inside the user's end listener.
+            var skipEndLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, bodyReadSucceededLocal);
+            il.Emit(OpCodes.Brfalse, skipEndLabel);
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldfld, _httpRequestAbortedField);
+            il.Emit(OpCodes.Brtrue, skipEndLabel);
+            il.Emit(OpCodes.Ldloc, reqLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, _httpRequestCompleteField);
             il.Emit(OpCodes.Ldloc, reqLocal);
             il.Emit(OpCodes.Ldstr, "end");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
             il.Emit(OpCodes.Pop);
+            il.MarkLabel(skipEndLabel);
 
             il.Emit(OpCodes.Ret);
         }

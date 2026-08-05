@@ -77,10 +77,30 @@ public class SharpTSHttpRequest : SharpTSReadable
             "trailers" => new SharpTSObject(new Dictionary<string, object?>()),
             "rawTrailers" => new SharpTSArray(new List<object?>()),
             "aborted" => _aborted,
+            "destroy" => BuiltInMethod.CreateV2("destroy", 0, 1, (interp, receiver, args) =>
+            {
+                if (receiver.ToObject() is SharpTSHttpRequest request)
+                    return request.DestroyRequest(interp, args);
+                return receiver;
+            }).Bind(this),
 
             // Inherit Readable stream methods (on, once, pipe, read, pause, resume, etc.)
             _ => base.GetMember(name)
         };
+    }
+
+    private RuntimeValue DestroyRequest(Interpreter interpreter, ReadOnlySpan<RuntimeValue> args)
+    {
+        if (!_aborted)
+        {
+            _aborted = true;
+            try { _request.InputStream.Close(); } catch { /* peer may already have closed */ }
+            EmitEvent(interpreter, "aborted", []);
+        }
+
+        // Preserve the base Readable destroy/error/close lifecycle as well.
+        var baseDestroy = base.GetMember("destroy") as BuiltInMethod;
+        return baseDestroy?.Bind(this).CallV2(interpreter, args) ?? RuntimeValue.FromObject(this);
     }
 
     /// <summary>
@@ -102,19 +122,31 @@ public class SharpTSHttpRequest : SharpTSReadable
             // were attached synchronously by the handler before this runs.
             var buffer = new byte[16384];
             int n;
-            while ((n = await _request.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            while (!_aborted &&
+                   (n = await _request.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
             {
                 var chunk = new byte[n];
                 Array.Copy(buffer, chunk, n);
                 bound?.Call(interpreter, [new SharpTSBuffer(chunk)]);
             }
 
-            // Signal EOF
-            bound?.Call(interpreter, new List<object?> { null });
+            // destroy() closes InputStream from inside a data listener. Depending
+            // on the platform that can make the pending read return EOF instead
+            // of throwing; either way an aborted request must never emit 'end'.
+            if (_aborted) return;
+
+            // Make complete observable from inside the synchronous end listener.
             _endEmitted = true;
+            bound?.Call(interpreter, new List<object?> { null });
         }
         catch (Exception ex)
         {
+            // Closing InputStream is the expected destroy() wake-up path. The
+            // base Readable destroy method already emitted any supplied error.
+            if (_aborted) return;
+
+            _aborted = true;
+            EmitEvent(interpreter, "aborted", []);
             // Emit 'error' event through the Readable stream
             EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
         }

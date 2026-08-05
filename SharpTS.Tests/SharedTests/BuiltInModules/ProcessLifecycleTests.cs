@@ -154,6 +154,33 @@ public class ProcessLifecycleTests
     }
 
     [Theory, ModeData]
+    public void Process_Kill_RestrictProcessControl_BlocksCrossProcessOnly(ExecutionMode mode)
+    {
+        var hadPrevious = AppContext.TryGetSwitch(
+            "SharpTS.RestrictProcessControl", out var previous);
+        try
+        {
+            AppContext.SetSwitch("SharpTS.RestrictProcessControl", true);
+            var source = """
+                console.log('self=' + process.kill(process.pid, 0));
+                try {
+                    process.kill(process.pid + 1, 0);
+                } catch (e: any) {
+                    console.log('cross=' + e.code);
+                }
+                """;
+
+            var output = TestHarness.Run(source, mode);
+            Assert.Equal("self=true\ncross=EPERM\n", output);
+        }
+        finally
+        {
+            AppContext.SetSwitch("SharpTS.RestrictProcessControl",
+                hadPrevious && previous);
+        }
+    }
+
+    [Theory, ModeData]
     public void Process_ExitEvent_FiresOnProcessExitThroughModuleListener(ExecutionMode mode)
     {
         // Listener registered through the module surface fires for the global

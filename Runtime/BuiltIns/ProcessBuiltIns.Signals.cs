@@ -128,6 +128,18 @@ public static partial class ProcessBuiltIns
 
         int pid = (int)pidDouble;
 
+        // Sandboxed hosts can forbid cross-process signaling while retaining
+        // ordinary self-signals/process.exit behavior inside the worker. The
+        // AppContext switch is process-global host state and cannot be changed
+        // through SharpTS's process.env surface.
+        if (AppContext.TryGetSwitch("SharpTS.RestrictProcessControl", out bool restricted) &&
+            restricted && pid != Environment.ProcessId)
+        {
+            throw new Exceptions.ThrowException(
+                new SharpTSError("kill EPERM: cross-process signaling is disabled by the host")
+                { Code = "EPERM" });
+        }
+
         // Signal 0: existence check, no signal delivered.
         if (args.Count > 1 && args[1] is double dz && (int)dz == 0)
         {

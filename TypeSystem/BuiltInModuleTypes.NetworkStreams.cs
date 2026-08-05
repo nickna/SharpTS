@@ -451,7 +451,7 @@ public static partial class BuiltInModuleTypes
         var serverType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             // Server-specific methods
-            ["listen"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
+            ["listen"] = new TypeInfo.Function([numberType, anyType, anyType], anyType, RequiredParams: 1),
             ["close"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
             ["address"] = new TypeInfo.Function([], anyType),
             ["listening"] = TypeInfo.Primitive.Boolean,

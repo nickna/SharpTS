@@ -104,4 +104,95 @@ public class HttpIncomingMessageTests
         var output = TestHarness.RunModules(files, "./main.ts", mode);
         Assert.Contains("echo:streamed-payload", output);
     }
+
+    [Theory, ModeData]
+    public void IncomingMessage_StreamsLargeBodyInBoundedChunks_AndMarksComplete(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server: any = http.createServer((req: any, res: any) => {
+                    let chunks = 0;
+                    let bytes = 0;
+                    req.on('data', (chunk: any) => {
+                        chunks++;
+                        bytes += chunk.length;
+                    });
+                    req.on('end', () => {
+                        console.log('multiple=' + (chunks > 1));
+                        console.log('bytes=' + bytes);
+                        console.log('complete=' + req.complete);
+                        console.log('aborted=' + req.aborted);
+                        res.end('ok');
+                    });
+                });
+                server.listen({{port}}, async () => {
+                    const response = await fetch('http://127.0.0.1:{{port}}/', {
+                        method: 'POST',
+                        body: 'x'.repeat(50000)
+                    });
+                    await response.text();
+                    server.close();
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("multiple=true", output);
+        Assert.Contains("bytes=50000", output);
+        Assert.Contains("complete=true", output);
+        Assert.Contains("aborted=false", output);
+    }
+
+    [Theory, ModeData]
+    public void IncomingMessage_Destroy_StopsBodyConsumptionAndMarksAborted(ExecutionMode mode)
+    {
+        var port = TestPorts.GetAvailablePort();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as http from 'http';
+                const server: any = http.createServer((req: any, res: any) => {
+                    let chunks = 0;
+                    req.on('aborted', () => {
+                        console.log('aborted=' + req.aborted);
+                        console.log('complete=' + req.complete);
+                        console.log('chunks=' + chunks);
+                        server.close();
+                    });
+                    req.on('end', () => console.log('unexpected-end'));
+                    req.on('error', () => console.log('unexpected-error'));
+                    req.on('close', () => console.log('destroyed=' + req.destroyed));
+                    req.on('data', () => {
+                        chunks++;
+                        if (chunks === 1) {
+                            res.statusCode = 413;
+                            res.end('too large');
+                            req.destroy();
+                        }
+                    });
+                });
+                server.listen({{port}}, async () => {
+                    try {
+                        await fetch('http://127.0.0.1:{{port}}/', {
+                            method: 'POST',
+                            body: 'x'.repeat(50000)
+                        });
+                    } catch {
+                        // destroy() may close the upload before the client finishes sending.
+                    }
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Contains("aborted=true", output);
+        Assert.Contains("complete=false", output);
+        Assert.Contains("chunks=1", output);
+        Assert.Contains("destroyed=true", output);
+        Assert.DoesNotContain("unexpected-end", output);
+        Assert.DoesNotContain("unexpected-error", output);
+    }
 }

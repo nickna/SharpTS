@@ -484,9 +484,24 @@ Process information and control.
 | `cwd` | `cwd()` | Get current working directory |
 | `chdir` | `chdir(path)` | Change working directory |
 | `exit` | `exit(code?)` | Exit process |
+| `kill` | `kill(pid, signal?)` | Signal a process; signal `0` performs an existence check |
 | `hrtime` | `hrtime(time?)` | High-resolution time |
 | `uptime` | `uptime()` | Process uptime in seconds |
 | `memoryUsage` | `memoryUsage()` | Memory usage statistics |
+
+### Host process-control policy
+
+An embedding host can set the process-wide AppContext switch
+`SharpTS.RestrictProcessControl` to `true`. While enabled, `process.kill()` permits
+self-signals (including signal `0`) but rejects every other PID with an `EPERM`
+error before probing or signaling that process. Interpreted and compiled execution
+honor the same switch.
+
+This switch constrains the Node-compatible `process.kill()` facade; it is not a
+standalone sandbox boundary. A host treating guest code as untrusted must also
+restrict arbitrary `dotnet:` interop and other process-launch/control surfaces such
+as `child_process`, because those APIs can bypass or mutate process-wide AppContext
+policy.
 
 ### Example
 
@@ -906,6 +921,20 @@ HTTP client and server.
 - `globalAgent` — default shared agent
 
 `https` exposes the same API with TLS transport.
+
+### Server lifecycle and SharpTS connection probe
+
+`server.close()` stops the server after active responses drain.
+`server.closeAllConnections()` aborts the responses that are active when it is
+called but leaves the listener open, matching Node's separation between the two
+operations.
+
+SharpTS additionally exposes `res.probeConnection()` as a best-effort extension for
+long-running JSON endpoints. It commits a chunked response, writes one JSON-safe
+whitespace byte (compiled mode also flushes it synchronously), and returns `false` if
+that write observes a disconnected peer. It returns `false` after the response has
+ended. Because it commits headers and changes the response body, it should be called
+only when that behavior is acceptable; it is not part of Node's `ServerResponse` API.
 
 ### Example
 
