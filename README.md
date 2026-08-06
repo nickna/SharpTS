@@ -227,6 +227,34 @@ sharpts --noUncheckedIndexedAccess script.ts
 sharpts --noEmit script.ts                  # type-check only; exit 1 on errors
 ```
 
+Compile commands can opt into an ordered timing report. Human-readable output
+is written to stderr; JSON output is the only content written to stdout, making
+it safe to pipe into tooling. `--quiet` does not suppress an explicitly
+requested report.
+
+```bash
+sharpts --compile app.ts --timings
+sharpts --compile app.ts --timings-json
+```
+
+The JSON protocol has the shape below. Phase names are stable identifiers;
+conditional work (dynamic imports, declaration emit, verification, bundling,
+copying, and packaging) appears only when it runs. Failures still emit a partial
+report with the existing nonzero exit code.
+
+```json
+{
+  "Success": true,
+  "TotalDurationMs": 123.456,
+  "Timings": [
+    { "Name": "loadModules", "DurationMs": 12.345, "Status": "completed" }
+  ]
+}
+```
+
+The two timing flags are mutually exclusive and cannot be combined with
+`--showConfig`. With `--noEmit`, only reached front-end phases are reported.
+
 SharpTS's defaults are `strictNullChecks: true`, `strictFunctionTypes: false`,
 and the other strictness flags off — unchanged unless you ask.
 

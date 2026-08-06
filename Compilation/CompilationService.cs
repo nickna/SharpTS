@@ -19,7 +19,6 @@ using System.Reflection;
 using System.Runtime.Loader;
 using SharpTS.Diagnostics;
 using SharpTS.Diagnostics.Exceptions;
-using SharpTS.Execution;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -59,7 +58,7 @@ public sealed record CompileOptions(
 /// </param>
 /// <param name="AssemblyBytes">The emitted PE image, or null on failure.</param>
 /// <param name="CompileTimeMs">
-/// Wall-clock time for compiler backend work, excluding tokenization, parsing, and type-checking.
+/// Complete wall-clock time spent in <see cref="CompilationService.Compile"/>.
 /// </param>
 /// <param name="RequiredSharpTSRuntimeReasons">
 /// Non-empty when the program uses a feature whose emitted IL late-binds into
@@ -121,85 +120,93 @@ public static class CompilationService
     /// </summary>
     public static CompileResult Compile(string source, CompileOptions? options = null)
     {
-        options ??= new CompileOptions();
-        var assemblyName = options.AssemblyName ?? $"ts_{Guid.NewGuid():N}";
+        var totalStartedAt = Stopwatch.GetTimestamp();
+        var timingCollector = new ExecutionTimingCollector();
         try
         {
+            options ??= new CompileOptions();
+            var assemblyName = options.AssemblyName ?? $"ts_{Guid.NewGuid():N}";
             var analysis = SingleSourceAnalyzer.Analyze(
                 source,
                 new SingleSourceAnalysisOptions(
                     options.DecoratorMode,
                     options.FileName,
-                    options.Jsx));
+                    options.Jsx),
+                timingCollector);
             if (!analysis.Success)
             {
                 return new CompileResult(
                     false,
                     analysis.Diagnostics,
                     null,
-                    0,
+                    ElapsedMilliseconds(totalStartedAt),
                     Array.Empty<string>())
                 {
-                    Timings = analysis.Timings
+                    Timings = timingCollector.Snapshot()
                 };
             }
 
-            var timings = analysis.Timings.ToList();
-            var compileStartedAt = Stopwatch.GetTimestamp();
             try
             {
-                var deadCodeInfo = new DeadCodeAnalyzer(analysis.TypeMap!).Analyze(analysis.Statements);
+                var deadCodeInfo = timingCollector.Measure(
+                    ExecutionPhaseTiming.AnalyzeDeadCode,
+                    () => new DeadCodeAnalyzer(analysis.TypeMap!).Analyze(analysis.Statements));
 
-                var compiler = new ILCompiler(assemblyName);
+                var compiler = timingCollector.Measure(
+                    ExecutionPhaseTiming.InitializeCompiler,
+                    () => new ILCompiler(assemblyName));
+                compiler.SetTimingCollector(timingCollector);
                 compiler.SetDecoratorMode(options.DecoratorMode);
                 compiler.Compile(analysis.Statements, analysis.TypeMap!, deadCodeInfo);
                 var bytes = compiler.SaveToBytes();
 
-                var compileDurationMs = Stopwatch.GetElapsedTime(compileStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Completed("compile", compileDurationMs));
                 return new CompileResult(
                     Success: true,
                     Diagnostics: analysis.Diagnostics,
                     AssemblyBytes: bytes,
-                    CompileTimeMs: (long)compileDurationMs,
+                    CompileTimeMs: ElapsedMilliseconds(totalStartedAt),
                     RequiredSharpTSRuntimeReasons: compiler.RequiredSharpTSRuntimeReasons)
                 {
-                    Timings = timings,
+                    Timings = timingCollector.Snapshot(),
                     RuntimeRequirements = compiler.RequiredSharpTSRuntimeRequirements
                 };
             }
             catch (SharpTSException ex)
             {
-                var compileDurationMs = Stopwatch.GetElapsedTime(compileStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Failed("compile", compileDurationMs));
                 return new CompileResult(
                     false,
                     [ex.Diagnostic],
                     null,
-                    (long)compileDurationMs,
+                    ElapsedMilliseconds(totalStartedAt),
                     Array.Empty<string>())
                 {
-                    Timings = timings
+                    Timings = timingCollector.Snapshot()
                 };
             }
             catch (Exception ex)
             {
-                var compileDurationMs = Stopwatch.GetElapsedTime(compileStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Failed("compile", compileDurationMs));
                 return new CompileResult(
                     false,
                     [Diagnostic.CompileError(ex.Message)],
                     null,
-                    (long)compileDurationMs,
+                    ElapsedMilliseconds(totalStartedAt),
                     Array.Empty<string>())
                 {
-                    Timings = timings
+                    Timings = timingCollector.Snapshot()
                 };
             }
         }
         catch (SharpTSException ex)
         {
-            return new CompileResult(false, [ex.Diagnostic], null, 0, Array.Empty<string>());
+            return new CompileResult(
+                false,
+                [ex.Diagnostic],
+                null,
+                ElapsedMilliseconds(totalStartedAt),
+                Array.Empty<string>())
+            {
+                Timings = timingCollector.Snapshot()
+            };
         }
         catch (Exception ex)
         {
@@ -209,10 +216,16 @@ public static class CompilationService
                 false,
                 [Diagnostic.CompileError(ex.Message)],
                 null,
-                0,
-                Array.Empty<string>());
+                ElapsedMilliseconds(totalStartedAt),
+                Array.Empty<string>())
+            {
+                Timings = timingCollector.Snapshot()
+            };
         }
     }
+
+    private static long ElapsedMilliseconds(long startedAt) =>
+        (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
     /// <summary>
     /// Loads a compiled assembly (from <see cref="CompileResult.AssemblyBytes"/>) into a
@@ -248,26 +261,28 @@ public static class CompilationService
     {
         ArgumentNullException.ThrowIfNull(assemblyBytes);
         ArgumentNullException.ThrowIfNull(output);
+        var totalStartedAt = Stopwatch.GetTimestamp();
+        var timingCollector = new ExecutionTimingCollector();
 
         if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {
+            timingCollector.FailDuration(ExecutionPhaseTiming.Load, 0);
             return new RunResult(
                 false,
                 "In-process compiled assembly execution is not available in a native SharpTS build — use a managed host.",
-                0)
+                ElapsedMilliseconds(totalStartedAt))
             {
-                Timings = [ExecutionPhaseTiming.Failed("load", 0)]
+                Timings = timingCollector.Snapshot()
             };
         }
 
         var alc = new AssemblyLoadContext($"SharpTS.Execute_{Guid.NewGuid():N}", isCollectible: true);
-        var timings = new List<ExecutionPhaseTiming>();
         try
         {
             Assembly assembly;
             Type programType;
             MethodInfo mainMethod;
-            var loadStartedAt = Stopwatch.GetTimestamp();
+            var loadStartedAt = timingCollector.Start();
             try
             {
                 using var stream = new MemoryStream(assemblyBytes, writable: false);
@@ -277,14 +292,15 @@ public static class CompilationService
                     ?? throw new InvalidOperationException("Compiled assembly has no $Program type");
                 mainMethod = programType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
                     ?? throw new InvalidOperationException("$Program has no public static Main method");
-                timings.Add(ExecutionPhaseTiming.Completed(
-                    "load", Stopwatch.GetElapsedTime(loadStartedAt).TotalMilliseconds));
+                timingCollector.Complete(ExecutionPhaseTiming.Load, loadStartedAt);
             }
             catch (Exception ex)
             {
-                timings.Add(ExecutionPhaseTiming.Failed(
-                    "load", Stopwatch.GetElapsedTime(loadStartedAt).TotalMilliseconds));
-                return new RunResult(false, ex.Message, 0) { Timings = timings };
+                timingCollector.Fail(ExecutionPhaseTiming.Load, loadStartedAt);
+                return new RunResult(false, ex.Message, ElapsedMilliseconds(totalStartedAt))
+                {
+                    Timings = timingCollector.Snapshot()
+                };
             }
 
             // Cooperative cancellation: the emitted $Runtime polls _cancelRequested at
@@ -311,28 +327,34 @@ public static class CompilationService
             // long-lived and may invoke Execute repeatedly, so restore the ambient
             // context afterward rather than leaking the loop context onto the host.
             var priorSyncContext = System.Threading.SynchronizationContext.Current;
-            var executeStartedAt = Stopwatch.GetTimestamp();
+            var executeStartedAt = timingCollector.Start();
             try
             {
                 mainMethod.Invoke(null, null);
-                var executeDurationMs = Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Completed("execute", executeDurationMs));
-                return new RunResult(true, null, (long)executeDurationMs) { Timings = timings };
+                timingCollector.Complete(ExecutionPhaseTiming.Execute, executeStartedAt);
+                return new RunResult(true, null, ElapsedMilliseconds(totalStartedAt))
+                {
+                    Timings = timingCollector.Snapshot()
+                };
             }
             catch (TargetInvocationException tie) when (tie.InnerException is not null)
             {
-                var executeDurationMs = Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Failed("execute", executeDurationMs));
-                return new RunResult(false, tie.InnerException.Message, (long)executeDurationMs)
+                timingCollector.Fail(ExecutionPhaseTiming.Execute, executeStartedAt);
+                return new RunResult(
+                    false,
+                    tie.InnerException.Message,
+                    ElapsedMilliseconds(totalStartedAt))
                 {
-                    Timings = timings
+                    Timings = timingCollector.Snapshot()
                 };
             }
             catch (Exception ex)
             {
-                var executeDurationMs = Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds;
-                timings.Add(ExecutionPhaseTiming.Failed("execute", executeDurationMs));
-                return new RunResult(false, ex.Message, (long)executeDurationMs) { Timings = timings };
+                timingCollector.Fail(ExecutionPhaseTiming.Execute, executeStartedAt);
+                return new RunResult(false, ex.Message, ElapsedMilliseconds(totalStartedAt))
+                {
+                    Timings = timingCollector.Snapshot()
+                };
             }
             finally
             {
@@ -343,9 +365,10 @@ public static class CompilationService
         }
         catch (Exception ex)
         {
-            if (timings.Count == 0 || timings[^1].Name != "execute")
-                timings.Add(ExecutionPhaseTiming.Failed("execute", 0));
-            return new RunResult(false, ex.Message, 0) { Timings = timings };
+            return new RunResult(false, ex.Message, ElapsedMilliseconds(totalStartedAt))
+            {
+                Timings = timingCollector.Snapshot()
+            };
         }
         finally
         {

@@ -17,17 +17,18 @@ namespace SharpTS.Execution;
 /// <param name="Errors">Formatted analysis or runtime errors.</param>
 /// <param name="ExecutionTimeMs">Wall-clock execution time, excluding analysis and compilation.</param>
 /// <param name="CompileTimeMs">
-/// Compiler backend time for compiled execution, excluding tokenization, parsing, and type-checking;
-/// null for interpretation.
+/// Complete compilation wall time for compiled execution; null for interpretation.
 /// </param>
-/// <param name="Timings">Ordered, precise pipeline phase timings.</param>
 public sealed record SourceExecutionResult(
     bool Success,
     string Output,
     string[] Errors,
     long ExecutionTimeMs,
-    long? CompileTimeMs = null,
-    ExecutionPhaseTiming[]? Timings = null);
+    long? CompileTimeMs = null)
+{
+    /// <summary>Ordered, precise pipeline phase timings.</summary>
+    public IReadOnlyList<ExecutionPhaseTiming> Timings { get; init; } = [];
+}
 
 /// <summary>
 /// Public embedding facade for executing a single TypeScript source string with bounded output.
@@ -113,12 +114,12 @@ public static class SourceExecutionService
                 var resolver = new VariableResolver(interpreter);
                 resolver.Resolve(analysis.Statements);
                 timings.Add(ExecutionPhaseTiming.Completed(
-                    "prepareInterpreter", ElapsedMilliseconds(prepareStartedAt)));
+                    ExecutionPhaseTiming.PrepareInterpreter, ElapsedMilliseconds(prepareStartedAt)));
             }
             catch (Exception ex)
             {
                 timings.Add(ExecutionPhaseTiming.Failed(
-                    "prepareInterpreter", ElapsedMilliseconds(prepareStartedAt)));
+                    ExecutionPhaseTiming.PrepareInterpreter, ElapsedMilliseconds(prepareStartedAt)));
                 errors.Add(ex.Message);
                 interpreter?.Dispose();
                 return Result(false, output, errors, 0, timings: timings);
@@ -135,11 +136,13 @@ public static class SourceExecutionService
                     if (interpreter.LastUncaughtError is { } uncaught)
                     {
                         errors.Add(uncaught.Message);
-                        timings.Add(ExecutionPhaseTiming.Failed("execute", executionDurationMs));
+                        timings.Add(ExecutionPhaseTiming.Failed(
+                            ExecutionPhaseTiming.Execute, executionDurationMs));
                     }
                     else
                     {
-                        timings.Add(ExecutionPhaseTiming.Completed("execute", executionDurationMs));
+                        timings.Add(ExecutionPhaseTiming.Completed(
+                            ExecutionPhaseTiming.Execute, executionDurationMs));
                     }
 
                     return Result(
@@ -152,7 +155,8 @@ public static class SourceExecutionService
                 catch (Exception ex)
                 {
                     var executionDurationMs = ElapsedMilliseconds(executeStartedAt);
-                    timings.Add(ExecutionPhaseTiming.Failed("execute", executionDurationMs));
+                    timings.Add(ExecutionPhaseTiming.Failed(
+                        ExecutionPhaseTiming.Execute, executionDurationMs));
                     errors.Add(ex.Message);
                     return Result(
                         false,
@@ -268,14 +272,16 @@ public static class SourceExecutionService
         List<string> errors,
         long executionTimeMs,
         long? compileTimeMs = null,
-        List<ExecutionPhaseTiming>? timings = null) =>
+        IReadOnlyList<ExecutionPhaseTiming>? timings = null) =>
         new(
             success,
             output.GetContent(),
             errors.ToArray(),
             executionTimeMs,
-            compileTimeMs,
-            (timings ?? []).ToArray());
+            compileTimeMs)
+        {
+            Timings = (timings ?? []).ToArray()
+        };
 
     private static double ElapsedMilliseconds(long startedAt) =>
         Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;

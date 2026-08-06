@@ -161,6 +161,37 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_CompileTimings_SetsReadableTimingMode()
+    {
+        var compile = Assert.IsType<ParsedCommand.Compile>(
+            _parser.Parse(["-c", "file.ts", "--timings"]));
+
+        Assert.True(compile.CompileOptions.Timings);
+        Assert.False(compile.CompileOptions.TimingsJson);
+    }
+
+    [Fact]
+    public void Parse_CompileTimingsJson_SetsJsonTimingMode()
+    {
+        var compile = Assert.IsType<ParsedCommand.Compile>(
+            _parser.Parse(["-c", "file.ts", "--timings-json"]));
+
+        Assert.False(compile.CompileOptions.Timings);
+        Assert.True(compile.CompileOptions.TimingsJson);
+    }
+
+    [Theory]
+    [InlineData("-c", "file.ts", "--timings", "--timings-json")]
+    [InlineData("-c", "file.ts", "--timings", "--showConfig")]
+    [InlineData("-c", "file.ts", "--timings-json", "--showConfig")]
+    public void Parse_CompileTimingConflicts_ReturnUsageError(params string[] args)
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(_parser.Parse(args));
+
+        Assert.Equal(64, error.ExitCode);
+    }
+
+    [Fact]
     public void Parse_Compile_CustomOutput_SetsOutputFile()
     {
         var result = _parser.Parse(["-c", "file.ts", "-o", "custom.dll"]);

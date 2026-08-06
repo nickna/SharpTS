@@ -107,8 +107,12 @@ public partial class ILCompiler
     /// </summary>
     public IReadOnlyList<string> Warnings => _warnings;
     private readonly List<string> _warnings = [];
+    private ExecutionTimingCollector? _timingCollector;
 
     internal void AddWarning(string message) => _warnings.Add(message);
+
+    internal void SetTimingCollector(ExecutionTimingCollector? timingCollector) =>
+        _timingCollector = timingCollector;
 
     /// <summary>
     /// The assemblies of every external .NET type the compilation bound (@DotNetType
@@ -553,41 +557,80 @@ public partial class ILCompiler
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
+        if (_timingCollector is null)
+        {
+            statements = PrepareSingleCompilation(statements, typeMap, deadCodeInfo);
+            Phase0_ExtractNamespace(statements);
+            Phase1_EmitRuntimeTypes();
+            AnalyzeClosuresAndPromotions(statements);
+            DefineSingleProgramStructure(statements);
+            AnalyzeSingleModuleBindings(statements);
+            Phase4_DefineDeclarations(statements);
+            Phase5_CollectArrowFunctions(statements);
+            Phase6_EmitArrowAndStateMachineBodies(statements);
+            Phase7_EmitMethodBodies(statements);
+            Phase8_EmitEntryPoint(statements);
+            Phase9_FinalizeTypes();
+            return;
+        }
+
+        statements = _timingCollector.Measure(
+            ExecutionPhaseTiming.PrepareCompilation,
+            () => PrepareSingleCompilation(statements, typeMap, deadCodeInfo));
+        _timingCollector.Measure(ExecutionPhaseTiming.ExtractNamespaces,
+            () => Phase0_ExtractNamespace(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitRuntimeTypes, Phase1_EmitRuntimeTypes);
+        _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeClosures,
+            () => AnalyzeClosuresAndPromotions(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.DefineProgramStructure,
+            () => DefineSingleProgramStructure(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeModuleBindings,
+            () => AnalyzeSingleModuleBindings(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.DefineDeclarations,
+            () => Phase4_DefineDeclarations(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.CollectFunctions,
+            () => Phase5_CollectArrowFunctions(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitFunctionBodies,
+            () => Phase6_EmitArrowAndStateMachineBodies(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitMethodBodies,
+            () => Phase7_EmitMethodBodies(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitEntryPoint,
+            () => Phase8_EmitEntryPoint(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.FinalizeTypes, Phase9_FinalizeTypes);
+    }
+
+    private List<Stmt> PrepareSingleCompilation(
+        List<Stmt> statements,
+        TypeMap typeMap,
+        DeadCodeInfo? deadCodeInfo)
+    {
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
-
-        // Check for "use strict" directive at file level
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
-
-        // Relocate non-capturing nested generator/async/state-machine-nested function declarations
-        // to the module top level so the mature top-level state-machine pipeline can lower them
-        // (#470, #501). Compile-path only — the interpreter handles nested declarations natively.
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
-
-        // Walk the AST to determine which runtime feature categories the program
-        // actually needs, so Phase 1 can skip emitting unused helper types.
-        // The override `_runtimeFeatures` (set by callers that have already detected,
-        // e.g. CompileModules over multiple files) wins.
         _features ??= new RuntimeFeatureDetector().Detect(statements);
+        return statements;
+    }
 
-        Phase0_ExtractNamespace(statements);
-        Phase1_EmitRuntimeTypes();
+    private void AnalyzeClosuresAndPromotions(List<Stmt> statements)
+    {
         Phase2_AnalyzeClosures(statements);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
-        NonEscapingArrowLocalAnalyzer.Analyze(statements, _closures.DirectCallArrowBindings, _closures.Analyzer);
+        NonEscapingArrowLocalAnalyzer.Analyze(
+            statements, _closures.DirectCallArrowBindings, _closures.Analyzer);
         ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+    }
+
+    private void DefineSingleProgramStructure(List<Stmt> statements)
+    {
         Phase3_CreateProgramType();
         DefineObjectShapeTypes();
         DefineHoistedRegexFields(statements);
-        PreScanBuiltInModuleImports(statements);
-        Phase4_DefineDeclarations(statements);
-        Phase5_CollectArrowFunctions(statements);
-        Phase6_EmitArrowAndStateMachineBodies(statements);
-        Phase7_EmitMethodBodies(statements);
-        Phase8_EmitEntryPoint(statements);
-        Phase9_FinalizeTypes();
     }
+
+    private void AnalyzeSingleModuleBindings(List<Stmt> statements) =>
+        PreScanBuiltInModuleImports(statements);
 
     #region Compile Phases
 
@@ -1084,6 +1127,63 @@ public partial class ILCompiler
     /// <param name="deadCodeInfo">Optional dead code analysis results</param>
     public void CompileModules(List<ParsedModule> modules, ModuleResolver resolver, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
+        if (_timingCollector is null)
+        {
+            var allStatements = PrepareModuleCompilation(modules, resolver, typeMap, deadCodeInfo);
+            ModulePhase0_ExtractNamespaces(modules);
+            Phase1_EmitRuntimeTypes();
+            AnalyzeClosuresAndPromotions(allStatements);
+            DefineModuleProgramStructure(allStatements);
+            AnalyzeModuleBindings(modules);
+            ModulePhase5_DefineDeclarations(modules);
+            InitializeTypedInterop();
+            InitializeTypeEmitterRegistries();
+            ModulePhase6_CollectArrowFunctions(modules);
+            ModulePhase7_EmitArrowBodies(modules);
+            ModulePhase8_EmitMethodBodies(modules);
+            ModulePhase9_EmitModuleInits(modules);
+            ModulePhase10_EmitEntryPoint(modules);
+            ModulePhase11_FinalizeTypes();
+            return;
+        }
+
+        var statements = _timingCollector.Measure(
+            ExecutionPhaseTiming.PrepareCompilation,
+            () => PrepareModuleCompilation(modules, resolver, typeMap, deadCodeInfo));
+        _timingCollector.Measure(ExecutionPhaseTiming.ExtractNamespaces,
+            () => ModulePhase0_ExtractNamespaces(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitRuntimeTypes, Phase1_EmitRuntimeTypes);
+        _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeClosures,
+            () => AnalyzeClosuresAndPromotions(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.DefineProgramStructure,
+            () => DefineModuleProgramStructure(statements));
+        _timingCollector.Measure(ExecutionPhaseTiming.AnalyzeModuleBindings,
+            () => AnalyzeModuleBindings(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.DefineDeclarations, () =>
+        {
+            ModulePhase5_DefineDeclarations(modules);
+            InitializeTypedInterop();
+            InitializeTypeEmitterRegistries();
+        });
+        _timingCollector.Measure(ExecutionPhaseTiming.CollectFunctions,
+            () => ModulePhase6_CollectArrowFunctions(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitFunctionBodies,
+            () => ModulePhase7_EmitArrowBodies(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitMethodBodies,
+            () => ModulePhase8_EmitMethodBodies(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitModuleInitializers,
+            () => ModulePhase9_EmitModuleInits(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.EmitEntryPoint,
+            () => ModulePhase10_EmitEntryPoint(modules));
+        _timingCollector.Measure(ExecutionPhaseTiming.FinalizeTypes, ModulePhase11_FinalizeTypes);
+    }
+
+    private List<Stmt> PrepareModuleCompilation(
+        List<ParsedModule> modules,
+        ModuleResolver resolver,
+        TypeMap typeMap,
+        DeadCodeInfo? deadCodeInfo)
+    {
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
         _modules.Resolver = resolver;
@@ -1118,16 +1218,18 @@ public partial class ILCompiler
                 _features.UsesCjsRequire = true;
         }
 
-        ModulePhase0_ExtractNamespaces(modules);
-        Phase1_EmitRuntimeTypes();
-        Phase2_AnalyzeClosures(allStatements);
-        ArrayLocalPromotionAnalyzer.Analyze(allStatements, _typeMap, _closures.Analyzer);
-        StringAccumulatorPromotionAnalyzer.Analyze(allStatements, _typeMap, _closures.Analyzer);
-        NonEscapingArrowLocalAnalyzer.Analyze(allStatements, _closures.DirectCallArrowBindings, _closures.Analyzer);
-        ObjectLocalPromotionAnalyzer.Analyze(allStatements, _typeMap, _closures.Analyzer);
+        return allStatements;
+    }
+
+    private void DefineModuleProgramStructure(List<Stmt> allStatements)
+    {
         Phase3_CreateProgramType();
         DefineObjectShapeTypes();
         DefineHoistedRegexFields(allStatements);
+    }
+
+    private void AnalyzeModuleBindings(List<ParsedModule> modules)
+    {
         // Scope each module's named-import bindings to that module so local
         // aliases like __platform don't collide between stdlib modules.
         foreach (var m in modules)
@@ -1144,15 +1246,6 @@ public partial class ILCompiler
         {
             DefineModuleScopedTopLevelStaticFields(m.Statements, m.Path);
         }
-        ModulePhase5_DefineDeclarations(modules);
-        InitializeTypedInterop();
-        InitializeTypeEmitterRegistries();
-        ModulePhase6_CollectArrowFunctions(modules);
-        ModulePhase7_EmitArrowBodies(modules);
-        ModulePhase8_EmitMethodBodies(modules);
-        ModulePhase9_EmitModuleInits(modules);
-        ModulePhase10_EmitEntryPoint(modules);
-        ModulePhase11_FinalizeTypes();
     }
 
     #region CompileModules Phases
@@ -1471,7 +1564,7 @@ public partial class ILCompiler
     /// the finished image, and the rewriter's row-for-row preservation of <c>MethodDef</c> is
     /// verified rather than assumed. See <see cref="Symbols.DebugDirectoryInjector"/>.
     /// </remarks>
-    public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
+    private CompilationArtifacts BuildArtifacts(string? pdbPath)
     {
         if (_inMemoryOnly)
             throw new InvalidOperationException(
@@ -1570,6 +1663,16 @@ public partial class ILCompiler
         return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
 
+    public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
+    {
+        if (_timingCollector is null)
+            return BuildArtifacts(pdbPath);
+
+        return _timingCollector.Measure(
+            ExecutionPhaseTiming.SerializeAssembly,
+            () => BuildArtifacts(pdbPath));
+    }
+
     public byte[] SaveToBytes() => SaveArtifacts().Assembly;
 
     public void Save(string outputPath) => Save(outputPath, pdbPath: null);
@@ -1587,6 +1690,19 @@ public partial class ILCompiler
     /// </param>
     public void Save(string outputPath, string? pdbPath)
     {
+        if (_timingCollector is null)
+        {
+            SaveCore(outputPath, pdbPath);
+            return;
+        }
+
+        _timingCollector.Measure(
+            ExecutionPhaseTiming.SerializeAssembly,
+            () => SaveCore(outputPath, pdbPath));
+    }
+
+    private void SaveCore(string outputPath, string? pdbPath)
+    {
         if (EmitDebugSymbols)
             pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
 
@@ -1596,7 +1712,7 @@ public partial class ILCompiler
                 Path.GetDirectoryName(Path.GetFullPath(pdbPath))
                 ? Path.GetFileName(pdbPath)
                 : Path.GetFullPath(pdbPath);
-        var artifacts = SaveArtifacts(codeViewPdbPath);
+        var artifacts = BuildArtifacts(codeViewPdbPath);
 
         File.WriteAllBytes(outputPath, artifacts.Assembly);
         if (artifacts.Pdb is not null)
