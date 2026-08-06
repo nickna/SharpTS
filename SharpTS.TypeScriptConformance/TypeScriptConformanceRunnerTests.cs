@@ -252,6 +252,15 @@ public class TypeScriptConformanceRunnerTests
 public class TypeScriptConformanceBaselineTests
 {
     [Fact]
+    public void Header_IsVersionedAndPinsCorpus()
+    {
+        const string revision = "0123456789abcdef0123456789abcdef01234567";
+        Assert.StartsWith(
+            "# SharpTS baseline-format=1 suite=TypeScript corpus=" + revision + " — ",
+            TypeScriptConformanceBaseline.Header(revision));
+    }
+
+    [Fact]
     public void EncodeBucket_PassWithNoSkipReason_JustOutcomeName()
     {
         var r = new TypeScriptConformanceResult(TypeScriptConformanceOutcome.Pass, null, null);

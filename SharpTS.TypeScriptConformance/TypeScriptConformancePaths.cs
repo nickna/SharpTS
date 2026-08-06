@@ -7,6 +7,26 @@ namespace SharpTS.TypeScriptConformance;
 /// </summary>
 public static class TypeScriptConformancePaths
 {
+    public static string GetCorpusRevision(string root)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("git", "rev-parse HEAD")
+        {
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git to resolve the TypeScript corpus revision.");
+        var revision = process.StandardOutput.ReadToEnd().Trim();
+        var error = process.StandardError.ReadToEnd().Trim();
+        process.WaitForExit();
+        if (process.ExitCode != 0 || revision.Length != 40 || revision.Any(c => !char.IsAsciiHexDigit(c)))
+            throw new InvalidOperationException($"Could not resolve the TypeScript corpus revision: {error}");
+        return revision.ToLowerInvariant();
+    }
+
     /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for
     /// <c>external/typescript/src/compiler/checker.ts</c> (a TS-repo-unique

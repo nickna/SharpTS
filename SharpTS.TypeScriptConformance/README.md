@@ -47,7 +47,8 @@ Sandboxed runners can additionally set
 `SHARPTS_TSCONFORMANCE_BASELINE_OUTPUT` to a writable artifact path, then
 copy that generated file into `baselines/interpreted.txt`. Set it to `-` when
 the test host has no writable filesystem; entries are emitted to test output
-with a `baseline-entry:` prefix.
+with a `baseline-entry:` prefix and the versioned header with a
+`baseline-header:` prefix.
 
 ## Bucket model
 
@@ -65,6 +66,27 @@ Each test classifies into one of:
 `Skipped` carries a reason suffix (`Skipped:lib-drift`,
 `Skipped:directive:experimentaldecorators`, `Skipped:explicitly-skipped`) so
 the diff harness can tell different skip causes apart.
+
+## Baseline file contract
+
+The committed baseline is consumed outside this repository, including by the
+`sharpts-www` conformance explorer. Its first and only comment line has this
+machine-readable shape:
+
+```text
+# SharpTS baseline-format=1 suite=TypeScript corpus=<40-character-git-sha> — ...
+```
+
+Every remaining non-empty line is `<test-path> <Bucket[:reason]>`. Paths contain
+no spaces. The closed bucket vocabulary is `Pass`, `Fail`, `ParseError`,
+`TypeCheckError`, `HarnessError`, and `Skipped:<reason>`. Any format or
+vocabulary change must bump `baseline-format`; consumers must reject versions
+and buckets they do not know.
+
+Official aggregation uses every result except `Skipped:*` in the denominator.
+Only `Pass` contributes to the numerator. All other non-skipped buckets count as
+not passing, while skipped results are reported separately and never folded into
+the percentage.
 
 ## Match strategy
 

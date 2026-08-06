@@ -1,4 +1,4 @@
-# TS conformance baseline — do not hand-edit. Regenerate with SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1.
+# SharpTS baseline-format=1 suite=TypeScript corpus=050880ce59e30b356b686bd3144efe24f875ebc8 — do not hand-edit; regenerate with SHARPTS_TSCONFORMANCE_UPDATE_BASELINE=1.
 tests/cases/conformance/Symbols/ES5SymbolProperty1.ts Pass
 tests/cases/conformance/Symbols/ES5SymbolProperty2.ts Pass
 tests/cases/conformance/Symbols/ES5SymbolProperty3.ts Fail

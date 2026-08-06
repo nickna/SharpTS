@@ -7,6 +7,26 @@ namespace SharpTS.Test262;
 /// </summary>
 public static class Test262Paths
 {
+    public static string GetCorpusRevision(string root)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("git", "rev-parse HEAD")
+        {
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git to resolve the Test262 corpus revision.");
+        var revision = process.StandardOutput.ReadToEnd().Trim();
+        var error = process.StandardError.ReadToEnd().Trim();
+        process.WaitForExit();
+        if (process.ExitCode != 0 || revision.Length != 40 || revision.Any(c => !char.IsAsciiHexDigit(c)))
+            throw new InvalidOperationException($"Could not resolve the Test262 corpus revision: {error}");
+        return revision.ToLowerInvariant();
+    }
+
     /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for
     /// <c>external/test262/harness/sta.js</c>. Returns null when the submodule

@@ -47,6 +47,27 @@ Switches to the wide-sweep config and writes `wide-sweep-report.md` instead of d
 
 Skip reasons are appended to the bucket (`Skipped:async-done-deferred`) so the diff harness can tell different skip causes apart.
 
+## Baseline file contract
+
+The committed baselines are consumed outside this repository, including by the
+`sharpts-www` conformance explorer. The first and only comment line has this
+machine-readable shape:
+
+```text
+# SharpTS baseline-format=1 suite=Test262 corpus=<40-character-git-sha> — ...
+```
+
+Every remaining non-empty line is `<test-path> <Bucket[:reason]>`. Paths contain
+no spaces. The closed bucket vocabulary is `Pass`, `Fail`, `RuntimeError`,
+`ParseError`, `TypeCheckError`, `Timeout`, `HarnessError`, and
+`Skipped[:reason]`. Any format or vocabulary change must bump
+`baseline-format`; consumers must reject versions and buckets they do not know.
+
+Official aggregation uses every result except `Skipped:*` in the denominator.
+Only `Pass` contributes to the numerator. All other non-skipped buckets count as
+not passing, while skipped results are reported separately and never folded into
+the percentage.
+
 ## Layout
 
 | Path | Purpose |
