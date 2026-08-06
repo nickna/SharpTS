@@ -245,6 +245,10 @@ public static class FunctionBuiltIns
         {
             return objUnbound.BindTo(thisArg).Call(interp, args);
         }
+        if (callable is ErrorToStringCallable errorToString)
+        {
+            return errorToString.Bind(thisArg).Call(interp, args);
+        }
 
         // BuiltInMethod (e.g. Array.prototype.every exposed via
         // SharpTSArrayPrototype) must rebind the receiver on every .call/.apply

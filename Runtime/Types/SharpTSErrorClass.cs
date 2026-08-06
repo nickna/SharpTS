@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -202,7 +203,8 @@ public class SharpTSErrorClass : SharpTSClass
 internal sealed class ErrorToStringCallable : ISharpTSCallable, IInstanceBindable,
     Runtime.BuiltIns.IBuiltInFunctionMetadata
 {
-    private SharpTSInstance? _boundInstance;
+    private object? _receiver;
+    private bool _hasReceiver;
     private readonly Runtime.BuiltIns.BuiltInFunctionMetadata _metadata;
 
     public ErrorToStringCallable()
@@ -223,15 +225,37 @@ internal sealed class ErrorToStringCallable : ISharpTSCallable, IInstanceBindabl
 
     public ISharpTSCallable BindTo(SharpTSInstance instance)
     {
-        return new ErrorToStringCallable(_metadata) { _boundInstance = instance };
+        return Bind(instance);
     }
+
+    internal ErrorToStringCallable Bind(object? receiver)
+        => new(_metadata) { _receiver = receiver, _hasReceiver = true };
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        var instance = _boundInstance
-            ?? interpreter.GetCurrentThis() as SharpTSInstance;
-        if (instance == null) return "Error";
-        return SharpTSErrorClass.ErrorToString(instance);
+        // Built-in functions use strict this semantics: an unbound call has
+        // undefined as its receiver rather than the global object.
+        if (!_hasReceiver || _receiver is null or SharpTSUndefined
+            or double or float or int or long or bool or string
+            or SharpTSBigInt or SharpTSSymbol)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Error.prototype.toString requires an object receiver"));
+        }
+
+        object? nameValue = interpreter.GetPropertyValue(_receiver, "name");
+        string name = nameValue is SharpTSUndefined
+            ? "Error"
+            : interpreter.ToStringForBuiltInArgument(nameValue);
+
+        object? messageValue = interpreter.GetPropertyValue(_receiver, "message");
+        string message = messageValue is SharpTSUndefined
+            ? ""
+            : interpreter.ToStringForBuiltInArgument(messageValue);
+
+        if (name.Length == 0) return message;
+        if (message.Length == 0) return name;
+        return $"{name}: {message}";
     }
 }
 

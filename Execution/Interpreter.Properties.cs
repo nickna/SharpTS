@@ -1279,6 +1279,7 @@ public partial class Interpreter
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
+            ErrorToStringCallable m => m.Bind(receiver),
             _ => null,
         };
     }

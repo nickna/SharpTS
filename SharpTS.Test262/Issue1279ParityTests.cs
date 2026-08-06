@@ -1101,6 +1101,15 @@ public sealed class Issue1279ParityTests
     public void Number_constructor_and_prototype_have_standard_intrinsic_shape(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Error/prototype/toString/invalid-receiver.js")]
+    [InlineData("built-ins/Error/prototype/toString/prop-desc.js")]
+    [InlineData("built-ins/Error/prototype/toString/tostring-get-throws.js")]
+    [InlineData("built-ins/Error/prototype/toString/tostring-message-throws-symbol.js")]
+    [InlineData("built-ins/Error/prototype/toString/undefined-props.js")]
+    public void Error_toString_uses_strict_generic_object_semantics(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
