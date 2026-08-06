@@ -1230,6 +1230,15 @@ public sealed class Issue1279ParityTests
     public void Array_find_callbacks_receive_undefined_this_in_strict_mode(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A4_T3.js")]
+    public void Array_join_is_generic_for_array_like_objects(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
