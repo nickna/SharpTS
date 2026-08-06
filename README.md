@@ -109,6 +109,10 @@ dotnet tool install -g SharpTS
 </Project>
 ```
 
+`SharpTS.Sdk` composes with the installed `Microsoft.NET.Sdk` and invokes the
+compiler bundled in that exact NuGet package version. A separate global
+`sharpts` tool installation is not required for project builds.
+
 ### Usage
 
 **REPL Mode:**

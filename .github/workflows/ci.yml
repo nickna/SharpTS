@@ -77,6 +77,13 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
+      # Exercise the SDK through its nupkg rather than repository-relative build
+      # outputs. The script uses a local-only feed, a clean package cache, and no
+      # global dotnet-tool directory on PATH.
+      - name: Packaged SDK smoke test
+        shell: pwsh
+        run: ./scripts/test-packaged-sdk.ps1
+
   # AOT-compatibility ratchet (#1324 Track 0). Builds SharpTS.csproj with the
   # AOT/trim/single-file analyzers compare the distinct IL#### inventory against
   # .github/aot-warning-baseline.json. The structured baseline pins total,

@@ -1,11 +1,21 @@
 <Project>
+  <!-- SharpTS.Sdk is a composing SDK: consumers need the standard .NET SDK
+       project system as well as the SharpTS compiler integration below. Import
+       the base props first so SharpTS defaults can build on its configuration. -->
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
   <PropertyGroup>
     <!-- SDK identification marker -->
     <UsingSharpTSSdk>true</UsingSharpTSSdk>
 
-    <!-- Output configuration -->
-    <SharpTSOutputPath Condition="'$(SharpTSOutputPath)' == ''">$(OutputPath)</SharpTSOutputPath>
-    <SharpTSOutputFileName Condition="'$(SharpTSOutputFileName)' == ''">$(AssemblyName).dll</SharpTSOutputFileName>
+    <!-- Microsoft.NET.Sdk supplies the project system and reference resolution,
+         but SharpTS is the compiler and writes its product directly to the
+         configured output directory. Do not let Roslyn overwrite that assembly
+         or ask the common targets to copy a nonexistent C# intermediate output. -->
+    <SkipCompilerExecution>true</SkipCompilerExecution>
+    <SkipCopyBuildProduct>true</SkipCopyBuildProduct>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <UseAppHost>false</UseAppHost>
 
     <!-- tsconfig.json path (auto-detected or overridden) -->
     <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == ''">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>

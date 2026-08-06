@@ -17,7 +17,6 @@
     <!-- SDK package marker -->
     <DevelopmentDependency>true</DevelopmentDependency>
     <NoPackageAnalysis>true</NoPackageAnalysis>
-    <IsTool>true</IsTool>
   </PropertyGroup>
 
   <!-- SDK files -->
