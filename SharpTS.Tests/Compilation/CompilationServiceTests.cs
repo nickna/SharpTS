@@ -35,9 +35,23 @@ public class CompilationServiceTests
         Assert.NotEmpty(result.AssemblyBytes!);
         Assert.DoesNotContain(result.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.True(result.CompileTimeMs >= 0);
+        Assert.DoesNotContain(result.Timings, timing => timing.Name == "compile");
+        Assert.True(result.CompileTimeMs + 1 >= result.Timings.Sum(timing => timing.DurationMs));
         Assert.Equal(
-            result.CompileTimeMs,
-            (long)result.Timings.Single(timing => timing.Name == "compile").DurationMs);
+            [
+                ExecutionPhaseTiming.Tokenize, ExecutionPhaseTiming.Parse,
+                ExecutionPhaseTiming.ValidateModules, ExecutionPhaseTiming.TypeCheck,
+                ExecutionPhaseTiming.AnalyzeDeadCode, ExecutionPhaseTiming.InitializeCompiler,
+                ExecutionPhaseTiming.PrepareCompilation, ExecutionPhaseTiming.ExtractNamespaces,
+                ExecutionPhaseTiming.EmitRuntimeTypes, ExecutionPhaseTiming.AnalyzeClosures,
+                ExecutionPhaseTiming.DefineProgramStructure,
+                ExecutionPhaseTiming.AnalyzeModuleBindings,
+                ExecutionPhaseTiming.DefineDeclarations, ExecutionPhaseTiming.CollectFunctions,
+                ExecutionPhaseTiming.EmitFunctionBodies, ExecutionPhaseTiming.EmitMethodBodies,
+                ExecutionPhaseTiming.EmitEntryPoint, ExecutionPhaseTiming.FinalizeTypes,
+                ExecutionPhaseTiming.SerializeAssembly
+            ],
+            result.Timings.Select(timing => timing.Name));
     }
 
     [Fact]
@@ -152,9 +166,7 @@ public class CompilationServiceTests
         Assert.Null(run.Error);
         Assert.True(run.ExecuteTimeMs >= 0);
         Assert.Equal(["load", "execute"], run.Timings.Select(timing => timing.Name));
-        Assert.Equal(
-            run.ExecuteTimeMs,
-            (long)run.Timings.Single(timing => timing.Name == "execute").DurationMs);
+        Assert.True(run.ExecuteTimeMs + 1 >= run.Timings.Sum(timing => timing.DurationMs));
         Assert.Equal("hello from compiled\n", sw.ToString().Replace("\r\n", "\n"));
     }
 
@@ -170,6 +182,19 @@ public class CompilationServiceTests
         Assert.False(run.Success);
         Assert.NotNull(run.Error);
         Assert.Contains("boom", run.Error);
+    }
+
+    [Fact]
+    public void Execute_InvalidAssembly_ReportsFailedLoadAndAggregateTime()
+    {
+        var run = CompilationService.Execute([1, 2, 3, 4], new StringWriter());
+
+        Assert.False(run.Success);
+        Assert.NotNull(run.Error);
+        var timing = Assert.Single(run.Timings);
+        Assert.Equal(ExecutionPhaseTiming.Load, timing.Name);
+        Assert.Equal(ExecutionPhaseTiming.FailedStatus, timing.Status);
+        Assert.True(run.ExecuteTimeMs + 1 >= timing.DurationMs);
     }
 
     [Fact]

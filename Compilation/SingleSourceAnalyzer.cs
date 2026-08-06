@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using SharpTS.Diagnostics;
-using SharpTS.Execution;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
@@ -41,38 +41,39 @@ internal static class SingleSourceAnalyzer
 {
     public static SingleSourceAnalysisResult Analyze(
         string source,
-        SingleSourceAnalysisOptions options)
+        SingleSourceAnalysisOptions options,
+        ExecutionTimingCollector? timingCollector = null)
     {
+        timingCollector ??= new ExecutionTimingCollector();
         bool isTsx = options.FileName.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase)
             || options.FileName.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase)
             || options.Jsx is not null;
 
-        var timings = new List<ExecutionPhaseTiming>();
         Lexer lexer;
         List<Token> tokens;
-        var phaseStartedAt = Stopwatch.GetTimestamp();
+        var phaseStartedAt = timingCollector.Start();
         try
         {
             lexer = new Lexer(source) { JsxTolerant = isTsx };
             tokens = lexer.ScanTokens();
-            timings.Add(ExecutionPhaseTiming.Completed(
-                "tokenize", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Complete(ExecutionPhaseTiming.Tokenize, phaseStartedAt);
         }
         catch (Exception ex)
         {
-            timings.Add(ExecutionPhaseTiming.Failed(
-                "tokenize", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Fail(ExecutionPhaseTiming.Tokenize, phaseStartedAt);
             return new SingleSourceAnalysisResult(
                 [],
                 null,
-                [LexErrorToDiagnostic(ex.Message, options.FileName)])
+                [ex is SharpTSException sharpTsException
+                    ? sharpTsException.Diagnostic
+                    : LexErrorToDiagnostic(ex.Message, options.FileName)])
             {
-                Timings = timings
+                Timings = timingCollector.Snapshot()
             };
         }
 
         ParseDiagnosticResult parseResult;
-        phaseStartedAt = Stopwatch.GetTimestamp();
+        phaseStartedAt = timingCollector.Start();
         try
         {
             var parser = new Parser(tokens, options.DecoratorMode)
@@ -82,58 +83,90 @@ internal static class SingleSourceAnalyzer
 
             parseResult = parser.Parse();
         }
-        catch (Exception ex)
+        catch (SharpTSException ex)
         {
-            timings.Add(ExecutionPhaseTiming.Failed(
-                "parse", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Fail(ExecutionPhaseTiming.Parse, phaseStartedAt);
             return new SingleSourceAnalysisResult(
                 [],
                 null,
-                [Diagnostic.ParseError(ex.Message, new SourceLocation(options.FileName, 1))])
+                [ex.Diagnostic])
             {
-                Timings = timings
+                Timings = timingCollector.Snapshot()
+            };
+        }
+        catch (Exception ex)
+        {
+            timingCollector.Fail(ExecutionPhaseTiming.Parse, phaseStartedAt);
+            return new SingleSourceAnalysisResult(
+                [],
+                null,
+                [Diagnostic.CompileError(ex.Message, new SourceLocation(options.FileName, 1))])
+            {
+                Timings = timingCollector.Snapshot()
             };
         }
 
         if (!parseResult.IsSuccess)
         {
-            timings.Add(ExecutionPhaseTiming.Failed(
-                "parse", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Fail(ExecutionPhaseTiming.Parse, phaseStartedAt);
             return new SingleSourceAnalysisResult(
                 parseResult.Statements,
                 null,
                 parseResult.Diagnostics,
                 parseResult.HitErrorLimit)
             {
-                Timings = timings
+                Timings = timingCollector.Snapshot()
             };
         }
-        timings.Add(ExecutionPhaseTiming.Completed(
-            "parse", ElapsedMilliseconds(phaseStartedAt)));
+        timingCollector.Complete(ExecutionPhaseTiming.Parse, phaseStartedAt);
 
         // These APIs deliberately have no ModuleResolver. Reject every module-loading form
         // explicitly instead of relying on a later checker/runtime failure. Besides producing a
         // stable diagnostic, this keeps the untrusted-source boundary intact if the checker gains
         // more permissive single-file module behavior in the future.
-        phaseStartedAt = Stopwatch.GetTimestamp();
-        var moduleDiagnostics = ModuleLoadingValidator.Validate(
-            parseResult.Statements,
-            options.FileName);
+        phaseStartedAt = timingCollector.Start();
+        IReadOnlyList<Diagnostic> moduleDiagnostics;
+        try
+        {
+            moduleDiagnostics = ModuleLoadingValidator.Validate(
+                parseResult.Statements,
+                options.FileName);
+        }
+        catch (SharpTSException ex)
+        {
+            timingCollector.Fail(ExecutionPhaseTiming.ValidateModules, phaseStartedAt);
+            return new SingleSourceAnalysisResult(parseResult.Statements, null, [ex.Diagnostic])
+            {
+                Timings = timingCollector.Snapshot()
+            };
+        }
+        catch (Exception ex)
+        {
+            timingCollector.Fail(ExecutionPhaseTiming.ValidateModules, phaseStartedAt);
+            return new SingleSourceAnalysisResult(
+                parseResult.Statements,
+                null,
+                [Diagnostic.CompileError(ex.Message, new SourceLocation(options.FileName, 1))])
+            {
+                Timings = timingCollector.Snapshot()
+            };
+        }
         if (moduleDiagnostics.Count > 0)
         {
-            timings.Add(ExecutionPhaseTiming.Failed(
-                "typeCheck", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Fail(ExecutionPhaseTiming.ValidateModules, phaseStartedAt);
             return new SingleSourceAnalysisResult(
                 parseResult.Statements,
                 null,
                 moduleDiagnostics)
             {
-                Timings = timings
+                Timings = timingCollector.Snapshot()
             };
         }
+        timingCollector.Complete(ExecutionPhaseTiming.ValidateModules, phaseStartedAt);
 
         TypeCheckDiagnosticResult typeResult;
         IReadOnlyList<Diagnostic> diagnostics;
+        phaseStartedAt = timingCollector.Start();
         try
         {
             var checker = new TypeChecker().WithFilePath(options.FileName);
@@ -143,22 +176,33 @@ internal static class SingleSourceAnalyzer
                 typeResult.Diagnostics,
                 lexer.Pragmas);
         }
-        catch (Exception ex)
+        catch (SharpTSException ex)
         {
-            timings.Add(ExecutionPhaseTiming.Failed(
-                "typeCheck", ElapsedMilliseconds(phaseStartedAt)));
+            timingCollector.Fail(ExecutionPhaseTiming.TypeCheck, phaseStartedAt);
             return new SingleSourceAnalysisResult(
                 parseResult.Statements,
                 null,
-                [Diagnostic.TypeError(ex.Message, new SourceLocation(options.FileName, 1))])
+                [ex.Diagnostic])
             {
-                Timings = timings
+                Timings = timingCollector.Snapshot()
+            };
+        }
+        catch (Exception ex)
+        {
+            timingCollector.Fail(ExecutionPhaseTiming.TypeCheck, phaseStartedAt);
+            return new SingleSourceAnalysisResult(
+                parseResult.Statements,
+                null,
+                [Diagnostic.CompileError(ex.Message, new SourceLocation(options.FileName, 1))])
+            {
+                Timings = timingCollector.Snapshot()
             };
         }
 
-        timings.Add(diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-            ? ExecutionPhaseTiming.Failed("typeCheck", ElapsedMilliseconds(phaseStartedAt))
-            : ExecutionPhaseTiming.Completed("typeCheck", ElapsedMilliseconds(phaseStartedAt)));
+        if (diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+            timingCollector.Fail(ExecutionPhaseTiming.TypeCheck, phaseStartedAt);
+        else
+            timingCollector.Complete(ExecutionPhaseTiming.TypeCheck, phaseStartedAt);
 
         return new SingleSourceAnalysisResult(
             parseResult.Statements,
@@ -166,12 +210,9 @@ internal static class SingleSourceAnalyzer
             diagnostics,
             typeResult.HitErrorLimit)
         {
-            Timings = timings
+            Timings = timingCollector.Snapshot()
         };
     }
-
-    private static double ElapsedMilliseconds(long startedAt) =>
-        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
     private static Diagnostic LexErrorToDiagnostic(string message, string fileName)
     {

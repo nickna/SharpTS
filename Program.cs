@@ -39,6 +39,8 @@
 // =============================================================================
 
 using System.Reflection;
+using System.Diagnostics;
+using System.Text.Json;
 using SharpTS.Cli;
 using SharpTS.Compilation;
 using SharpTS.Configuration;
@@ -164,34 +166,7 @@ switch (command)
         break;
 
     case ParsedCommand.Compile compile:
-        var (compileOptions, compileConfig) = ApplyTsConfig(
-            compile.GlobalOptions, Path.GetDirectoryName(Path.GetFullPath(compile.InputFile)) ?? ".");
-        if (compileOptions.ShowConfig)
-        {
-            PrintResolvedConfig(compileOptions, compile.GlobalOptions.Strictness, compileConfig);
-            return Environment.ExitCode;
-        }
-        if (compile.CompileOptions.VerifyIL)
-            RequireManagedBuild("--verify"); // ILVerifier resolves the BCL from typeof(object).Assembly.Location — no BCL on disk in a native build
-        var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode, compile.CompileOptions.Standalone, compile.CompileOptions.EmitDebugSymbols);
-        CompileFile(
-            compile.InputFile,
-            compile.OutputFile,
-            compile.CompileOptions.PreserveConstEnums || (compileConfig?.PreserveConstEnums ?? false),
-            compile.CompileOptions.UseReferenceAssemblies,
-            compile.CompileOptions.SdkPath,
-            compile.CompileOptions.VerifyIL,
-            compileOptions.DecoratorMode,
-            compileOptions.EmitDecoratorMetadata,
-            compile.PackOptions,
-            outputOptions,
-            compile.CompileOptions.References,
-            compile.CompileOptions.Target,
-            compile.CompileOptions.Bundler,
-            compileOptions,
-            compileConfig
-        );
-        break;
+        return RunCompileCommand(compile);
 
     case ParsedCommand.GenDecl genDecl:
         RequireManagedBuild("--gen-decl"); // DiscoveryGenerator needs Assembly.LoadFrom; the by-name fallback returns truncated metadata
@@ -200,6 +175,131 @@ switch (command)
 }
 
 return Environment.ExitCode;
+}
+
+static int RunCompileCommand(ParsedCommand.Compile compile)
+{
+    var totalStartedAt = Stopwatch.GetTimestamp();
+    var timings = compile.CompileOptions.Timings || compile.CompileOptions.TimingsJson
+        ? new ExecutionTimingCollector()
+        : null;
+    bool json = compile.CompileOptions.TimingsJson;
+    TextWriter? originalOut = null;
+    int exitCode = 1;
+
+    try
+    {
+        if (json)
+        {
+            originalOut = Console.Out;
+            Console.SetOut(Console.Error);
+        }
+
+        var resolved = MeasurePhase(timings,
+            ExecutionPhaseTiming.ResolveConfiguration,
+            () => ApplyTsConfig(
+                compile.GlobalOptions,
+                Path.GetDirectoryName(Path.GetFullPath(compile.InputFile)) ?? ".",
+                propagateErrors: true));
+        var (compileOptions, compileConfig) = resolved;
+
+        if (compile.CompileOptions.VerifyIL &&
+            !System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            Console.Error.WriteLine(FormatManagedBuildRequiredError("--verify"));
+            exitCode = 1;
+        }
+        else
+        {
+            var outputOptions = new OutputOptions(
+                compile.CompileOptions.MsBuildErrors,
+                compile.CompileOptions.QuietMode || json,
+                compile.CompileOptions.Standalone,
+                compile.CompileOptions.EmitDebugSymbols);
+            exitCode = CompileFile(
+                compile.InputFile,
+                compile.OutputFile,
+                compile.CompileOptions.PreserveConstEnums ||
+                    (compileConfig?.PreserveConstEnums ?? false),
+                compile.CompileOptions.UseReferenceAssemblies,
+                compile.CompileOptions.SdkPath,
+                compile.CompileOptions.VerifyIL,
+                compileOptions.DecoratorMode,
+                compileOptions.EmitDecoratorMetadata,
+                compile.PackOptions,
+                outputOptions,
+                compile.CompileOptions.References,
+                compile.CompileOptions.Target,
+                compile.CompileOptions.Bundler,
+                compileOptions,
+                timings,
+                compileConfig);
+        }
+    }
+    catch (SharpTSException ex)
+    {
+        new DiagnosticReporter
+        {
+            MsBuildFormat = compile.CompileOptions.MsBuildErrors
+        }.Report(ex.Diagnostic);
+        exitCode = 1;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        exitCode = 1;
+    }
+    finally
+    {
+        if (originalOut is not null)
+            Console.SetOut(originalOut);
+
+        if (compile.CompileOptions.Timings || json)
+        {
+            PrintCompilationTimings(
+                exitCode == 0,
+                Stopwatch.GetElapsedTime(totalStartedAt).TotalMilliseconds,
+                timings!.Snapshot(),
+                json,
+                originalOut ?? Console.Out);
+        }
+    }
+
+    return exitCode;
+}
+
+static T MeasurePhase<T>(ExecutionTimingCollector? timings, string name, Func<T> action) =>
+    timings is null ? action() : timings.Measure(name, action);
+
+static void MeasurePhase(ExecutionTimingCollector? timings, string name, Action action)
+{
+    if (timings is null)
+        action();
+    else
+        timings.Measure(name, action);
+}
+
+static void PrintCompilationTimings(
+    bool success,
+    double totalDurationMs,
+    IReadOnlyList<ExecutionPhaseTiming> timings,
+    bool json,
+    TextWriter jsonOutput)
+{
+    if (json)
+    {
+        var report = new CompilationTimingReport(success, totalDurationMs, timings.ToArray());
+        jsonOutput.WriteLine(JsonSerializer.Serialize(
+            report,
+            CompilationTimingJsonContext.Default.CompilationTimingReport));
+        return;
+    }
+
+    Console.Error.WriteLine("Compilation timings:");
+    Console.Error.WriteLine($"{"Phase",-28} {"Status",-10} {"Duration (ms)",14}");
+    foreach (var timing in timings)
+        Console.Error.WriteLine($"{timing.Name,-28} {timing.Status,-10} {timing.DurationMs,14:F3}");
+    Console.Error.WriteLine($"{"total",-28} {(success ? "completed" : "failed"),-10} {totalDurationMs,14:F3}");
 }
 
 /// <summary>
@@ -238,7 +338,10 @@ internal static string FormatManagedBuildRequiredError(string feature) =>
 /// SharpTS.Sdk/Sdk/Sdk.targets already performs. Decorator mode applies from tsconfig only when
 /// the command line left it at its default.</para>
 /// </remarks>
-static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(GlobalOptions cli, string startDirectory)
+static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(
+    GlobalOptions cli,
+    string startDirectory,
+    bool propagateErrors = false)
 {
     if (cli.NoTsConfig)
         return (cli, null);
@@ -300,6 +403,8 @@ static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(GlobalOptio
     }
     catch (Exception ex)
     {
+        if (propagateErrors)
+            throw;
         Console.WriteLine(ex.Message);
         Environment.Exit(1);
         throw; // unreachable
@@ -413,7 +518,10 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
 /// before any module loading or type checking, so every resolution seam sees the types.
 /// Reference errors are user-facing configuration problems: print and exit.
 /// </summary>
-static ReferenceSet LoadDotNetReferences(string startDirectory, IReadOnlyList<string> cliReferences)
+static ReferenceSet LoadDotNetReferences(
+    string startDirectory,
+    IReadOnlyList<string> cliReferences,
+    bool propagateErrors = false)
 {
     try
     {
@@ -421,12 +529,16 @@ static ReferenceSet LoadDotNetReferences(string startDirectory, IReadOnlyList<st
     }
     catch (SharpTSException ex)
     {
+        if (propagateErrors)
+            throw;
         new DiagnosticReporter().Report(ex.Diagnostic);
         Environment.Exit(1);
         throw; // unreachable
     }
     catch (Exception ex)
     {
+        if (propagateErrors)
+            throw;
         Console.WriteLine(ex.Message);
         Environment.Exit(1);
         throw; // unreachable
@@ -558,7 +670,7 @@ static async Task RunPromptAsync(GlobalOptions options)
     await repl.RunAsync();
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions, TsConfigResult? project = null)
+static int CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
     try
     {
@@ -567,7 +679,10 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         // Third-party assembly references (sharpts.json + -r) load into this process
         // before module resolution: dotnet: imports resolve at module-load time, and
         // the returned set drives the post-Save co-location of referenced DLLs.
-        var externalRefs = LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references);
+        var externalRefs = MeasurePhase(timings,
+            ExecutionPhaseTiming.LoadReferences,
+            () => LoadDotNetReferences(
+                Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
 
         // Load package.json if packaging is enabled
         PackageJson? packageJson = null;
@@ -575,13 +690,19 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         if (packOptions.Pack)
         {
             var inputDir = Path.GetDirectoryName(absolutePath) ?? ".";
-            packageJson = PackageJsonLoader.FindAndLoad(inputDir);
-
-            if (packageJson == null && packOptions.PackageIdOverride == null)
-            {
-                Console.WriteLine("Error: No package.json found. Provide --package-id and --version, or create a package.json.");
-                Environment.Exit(1);
-            }
+            packageJson = MeasurePhase(timings,
+                ExecutionPhaseTiming.LoadPackageMetadata,
+                () =>
+                {
+                    var loadedPackage = PackageJsonLoader.FindAndLoad(inputDir);
+                    if (loadedPackage == null && packOptions.PackageIdOverride == null)
+                    {
+                        Console.WriteLine(
+                            "Error: No package.json found. Provide --package-id and --version, or create a package.json.");
+                        throw new CompilationAbortedException();
+                    }
+                    return loadedPackage;
+                });
 
             // Create assembly metadata from package.json and overrides
             if (packageJson != null)
@@ -618,22 +739,28 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         // keeping declaration-only inputs out of emitted IL.
         CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies,
             sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target,
-            bundlerMode, externalRefs, globalOptions, project);
+            bundlerMode, externalRefs, globalOptions, timings, project);
 
         // These modes stopped before any assembly was written, so there is nothing to pack.
-        if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return;
+        if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return 0;
 
         // Package if requested
         if (packOptions.Pack)
         {
-            CreateNuGetPackage(outputPath, packageJson, packOptions);
+            CreateNuGetPackage(
+                outputPath, packageJson, packOptions, timings, outputOptions.QuietMode);
         }
+        return 0;
     }
     catch (SharpTSException ex)
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors };
         reporter.Report(ex.Diagnostic);
-        Environment.Exit(1);
+        return 1;
+    }
+    catch (CompilationAbortedException)
+    {
+        return 1;
     }
     catch (Exception ex)
     {
@@ -655,51 +782,52 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
             // refusals there, and compiled-output diffs must not see error text on stdout.
             Console.Error.WriteLine($"Error: {ex.Message}");
         }
-        Environment.Exit(1);
+        return 1;
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions, TsConfigResult? project = null)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
-    // Phase 1: Load all static dependencies via ModuleResolver
-    var resolver = new ModuleResolver(
-        absolutePath,
-        project?.ModuleResolution ?? ModuleResolutionOptions.Default,
-        virtualFiles: null,
-        globalOptions.TypeScriptProgramOptions)
+    var loaded = MeasurePhase(timings, ExecutionPhaseTiming.LoadModules, () =>
     {
-        JsxOptions = globalOptions.ResolvedJsxOptions,
-    };
-    var declarationModules = (project?.DeclarationFiles ?? [])
-        .Select(path => resolver.LoadModule(path, decoratorMode))
-        .ToArray();
-    resolver.RegisterAmbientModuleDeclarations(declarationModules);
-    var entryModule = resolver.LoadProgram(absolutePath, decoratorMode);
-    var allModules = resolver.GetRuntimeModulesInOrder(entryModule);
-    var typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
+        var loadedResolver = new ModuleResolver(
+            absolutePath,
+            project?.ModuleResolution ?? ModuleResolutionOptions.Default,
+            virtualFiles: null,
+            globalOptions.TypeScriptProgramOptions)
+        {
+            JsxOptions = globalOptions.ResolvedJsxOptions,
+        };
+        var loadedDeclarations = (project?.DeclarationFiles ?? [])
+            .Select(path => loadedResolver.LoadModule(path, decoratorMode))
+            .ToArray();
+        loadedResolver.RegisterAmbientModuleDeclarations(loadedDeclarations);
+        var loadedEntry = loadedResolver.LoadProgram(absolutePath, decoratorMode);
+        return (
+            Resolver: loadedResolver,
+            Declarations: loadedDeclarations,
+            Entry: loadedEntry,
+            RuntimeModules: loadedResolver.GetRuntimeModulesInOrder(loadedEntry),
+            TypeModules: loadedResolver.GetModulesInOrder(loadedDeclarations.Append(loadedEntry)));
+    });
+    var resolver = loaded.Resolver;
+    var declarationModules = loaded.Declarations;
+    var entryModule = loaded.Entry;
+    var allModules = loaded.RuntimeModules;
+    var typeModules = loaded.TypeModules;
 
-    // Phase 2: Initial type checking to discover dynamic import paths
     var checker = new TypeChecker(globalOptions.TypeCheckerOptions);
     checker.SetDecoratorMode(decoratorMode);
-    var typeMap = checker.CheckModules(typeModules, resolver);
-
-    // Phase 3: Load modules discovered through dynamic import string literals
-    // These modules aren't in the static dependency graph but need to be compiled
-    // for runtime dynamic imports to work
-    var dynamicPaths = checker.DynamicImportPaths;
-    if (dynamicPaths.Count > 0)
+    TypeMap typeMap;
+    var typeCheckStartedAt = timings?.Start() ?? 0;
+    try
     {
-        var newModules = resolver.LoadDynamicImportModules(dynamicPaths, absolutePath, decoratorMode);
-        if (newModules.Count > 0)
-        {
-            // Re-get the module list to include newly discovered modules
-            allModules = resolver.GetRuntimeModulesInOrder(entryModule);
-            typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
-
-            // Re-run type checking with the expanded module list
-            // (CheckModules is incremental - only checks newly added modules)
-            typeMap = checker.CheckModules(typeModules, resolver);
-        }
+        typeMap = checker.CheckModules(typeModules, resolver);
+    }
+    catch
+    {
+        timings?.Fail(ExecutionPhaseTiming.TypeCheck, typeCheckStartedAt);
+        throw;
     }
 
     var reporter = new DiagnosticReporter
@@ -707,8 +835,43 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     var diagnostics = checker.GetDiagnostics();
     if (diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
     {
+        timings?.Fail(ExecutionPhaseTiming.TypeCheck, typeCheckStartedAt);
         reporter.ReportAll(diagnostics);
-        Environment.Exit(1);
+        throw new CompilationAbortedException();
+    }
+    timings?.Complete(ExecutionPhaseTiming.TypeCheck, typeCheckStartedAt);
+
+    var dynamicPaths = checker.DynamicImportPaths;
+    if (dynamicPaths.Count > 0)
+    {
+        var newModules = MeasurePhase(timings,
+            ExecutionPhaseTiming.LoadDynamicImports,
+            () => resolver.LoadDynamicImportModules(dynamicPaths, absolutePath, decoratorMode));
+        if (newModules.Count > 0)
+        {
+            allModules = resolver.GetRuntimeModulesInOrder(entryModule);
+            typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
+
+            typeCheckStartedAt = timings?.Start() ?? 0;
+            try
+            {
+                typeMap = checker.CheckModules(typeModules, resolver);
+            }
+            catch
+            {
+                timings?.Fail(ExecutionPhaseTiming.TypeCheckDynamicImports, typeCheckStartedAt);
+                throw;
+            }
+
+            diagnostics = checker.GetDiagnostics();
+            if (diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+            {
+                timings?.Fail(ExecutionPhaseTiming.TypeCheckDynamicImports, typeCheckStartedAt);
+                reporter.ReportAll(diagnostics);
+                throw new CompilationAbortedException();
+            }
+            timings?.Complete(ExecutionPhaseTiming.TypeCheckDynamicImports, typeCheckStartedAt);
+        }
     }
 
     // --noEmit: type-check only, never produce an assembly.
@@ -723,14 +886,18 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
                 .Where(path => IsDeclarationSource(path) && !IsNodeModulesPath(path))
                 .ToArray()
             : project.RootFiles;
-        var declarations = SourceDeclarationEmitter.EmitModules(
-            typeModules,
-            typeMap,
-            sources,
-            project?.RootDir,
-            globalOptions.DeclarationDir,
-            project?.OutDir);
-        SourceDeclarationEmitter.WriteAll(declarations);
+        var declarations = MeasurePhase(timings, ExecutionPhaseTiming.EmitDeclarations, () =>
+        {
+            var emitted = SourceDeclarationEmitter.EmitModules(
+                typeModules,
+                typeMap,
+                sources,
+                project?.RootDir,
+                globalOptions.DeclarationDir,
+                project?.OutDir);
+            SourceDeclarationEmitter.WriteAll(emitted);
+            return emitted;
+        });
         if (!outputOptions.QuietMode)
             foreach (var declaration in declarations)
                 Console.WriteLine($"Declaration emitted to {declaration.OutputPath}");
@@ -740,13 +907,14 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         return;
 
     // Dead Code Analysis
-    DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
     var emittedModules = allModules.Where(module => !module.IsDeclarationFile).ToList();
     var allStatements = emittedModules.SelectMany(m => m.Statements).ToList();
-    DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(allStatements);
+    DeadCodeInfo deadCodeInfo = MeasurePhase(timings,
+        ExecutionPhaseTiming.AnalyzeDeadCode,
+        () => new DeadCodeAnalyzer(typeMap).Analyze(allStatements));
 
     // Compilation
-    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs,
+    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs, timings,
         compiler => compiler.CompileModules(emittedModules, resolver, typeMap, deadCodeInfo));
 }
 
@@ -758,7 +926,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 /// the configured compiler and performs the one step that differs between the drivers
 /// (whole-module-graph vs single-file compile).
 /// </summary>
-static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, Action<ILCompiler> compileBody)
+static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
 {
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
 
@@ -769,7 +937,11 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         try
         {
             // Compile to DLL format (will be bundled into EXE)
-            ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
+            ILCompiler compiler = MeasurePhase(timings,
+                ExecutionPhaseTiming.InitializeCompiler,
+                () => new ILCompiler(assemblyName, preserveConstEnums, useReferenceAssemblies,
+                    sdkPath, metadata, references, OutputTarget.Dll));
+            compiler.SetTimingCollector(timings);
             compiler.SetDecoratorMode(decoratorMode);
             compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
             compileBody(compiler);
@@ -782,24 +954,28 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             // Run IL verification on the DLL if requested
             if (verifyIL)
             {
-                VerifyCompiledAssembly(tempDllPath, sdkPath, externalRefs);
+                MeasurePhase(timings,
+                    ExecutionPhaseTiming.VerifyAssembly,
+                    () => VerifyCompiledAssembly(tempDllPath, sdkPath, externalRefs));
             }
 
             // Bundle into single-file EXE
             try
             {
-                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(
-                    new BundleRequest
-                    {
-                        EntryAssemblyPath = tempDllPath,
-                        OutputPath = outputPath,
-                        AssemblyName = assemblyName,
-                        // SharpTS targets net10.0. Do not let a Native AOT host's
-                        // Environment.Version (the ILC runtime-pack version) leak into the
-                        // generated application's runtimeconfig.
-                        FrameworkVersion = new Version(10, 0)
-                    },
-                    bundlerMode);
+                var bundleResult = MeasurePhase(timings,
+                    ExecutionPhaseTiming.BundleExecutable,
+                    () => AppHostGenerator.CreateSingleFileExecutable(
+                        new BundleRequest
+                        {
+                            EntryAssemblyPath = tempDllPath,
+                            OutputPath = outputPath,
+                            AssemblyName = assemblyName,
+                            // SharpTS targets net10.0. Do not let a Native AOT host's
+                            // Environment.Version (the ILC runtime-pack version) leak into the
+                            // generated application's runtimeconfig.
+                            FrameworkVersion = new Version(10, 0)
+                        },
+                        bundlerMode));
 
                 if (!outputOptions.QuietMode)
                 {
@@ -809,15 +985,19 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
                 // Co-locate SharpTS.dll next to the EXE when the program uses a feature that
                 // late-binds into the SharpTS runtime (eval, Proxy, Intl, vm, dns, @DotNetType
                 // dynamic events). Honors --standalone. Pure programs stay a single file.
-                CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
-                CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
+                if (compiler.RequiredSharpTSRuntimeReasons.Count > 0)
+                    MeasurePhase(timings, ExecutionPhaseTiming.CopyRuntime,
+                        () => CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions));
+                if (compiler.ExternalInteropAssemblies.Count > 0)
+                    MeasurePhase(timings, ExecutionPhaseTiming.CopyDependencies,
+                        () => CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions));
             }
             catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
             {
                 var bundlerName = bundlerMode == BundlerMode.Sdk ? "SDK" : "built-in";
                 Console.Error.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
                 Console.Error.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
-                Environment.Exit(1);
+                throw new CompilationAbortedException();
             }
         }
         finally
@@ -829,7 +1009,11 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
     else
     {
         // Standard DLL output
-        ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
+        ILCompiler compiler = MeasurePhase(timings,
+            ExecutionPhaseTiming.InitializeCompiler,
+            () => new ILCompiler(assemblyName, preserveConstEnums, useReferenceAssemblies,
+                sdkPath, metadata, references, target));
+        compiler.SetTimingCollector(timings);
         compiler.SetDecoratorMode(decoratorMode);
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         compileBody(compiler);
@@ -837,9 +1021,15 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
 
-        GenerateRuntimeConfig(outputPath);
-        CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
-        CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
+        MeasurePhase(timings,
+            ExecutionPhaseTiming.GenerateRuntimeConfig,
+            () => GenerateRuntimeConfig(outputPath));
+        if (compiler.RequiredSharpTSRuntimeReasons.Count > 0)
+            MeasurePhase(timings, ExecutionPhaseTiming.CopyRuntime,
+                () => CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions));
+        if (compiler.ExternalInteropAssemblies.Count > 0)
+            MeasurePhase(timings, ExecutionPhaseTiming.CopyDependencies,
+                () => CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions));
         if (!outputOptions.QuietMode)
         {
             Console.WriteLine($"Compiled to {outputPath}");
@@ -848,7 +1038,9 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         // Run IL verification if requested
         if (verifyIL)
         {
-            VerifyCompiledAssembly(outputPath, sdkPath, externalRefs);
+            MeasurePhase(timings,
+                ExecutionPhaseTiming.VerifyAssembly,
+                () => VerifyCompiledAssembly(outputPath, sdkPath, externalRefs));
         }
     }
 }
@@ -884,9 +1076,10 @@ static void PrintCompilerWarnings(ILCompiler compiler)
 static void ValidateCompiledRuntimeRequirements(ILCompiler compiler)
 {
     if (compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
-            SharpTSRuntimeRequirements.ManagedCompilerHost))
+            SharpTSRuntimeRequirements.ManagedCompilerHost) &&
+        !System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
     {
-        RequireManagedBuild(
+        throw new ManagedBuildRequiredException(
             $"compiled output requiring the managed SharpTS host " +
             $"({string.Join(", ", compiler.RequiredSharpTSRuntimeReasons)})");
     }
@@ -950,7 +1143,7 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
                     $"Error: the compiled output requires the SharpTS runtime ({reasonList}), but the " +
                     $"embedded SharpTS.dll could not be extracted ({extractionError}). " +
                     "The output will not run until SharpTS.dll is placed next to it.");
-                Environment.Exit(1);
+                throw new CompilationAbortedException();
             }
             if (!outputOptions.QuietMode)
                 Console.WriteLine(
@@ -1194,84 +1387,84 @@ static void VerifyCompiledAssembly(string outputPath, string? sdkPath, Reference
     verifier.VerifyAndReport(stream);
 }
 
-static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, PackOptions packOptions)
+static void CreateNuGetPackage(
+    string assemblyPath,
+    PackageJson? packageJson,
+    PackOptions packOptions,
+    ExecutionTimingCollector? timings,
+    bool quietMode)
 {
-    // Create a minimal package.json if one wasn't found but we have CLI overrides
-    packageJson ??= new PackageJson
+    var package = MeasurePhase(timings, ExecutionPhaseTiming.CreatePackage, () =>
     {
-        Name = packOptions.PackageIdOverride,
-        Version = packOptions.VersionOverride ?? "1.0.0"
-    };
-
-    // Validate the package configuration
-    var validation = PackageValidator.Validate(
-        assemblyPath,
-        packageJson,
-        packOptions.PackageIdOverride,
-        packOptions.VersionOverride);
-
-    // Print warnings
-    foreach (var warning in validation.Warnings)
-    {
-        Console.WriteLine($"Warning: {warning}");
-    }
-
-    // Check for errors
-    if (!validation.IsValid)
-    {
-        foreach (var error in validation.Errors)
+        packageJson ??= new PackageJson
         {
-            Console.WriteLine($"Error: {error}");
+            Name = packOptions.PackageIdOverride,
+            Version = packOptions.VersionOverride ?? "1.0.0"
+        };
+
+        var validation = PackageValidator.Validate(
+            assemblyPath,
+            packageJson,
+            packOptions.PackageIdOverride,
+            packOptions.VersionOverride);
+
+        foreach (var warning in validation.Warnings)
+            Console.WriteLine($"Warning: {warning}");
+
+        if (!validation.IsValid)
+        {
+            foreach (var error in validation.Errors)
+                Console.WriteLine($"Error: {error}");
+            throw new CompilationAbortedException();
         }
-        Environment.Exit(1);
-    }
 
-    // Create the NuGet packager
-    var packager = new NuGetPackager(packageJson, packOptions.PackageIdOverride, packOptions.VersionOverride);
-    var outputDir = Path.GetDirectoryName(assemblyPath) ?? ".";
+        var packager = new NuGetPackager(
+            packageJson, packOptions.PackageIdOverride, packOptions.VersionOverride);
+        var outputDir = Path.GetDirectoryName(assemblyPath) ?? ".";
 
-    // Look for README.md in the package.json directory
-    string? readmePath = null;
-    var candidateReadme = Path.Combine(outputDir, "README.md");
-    if (File.Exists(candidateReadme))
-    {
-        readmePath = candidateReadme;
-    }
+        string? readmePath = null;
+        var candidateReadme = Path.Combine(outputDir, "README.md");
+        if (File.Exists(candidateReadme))
+            readmePath = candidateReadme;
 
-    // Create the main package
-    var nupkgPath = packager.CreatePackage(assemblyPath, outputDir, readmePath);
-    Console.WriteLine($"Created package: {nupkgPath}");
+        var nupkgPath = packager.CreatePackage(assemblyPath, outputDir, readmePath);
+        if (!quietMode)
+            Console.WriteLine($"Created package: {nupkgPath}");
 
-    // Create symbol package
-    var symbolPackager = new SymbolPackager(packager.PackageId, packager.Version, packageJson.Author);
-    var snupkgPath = symbolPackager.CreateSymbolPackage(assemblyPath, outputDir);
-    if (snupkgPath != null)
-    {
-        Console.WriteLine($"Created symbol package: {snupkgPath}");
-    }
+        var symbolPackager = new SymbolPackager(packager.PackageId, packager.Version, packageJson.Author);
+        var snupkgPath = symbolPackager.CreateSymbolPackage(assemblyPath, outputDir);
+        if (snupkgPath != null && !quietMode)
+            Console.WriteLine($"Created symbol package: {snupkgPath}");
 
-    // Push to NuGet feed if requested
+        return (Packager: packager, PackagePath: nupkgPath, SymbolsPath: snupkgPath);
+    });
+
     if (!string.IsNullOrEmpty(packOptions.PushSource))
     {
-        if (string.IsNullOrEmpty(packOptions.ApiKey))
+        MeasurePhase(timings, ExecutionPhaseTiming.PushPackage, () =>
         {
-            Console.WriteLine("Error: --api-key is required when using --push.");
-            Environment.Exit(1);
-        }
+            if (string.IsNullOrEmpty(packOptions.ApiKey))
+            {
+                Console.WriteLine("Error: --api-key is required when using --push.");
+                throw new CompilationAbortedException();
+            }
 
-        Console.WriteLine($"Pushing to {packOptions.PushSource}...");
-        var publisher = new NuGetPublisher(packOptions.ApiKey, packOptions.PushSource);
-        var success = publisher.PushWithSymbolsAsync(nupkgPath, snupkgPath).GetAwaiter().GetResult();
+            if (!quietMode)
+                Console.WriteLine($"Pushing to {packOptions.PushSource}...");
+            var publisher = new NuGetPublisher(packOptions.ApiKey, packOptions.PushSource);
+            var success = publisher.PushWithSymbolsAsync(
+                package.PackagePath, package.SymbolsPath).GetAwaiter().GetResult();
 
-        if (success)
-        {
-            Console.WriteLine($"Successfully pushed {packager.PackageId} {packager.Version}");
-        }
-        else
-        {
-            Console.WriteLine("Push failed.");
-            Environment.Exit(1);
-        }
+            if (!success)
+            {
+                Console.WriteLine("Push failed.");
+                throw new CompilationAbortedException();
+            }
+
+            if (!quietMode)
+                Console.WriteLine(
+                    $"Successfully pushed {package.Packager.PackageId} {package.Packager.Version}");
+        });
     }
 }
 
@@ -1435,6 +1628,8 @@ static void PrintHelp()
     Console.WriteLine("  -g, --debug                   Emit a portable PDB for TypeScript-source debugging");
     Console.WriteLine("  --msbuild-errors              Output errors in MSBuild format");
     Console.WriteLine("  --quiet                       Suppress success messages");
+    Console.WriteLine("  --timings                     Print compilation timings to stderr");
+    Console.WriteLine("  --timings-json                Print compilation timings as JSON to stdout");
     Console.WriteLine();
     Console.WriteLine("Packaging Options:");
     Console.WriteLine("  --pack                        Generate NuGet package");
@@ -1479,12 +1674,16 @@ static void PrintCompileUsage()
     Console.WriteLine("  -g, --debug            Emit a portable PDB for TypeScript-source debugging");
     Console.WriteLine("  --msbuild-errors       Output errors in MSBuild format");
     Console.WriteLine("  --quiet                Suppress success messages");
+    Console.WriteLine("  --timings              Print compilation timings to stderr");
+    Console.WriteLine("  --timings-json         Print compilation timings as JSON to stdout");
     Console.WriteLine("  --pack                 Generate NuGet package");
     Console.WriteLine("  --push <source>        Push to NuGet feed (implies --pack)");
     Console.WriteLine("  --api-key <key>        NuGet API key for push");
     Console.WriteLine("  --package-id <id>      Override package ID");
     Console.WriteLine("  --version <ver>        Override package version");
 }
+
+private sealed class CompilationAbortedException : Exception;
 
 record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false);
 }

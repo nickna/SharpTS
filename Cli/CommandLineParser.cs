@@ -139,6 +139,8 @@ public record GlobalOptions(
 /// <param name="References">Assembly references to add</param>
 /// <param name="Bundler">Bundler selection mode for EXE targets</param>
 /// <param name="EmitDebugSymbols">Emit a portable PDB beside the assembly (<c>--debug</c>/<c>-g</c>)</param>
+/// <param name="Timings">Print a human-readable compilation timing table.</param>
+/// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -150,7 +152,9 @@ public record CompileOptions(
     IReadOnlyList<string>? References = null,
     BundlerMode Bundler = BundlerMode.Auto,
     bool Standalone = false,
-    bool EmitDebugSymbols = false
+    bool EmitDebugSymbols = false,
+    bool Timings = false,
+    bool TimingsJson = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -662,6 +666,8 @@ public class CommandLineParser
         bool msbuildErrors = false;
         bool quietMode = false;
         bool standalone = false;
+        bool timings = false;
+        bool timingsJson = false;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
 
@@ -762,6 +768,14 @@ public class CommandLineParser
             {
                 quietMode = true;
             }
+            else if (args[i] == "--timings")
+            {
+                timings = true;
+            }
+            else if (args[i] == "--timings-json")
+            {
+                timingsJson = true;
+            }
             else if (args[i] == "--standalone")
             {
                 standalone = true;
@@ -815,6 +829,22 @@ public class CommandLineParser
                 ShowCompileUsage: true);
         }
 
+        if (timings && timingsJson)
+        {
+            return new ParsedCommand.Error(
+                "Error: --timings cannot be combined with --timings-json.",
+                64,
+                ShowCompileUsage: true);
+        }
+
+        if ((timings || timingsJson) && globalOptions.ShowConfig)
+        {
+            return new ParsedCommand.Error(
+                "Error: timing output cannot be combined with --showConfig.",
+                64,
+                ShowCompileUsage: true);
+        }
+
         // Determine output file: use explicit output if provided, otherwise derive from input + target
         string outputFile = explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
 
@@ -829,7 +859,9 @@ public class CommandLineParser
             References: globalOptions.References,
             Bundler: bundlerMode,
             Standalone: standalone,
-            EmitDebugSymbols: emitDebugSymbols
+            EmitDebugSymbols: emitDebugSymbols,
+            Timings: timings,
+            TimingsJson: timingsJson
         );
 
         var packOptions = new PackOptions(
