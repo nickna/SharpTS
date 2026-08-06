@@ -160,6 +160,70 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("[\"a!\",\"b!\"]\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Every_OnPlainArrayLike_BindsThisArgAndObservesMutation(ExecutionMode mode)
+    {
+        var source = """
+            let receiver: any = { 0: 11, 1: 12, length: 2 };
+            let thisArg: any = { threshold: 10 };
+            let sawBinding: boolean = false;
+            let result = Array.prototype.every.call(receiver, function (value: any, index: any, obj: any): any {
+                sawBinding = this === thisArg && obj === receiver;
+                if (index === 0) receiver[1] = 8;
+                return value > this.threshold;
+            }, thisArg);
+            console.log(result + ":" + sawBinding);
+            """;
+        Assert.Equal("false:true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Every_OnPlainArrayLike_BoxesPrimitiveThisArg(ExecutionMode mode)
+    {
+        var source = """
+            let receiver: any = { 0: 11, length: 1 };
+            let result = Array.prototype.every.call(receiver, function (value: any): any {
+                return this.valueOf() === 5;
+            }, 5);
+            console.log(result);
+            """;
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Map_OnPlainArrayLike_VisitsPropertyAddedByCallback(ExecutionMode mode)
+    {
+        var source = """
+            let receiver: any = { 0: 1, length: 3 };
+            let result = Array.prototype.map.call(receiver, function (value: any, index: any): any {
+                if (index === 0) receiver[1] = 2;
+                return value * 10;
+            });
+            console.log(JSON.stringify(result));
+            """;
+        Assert.Equal("[10,20,null]\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReduceRight_OnPlainArrayLike_ObservesPropertyAddedByGetter(ExecutionMode mode)
+    {
+        var source = """
+            let receiver: any = { length: 2 };
+            Object.defineProperty(receiver, "1", {
+                configurable: true,
+                get: function (): any {
+                    receiver[0] = 2;
+                    return 3;
+                }
+            });
+            let result = Array.prototype.reduceRight.call(receiver, function (acc: any, value: any): any {
+                return acc + value;
+            });
+            console.log(result);
+            """;
+        Assert.Equal("5\n", TestHarness.Run(source, mode));
+    }
+
     // ── Object.defineProperties reads Properties via Get (accessor getters) ──
 
     [Theory, ModeData]

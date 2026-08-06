@@ -514,6 +514,197 @@ public static class ArrayBuiltIns
         return (long)Math.Min(Math.Truncate(number), MaxSafeInteger);
     }
 
+    internal static bool IsGenericCallbackMethod(string name)
+        => name is "map" or "filter" or "flatMap" or "forEach"
+            or "find" or "findIndex" or "findLast" or "findLastIndex"
+            or "some" or "every" or "reduce" or "reduceRight";
+
+    /// <summary>
+    /// Runs a callback-based Array.prototype method against a generic array-like
+    /// receiver. Unlike the fallback materialization used by read-only methods,
+    /// indexed properties are queried live so mutations from getters/callbacks
+    /// affect later iterations. The receiver itself is passed as the callback's
+    /// final argument.
+    /// </summary>
+    internal static object? InvokeArrayLikeCallbackMethod(
+        Interpreter interpreter,
+        object receiver,
+        string methodName,
+        IReadOnlyList<object?> args)
+    {
+        int len = (int)Math.Min(
+            ToLength(interpreter.GetPropertyValue(receiver, "length"), interpreter),
+            1 << 20);
+
+        if (methodName is "reduce" or "reduceRight")
+            return ReduceArrayLike(interpreter, receiver, methodName, args, len);
+
+        using var iter = CallbackIterator.CreateForArrayLike(args, receiver, methodName);
+        switch (methodName)
+        {
+            case "map":
+            {
+                var result = new List<object?>(len);
+                for (int i = 0; i < len; i++)
+                {
+                    if (TryGetPresentElement(interpreter, receiver, i, out var element))
+                        result.Add(iter.Invoke(interpreter, element, i));
+                    else
+                        result.Add(ArrayHole.Instance);
+                }
+                return new SharpTSArray(result);
+            }
+            case "filter":
+            {
+                List<object?> result = [];
+                for (int i = 0; i < len; i++)
+                {
+                    if (!TryGetPresentElement(interpreter, receiver, i, out var element)) continue;
+                    if (iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        result.Add(element);
+                }
+                return new SharpTSArray(result);
+            }
+            case "flatMap":
+            {
+                List<object?> result = [];
+                for (int i = 0; i < len; i++)
+                {
+                    if (!TryGetPresentElement(interpreter, receiver, i, out var element)) continue;
+                    var mapped = iter.Invoke(interpreter, element, i);
+                    if (mapped is SharpTSArray mappedArray)
+                        AppendPresentElements(mappedArray, result);
+                    else
+                        result.Add(mapped);
+                }
+                return new SharpTSArray(result);
+            }
+            case "forEach":
+                for (int i = 0; i < len; i++)
+                {
+                    if (TryGetPresentElement(interpreter, receiver, i, out var element))
+                        iter.InvokeRV(interpreter, element, i);
+                }
+                return SharpTSUndefined.Instance;
+            case "some":
+                for (int i = 0; i < len; i++)
+                {
+                    if (TryGetPresentElement(interpreter, receiver, i, out var element)
+                        && iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return true;
+                }
+                return false;
+            case "every":
+                for (int i = 0; i < len; i++)
+                {
+                    if (TryGetPresentElement(interpreter, receiver, i, out var element)
+                        && !iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return false;
+                }
+                return true;
+            case "find":
+                for (int i = 0; i < len; i++)
+                {
+                    var element = GetElement(interpreter, receiver, i);
+                    if (iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return element;
+                }
+                return SharpTSUndefined.Instance;
+            case "findIndex":
+                for (int i = 0; i < len; i++)
+                {
+                    var element = GetElement(interpreter, receiver, i);
+                    if (iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return (double)i;
+                }
+                return -1d;
+            case "findLast":
+                for (int i = len - 1; i >= 0; i--)
+                {
+                    var element = GetElement(interpreter, receiver, i);
+                    if (iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return element;
+                }
+                return SharpTSUndefined.Instance;
+            case "findLastIndex":
+                for (int i = len - 1; i >= 0; i--)
+                {
+                    var element = GetElement(interpreter, receiver, i);
+                    if (iter.InvokeRV(interpreter, element, i).IsTruthy())
+                        return (double)i;
+                }
+                return -1d;
+            default:
+                throw new InvalidOperationException($"Unsupported array callback method: {methodName}");
+        }
+    }
+
+    private static object? ReduceArrayLike(
+        Interpreter interpreter,
+        object receiver,
+        string methodName,
+        IReadOnlyList<object?> args,
+        int len)
+    {
+        if (args.Count == 0 || args[0] is not ISharpTSCallable callback)
+            throw TypeError($"{methodName} callback must be callable");
+
+        bool fromEnd = methodName == "reduceRight";
+        int step = fromEnd ? -1 : 1;
+        int index = fromEnd ? len - 1 : 0;
+        object? accumulator = null;
+
+        if (args.Count > 1)
+        {
+            accumulator = args[1];
+        }
+        else
+        {
+            while (index >= 0 && index < len
+                && !TryGetPresentElement(interpreter, receiver, index, out accumulator))
+            {
+                index += step;
+            }
+            if (index < 0 || index >= len)
+                throw TypeError("Reduce of empty array with no initial value");
+            index += step;
+        }
+
+        var callbackArgs = ArgumentListPool.Rent();
+        try
+        {
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(receiver);
+            for (; index >= 0 && index < len; index += step)
+            {
+                if (!TryGetPresentElement(interpreter, receiver, index, out var element)) continue;
+                callbackArgs[0] = accumulator;
+                callbackArgs[1] = element;
+                callbackArgs[2] = (double)index;
+                accumulator = callback.Call(interpreter, callbackArgs);
+            }
+            return accumulator;
+        }
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
+    }
+
+    private static object? GetElement(Interpreter interpreter, object receiver, int index)
+        => interpreter.GetPropertyValue(receiver, index.ToString(
+            System.Globalization.CultureInfo.InvariantCulture));
+
+    private static void AppendPresentElements(SharpTSArray source, List<object?> destination)
+    {
+        for (int i = 0; i < source.Length; i++)
+        {
+            if (source.HasIndex(i)) destination.Add(source[i]);
+        }
+    }
+
     /// <summary>
     /// ECMA-262 7.1.5 ToIntegerOrInfinity. Full ToNumber coercion is required:
     /// strings may be hexadecimal and objects may run valueOf/toString or throw.
@@ -1004,6 +1195,19 @@ public static class ArrayBuiltIns
         return true;
     }
 
+    private static bool TryGetPresentElement(
+        Interpreter interpreter, object receiver, int index, out object? value)
+    {
+        string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (!interpreter.HasProperty(receiver, key))
+        {
+            value = null;
+            return false;
+        }
+        value = interpreter.GetPropertyValue(receiver, key);
+        return true;
+    }
+
     private static bool IsStrictlyEqual(object? a, object? b)
     {
         if (a == null && b == null) return true;
@@ -1090,6 +1294,18 @@ public static class ArrayBuiltIns
             if (args.Length >= 2)
                 callback = BindCallbackThis(callback, args[1].ToObject());
             return new CallbackIterator(callback, RuntimeValue.FromObject(arr));
+        }
+
+        public static CallbackIterator CreateForArrayLike(
+            IReadOnlyList<object?> args, object receiver, string methodName)
+        {
+            var callback = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+            if (callback is null)
+                throw TypeError($"{methodName} callback must be callable");
+
+            if (args.Count >= 2)
+                callback = BindCallbackThis(callback, args[1]);
+            return new CallbackIterator(callback, RuntimeValue.FromObject(receiver));
         }
 
         public object? Invoke(Interpreter interp, object? element, int index)

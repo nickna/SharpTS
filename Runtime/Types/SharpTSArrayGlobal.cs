@@ -217,6 +217,18 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, arguments, fromEnd: _name == "lastIndexOf");
         }
 
+        // Callback-based methods must not use the eager materialization below.
+        // Length is captured once, but each indexed HasProperty/Get happens at
+        // the point prescribed by the method, so callback/getter mutations of
+        // the original array-like remain visible. Dispatching the original
+        // callback also lets thisArg binding see its real callable type.
+        if (receiver is not SharpTSArray
+            && BuiltIns.ArrayBuiltIns.IsGenericCallbackMethod(_name))
+        {
+            return BuiltIns.ArrayBuiltIns.InvokeArrayLikeCallbackMethod(
+                interpreter, receiver!, _name, arguments);
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         if (receiver is SharpTSArray arr)
             return _inner.Bind(arr).Call(interpreter, arguments);
