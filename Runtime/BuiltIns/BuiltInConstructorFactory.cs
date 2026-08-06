@@ -113,7 +113,7 @@ public static class BuiltInConstructorFactory
         // matching compiled-mode behaviour so typeof is "object" and instanceof works.
         if (name == "Number") return CreateBoxedNumber(args, interpreter);
         if (name == "String") return CreateBoxedString(args, interpreter);
-        if (name == "Boolean") return CreateBoxedBoolean(args);
+        if (name == "Boolean") return CreateBoxedBoolean(args, interpreter);
 
         // Check simple constructors first
         if (_simpleConstructors.TryGetValue(name, out var handler))
@@ -465,7 +465,8 @@ public static class BuiltInConstructorFactory
     /// <c>new Boolean(x)</c>: ECMA-262 §20.4.2. Returns a <c>SharpTSObject</c>
     /// wrapper with <c>__primitiveType="Boolean"</c> and the ToBoolean-coerced value.
     /// </summary>
-    private static SharpTSObject CreateBoxedBoolean(IReadOnlyList<object?> args)
+    private static SharpTSObject CreateBoxedBoolean(
+        IReadOnlyList<object?> args, Interpreter? interpreter = null)
     {
         var arg = args.Count > 0 ? args[0] : null;
         bool value = RuntimeTypes.IsTruthy(arg);
@@ -473,7 +474,10 @@ public static class BuiltInConstructorFactory
         {
             ["__primitiveType"] = "Boolean",
             ["__primitiveValue"] = value,
-        });
+        })
+        {
+            Prototype = interpreter?.GetBooleanPrototype(),
+        };
     }
 
     private static double ParseNumberFromString(string s)

@@ -3087,7 +3087,7 @@ test/built-ins/Boolean/S15.6.1.1_A1_T4.js RuntimeError
 test/built-ins/Boolean/S15.6.1.1_A1_T5.js Pass
 test/built-ins/Boolean/S15.6.1.1_A2.js Pass
 test/built-ins/Boolean/S15.6.2.1_A1.js Pass
-test/built-ins/Boolean/S15.6.2.1_A2.js Fail
+test/built-ins/Boolean/S15.6.2.1_A2.js Pass
 test/built-ins/Boolean/S15.6.2.1_A3.js Pass
 test/built-ins/Boolean/S15.6.2.1_A4.js Fail
 test/built-ins/Boolean/S15.6.3_A1.js Pass
@@ -6703,7 +6703,7 @@ test/built-ins/Object/getPrototypeOf/15.2.3.2-2-2.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-20.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-21.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-22.js Fail
-test/built-ins/Object/getPrototypeOf/15.2.3.2-2-23.js Fail
+test/built-ins/Object/getPrototypeOf/15.2.3.2-2-23.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-24.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-25.js Fail
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-26.js Pass
