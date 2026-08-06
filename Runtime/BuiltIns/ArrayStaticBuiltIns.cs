@@ -15,7 +15,8 @@ public static class ArrayStaticBuiltIns
             "isArray" => BuiltInMethod.CreateV2("isArray", 1, static (_, _, args) =>
             {
                 return RuntimeValue.FromBoolean(
-                    args[0].ToObject() is SharpTSArray and not SharpTSArguments);
+                    args[0].ToObject() is SharpTSArray and not SharpTSArguments
+                        or SharpTSArrayPrototype);
             }),
             "from" => BuiltInMethod.CreateV2("from", 1, 2, static (interpreter, _, args) =>
             {

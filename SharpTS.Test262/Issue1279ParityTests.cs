@@ -1130,6 +1130,10 @@ public sealed class Issue1279ParityTests
     public void Object_prototype_methods_reject_nullish_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_isArray_recognizes_Array_prototype()
+        => AssertPassInBothModes("built-ins/Array/isArray/15.4.3.2-0-5.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
