@@ -1133,6 +1133,10 @@ public partial class Interpreter : IDisposable
                 _environment = new RuntimeEnvironment(_environment, strictMode: true);
             }
 
+            // `var` declarations are instantiated before any top-level code runs;
+            // their initializer still executes in source order.
+            HoistTopLevelVarDeclarations(statements);
+
             // Hoist function declarations first
             HoistFunctionDeclarations(statements);
 
@@ -1990,6 +1994,23 @@ public partial class Interpreter : IDisposable
                 {
                     _environment.Define(funcStmt.Name.Lexeme, new SharpTSFunction(funcStmt, _environment));
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates top-level <c>var</c> bindings with the initial value undefined before
+    /// evaluation begins. A later declaration overwrites the slot when its initializer
+    /// executes; an earlier read therefore observes undefined rather than ReferenceError.
+    /// </summary>
+    private void HoistTopLevelVarDeclarations(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Var { IsVar: true } variable
+                && !_environment.IsDefinedLocally(variable.Name.Lexeme))
+            {
+                _environment.Define(variable.Name.Lexeme, SharpTSUndefined.Instance);
             }
         }
     }

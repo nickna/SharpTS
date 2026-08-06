@@ -3083,7 +3083,7 @@ test/built-ins/Array/prototype/with/this-value-nullish.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T1.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T2.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T3.js Pass
-test/built-ins/Boolean/S15.6.1.1_A1_T4.js RuntimeError
+test/built-ins/Boolean/S15.6.1.1_A1_T4.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T5.js Pass
 test/built-ins/Boolean/S15.6.1.1_A2.js Pass
 test/built-ins/Boolean/S15.6.2.1_A1.js Pass
@@ -4025,7 +4025,7 @@ test/built-ins/Object/S15.2.1.1_A1_T1.js Pass
 test/built-ins/Object/S15.2.1.1_A1_T2.js Pass
 test/built-ins/Object/S15.2.1.1_A1_T3.js Pass
 test/built-ins/Object/S15.2.1.1_A1_T4.js Pass
-test/built-ins/Object/S15.2.1.1_A1_T5.js RuntimeError
+test/built-ins/Object/S15.2.1.1_A1_T5.js Pass
 test/built-ins/Object/S15.2.1.1_A2_T1.js Pass
 test/built-ins/Object/S15.2.1.1_A2_T10.js Pass
 test/built-ins/Object/S15.2.1.1_A2_T11.js Fail
@@ -4047,7 +4047,7 @@ test/built-ins/Object/S15.2.2.1_A1_T1.js Fail
 test/built-ins/Object/S15.2.2.1_A1_T2.js Fail
 test/built-ins/Object/S15.2.2.1_A1_T3.js Fail
 test/built-ins/Object/S15.2.2.1_A1_T4.js Fail
-test/built-ins/Object/S15.2.2.1_A1_T5.js RuntimeError
+test/built-ins/Object/S15.2.2.1_A1_T5.js Fail
 test/built-ins/Object/S15.2.2.1_A2_T1.js Pass
 test/built-ins/Object/S15.2.2.1_A2_T2.js Pass
 test/built-ins/Object/S15.2.2.1_A2_T3.js Pass
@@ -8436,7 +8436,7 @@ test/built-ins/RegExp/S15.10.2.9_A1_T5.js Pass
 test/built-ins/RegExp/S15.10.2_A1_T1.js Pass
 test/built-ins/RegExp/S15.10.3.1_A1_T1.js Pass
 test/built-ins/RegExp/S15.10.3.1_A1_T2.js Pass
-test/built-ins/RegExp/S15.10.3.1_A1_T3.js RuntimeError
+test/built-ins/RegExp/S15.10.3.1_A1_T3.js Pass
 test/built-ins/RegExp/S15.10.3.1_A1_T4.js Pass
 test/built-ins/RegExp/S15.10.3.1_A1_T5.js Pass
 test/built-ins/RegExp/S15.10.3.1_A2_T1.js Pass
@@ -8444,7 +8444,7 @@ test/built-ins/RegExp/S15.10.3.1_A2_T2.js Pass
 test/built-ins/RegExp/S15.10.3.1_A3_T1.js Pass
 test/built-ins/RegExp/S15.10.3.1_A3_T2.js Pass
 test/built-ins/RegExp/S15.10.4.1_A1_T1.js Pass
-test/built-ins/RegExp/S15.10.4.1_A1_T2.js RuntimeError
+test/built-ins/RegExp/S15.10.4.1_A1_T2.js Pass
 test/built-ins/RegExp/S15.10.4.1_A1_T3.js Pass
 test/built-ins/RegExp/S15.10.4.1_A1_T4.js Pass
 test/built-ins/RegExp/S15.10.4.1_A1_T5.js Pass
@@ -8452,7 +8452,7 @@ test/built-ins/RegExp/S15.10.4.1_A2_T1.js Pass
 test/built-ins/RegExp/S15.10.4.1_A2_T2.js Pass
 test/built-ins/RegExp/S15.10.4.1_A3_T1.js Pass
 test/built-ins/RegExp/S15.10.4.1_A3_T2.js Pass
-test/built-ins/RegExp/S15.10.4.1_A3_T3.js RuntimeError
+test/built-ins/RegExp/S15.10.4.1_A3_T3.js Pass
 test/built-ins/RegExp/S15.10.4.1_A3_T4.js Pass
 test/built-ins/RegExp/S15.10.4.1_A3_T5.js Pass
 test/built-ins/RegExp/S15.10.4.1_A4_T1.js Fail
@@ -9493,7 +9493,7 @@ test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T17.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T18.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T19.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T2.js Pass
-test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T20.js RuntimeError
+test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T20.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T21.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T3.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T4.js Pass
@@ -9526,7 +9526,7 @@ test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T12.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T2.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T3.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T4.js Pass
-test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T5.js RuntimeError
+test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T5.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T6.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T7.js Pass
 test/built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T8.js Pass
@@ -9645,7 +9645,7 @@ test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T17.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T18.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T19.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T2.js Pass
-test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T20.js RuntimeError
+test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T20.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T21.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T22.js Pass
 test/built-ins/RegExp/prototype/test/S15.10.6.3_A1_T3.js Pass
@@ -10016,7 +10016,7 @@ test/built-ins/String/S15.5.1.1_A1_T19.js Pass
 test/built-ins/String/S15.5.1.1_A1_T2.js Pass
 test/built-ins/String/S15.5.1.1_A1_T3.js Pass
 test/built-ins/String/S15.5.1.1_A1_T4.js Pass
-test/built-ins/String/S15.5.1.1_A1_T5.js RuntimeError
+test/built-ins/String/S15.5.1.1_A1_T5.js Pass
 test/built-ins/String/S15.5.1.1_A1_T6.js Pass
 test/built-ins/String/S15.5.1.1_A1_T7.js Pass
 test/built-ins/String/S15.5.1.1_A1_T8.js Fail
@@ -10138,7 +10138,7 @@ test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T10.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T2.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T4.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T5.js Pass
-test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T6.js RuntimeError
+test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T6.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T7.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T8.js Pass
 test/built-ins/String/prototype/charAt/S15.5.4.4_A1_T9.js Pass
@@ -10168,7 +10168,7 @@ test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T10.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T2.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T4.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T5.js Pass
-test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T6.js RuntimeError
+test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T6.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T7.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T8.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T9.js Pass
@@ -10204,18 +10204,18 @@ test/built-ins/String/prototype/codePointAt/this-is-undefined-throws.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A10.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A11.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T1.js Pass
-test/built-ins/String/prototype/concat/S15.5.4.6_A1_T10.js RuntimeError
+test/built-ins/String/prototype/concat/S15.5.4.6_A1_T10.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T2.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T4.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T5.js Pass
-test/built-ins/String/prototype/concat/S15.5.4.6_A1_T6.js RuntimeError
+test/built-ins/String/prototype/concat/S15.5.4.6_A1_T6.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T7.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T8.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A1_T9.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A2.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A3.js Pass
-test/built-ins/String/prototype/concat/S15.5.4.6_A4_T1.js RuntimeError
-test/built-ins/String/prototype/concat/S15.5.4.6_A4_T2.js Fail
+test/built-ins/String/prototype/concat/S15.5.4.6_A4_T1.js Pass
+test/built-ins/String/prototype/concat/S15.5.4.6_A4_T2.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A6.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A7.js Pass
 test/built-ins/String/prototype/concat/S15.5.4.6_A8.js Pass
@@ -10287,7 +10287,7 @@ test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T12.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T2.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T4.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T5.js Pass
-test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T6.js RuntimeError
+test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T6.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T7.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T8.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T9.js Pass
@@ -10342,7 +10342,7 @@ test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T12.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T2.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T4.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T5.js Pass
-test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T6.js RuntimeError
+test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T6.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T7.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T8.js Pass
 test/built-ins/String/prototype/lastIndexOf/S15.5.4.8_A1_T9.js Pass
@@ -10380,7 +10380,7 @@ test/built-ins/String/prototype/match/S15.5.4.10_A1_T14.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T3.js RuntimeError
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T4.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T5.js Pass
-test/built-ins/String/prototype/match/S15.5.4.10_A1_T6.js RuntimeError
+test/built-ins/String/prototype/match/S15.5.4.10_A1_T6.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T7.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T8.js Pass
 test/built-ins/String/prototype/match/S15.5.4.10_A1_T9.js Pass
@@ -10514,8 +10514,8 @@ test/built-ins/String/prototype/replace/S15.5.4.11_A1_T13.js Pass
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T14.js Pass
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T15.js Pass
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T16.js Pass
-test/built-ins/String/prototype/replace/S15.5.4.11_A1_T17.js RuntimeError
-test/built-ins/String/prototype/replace/S15.5.4.11_A1_T2.js RuntimeError
+test/built-ins/String/prototype/replace/S15.5.4.11_A1_T17.js Pass
+test/built-ins/String/prototype/replace/S15.5.4.11_A1_T2.js Pass
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T4.js Fail
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T5.js RuntimeError
 test/built-ins/String/prototype/replace/S15.5.4.11_A1_T6.js RuntimeError
@@ -10616,7 +10616,7 @@ test/built-ins/String/prototype/search/S15.5.4.12_A1_T14.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T2.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T4.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T5.js Pass
-test/built-ins/String/prototype/search/S15.5.4.12_A1_T6.js RuntimeError
+test/built-ins/String/prototype/search/S15.5.4.12_A1_T6.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T7.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T8.js Pass
 test/built-ins/String/prototype/search/S15.5.4.12_A1_T9.js Pass
@@ -10656,10 +10656,10 @@ test/built-ins/String/prototype/slice/S15.5.4.13_A1_T12.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T13.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T14.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js RuntimeError
-test/built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js RuntimeError
+test/built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T4.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js RuntimeError
-test/built-ins/String/prototype/slice/S15.5.4.13_A1_T6.js RuntimeError
+test/built-ins/String/prototype/slice/S15.5.4.13_A1_T6.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T7.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T8.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T9.js Pass
@@ -10835,10 +10835,10 @@ test/built-ins/String/prototype/substring/S15.5.4.15_A1_T12.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T13.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T14.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js RuntimeError
-test/built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js RuntimeError
+test/built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T4.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T5.js RuntimeError
-test/built-ins/String/prototype/substring/S15.5.4.15_A1_T6.js RuntimeError
+test/built-ins/String/prototype/substring/S15.5.4.15_A1_T6.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T7.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T8.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T9.js Pass
