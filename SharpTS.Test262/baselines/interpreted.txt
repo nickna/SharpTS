@@ -397,7 +397,7 @@ test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length-as-symb
 test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js Fail
 test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this.js Pass
 test/built-ins/Array/prototype/copyWithin/return-this.js Fail
-test/built-ins/Array/prototype/copyWithin/undefined-end.js Fail
+test/built-ins/Array/prototype/copyWithin/undefined-end.js Pass
 test/built-ins/Array/prototype/entries/iteration-mutable.js Pass
 test/built-ins/Array/prototype/entries/iteration.js Pass
 test/built-ins/Array/prototype/entries/length.js Pass

@@ -886,7 +886,9 @@ public static class ArrayBuiltIns
         int relStart = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : 0;
         int from = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
 
-        int relEnd = args.Length > 2 ? (int)Interpreter.ToNumber(args[2]) : len;
+        int relEnd = args.Length > 2 && !args[2].IsUndefined
+            ? (int)Interpreter.ToNumber(args[2])
+            : len;
         int final_ = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
 
         int count = Math.Min(final_ - from, len - to);
