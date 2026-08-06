@@ -247,6 +247,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
             SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetMember(key) != null,
+            SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),
             SharpTSClassPrototype classPrototype => classPrototype.HasOwnProperty(key),
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
@@ -279,6 +280,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is bool) return "[object Boolean]";
         if (target is SharpTSArguments) return "[object Arguments]";
         if (target is SharpTSArray) return "[object Array]";
+        if (target is SharpTSDate) return "[object Date]";
+        if (target is SharpTSRegExp) return "[object RegExp]";
+        if (target is SharpTSError
+            || target is SharpTSInstance { RuntimeClass: SharpTSErrorClass })
+            return "[object Error]";
         if (target is SharpTSObject boxed
             && boxed.GetProperty("__primitiveType") is string primitiveType)
         {

@@ -7074,7 +7074,7 @@ test/built-ins/Object/prototype/__defineGetter__/getter-non-callable.js Pass
 test/built-ins/Object/prototype/__defineGetter__/key-invalid.js Pass
 test/built-ins/Object/prototype/__defineGetter__/length.js Pass
 test/built-ins/Object/prototype/__defineGetter__/name.js Pass
-test/built-ins/Object/prototype/__defineGetter__/prop-desc.js Fail
+test/built-ins/Object/prototype/__defineGetter__/prop-desc.js Pass
 test/built-ins/Object/prototype/__defineGetter__/this-non-obj.js Pass
 test/built-ins/Object/prototype/__defineSetter__/define-abrupt.js Fail
 test/built-ins/Object/prototype/__defineSetter__/define-existing.js Pass
@@ -7084,7 +7084,7 @@ test/built-ins/Object/prototype/__defineSetter__/define-non-extensible.js Pass
 test/built-ins/Object/prototype/__defineSetter__/key-invalid.js Pass
 test/built-ins/Object/prototype/__defineSetter__/length.js Pass
 test/built-ins/Object/prototype/__defineSetter__/name.js Pass
-test/built-ins/Object/prototype/__defineSetter__/prop-desc.js Fail
+test/built-ins/Object/prototype/__defineSetter__/prop-desc.js Pass
 test/built-ins/Object/prototype/__defineSetter__/setter-non-callable.js Pass
 test/built-ins/Object/prototype/__defineSetter__/this-non-obj.js Pass
 test/built-ins/Object/prototype/__lookupGetter__/key-invalid.js Pass
@@ -7101,7 +7101,7 @@ test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-data.js Pass
 test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-get-err.js Fail
 test/built-ins/Object/prototype/__lookupGetter__/lookup-proto-proto-err.js Fail
 test/built-ins/Object/prototype/__lookupGetter__/name.js Pass
-test/built-ins/Object/prototype/__lookupGetter__/prop-desc.js Fail
+test/built-ins/Object/prototype/__lookupGetter__/prop-desc.js Pass
 test/built-ins/Object/prototype/__lookupGetter__/this-non-obj.js Pass
 test/built-ins/Object/prototype/__lookupSetter__/key-invalid.js Pass
 test/built-ins/Object/prototype/__lookupSetter__/length.js Pass
@@ -7117,7 +7117,7 @@ test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-data.js Pass
 test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-get-err.js Fail
 test/built-ins/Object/prototype/__lookupSetter__/lookup-proto-proto-err.js Fail
 test/built-ins/Object/prototype/__lookupSetter__/name.js Pass
-test/built-ins/Object/prototype/__lookupSetter__/prop-desc.js Fail
+test/built-ins/Object/prototype/__lookupSetter__/prop-desc.js Pass
 test/built-ins/Object/prototype/__lookupSetter__/this-non-obj.js Pass
 test/built-ins/Object/prototype/__proto__/get-abrupt.js RuntimeError
 test/built-ins/Object/prototype/__proto__/get-fn-name.js RuntimeError
@@ -7188,7 +7188,7 @@ test/built-ins/Object/prototype/hasOwnProperty/8.12.1-1_8.js Pass
 test/built-ins/Object/prototype/hasOwnProperty/8.12.1-1_9.js Pass
 test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A12.js Fail
 test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A13.js Fail
-test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js Fail
+test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T1.js Pass
 test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T2.js Pass
 test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A1_T3.js Pass
 test/built-ins/Object/prototype/hasOwnProperty/S15.2.4.5_A6.js Pass
@@ -7247,13 +7247,13 @@ test/built-ins/Object/prototype/toString/Object.prototype.toString.call-argument
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-array.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-bigint.js Fail
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-boolean.js Pass
-test/built-ins/Object/prototype/toString/Object.prototype.toString.call-date.js Fail
-test/built-ins/Object/prototype/toString/Object.prototype.toString.call-error.js Fail
+test/built-ins/Object/prototype/toString/Object.prototype.toString.call-date.js Pass
+test/built-ins/Object/prototype/toString/Object.prototype.toString.call-error.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-function.js RuntimeError
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-null.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-number.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-object.js Pass
-test/built-ins/Object/prototype/toString/Object.prototype.toString.call-regexp.js Fail
+test/built-ins/Object/prototype/toString/Object.prototype.toString.call-regexp.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-string.js Pass
 test/built-ins/Object/prototype/toString/Object.prototype.toString.call-undefined.js Pass
 test/built-ins/Object/prototype/toString/direct-invocation.js Pass
@@ -7262,7 +7262,7 @@ test/built-ins/Object/prototype/toString/length.js Pass
 test/built-ins/Object/prototype/toString/name.js Pass
 test/built-ins/Object/prototype/toString/no-prototype-property.js Pass
 test/built-ins/Object/prototype/toString/not-a-constructor.js Pass
-test/built-ins/Object/prototype/toString/prop-desc.js Fail
+test/built-ins/Object/prototype/toString/prop-desc.js Pass
 test/built-ins/Object/prototype/toString/proxy-array.js Fail
 test/built-ins/Object/prototype/toString/proxy-function-async.js Fail
 test/built-ins/Object/prototype/toString/proxy-function.js Fail
@@ -8467,7 +8467,7 @@ test/built-ins/RegExp/S15.10.4.1_A5_T6.js Fail
 test/built-ins/RegExp/S15.10.4.1_A5_T7.js Pass
 test/built-ins/RegExp/S15.10.4.1_A5_T8.js Pass
 test/built-ins/RegExp/S15.10.4.1_A5_T9.js Pass
-test/built-ins/RegExp/S15.10.4.1_A6_T1.js Fail
+test/built-ins/RegExp/S15.10.4.1_A6_T1.js Pass
 test/built-ins/RegExp/S15.10.4.1_A7_T1.js Pass
 test/built-ins/RegExp/S15.10.4.1_A7_T2.js Pass
 test/built-ins/RegExp/S15.10.4.1_A8_T1.js Pass

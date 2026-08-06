@@ -1110,6 +1110,14 @@ public sealed class Issue1279ParityTests
     public void Error_toString_uses_strict_generic_object_semantics(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/prototype/toString/Object.prototype.toString.call-date.js")]
+    [InlineData("built-ins/Object/prototype/toString/Object.prototype.toString.call-error.js")]
+    [InlineData("built-ins/Object/prototype/toString/Object.prototype.toString.call-regexp.js")]
+    [InlineData("built-ins/Object/prototype/toString/prop-desc.js")]
+    public void Object_toString_reports_standard_builtin_brands(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
