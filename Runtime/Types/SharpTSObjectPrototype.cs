@@ -187,7 +187,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         else
         {
             if (arguments.Count == 0)
-                throw new Exception($"Runtime Error: Object.prototype.{_name} requires a receiver.");
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Object.prototype.{_name} called on null or undefined"));
             target = arguments[0];
             rest = arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : new List<object?>();
         }
@@ -325,7 +326,20 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         return ToStringImpl(interpreter, target, args);
     }
 
-    private static object? ValueOfImpl(Interp? interpreter, object? target, List<object?> args) => target;
+    private static object? ValueOfImpl(Interp? interpreter, object? target, List<object?> args)
+    {
+        RequireObjectCoercible(target, "valueOf");
+        return target;
+    }
+
+    private static void RequireObjectCoercible(object? target, string methodName)
+    {
+        if (target is null or SharpTSUndefined)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                $"Object.prototype.{methodName} called on null or undefined"));
+        }
+    }
 
     private static object? DefineAccessorImpl(
         Interp? interpreter, object? target, List<object?> args, bool isGetter)
@@ -357,6 +371,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (v is null or SharpTSUndefined or double or int or long or bool or string
             or System.Numerics.BigInteger or SharpTSSymbol)
             return false;
+        RequireObjectCoercible(target, "isPrototypeOf");
 
         // Bounded to keep a cyclic __proto__ chain from spinning; 64 matches the
         // interpreter's other prototype walks.
@@ -374,7 +389,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
 
     private static object? PropertyIsEnumerableImpl(Interp? interpreter, object? target, List<object?> args)
     {
-        if (target == null || args.Count == 0) return false;
+        RequireObjectCoercible(target, "propertyIsEnumerable");
+        if (args.Count == 0) return false;
         var key = args[0]?.ToString() ?? "";
         return target switch
         {

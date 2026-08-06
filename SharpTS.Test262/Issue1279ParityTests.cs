@@ -1118,6 +1118,18 @@ public sealed class Issue1279ParityTests
     public void Object_toString_reports_standard_builtin_brands(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/prototype/isPrototypeOf/null-this-and-object-arg-throws.js")]
+    [InlineData("built-ins/Object/prototype/isPrototypeOf/undefined-this-and-object-arg-throws.js")]
+    [InlineData("built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A12.js")]
+    [InlineData("built-ins/Object/prototype/propertyIsEnumerable/S15.2.4.7_A13.js")]
+    [InlineData("built-ins/Object/prototype/valueOf/S15.2.4.4_A12.js")]
+    [InlineData("built-ins/Object/prototype/valueOf/S15.2.4.4_A13.js")]
+    [InlineData("built-ins/Object/prototype/valueOf/S15.2.4.4_A14.js")]
+    [InlineData("built-ins/Object/prototype/valueOf/S15.2.4.4_A15.js")]
+    public void Object_prototype_methods_reject_nullish_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
