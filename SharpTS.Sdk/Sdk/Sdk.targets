@@ -1,4 +1,26 @@
 <Project>
+  <!-- Import the base targets before declaring SharpTS hooks. MSBuild evaluation
+       is order-dependent; this keeps the base SDK from overwriting the target
+       chain customizations declared later in this file. -->
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!-- These defaults depend on values finalized by the consumer project and the
+       base SDK targets. Keeping them here avoids capturing an empty OutputPath
+       or AssemblyName during the early Sdk.props import. -->
+  <PropertyGroup>
+    <SharpTSOutputPath Condition="'$(SharpTSOutputPath)' == ''">$(OutputPath)</SharpTSOutputPath>
+    <SharpTSOutputFileName Condition="'$(SharpTSOutputFileName)' == ''">$(AssemblyName).dll</SharpTSOutputFileName>
+    <_SharpTSRuntimeConfigFileName>$([System.IO.Path]::ChangeExtension('$(SharpTSOutputFileName)', '.runtimeconfig.json'))</_SharpTSRuntimeConfigFileName>
+  </PropertyGroup>
+
+  <!-- Publish consumes @(IntermediateAssembly) as the primary build product.
+       Point it at the assembly emitted by SharpTS so the base SDK publishes the
+       real TypeScript output instead of looking for a Roslyn-produced obj file. -->
+  <ItemGroup>
+    <IntermediateAssembly Remove="@(IntermediateAssembly)" />
+    <IntermediateAssembly Include="$(SharpTSOutputPath)$(SharpTSOutputFileName)" />
+  </ItemGroup>
+
   <!-- Import the MSBuild tasks assembly -->
   <UsingTask TaskName="SharpTS.Sdk.Tasks.ReadTsConfigTask"
              AssemblyFile="$(SharpTSTasksAssembly)" />
@@ -105,9 +127,24 @@
   <Target Name="SharpTSClean" BeforeTargets="Clean">
     <Delete Files="$(SharpTSOutputPath)$(SharpTSOutputFileName)"
             Condition="Exists('$(SharpTSOutputPath)$(SharpTSOutputFileName)')" />
-    <Delete Files="$(SharpTSOutputPath)$(AssemblyName).runtimeconfig.json"
-            Condition="Exists('$(SharpTSOutputPath)$(AssemblyName).runtimeconfig.json')" />
+    <Delete Files="$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)"
+            Condition="Exists('$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)')" />
     <Message Importance="normal" Text="SharpTS: Cleaned output files" />
+  </Target>
+
+  <!-- The SharpTS compiler emits a runtimeconfig even when the consumer keeps
+       Microsoft.NET.Sdk's default Library OutputType. Add that compiler-owned
+       file to the standard publish set so the documented minimal project stays
+       runnable after `dotnet publish`. -->
+  <Target Name="_SharpTSAddRuntimeConfigToPublish"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="Exists('$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)')">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)">
+        <RelativePath>$(_SharpTSRuntimeConfigFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
   <!-- Integrate with Build target chain -->

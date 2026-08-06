@@ -2,6 +2,10 @@
 
 MSBuild SDK for compiling TypeScript directly to .NET assemblies using SharpTS.
 
+SharpTS.Sdk composes with the installed `Microsoft.NET.Sdk` and uses the
+compiler bundled in the selected package version. It does not require a global
+`sharpts` tool installation.
+
 ## Quick Start
 
 Create a new project file:

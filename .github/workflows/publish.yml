@@ -81,6 +81,13 @@ jobs:
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
           echo "✓ All packages created successfully"
 
+      - name: Smoke test packaged SDK
+        shell: pwsh
+        run: >-
+          ./scripts/test-packaged-sdk.ps1
+          -PackagePath "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg"
+          -PackageVersion "${{ steps.version.outputs.VERSION }}"
+
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:

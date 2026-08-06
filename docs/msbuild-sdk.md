@@ -2,6 +2,11 @@
 
 SharpTS provides an MSBuild SDK that integrates TypeScript-to-.NET compilation directly into your build process. Instead of running `sharpts --compile` manually, the SDK compiles your TypeScript automatically when you run `dotnet build`.
 
+The SDK composes with `Microsoft.NET.Sdk` to provide the standard restore,
+reference-resolution, build, rebuild, publish, and clean lifecycle. Compilation
+uses the SharpTS compiler bundled in the selected `SharpTS.Sdk` package, so the
+global `sharpts` tool is neither consulted nor required.
+
 ## Quick Start
 
 Create a project file:
