@@ -1215,6 +1215,13 @@ public sealed class Issue1279ParityTests
     public void Array_copyWithin_treats_undefined_end_as_omitted()
         => AssertPassInBothModes("built-ins/Array/prototype/copyWithin/undefined-end.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/includes/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/includes/fromIndex-minus-zero.js")]
+    [InlineData("built-ins/Array/prototype/includes/length-zero-returns-false.js")]
+    public void Array_includes_accepts_optional_arguments_and_generic_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

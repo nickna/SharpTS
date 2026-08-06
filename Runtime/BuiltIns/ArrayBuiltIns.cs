@@ -33,7 +33,7 @@ public static class ArrayBuiltIns
             .MethodV2("every", 0, int.MaxValue, specLength: 1, EveryV2)
             .MethodV2("reduce", 0, int.MaxValue, specLength: 1, ReduceV2)
             .MethodV2("reduceRight", 0, int.MaxValue, specLength: 1, ReduceRightV2)
-            .MethodV2("includes", 1, IncludesV2)
+            .MethodV2("includes", 0, 2, specLength: 1, IncludesV2)
             .MethodV2("indexOf", 1, 2, IndexOfV2)
             .MethodV2("lastIndexOf", 1, 2, LastIndexOfV2)
             .MethodV2("join", 0, 1, specLength: 1, JoinV2)
@@ -405,13 +405,26 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromObject(new SharpTSArray(new Deque<object?>(sliced)));
     }
 
-    private static RuntimeValue IncludesV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue IncludesV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         // ECMA-262 23.1.3.14: does NOT skip holes — holes compare as undefined
         // under SameValueZero, so [,].includes(undefined) === true.
-        var searchElement = args[0].ToObject();
         int len = arr.Length;
-        for (int i = 0; i < len; i++)
+        if (len == 0) return RuntimeValue.False;
+
+        var searchElement = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        double fromIndex = args.Length > 1
+            ? ToIntegerOrInfinity(interpreter, args[1].ToObject())
+            : 0;
+        if (double.IsPositiveInfinity(fromIndex) || fromIndex >= len)
+            return RuntimeValue.False;
+        int start = double.IsNegativeInfinity(fromIndex) || fromIndex < -len
+            ? 0
+            : fromIndex >= 0 ? (int)fromIndex : (int)(len + fromIndex);
+
+        for (int i = start; i < len; i++)
         {
             if (IsEqual(arr[i], searchElement))  // arr[i] unhole's to undefined
                 return RuntimeValue.True;
