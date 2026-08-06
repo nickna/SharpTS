@@ -1154,6 +1154,10 @@ public sealed class Issue1279ParityTests
     public void Legacy_Array_mutators_are_not_constructors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_iterator_is_not_a_constructor()
+        => AssertPassInBothModes("built-ins/Array/prototype/Symbol.iterator/not-a-constructor.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

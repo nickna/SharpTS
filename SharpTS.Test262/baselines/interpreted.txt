@@ -271,7 +271,7 @@ test/built-ins/Array/proto-from-ctor-realm-two.js RuntimeError
 test/built-ins/Array/proto-from-ctor-realm-zero.js RuntimeError
 test/built-ins/Array/proto.js Pass
 test/built-ins/Array/prototype/Symbol.iterator.js Fail
-test/built-ins/Array/prototype/Symbol.iterator/not-a-constructor.js Fail
+test/built-ins/Array/prototype/Symbol.iterator/not-a-constructor.js Pass
 test/built-ins/Array/prototype/Symbol.unscopables/array-find-from-last.js RuntimeError
 test/built-ins/Array/prototype/Symbol.unscopables/change-array-by-copy.js Fail
 test/built-ins/Array/prototype/Symbol.unscopables/prop-desc.js Fail

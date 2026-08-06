@@ -1088,6 +1088,11 @@ public partial class Interpreter
         }
         if (obj is SharpTSArrayPrototype arrayProto)
         {
+            if (ReferenceEquals(index, SharpTSSymbol.Iterator))
+            {
+                return RuntimeValue.FromBoxed(
+                    arrayProto.GetMember("values") ?? SharpTSUndefined.Instance);
+            }
             var key = PropertyKeyConverter.ToPropertyKeyString(index);
             if (arrayProto.GetExtraGetter(key) is { } getter)
                 return BindAccessorToObject(getter, arrayProto).CallV2(
