@@ -330,7 +330,11 @@ public class Lexer(string source)
                 AddToken(TokenType.AT);
                 break;
             case '#':
-                if (char.IsLetter(Peek()) || Peek() == '_' || Peek() == '$')
+                if (_start == 0 && Peek() == '!')
+                {
+                    SkipHashbang();
+                }
+                else if (char.IsLetter(Peek()) || Peek() == '_' || Peek() == '$')
                 {
                     PrivateIdentifier();
                 }
@@ -493,6 +497,27 @@ public class Lexer(string source)
         // _start already points to '#', consume identifier chars
         while (char.IsLetterOrDigit(Peek()) || Peek() == '_' || Peek() == '$') Advance();
         AddToken(TokenType.PRIVATE_IDENTIFIER);
+    }
+
+    /// <summary>
+    /// Skips a Unix hashbang at the very beginning of a source file. The leading '#'
+    /// has already been consumed; consume the rest of the line as trivia, including
+    /// its terminator, so the next token keeps its original offset and line number.
+    /// </summary>
+    private void SkipHashbang()
+    {
+        Advance(); // consume '!'
+        while (!IsAtEnd() && Peek() != '\r' && Peek() != '\n') Advance();
+
+        if (Match('\r'))
+        {
+            Match('\n');
+            _line++;
+        }
+        else if (Match('\n'))
+        {
+            _line++;
+        }
     }
 
     private void NumberLiteral()

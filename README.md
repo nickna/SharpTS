@@ -129,6 +129,19 @@ dismiss the list. Type `.help` for the dot-commands.
 sharpts script.ts
 ```
 
+On Unix-like systems, a TypeScript file can also be an executable script. Put the SharpTS
+hashbang at the very beginning of the file, then mark it executable:
+
+```typescript
+#!/usr/bin/env sharpts
+console.log("Hello from SharpTS");
+```
+
+```bash
+chmod +x hello.ts
+./hello.ts
+```
+
 **Compile to .NET assembly:**
 
 ```bash

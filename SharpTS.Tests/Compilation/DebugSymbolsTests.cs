@@ -160,6 +160,16 @@ public class DebugSymbolsTests
         Assert.Equal([2, 3, 5], lines);
     }
 
+    [Fact]
+    public void HashbangKeepsFollowingSequencePointOnSecondLine()
+    {
+        const string source = "#!/usr/bin/env sharpts\nconsole.log(42);";
+
+        var lines = AllSequencePointLines(CompileTypeScript(source, emitDebugSymbols: true));
+
+        Assert.Equal([2], lines);
+    }
+
     /// <summary>
     /// A block or a <c>try</c> emits no instructions of its own, so the statement inside it must
     /// own the offset they would otherwise share — otherwise stepping lands on a brace.
