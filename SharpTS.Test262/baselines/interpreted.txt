@@ -211,7 +211,7 @@ test/built-ins/Array/isArray/15.4.3.2-2-2.js Pass
 test/built-ins/Array/isArray/15.4.3.2-2-3.js Pass
 test/built-ins/Array/isArray/descriptor.js Fail
 test/built-ins/Array/isArray/name.js Pass
-test/built-ins/Array/isArray/not-a-constructor.js Fail
+test/built-ins/Array/isArray/not-a-constructor.js Pass
 test/built-ins/Array/isArray/proxy-revoked.js Fail
 test/built-ins/Array/isArray/proxy.js Fail
 test/built-ins/Array/length.js Fail

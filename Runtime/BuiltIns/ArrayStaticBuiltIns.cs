@@ -17,7 +17,7 @@ public static class ArrayStaticBuiltIns
                 return RuntimeValue.FromBoolean(
                     args[0].ToObject() is SharpTSArray and not SharpTSArguments
                         or SharpTSArrayPrototype);
-            }),
+            }).AsNonConstructor(),
             "from" => BuiltInMethod.CreateV2("from", 1, 2, static (interpreter, _, args) =>
             {
                 // ECMA-262 23.1.2.1: Array.from(null) and Array.from(undefined) throw TypeError
