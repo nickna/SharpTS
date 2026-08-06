@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using SharpTS.Execution;
+using SharpTS.Runtime.Exceptions;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -140,23 +142,87 @@ public static class NumberBuiltIns
         return RuntimeValue.FromString(ToPrecisionImpl(value, precision));
     }
 
-    private static RuntimeValue ToExponentialV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ToExponentialV2(
+        Interpreter interpreter, double value, ReadOnlySpan<RuntimeValue> args)
     {
+        // ECMA-262 §21.1.3.2 coerces fractionDigits before the NaN/Infinity
+        // short-circuits. That ordering is observable when an object conversion throws.
+        bool useShortestForm = args.IsEmpty || args[0].IsUndefined;
+        double fractionDigits = 0;
+        if (!useShortestForm)
+        {
+            fractionDigits = interpreter.ToNumberWithPrimitive(args[0].ToObject());
+            fractionDigits = double.IsNaN(fractionDigits)
+                ? 0
+                : Math.Truncate(fractionDigits);
+        }
+
         if (double.IsNaN(value)) return RuntimeValue.FromString("NaN");
         if (double.IsPositiveInfinity(value)) return RuntimeValue.FromString("Infinity");
         if (double.IsNegativeInfinity(value)) return RuntimeValue.FromString("-Infinity");
 
-        var fractionDigits = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : -1;
-        if (fractionDigits != -1 && (fractionDigits < 0 || fractionDigits > 100))
-            throw new Exception("Runtime Error: toExponential() argument must be between 0 and 100");
+        if (!useShortestForm && (fractionDigits < 0 || fractionDigits > 100))
+            throw new ThrowException(new SharpTSRangeError(
+                "toExponential() argument must be between 0 and 100"));
 
-        var result = fractionDigits == -1
-            ? value.ToString("e", CultureInfo.InvariantCulture)
-            : value.ToString($"e{fractionDigits}", CultureInfo.InvariantCulture);
-        // .NET pads the exponent to 3 digits ("1.23e+003"); JS uses no leading zeros.
-        result = System.Text.RegularExpressions.Regex.Replace(result, @"e([+-])0+(?=\d)", "e$1");
-        return RuntimeValue.FromString(result);
+        return RuntimeValue.FromString(useShortestForm
+            ? FormatShortestExponential(value)
+            : FormatExponential(value, (int)fractionDigits));
     }
+
+    private static string FormatShortestExponential(double value)
+    {
+        if (value == 0) return "0e+0";
+
+        // Fifteen digits cover the shortest forms exercised by the compiled runtime,
+        // then trailing fractional zeroes are removed without disturbing the exponent.
+        string result = value.ToString("e15", CultureInfo.InvariantCulture);
+        result = System.Text.RegularExpressions.Regex.Replace(
+            result, @"(\.\d*?)0+(?=e)", "$1");
+        result = result.Replace(".e", "e", StringComparison.Ordinal);
+        return NormalizeExponent(result);
+    }
+
+    private static string FormatExponential(double value, int fractionDigits)
+    {
+        // ECMA-262 treats -0 as non-negative.
+        if (value == 0) value = 0;
+
+        // Double's standard exponential formatter uses ties-to-even. JavaScript chooses
+        // the larger decimal on a tie, so perform the mantissa rounding explicitly while
+        // Math.Round can represent the requested decimal precision.
+        if (fractionDigits <= 15)
+        {
+            double absolute = Math.Abs(value);
+            int exponent = absolute == 0
+                ? 0
+                : (int)Math.Floor(Math.Log10(absolute));
+            double rounded = absolute == 0
+                ? 0
+                : Math.Round(
+                    absolute / Math.Pow(10, exponent),
+                    fractionDigits,
+                    MidpointRounding.AwayFromZero);
+
+            if (rounded >= 10)
+            {
+                rounded /= 10;
+                exponent++;
+            }
+            if (value < 0) rounded = -rounded;
+
+            return rounded.ToString($"F{fractionDigits}", CultureInfo.InvariantCulture)
+                + (exponent < 0 ? "e-" : "e+")
+                + Math.Abs(exponent).ToString(CultureInfo.InvariantCulture);
+        }
+
+        return NormalizeExponent(
+            value.ToString($"e{fractionDigits}", CultureInfo.InvariantCulture));
+    }
+
+    private static string NormalizeExponent(string value)
+        => System.Text.RegularExpressions.Regex.Replace(
+            value, @"e([+-])0+(?=\d)", "e$1");
 
     private static RuntimeValue ToStringMethodV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
     {

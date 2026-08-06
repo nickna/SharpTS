@@ -981,6 +981,23 @@ public sealed class Issue1279ParityTests
     public void Number_predicates_reject_non_numbers_and_have_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number.prototype.toExponential applies ToIntegerOrInfinity before handling special
+    /// receiver values, preserves undefined as the shortest-form signal, and uses the
+    /// decimal rounding and exponent spelling required by ECMA-262.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toExponential/range.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/return-abrupt-tointeger-fractiondigits-symbol.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/return-abrupt-tointeger-fractiondigits.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/return-values.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/this-is-0-fractiondigits-is-0.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/this-is-0-fractiondigits-is-not-0.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/tointeger-fractiondigits.js")]
+    [InlineData("built-ins/Number/prototype/toExponential/undefined-fractiondigits.js")]
+    public void Number_toExponential_matches_spec_coercion_rounding_and_format(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
