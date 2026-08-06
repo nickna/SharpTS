@@ -3160,7 +3160,7 @@ test/built-ins/Error/prototype/S15.11.3.1_A1_T1.js Fail
 test/built-ins/Error/prototype/S15.11.3.1_A2_T1.js Pass
 test/built-ins/Error/prototype/S15.11.3.1_A3_T1.js Pass
 test/built-ins/Error/prototype/S15.11.3.1_A4_T1.js Pass
-test/built-ins/Error/prototype/S15.11.4_A1.js Fail
+test/built-ins/Error/prototype/S15.11.4_A1.js Pass
 test/built-ins/Error/prototype/S15.11.4_A2.js Pass
 test/built-ins/Error/prototype/S15.11.4_A3.js Pass
 test/built-ins/Error/prototype/S15.11.4_A4.js Pass
