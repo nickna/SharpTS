@@ -398,8 +398,8 @@ test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js Fail
 test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this.js Pass
 test/built-ins/Array/prototype/copyWithin/return-this.js Fail
 test/built-ins/Array/prototype/copyWithin/undefined-end.js Fail
-test/built-ins/Array/prototype/entries/iteration-mutable.js Fail
-test/built-ins/Array/prototype/entries/iteration.js Fail
+test/built-ins/Array/prototype/entries/iteration-mutable.js Pass
+test/built-ins/Array/prototype/entries/iteration.js Pass
 test/built-ins/Array/prototype/entries/length.js Pass
 test/built-ins/Array/prototype/entries/name.js Pass
 test/built-ins/Array/prototype/entries/not-a-constructor.js Pass
@@ -1474,8 +1474,8 @@ test/built-ins/Array/prototype/join/name.js Pass
 test/built-ins/Array/prototype/join/not-a-constructor.js Pass
 test/built-ins/Array/prototype/join/prop-desc.js Pass
 test/built-ins/Array/prototype/join/resizable-buffer.js RuntimeError
-test/built-ins/Array/prototype/keys/iteration-mutable.js Fail
-test/built-ins/Array/prototype/keys/iteration.js Fail
+test/built-ins/Array/prototype/keys/iteration-mutable.js Pass
+test/built-ins/Array/prototype/keys/iteration.js Pass
 test/built-ins/Array/prototype/keys/length.js Pass
 test/built-ins/Array/prototype/keys/name.js Pass
 test/built-ins/Array/prototype/keys/not-a-constructor.js Pass
@@ -3047,8 +3047,8 @@ test/built-ins/Array/prototype/unshift/set-length-zero-array-is-frozen.js Fail
 test/built-ins/Array/prototype/unshift/set-length-zero-array-length-is-non-writable.js Fail
 test/built-ins/Array/prototype/unshift/throws-if-integer-limit-exceeded.js Fail
 test/built-ins/Array/prototype/unshift/throws-with-string-receiver.js Fail
-test/built-ins/Array/prototype/values/iteration-mutable.js Fail
-test/built-ins/Array/prototype/values/iteration.js Fail
+test/built-ins/Array/prototype/values/iteration-mutable.js Pass
+test/built-ins/Array/prototype/values/iteration.js Pass
 test/built-ins/Array/prototype/values/length.js Pass
 test/built-ins/Array/prototype/values/name.js Pass
 test/built-ins/Array/prototype/values/not-a-constructor.js Pass

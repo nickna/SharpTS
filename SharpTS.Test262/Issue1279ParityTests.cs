@@ -1158,6 +1158,13 @@ public sealed class Issue1279ParityTests
     public void Array_iterator_is_not_a_constructor()
         => AssertPassInBothModes("built-ins/Array/prototype/Symbol.iterator/not-a-constructor.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/entries/iteration.js")]
+    [InlineData("built-ins/Array/prototype/keys/iteration.js")]
+    [InlineData("built-ins/Array/prototype/values/iteration.js")]
+    public void Array_iterators_return_undefined_when_exhausted(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

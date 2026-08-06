@@ -40,14 +40,14 @@ public class SharpTSIterator : ITypeCategorized
     public SharpTSIteratorResult Next()
     {
         if (_done)
-            return new SharpTSIteratorResult(null, true);
+            return new SharpTSIteratorResult(SharpTSUndefined.Instance, true);
 
         _enumerator ??= _source.GetEnumerator();
         if (_enumerator.MoveNext())
             return new SharpTSIteratorResult(_enumerator.Current, false);
 
         _done = true;
-        return new SharpTSIteratorResult(null, true);
+        return new SharpTSIteratorResult(SharpTSUndefined.Instance, true);
     }
 
     /// <summary>
