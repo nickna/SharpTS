@@ -37,19 +37,23 @@ public static class NumberBuiltIns
             // Static methods (V2 — no boxing)
             .MethodV2("parseInt", 1, 2, ParseIntV2)
             .MethodV2("parseFloat", 1, ParseFloatV2)
-            .MethodV2("isNaN", 1, (_, _, args) =>
-                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsNaN(Interpreter.ToNumber(args[0]))))
-            .MethodV2("isFinite", 1, (_, _, args) =>
-                RuntimeValue.FromBoolean(args[0].Kind == ValueKind.Number && double.IsFinite(Interpreter.ToNumber(args[0]))))
-            .MethodV2("isInteger", 1, (_, _, args) =>
+            .MethodV2("isNaN", 0, int.MaxValue, specLength: 1, (_, _, args) =>
+                RuntimeValue.FromBoolean(!args.IsEmpty
+                    && args[0].Kind == ValueKind.Number
+                    && double.IsNaN(Interpreter.ToNumber(args[0]))))
+            .MethodV2("isFinite", 0, int.MaxValue, specLength: 1, (_, _, args) =>
+                RuntimeValue.FromBoolean(!args.IsEmpty
+                    && args[0].Kind == ValueKind.Number
+                    && double.IsFinite(Interpreter.ToNumber(args[0]))))
+            .MethodV2("isInteger", 0, int.MaxValue, specLength: 1, (_, _, args) =>
             {
-                if (args[0].Kind != ValueKind.Number) return RuntimeValue.False;
+                if (args.IsEmpty || args[0].Kind != ValueKind.Number) return RuntimeValue.False;
                 double d = Interpreter.ToNumber(args[0]);
                 return RuntimeValue.FromBoolean(double.IsFinite(d) && Math.Truncate(d) == d);
             })
-            .MethodV2("isSafeInteger", 1, (_, _, args) =>
+            .MethodV2("isSafeInteger", 0, int.MaxValue, specLength: 1, (_, _, args) =>
             {
-                if (args[0].Kind != ValueKind.Number) return RuntimeValue.False;
+                if (args.IsEmpty || args[0].Kind != ValueKind.Number) return RuntimeValue.False;
                 double d = Interpreter.ToNumber(args[0]);
                 return RuntimeValue.FromBoolean(double.IsFinite(d) && Math.Truncate(d) == d && Math.Abs(d) <= MAX_SAFE_INTEGER);
             })

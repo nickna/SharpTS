@@ -242,6 +242,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSDate date => date.HasExtra(key),
             SharpTSRegExp regex => regex.HasOwnProperty(key),
             SharpTSObjectNamespace objectNamespace => objectNamespace.HasOwnProperty(key),
+            SharpTSNumberNamespace numberNamespace => numberNamespace.HasOwnProperty(key),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
             SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),

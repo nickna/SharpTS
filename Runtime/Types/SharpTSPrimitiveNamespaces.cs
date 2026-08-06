@@ -276,33 +276,69 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     // ECMA-262 makes a constructor object ordinary and extensible, so `Number.foo = 1`
     // must take. Descriptor-aware storage keeps defineProperty attributes intact.
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly Dictionary<string, object?> _realmBuiltIns = [];
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
 
     /// <summary>
-    /// Assigns an expando. A write targeting one of the built-in statics is dropped: those
-    /// are <c>{ writable: false }</c> data properties per ECMA-262 §21.1.2 / §22.1.2, and
-    /// sloppy-mode assignment to a non-writable property is a silent no-op — not a shadowing
-    /// own property. (<c>Number.MAX_VALUE = 1</c> must leave MAX_VALUE alone.)
+    /// Assigns an expando. A write targeting a numeric constant is dropped because those
+    /// slots are non-writable; built-in methods are ordinary writable/configurable data
+    /// properties and therefore may be replaced.
     /// </summary>
     public void SetExtra(string name, object? value)
     {
         if (IsReadOnlyBuiltIn(name)) return;
+        _deletedBuiltIns.Remove(name);
+        if (IsBuiltInMethod(name) && !HasExtra(name))
+        {
+            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+            return;
+        }
         _extras.SetProperty(name, value);
     }
 
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool DeleteProperty(string name) => !IsReadOnlyBuiltIn(name) && _extras.DeleteProperty(name);
+    public bool DeleteProperty(string name)
+    {
+        if (IsReadOnlyBuiltIn(name)) return false;
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltInMethod(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     private static bool IsReadOnlyBuiltIn(string name)
-        => name == "prototype" || NumberBuiltIns.GetStaticMember(name) != null;
+        => name == "prototype"
+            || NumberBuiltIns.GetStaticMember(name) is BuiltInMethod { IsConstant: true };
+
+    private static bool IsBuiltInMethod(string name)
+        => NumberBuiltIns.GetStaticMember(name) is BuiltInMethod { IsConstant: false };
+
+    public bool HasOwnProperty(string name)
+        => HasExtra(name)
+            || (!_deletedBuiltIns.Contains(name)
+                && (name == "prototype" || NumberBuiltIns.GetStaticMember(name) != null));
 
     public int Arity() => 0;
 
@@ -353,11 +389,18 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     {
         if (HasExtra(name)) return TryGetExtra(name);
         if (name == "prototype") return SharpTSNumberPrototype.Instance;
+        if (_deletedBuiltIns.Contains(name)) return null;
+        if (_realmBuiltIns.TryGetValue(name, out var cached)) return cached;
         // Materialize constant-wrapping members (MAX_VALUE, EPSILON, …) here rather than
         // leaving the wrapper for each read path to unwrap — a per-realm intrinsic bypasses
         // the namespace static fast-path in EvaluateGet that used to do it.
         var member = NumberBuiltIns.GetStaticMember(name);
-        return member is BuiltInMethod { IsConstant: true } constant ? constant.ConstantValue : member;
+        if (member is BuiltInMethod { IsConstant: true } constant) return constant.ConstantValue;
+        // Built-in function metadata is configurable. Keep each realm's copy isolated so a
+        // delete/redefinition of `name` or `length` cannot leak into another interpreter.
+        if (member is BuiltInMethod method) member = method.Bind(null);
+        if (member != null) _realmBuiltIns[name] = member;
+        return member;
     }
 
     public override string ToString() => "function Number() { [native code] }";

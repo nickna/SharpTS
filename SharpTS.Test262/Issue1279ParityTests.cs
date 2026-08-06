@@ -964,6 +964,23 @@ public sealed class Issue1279ParityTests
     public void String_trimming_uses_spec_whitespace_and_ToPrimitive(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number predicates treat a missing/non-number argument as false while retaining a
+    /// spec-visible length of one. Their constructor slots are ordinary writable,
+    /// configurable, non-enumerable own data properties.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/isNaN/arg-is-not-number.js")]
+    [InlineData("built-ins/Number/isFinite/arg-is-not-number.js")]
+    [InlineData("built-ins/Number/isInteger/arg-is-not-number.js")]
+    [InlineData("built-ins/Number/isSafeInteger/arg-is-not-number.js")]
+    [InlineData("built-ins/Number/isNaN/prop-desc.js")]
+    [InlineData("built-ins/Number/isFinite/prop-desc.js")]
+    [InlineData("built-ins/Number/isInteger/prop-desc.js")]
+    [InlineData("built-ins/Number/isSafeInteger/prop-desc.js")]
+    public void Number_predicates_reject_non_numbers_and_have_standard_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
