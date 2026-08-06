@@ -1018,6 +1018,19 @@ public sealed class Issue1279ParityTests
     public void Number_toPrecision_matches_spec_coercion_range_and_format(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number.prototype.toFixed performs full ToIntegerOrInfinity coercion, rejects BigInt,
+    /// validates the digit range with a guest RangeError, and only then formats NaN.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T01.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T02.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/range.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-bigint.js")]
+    [InlineData("built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-toprimitive.js")]
+    public void Number_toFixed_matches_spec_argument_conversion_and_errors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -124,12 +124,31 @@ public static class NumberBuiltIns
     }
 
     // Instance method implementations (V2 — no boxing)
-    private static RuntimeValue ToFixedV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ToFixedV2(
+        Interpreter interpreter, double value, ReadOnlySpan<RuntimeValue> args)
     {
-        var digits = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
+        double digits = 0;
+        if (!args.IsEmpty)
+        {
+            if (args[0].IsBigInt)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Cannot convert a BigInt value to a number"));
+
+            digits = interpreter.ToNumberWithPrimitive(args[0].ToObject());
+            digits = double.IsNaN(digits) ? 0 : Math.Truncate(digits);
+        }
+
         if (digits < 0 || digits > 100)
-            throw new Exception("Runtime Error: toFixed() digits argument must be between 0 and 100");
-        return RuntimeValue.FromString(value.ToString($"F{digits}", CultureInfo.InvariantCulture));
+            throw new ThrowException(new SharpTSRangeError(
+                "toFixed() digits argument must be between 0 and 100"));
+
+        if (double.IsNaN(value)) return RuntimeValue.FromString("NaN");
+        if (double.IsPositiveInfinity(value)) return RuntimeValue.FromString("Infinity");
+        if (double.IsNegativeInfinity(value)) return RuntimeValue.FromString("-Infinity");
+        if (value == 0) value = 0; // ECMA-262 treats -0 as non-negative.
+
+        return RuntimeValue.FromString(value.ToString(
+            $"F{(int)digits}", CultureInfo.InvariantCulture));
     }
 
     private static RuntimeValue ToPrecisionV2(

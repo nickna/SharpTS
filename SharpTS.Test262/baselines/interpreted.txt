@@ -3848,8 +3848,8 @@ test/built-ins/Number/prototype/toExponential/tointeger-fractiondigits.js Pass
 test/built-ins/Number/prototype/toExponential/undefined-fractiondigits.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.1_T01.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.1_T02.js Pass
-test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T01.js Fail
-test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T02.js Fail
+test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T01.js Pass
+test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T02.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js Fail
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A2_T01.js Pass
 test/built-ins/Number/prototype/toFixed/exactness.js Pass
@@ -3857,11 +3857,11 @@ test/built-ins/Number/prototype/toFixed/length.js Pass
 test/built-ins/Number/prototype/toFixed/name.js Pass
 test/built-ins/Number/prototype/toFixed/not-a-constructor.js Pass
 test/built-ins/Number/prototype/toFixed/prop-desc.js Pass
-test/built-ins/Number/prototype/toFixed/range.js Fail
+test/built-ins/Number/prototype/toFixed/range.js Pass
 test/built-ins/Number/prototype/toFixed/return-type.js Pass
-test/built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-bigint.js Fail
+test/built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-bigint.js Pass
 test/built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-symbol.js Pass
-test/built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-toprimitive.js Fail
+test/built-ins/Number/prototype/toFixed/toFixed-tonumber-throws-typeerror-toprimitive.js Pass
 test/built-ins/Number/prototype/toLocaleString/length.js Pass
 test/built-ins/Number/prototype/toLocaleString/name.js Pass
 test/built-ins/Number/prototype/toLocaleString/not-a-constructor.js Pass
