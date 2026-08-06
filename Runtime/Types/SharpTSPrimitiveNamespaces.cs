@@ -279,6 +279,9 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     private readonly HashSet<string> _deletedBuiltIns = [];
     private readonly Dictionary<string, object?> _realmBuiltIns = [];
 
+    internal void SetRealmBuiltInAlias(string name, object value)
+        => _realmBuiltIns[name] = value;
+
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
 
@@ -336,11 +339,12 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         => NumberBuiltIns.GetStaticMember(name) is BuiltInMethod { IsConstant: false };
 
     public bool HasOwnProperty(string name)
-        => HasExtra(name)
+        => name is "name" or "length"
+            || HasExtra(name)
             || (!_deletedBuiltIns.Contains(name)
                 && (name == "prototype" || NumberBuiltIns.GetStaticMember(name) != null));
 
-    public int Arity() => 0;
+    public int Arity() => 1;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -362,6 +366,8 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (name == "name") return "Number";
+        if (name == "length") return 1.0;
         if (name == "prototype") return SharpTSNumberPrototype.Instance;
         if (_deletedBuiltIns.Contains(name)) return null;
         if (_realmBuiltIns.TryGetValue(name, out var cached)) return cached;

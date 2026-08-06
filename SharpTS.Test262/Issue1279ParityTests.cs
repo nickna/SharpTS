@@ -1074,6 +1074,33 @@ public sealed class Issue1279ParityTests
     public void Number_constructor_uses_full_ToNumber_conversion(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number exposes the standard constructor/prototype object graph, boxed-value
+    /// dispatch, global parser aliases, and callable metadata in both execution modes.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/15.7.4-1.js")]
+    [InlineData("built-ins/Number/parseFloat.js")]
+    [InlineData("built-ins/Number/parseFloat/not-a-constructor.js")]
+    [InlineData("built-ins/Number/parseInt.js")]
+    [InlineData("built-ins/Number/parseInt/not-a-constructor.js")]
+    [InlineData("built-ins/Number/prototype/15.7.3.1-2.js")]
+    [InlineData("built-ins/Number/prototype/S15.7.3.1_A3.js")]
+    [InlineData("built-ins/Number/prototype/S15.7.4_A1.js")]
+    [InlineData("built-ins/Number/prototype/S15.7.4_A2.js")]
+    [InlineData("built-ins/Number/prototype/valueOf/S15.7.4.4_A1_T02.js")]
+    [InlineData("built-ins/Number/S15.7.2.1_A2.js")]
+    [InlineData("built-ins/Number/S15.7.2.1_A4.js")]
+    [InlineData("built-ins/Number/S15.7.3_A8.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T02.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T04.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T05.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T06.js")]
+    [InlineData("built-ins/Number/S15.7.5_A1_T07.js")]
+    public void Number_constructor_and_prototype_have_standard_intrinsic_shape(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

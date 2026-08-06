@@ -1139,6 +1139,7 @@ public partial class Interpreter
         or StringPrototypeMethodWrapper
         or NumberPrototypeMethodWrapper
         or BooleanPrototypeMethodWrapper
+        or SharpTSGlobalFunction
         or SharpTSObjectUnboundMethod
         or ErrorToStringCallable
         or BuiltInMethod { IsConstructor: false };
@@ -1275,6 +1276,9 @@ public partial class Interpreter
         {
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
+            StringPrototypeMethodWrapper m => m.Bind(receiver),
+            NumberPrototypeMethodWrapper m => m.Bind(receiver),
+            BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             _ => null,
         };
     }
@@ -1431,11 +1435,17 @@ public partial class Interpreter
                 && GetBooleanPrototype().GetMember(memberName) is { } booleanMember)
                 return RuntimeValue.FromBoxed(booleanMember);
 
-            var pv = simpleObj.GetProperty("__primitiveValue");
-            if (pv != null)
+            // These wrappers resolve exclusively through their mutable realm
+            // prototype. Falling back to the primitive registry would resurrect
+            // a deleted method such as Number.prototype.toString.
+            if (primitiveType is not ("String" or "Number" or "Boolean"))
             {
-                var dispatched = BuiltInRegistry.Instance.GetInstanceMember(pv, memberName);
-                if (dispatched != null) return RuntimeValue.FromBoxed(dispatched);
+                var pv = simpleObj.GetProperty("__primitiveValue");
+                if (pv != null)
+                {
+                    var dispatched = BuiltInRegistry.Instance.GetInstanceMember(pv, memberName);
+                    if (dispatched != null) return RuntimeValue.FromBoxed(dispatched);
+                }
             }
         }
 
@@ -1712,7 +1722,9 @@ public partial class Interpreter
             var (member, isBuiltInType) = BuiltInRegistry.Instance.TryGetInstanceMember(obj, memberName);
             if (member != null)
             {
-                // Bind methods to their receiver, return properties directly
+                // Bind methods to their receiver, return properties and prototype
+                // adapters directly. Prototype adapters receive `this` at the
+                // member-call site so ordinary reads preserve function identity.
                 if (member is BuiltInMethod m) return m.Bind(obj);
                 if (member is BuiltInAsyncMethod am) return am.Bind(obj);
                 return member;

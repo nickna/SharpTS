@@ -1533,6 +1533,9 @@ public static partial class ObjectBuiltIns
         // `Function.prototype.isPrototypeOf(Array)` holds. Function.prototype itself
         // bottoms out at Object.prototype.
         SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        // The Number prototype object is ordinary and inherits from this realm's
+        // Object.prototype.
+        SharpTSNumberPrototype => interp?.GetObjectPrototype(),
         // §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
         // `Object.getPrototypeOf(RangeError) === Error`. A base class falls back to
         // Function.prototype like any other function object.

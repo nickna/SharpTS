@@ -409,7 +409,10 @@ public static class BuiltInConstructorFactory
         {
             ["__primitiveType"] = "Number",
             ["__primitiveValue"] = value,
-        });
+        })
+        {
+            Prototype = interpreter?.GetNumberPrototype(),
+        };
     }
 
     /// <summary>

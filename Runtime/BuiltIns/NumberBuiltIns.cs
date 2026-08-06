@@ -75,7 +75,8 @@ public static class NumberBuiltIns
             // ECMA-262 §21.1.3.7: Number.prototype.valueOf returns thisNumberValue.
             // Needed so `(new Number(5)).valueOf()` and ToPrimitive(number-wrapper)
             // unwrap to the primitive instead of resolving Object.prototype.valueOf.
-            .MethodV2("valueOf", 0, (Interpreter _, double value, ReadOnlySpan<RuntimeValue> _)
+            .MethodV2("valueOf", 0, int.MaxValue, specLength: 0,
+                (Interpreter _, double value, ReadOnlySpan<RuntimeValue> _)
                 => RuntimeValue.FromNumber(value))
             .Build();
 

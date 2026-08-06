@@ -278,6 +278,17 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is bool) return "[object Boolean]";
         if (target is SharpTSArguments) return "[object Arguments]";
         if (target is SharpTSArray) return "[object Array]";
+        if (target is SharpTSObject boxed
+            && boxed.GetProperty("__primitiveType") is string primitiveType)
+        {
+            return primitiveType switch
+            {
+                "Number" => "[object Number]",
+                "String" => "[object String]",
+                "Boolean" => "[object Boolean]",
+                _ => "[object Object]",
+            };
+        }
         if (target is SharpTSMath) return "[object Math]";
         if (target is SharpTSJSON) return "[object JSON]";
         // The primitive prototype objects each carry the matching internal slot

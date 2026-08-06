@@ -373,7 +373,20 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
     internal Runtime.Types.SharpTSStringNamespace GetStringNamespace() => _stringNamespace ??= new();
-    internal Runtime.Types.SharpTSNumberNamespace GetNumberNamespace() => _numberNamespace ??= new();
+    internal Runtime.Types.SharpTSNumberNamespace GetNumberNamespace()
+    {
+        if (_numberNamespace is null)
+        {
+            _numberNamespace = new();
+            // Number.parseInt / Number.parseFloat are aliases of the corresponding
+            // global function objects, not merely equivalent implementations.
+            _numberNamespace.SetRealmBuiltInAlias(
+                BuiltInNames.ParseInt, _globalConstants[BuiltInNames.ParseInt]);
+            _numberNamespace.SetRealmBuiltInAlias(
+                BuiltInNames.ParseFloat, _globalConstants[BuiltInNames.ParseFloat]);
+        }
+        return _numberNamespace;
+    }
     internal Runtime.Types.SharpTSBooleanNamespace GetBooleanNamespace() => _booleanNamespace ??= new();
     internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
 
