@@ -1269,6 +1269,10 @@ public sealed class Issue1279ParityTests
     public void Boolean_call_coerces_nullish_values_to_false()
         => AssertPassInBothModes("built-ins/Boolean/S15.6.1.1_A1_T4.js");
 
+    [Fact]
+    public void Error_prototype_exposes_its_standard_name()
+        => AssertPassInBothModes("built-ins/Error/name.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

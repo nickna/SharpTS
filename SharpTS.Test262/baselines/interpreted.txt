@@ -3153,7 +3153,7 @@ test/built-ins/Error/isError/prop-desc.js Fail
 test/built-ins/Error/isError/symbols.js RuntimeError
 test/built-ins/Error/length.js Fail
 test/built-ins/Error/message_property.js Pass
-test/built-ins/Error/name.js Fail
+test/built-ins/Error/name.js Pass
 test/built-ins/Error/prop-desc.js Fail
 test/built-ins/Error/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Error/prototype/S15.11.3.1_A1_T1.js Fail
@@ -3167,7 +3167,7 @@ test/built-ins/Error/prototype/S15.11.4_A4.js Pass
 test/built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js RuntimeError
 test/built-ins/Error/prototype/constructor/prop-desc.js Pass
 test/built-ins/Error/prototype/message/prop-desc.js Fail
-test/built-ins/Error/prototype/name/prop-desc.js Fail
+test/built-ins/Error/prototype/name/prop-desc.js Pass
 test/built-ins/Error/prototype/no-error-data.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-10-1.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-6-1.js Pass

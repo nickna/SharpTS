@@ -39,6 +39,17 @@ public class SharpTSErrorClass : SharpTSClass
             staticProperties: [])
     {
         _errorTypeName = errorTypeName;
+        Prototype.DefineExtraProperty("name", new SharpTSPropertyDescriptor
+        {
+            Value = errorTypeName,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
     }
 
     /// <summary>
