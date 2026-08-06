@@ -1191,6 +1191,16 @@ public sealed class Issue1279ParityTests
     public void RegExp_symbol_methods_are_not_constructors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/from/Array.from-descriptor.js")]
+    [InlineData("built-ins/Array/isArray/descriptor.js")]
+    public void Array_static_methods_have_standard_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Array_of_uses_the_realm_Array_constructor()
+        => AssertPassInBothModes("built-ins/Array/of/of.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

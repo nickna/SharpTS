@@ -42,7 +42,7 @@ test/built-ins/Array/Symbol.species/return-value.js RuntimeError
 test/built-ins/Array/Symbol.species/symbol-species-name.js RuntimeError
 test/built-ins/Array/Symbol.species/symbol-species.js RuntimeError
 test/built-ins/Array/constructor.js Pass
-test/built-ins/Array/from/Array.from-descriptor.js Fail
+test/built-ins/Array/from/Array.from-descriptor.js Pass
 test/built-ins/Array/from/Array.from-name.js Pass
 test/built-ins/Array/from/Array.from_arity.js Pass
 test/built-ins/Array/from/Array.from_forwards-length-for-array-likes.js RuntimeError
@@ -209,7 +209,7 @@ test/built-ins/Array/isArray/15.4.3.2-1-9.js Pass
 test/built-ins/Array/isArray/15.4.3.2-2-1.js Pass
 test/built-ins/Array/isArray/15.4.3.2-2-2.js Pass
 test/built-ins/Array/isArray/15.4.3.2-2-3.js Pass
-test/built-ins/Array/isArray/descriptor.js Fail
+test/built-ins/Array/isArray/descriptor.js Pass
 test/built-ins/Array/isArray/name.js Pass
 test/built-ins/Array/isArray/not-a-constructor.js Pass
 test/built-ins/Array/isArray/proxy-revoked.js Fail
@@ -253,7 +253,7 @@ test/built-ins/Array/of/does-not-use-set-for-indices.js Pass
 test/built-ins/Array/of/length.js Pass
 test/built-ins/Array/of/name.js Pass
 test/built-ins/Array/of/not-a-constructor.js Pass
-test/built-ins/Array/of/of.js Fail
+test/built-ins/Array/of/of.js Pass
 test/built-ins/Array/of/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Array/of/return-a-custom-instance.js Fail
 test/built-ins/Array/of/return-a-new-array-object.js Pass

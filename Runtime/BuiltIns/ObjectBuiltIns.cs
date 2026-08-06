@@ -549,6 +549,9 @@ public static partial class ObjectBuiltIns
                     descriptor.Value = interpreter.ToNumberWithPrimitive(descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSArrayGlobal arrayGlobal:
+                success = arrayGlobal.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSArrayPrototype arrayPrototype:
                 success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -685,6 +688,9 @@ public static partial class ObjectBuiltIns
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
             SharpTSObjectNamespace objectNamespace
                 => objectNamespace.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSArrayGlobal arrayGlobal
+                => arrayGlobal.GetOwnPropertyDescriptor(propertyKey)
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),

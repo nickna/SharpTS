@@ -18,11 +18,39 @@ namespace SharpTS.Runtime.Types;
 /// to be reifiable as a value and <c>Array.prototype</c> to carry its classic
 /// methods.
 /// </remarks>
-public sealed class SharpTSArrayGlobal : ISharpTSCallable
+public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSArrayGlobal Instance = new();
-    private readonly SharpTSArrayPrototype _prototype = new();
-    private SharpTSArrayGlobal() { }
+    private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
+    internal SharpTSArrayGlobal() { }
+
+    internal SharpTSArrayPrototype? RealmPrototype { get; set; }
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && GetBuiltInMember(name) != null);
+    public bool DeleteProperty(string name)
+    {
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (GetBuiltInMember(name) != null) _deletedBuiltIns.Add(name);
+        return true;
+    }
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     public int Arity() => 0;
 
@@ -50,9 +78,15 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 
     public object? GetMember(string name)
     {
-        if (name == "prototype") return _prototype;
-        return BuiltInRegistry.Instance.GetStaticMethod("Array", name);
+        if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
+        return GetBuiltInMember(name);
     }
+
+    private object? GetBuiltInMember(string name)
+        => name == "prototype"
+            ? RealmPrototype ?? new SharpTSArrayPrototype { RealmConstructor = this }
+            : BuiltInRegistry.Instance.GetStaticMethod("Array", name);
 
     public override string ToString() => "function Array() { [native code] }";
 }
@@ -68,6 +102,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable
 /// </summary>
 public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
 {
+    internal SharpTSArrayGlobal? RealmConstructor { get; set; }
     // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
     // descriptor-aware storage so defineProperty can install accessors and
     // enforce writable/configurable flags instead of maintaining a parallel
@@ -95,7 +130,7 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
 
     private object? GetBuiltInMember(string name)
     {
-        if (name == "constructor") return SharpTSArrayGlobal.Instance;
+        if (name == "constructor") return RealmConstructor ?? SharpTSArrayGlobal.Instance;
 
         var legacy = name switch
         {

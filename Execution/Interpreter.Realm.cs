@@ -321,6 +321,11 @@ public partial class Interpreter
             value = GetBooleanNamespace();
             return true;
         }
+        if (name == BuiltInNames.Array)
+        {
+            value = GetArrayGlobal();
+            return true;
+        }
         value = null;
         return false;
     }
@@ -333,7 +338,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean"
+        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
@@ -358,6 +363,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSStringNamespace? _stringNamespace;
     private Runtime.Types.SharpTSNumberNamespace? _numberNamespace;
     private Runtime.Types.SharpTSBooleanNamespace? _booleanNamespace;
+    private Runtime.Types.SharpTSArrayGlobal? _arrayGlobal;
     private Runtime.Types.SharpTSPromisePrototype? _promisePrototype;
     private Dictionary<string, Runtime.Types.SharpTSErrorClass>? _errorClasses;
     // Each prototype is linked back to this realm's constructor object on creation, so
@@ -368,7 +374,16 @@ public partial class Interpreter
         => _numberPrototype ??= new() { RealmConstructor = GetNumberNamespace() };
     internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype()
         => _booleanPrototype ??= new() { RealmConstructor = GetBooleanNamespace() };
-    internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype() => _arrayPrototype ??= new();
+    internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype()
+    {
+        if (_arrayPrototype is null)
+        {
+            _arrayPrototype = new();
+            _arrayPrototype.RealmConstructor = GetArrayGlobal();
+            _arrayGlobal!.RealmPrototype = _arrayPrototype;
+        }
+        return _arrayPrototype;
+    }
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
@@ -388,6 +403,17 @@ public partial class Interpreter
         return _numberNamespace;
     }
     internal Runtime.Types.SharpTSBooleanNamespace GetBooleanNamespace() => _booleanNamespace ??= new();
+    internal Runtime.Types.SharpTSArrayGlobal GetArrayGlobal()
+    {
+        if (_arrayGlobal is null)
+        {
+            _arrayGlobal = new();
+            if (_arrayPrototype is null)
+                _arrayPrototype = new() { RealmConstructor = _arrayGlobal };
+            _arrayGlobal.RealmPrototype = _arrayPrototype;
+        }
+        return _arrayGlobal;
+    }
     internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
 
     /// <summary>
