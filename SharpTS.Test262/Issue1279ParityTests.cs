@@ -1201,6 +1201,12 @@ public sealed class Issue1279ParityTests
     public void Array_of_uses_the_realm_Array_constructor()
         => AssertPassInBothModes("built-ins/Array/of/of.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/prop-desc.js")]
+    [InlineData("built-ins/Array/prototype/proto.js")]
+    public void Array_prototype_has_standard_intrinsic_shape(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

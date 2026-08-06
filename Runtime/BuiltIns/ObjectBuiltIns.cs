@@ -1539,6 +1539,7 @@ public static partial class ObjectBuiltIns
         // `Function.prototype.isPrototypeOf(Array)` holds. Function.prototype itself
         // bottoms out at Object.prototype.
         SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        SharpTSArrayPrototype => interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
         // Object.prototype.
         SharpTSNumberPrototype => interp?.GetObjectPrototype(),

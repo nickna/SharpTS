@@ -1925,8 +1925,8 @@ test/built-ins/Array/prototype/pop/set-length-array-length-is-non-writable.js Fa
 test/built-ins/Array/prototype/pop/set-length-zero-array-is-frozen.js Fail
 test/built-ins/Array/prototype/pop/set-length-zero-array-length-is-non-writable.js Fail
 test/built-ins/Array/prototype/pop/throws-with-string-receiver.js Fail
-test/built-ins/Array/prototype/prop-desc.js Fail
-test/built-ins/Array/prototype/proto.js Fail
+test/built-ins/Array/prototype/prop-desc.js Pass
+test/built-ins/Array/prototype/proto.js Pass
 test/built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js RuntimeError
 test/built-ins/Array/prototype/push/S15.4.4.7_A1_T2.js Pass
 test/built-ins/Array/prototype/push/S15.4.4.7_A2_T1.js RuntimeError

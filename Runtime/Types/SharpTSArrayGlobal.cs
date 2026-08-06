@@ -31,6 +31,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {
+        if (name == "prototype") return;
         _deletedBuiltIns.Remove(name);
         _extras.SetProperty(name, value);
     }
@@ -45,6 +46,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
         => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && GetBuiltInMember(name) != null);
     public bool DeleteProperty(string name)
     {
+        if (name == "prototype") return false;
         bool hadExtra = HasExtra(name);
         if (hadExtra && !_extras.DeleteProperty(name)) return false;
         if (GetBuiltInMember(name) != null) _deletedBuiltIns.Add(name);
