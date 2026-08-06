@@ -252,7 +252,7 @@ test/built-ins/Array/of/does-not-use-prototype-properties.js Pass
 test/built-ins/Array/of/does-not-use-set-for-indices.js Pass
 test/built-ins/Array/of/length.js Pass
 test/built-ins/Array/of/name.js Pass
-test/built-ins/Array/of/not-a-constructor.js Fail
+test/built-ins/Array/of/not-a-constructor.js Pass
 test/built-ins/Array/of/of.js Fail
 test/built-ins/Array/of/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Array/of/return-a-custom-instance.js Fail

@@ -84,7 +84,7 @@ public static class ArrayStaticBuiltIns
                 foreach (var arg in args)
                     items.Add(arg.ToObject());
                 return RuntimeValue.FromObject(new SharpTSArray(items));
-            }),
+            }).AsNonConstructor(),
             _ => null
         };
     }

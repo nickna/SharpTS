@@ -1142,6 +1142,10 @@ public sealed class Issue1279ParityTests
     public void Array_from_is_not_a_constructor()
         => AssertPassInBothModes("built-ins/Array/from/not-a-constructor.js");
 
+    [Fact]
+    public void Array_of_is_not_a_constructor()
+        => AssertPassInBothModes("built-ins/Array/of/not-a-constructor.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
