@@ -1043,6 +1043,37 @@ public sealed class Issue1279ParityTests
     public void Number_toString_matches_spec_radix_conversion_and_errors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number call and construct forms share ToPrimitive/ToNumber conversion, including
+    /// abrupt completions and hexadecimal, binary, and octal StringNumericLiteral forms.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/S15.7.1.1_A1.js")]
+    [InlineData("built-ins/Number/S9.1_A1_T1.js")]
+    [InlineData("built-ins/Number/S9.3_A5_T1.js")]
+    [InlineData("built-ins/Number/S9.3.1_A16.js")]
+    [InlineData("built-ins/Number/S9.3.1_A17.js")]
+    [InlineData("built-ins/Number/S9.3.1_A18.js")]
+    [InlineData("built-ins/Number/S9.3.1_A19.js")]
+    [InlineData("built-ins/Number/S9.3.1_A20.js")]
+    [InlineData("built-ins/Number/S9.3.1_A21.js")]
+    [InlineData("built-ins/Number/S9.3.1_A22.js")]
+    [InlineData("built-ins/Number/S9.3.1_A23.js")]
+    [InlineData("built-ins/Number/S9.3.1_A24.js")]
+    [InlineData("built-ins/Number/S9.3.1_A25.js")]
+    [InlineData("built-ins/Number/S9.3.1_A26.js")]
+    [InlineData("built-ins/Number/S9.3.1_A27.js")]
+    [InlineData("built-ins/Number/S9.3.1_A28.js")]
+    [InlineData("built-ins/Number/S9.3.1_A29.js")]
+    [InlineData("built-ins/Number/S9.3.1_A30.js")]
+    [InlineData("built-ins/Number/S9.3.1_A31.js")]
+    [InlineData("built-ins/Number/return-abrupt-tonumber-value-symbol.js")]
+    [InlineData("built-ins/Number/return-abrupt-tonumber-value.js")]
+    [InlineData("built-ins/Number/string-binary-literal.js")]
+    [InlineData("built-ins/Number/string-octal-literal.js")]
+    public void Number_constructor_uses_full_ToNumber_conversion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

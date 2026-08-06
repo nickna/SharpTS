@@ -111,7 +111,7 @@ public static class BuiltInConstructorFactory
         // Primitive wrapper constructors: `new Number(x)`, `new String(x)`, `new Boolean(x)`
         // return boxed SharpTSObjects with __primitiveType / __primitiveValue markers,
         // matching compiled-mode behaviour so typeof is "object" and instanceof works.
-        if (name == "Number") return CreateBoxedNumber(args);
+        if (name == "Number") return CreateBoxedNumber(args, interpreter);
         if (name == "String") return CreateBoxedString(args, interpreter);
         if (name == "Boolean") return CreateBoxedBoolean(args);
 
@@ -378,18 +378,33 @@ public static class BuiltInConstructorFactory
     /// wrapper with <c>__primitiveType="Number"</c> and <c>__primitiveValue</c>
     /// holding the ToNumber-coerced argument.
     /// </summary>
-    private static SharpTSObject CreateBoxedNumber(IReadOnlyList<object?> args)
+    private static SharpTSObject CreateBoxedNumber(
+        IReadOnlyList<object?> args, Interpreter? interpreter = null)
     {
         var arg = args.Count > 0 ? args[0] : null;
-        double value = arg switch
+        double value;
+        if (arg is SharpTSBigInt bigint)
         {
-            double d => d,
-            null => 0.0,
-            SharpTSUndefined => double.NaN,
-            bool b => b ? 1.0 : 0.0,
-            string s => ParseNumberFromString(s),
-            _ => double.NaN,
-        };
+            // Number is the explicit BigInt-to-Number conversion; unlike implicit
+            // ToNumber, both call and construct forms accept it.
+            value = (double)bigint.Value;
+        }
+        else if (interpreter != null)
+        {
+            value = interpreter.ToNumberWithPrimitive(arg);
+        }
+        else
+        {
+            value = arg switch
+            {
+                double d => d,
+                null => 0.0,
+                SharpTSUndefined => double.NaN,
+                bool b => b ? 1.0 : 0.0,
+                string s => ParseNumberFromString(s),
+                _ => double.NaN,
+            };
+        }
         return new SharpTSObject(new Dictionary<string, object?>
         {
             ["__primitiveType"] = "Number",

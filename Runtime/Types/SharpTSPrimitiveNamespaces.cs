@@ -346,38 +346,12 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     {
         if (arguments.Count == 0) return 0.0;
         var arg = arguments[0];
-        if (arg is double d) return d;
-        if (arg is SharpTSUndefined) return double.NaN;
-        if (arg == null) return 0.0;
-        if (arg is bool b) return b ? 1.0 : 0.0;
         // Number(bigint) is an explicit, allowed conversion (ECMA-262 21.1.1.1
         // step 3): it returns the numeric value, even though *implicit* ToNumber
         // on a bigint throws a TypeError. The radix-free decimal magnitude maps
         // to the nearest double.
         if (arg is SharpTSBigInt bi) return (double)bi.Value;
-        // §21.1.1.1 step 1 routes through ToNumber, and ToNumber(Symbol) is a
-        // TypeError — Number(Symbol()) must throw rather than yield NaN.
-        if (arg is SharpTSSymbol)
-            throw new ThrowException(new SharpTSTypeError(
-                "Cannot convert a Symbol value to a number"));
-        if (arg is string s)
-        {
-            s = s.Trim();
-            if (s.Length == 0) return 0.0;
-            // ECMA-262 7.1.4: only the case-sensitive "Infinity"/"+Infinity"/
-            // "-Infinity" forms are valid Infinity literals. Double.TryParse
-            // (NumberStyles.Float) would otherwise accept "infinity"/"INFINITY"
-            // case-insensitively.
-            if (s == "Infinity" || s == "+Infinity") return double.PositiveInfinity;
-            if (s == "-Infinity") return double.NegativeInfinity;
-            if (s.Contains("infinity", StringComparison.OrdinalIgnoreCase))
-                return double.NaN;
-            if (double.TryParse(s, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out double result))
-                return result;
-            return double.NaN;
-        }
-        return double.NaN;
+        return interpreter.ToNumberWithPrimitive(arg);
     }
 
     /// <summary>

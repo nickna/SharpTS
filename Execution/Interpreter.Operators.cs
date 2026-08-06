@@ -517,14 +517,26 @@ public partial class Interpreter
         {
             var s = rv.AsString().Trim();
             if (s.Length == 0) return 0.0;
-            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-                && ulong.TryParse(s.AsSpan(2),
-                    System.Globalization.NumberStyles.AllowHexSpecifier,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var hex))
+            if (s.Length >= 2 && s[0] == '0')
             {
-                return hex;
+                int radix = s[1] switch
+                {
+                    'x' or 'X' => 16,
+                    'b' or 'B' => 2,
+                    'o' or 'O' => 8,
+                    _ => 0,
+                };
+                if (radix != 0)
+                    return TryParseUnsignedInteger(s.AsSpan(2), radix, out var integer)
+                        ? integer
+                        : double.NaN;
             }
+            if (s is "Infinity" or "+Infinity") return double.PositiveInfinity;
+            if (s == "-Infinity") return double.NegativeInfinity;
+            if (s.Equals("Infinity", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("+Infinity", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("-Infinity", StringComparison.OrdinalIgnoreCase))
+                return double.NaN;
             if (double.TryParse(s, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var d))
                 return d;
@@ -538,6 +550,27 @@ public partial class Interpreter
         if (rv.Kind == ValueKind.Object && TryGetBoxedPrimitiveValue(rv.ToObject(), out var prim))
             return CoerceToNumber(RuntimeValue.FromBoxed(prim));
         return double.NaN;
+    }
+
+    private static bool TryParseUnsignedInteger(
+        ReadOnlySpan<char> digits, int radix, out double value)
+    {
+        value = 0;
+        if (digits.IsEmpty) return false;
+
+        foreach (char c in digits)
+        {
+            int digit = c switch
+            {
+                >= '0' and <= '9' => c - '0',
+                >= 'a' and <= 'f' => c - 'a' + 10,
+                >= 'A' and <= 'F' => c - 'A' + 10,
+                _ => -1,
+            };
+            if (digit < 0 || digit >= radix) return false;
+            value = value * radix + digit;
+        }
+        return true;
     }
 
     /// <summary>
