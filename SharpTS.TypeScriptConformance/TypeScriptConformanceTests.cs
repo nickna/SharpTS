@@ -102,6 +102,8 @@ public class TypeScriptConformanceTests
                 ?? baselinePath;
             if (baselineOutputPath == "-")
             {
+                _output.WriteLine("baseline-header:" + TypeScriptConformanceBaseline.Header(
+                    TypeScriptConformancePaths.GetCorpusRevision(root)));
                 foreach (var (path, bucket) in current)
                     _output.WriteLine($"baseline-entry:{path} {bucket}");
                 _output.WriteLine("wrote baseline → stdout");
@@ -109,7 +111,8 @@ public class TypeScriptConformanceTests
             else
             {
                 TypeScriptConformanceBaseline.Write(
-                    baselineOutputPath, current.Select(kv => (kv.Key, kv.Value)));
+                    baselineOutputPath, current.Select(kv => (kv.Key, kv.Value)),
+                    TypeScriptConformancePaths.GetCorpusRevision(root));
                 _output.WriteLine($"wrote baseline → {baselineOutputPath}");
             }
             return;

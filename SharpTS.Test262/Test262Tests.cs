@@ -135,7 +135,8 @@ public abstract class Test262TestsBase
 
         if (updateBaseline || !File.Exists(baselinePath))
         {
-            Test262Baseline.Write(baselinePath, current.Select(kv => (kv.Key, kv.Value)));
+            Test262Baseline.Write(baselinePath, current.Select(kv => (kv.Key, kv.Value)),
+                Test262Paths.GetCorpusRevision(test262Root));
             _output.WriteLine($"[{mode}] wrote baseline → {baselinePath}");
             return;
         }

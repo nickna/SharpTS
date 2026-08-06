@@ -11,6 +11,15 @@ namespace SharpTS.Test262;
 /// </summary>
 public static class Test262Baseline
 {
+    public const int FormatVersion = 1;
+
+    public static string Header(string corpusRevision)
+    {
+        if (corpusRevision.Length != 40 || corpusRevision.Any(c => !char.IsAsciiHexDigit(c)))
+            throw new ArgumentException("Corpus revision must be a 40-character Git SHA.", nameof(corpusRevision));
+        return $"# SharpTS baseline-format={FormatVersion} suite=Test262 corpus={corpusRevision.ToLowerInvariant()} — do not hand-edit; regenerate with SHARPTS_TEST262_UPDATE_BASELINE=1.";
+    }
+
     public static IReadOnlyDictionary<string, string> Read(string path)
     {
         var dict = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -28,12 +37,14 @@ public static class Test262Baseline
         return dict;
     }
 
-    public static void Write(string path, IEnumerable<(string RelPath, string Bucket)> entries)
+    public static void Write(string path, IEnumerable<(string RelPath, string Bucket)> entries,
+        string corpusRevision)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var sorted = entries.OrderBy(e => e.RelPath, StringComparer.Ordinal).ToList();
         var sb = new StringBuilder();
-        sb.Append("# Test262 baseline — do not hand-edit. Regenerate with SHARPTS_TEST262_UPDATE_BASELINE=1.\n");
+        sb.Append(Header(corpusRevision));
+        sb.Append('\n');
         foreach (var (relPath, bucket) in sorted)
         {
             sb.Append(relPath);

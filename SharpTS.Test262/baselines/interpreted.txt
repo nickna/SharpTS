@@ -1,4 +1,4 @@
-# Test262 baseline — do not hand-edit. Regenerate with SHARPTS_TEST262_UPDATE_BASELINE=1.
+# SharpTS baseline-format=1 suite=Test262 corpus=d5e73fc8d2c663554fb72e2380a8c2bc1a318a33 — do not hand-edit; regenerate with SHARPTS_TEST262_UPDATE_BASELINE=1.
 test/built-ins/Array/15.4.5-1.js Pass
 test/built-ins/Array/15.4.5.1-5-1.js Pass
 test/built-ins/Array/15.4.5.1-5-2.js Pass
