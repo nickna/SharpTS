@@ -497,14 +497,18 @@ public partial class Interpreter
     /// <summary>
     /// Gets the string name from a property key (sync version).
     /// </summary>
-    private string GetPropertyKeyName(Expr.PropertyKey key)
+    private object GetPropertyKeyName(Expr.PropertyKey key)
     {
         return key switch
         {
             Expr.IdentifierKey ik => ik.Name.Lexeme,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => Evaluate(ck.Expression)?.ToString() ?? "undefined",
+            Expr.ComputedKey ck => Evaluate(ck.Expression) switch
+            {
+                SharpTSSymbol symbol => symbol,
+                var value => ToPropertyKeyString(value),
+            },
             _ => throw new InterpreterException("Invalid property key for accessor.")
         };
     }
@@ -513,14 +517,19 @@ public partial class Interpreter
     /// Gets the string name from a property key using an evaluation context.
     /// Shared between sync and async paths via IEvaluationContext.
     /// </summary>
-    private async ValueTask<string> GetPropertyKeyNameCore(IEvaluationContext ctx, Expr.PropertyKey key)
+    private async ValueTask<object> GetPropertyKeyNameCore(IEvaluationContext ctx, Expr.PropertyKey key)
     {
+        if (key is Expr.ComputedKey computed)
+        {
+            object? value = (await ctx.EvaluateExprAsync(computed.Expression)).ToObject();
+            return value is SharpTSSymbol symbol ? symbol : ToPropertyKeyString(value);
+        }
+
         return key switch
         {
             Expr.IdentifierKey ik => ik.Name.Lexeme,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => (await ctx.EvaluateExprAsync(ck.Expression)).ToObject()?.ToString() ?? "undefined",
             _ => throw new InterpreterException("Invalid property key for accessor.")
         };
     }
@@ -601,8 +610,8 @@ public partial class Interpreter
     {
         Dictionary<string, object?> stringFields = [];
         Dictionary<SharpTSSymbol, object?> symbolFields = [];
-        List<(string name, ISharpTSCallable getter)>? getters = null;
-        List<(string name, ISharpTSCallable setter)>? setters = null;
+        List<(object key, ISharpTSCallable getter)>? getters = null;
+        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -613,14 +622,14 @@ public partial class Interpreter
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
-                string name = await GetPropertyKeyNameCore(ctx, prop.Key!);
+                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
                 var getter = CreateAccessorFunction(prop.Value);
                 getters ??= [];
                 getters.Add((name, getter));
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
             {
-                string name = await GetPropertyKeyNameCore(ctx, prop.Key!);
+                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
                 var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
                 setters ??= [];
                 setters.Add((name, setter));
@@ -639,14 +648,26 @@ public partial class Interpreter
         {
             foreach (var (name, getter) in getters)
             {
-                result.DefineGetter(name, getter);
+                if (name is SharpTSSymbol symbol)
+                {
+                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
+                    result.DefineSymbolAccessor(symbol, getter, setter);
+                }
+                else
+                    result.DefineGetter((string)name, getter);
             }
         }
         if (setters != null)
         {
             foreach (var (name, setter) in setters)
             {
-                result.DefineSetter(name, setter);
+                if (name is SharpTSSymbol symbol)
+                {
+                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
+                    result.DefineSymbolAccessor(symbol, getter, setter);
+                }
+                else
+                    result.DefineSetter((string)name, setter);
             }
         }
 
@@ -667,8 +688,8 @@ public partial class Interpreter
     {
         Dictionary<string, object?> stringFields = [];
         Dictionary<SharpTSSymbol, object?> symbolFields = [];
-        List<(string name, ISharpTSCallable getter)>? getters = null;
-        List<(string name, ISharpTSCallable setter)>? setters = null;
+        List<(object key, ISharpTSCallable getter)>? getters = null;
+        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -679,14 +700,14 @@ public partial class Interpreter
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
-                string name = GetPropertyKeyName(prop.Key!);
+                object name = GetPropertyKeyName(prop.Key!);
                 var getter = CreateAccessorFunction(prop.Value);
                 getters ??= [];
                 getters.Add((name, getter));
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
             {
-                string name = GetPropertyKeyName(prop.Key!);
+                object name = GetPropertyKeyName(prop.Key!);
                 var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
                 setters ??= [];
                 setters.Add((name, setter));
@@ -705,14 +726,26 @@ public partial class Interpreter
         {
             foreach (var (name, getter) in getters)
             {
-                result.DefineGetter(name, getter);
+                if (name is SharpTSSymbol symbol)
+                {
+                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
+                    result.DefineSymbolAccessor(symbol, getter, setter);
+                }
+                else
+                    result.DefineGetter((string)name, getter);
             }
         }
         if (setters != null)
         {
             foreach (var (name, setter) in setters)
             {
-                result.DefineSetter(name, setter);
+                if (name is SharpTSSymbol symbol)
+                {
+                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
+                    result.DefineSymbolAccessor(symbol, getter, setter);
+                }
+                else
+                    result.DefineSetter((string)name, setter);
             }
         }
 
@@ -989,6 +1022,21 @@ public partial class Interpreter
             if (afn.TryGetProperty(arrKey, out var arrPropVal))
                 return RuntimeValue.FromBoxed(arrPropVal);
             return RuntimeValue.Undefined;
+        }
+
+        if (obj is SharpTSObject symbolObject && index is SharpTSSymbol objectSymbol)
+        {
+            if (symbolObject.TryGetSymbolAccessor(objectSymbol, out var getter, out _))
+            {
+                return getter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(getter, symbolObject).Call(this, []));
+            }
+            return symbolObject.HasSymbolProperty(objectSymbol)
+                ? RuntimeValue.FromBoxed(
+                    symbolObject.GetBySymbol(objectSymbol) ?? SharpTSUndefined.Instance)
+                : RuntimeValue.Undefined;
         }
 
         // CLR indexers are real properties with parameters. Route them before the string-key
@@ -1421,8 +1469,18 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ObjectSymbol t:
-                if (strictMode) t.Target.SetBySymbolStrict(t.Key, value, strictMode);
-                else t.Target.SetBySymbol(t.Key, value);
+                if (t.Target.TryGetSymbolAccessor(t.Key, out _, out var symbolSetter))
+                {
+                    if (symbolSetter != null)
+                        BindAccessorToObject(symbolSetter, t.Target).CallBoxed(this, [value]);
+                    else if (strictMode)
+                        throw new InterpreterException(
+                            $"Cannot set symbol property '{t.Key}' which has only a getter.");
+                }
+                else if (strictMode)
+                    t.Target.SetBySymbolStrict(t.Key, value, strictMode);
+                else
+                    t.Target.SetBySymbol(t.Key, value);
                 break;
 
             case IndexTarget.InstanceString t:

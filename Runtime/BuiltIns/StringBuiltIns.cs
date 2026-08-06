@@ -380,7 +380,7 @@ public static class StringBuiltIns
         => RuntimeValue.FromString(str.ToLower());
 
     private static RuntimeValue TrimV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.Trim());
+        => RuntimeValue.FromString(TrimEcmaWhitespace(str, trimStart: true, trimEnd: true));
 
     private static RuntimeValue IncludesV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
@@ -494,10 +494,32 @@ public static class StringBuiltIns
     }
 
     private static RuntimeValue TrimStartV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.TrimStart());
+        => RuntimeValue.FromString(TrimEcmaWhitespace(str, trimStart: true, trimEnd: false));
 
     private static RuntimeValue TrimEndV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.TrimEnd());
+        => RuntimeValue.FromString(TrimEcmaWhitespace(str, trimStart: false, trimEnd: true));
+
+    private static string TrimEcmaWhitespace(string value, bool trimStart, bool trimEnd)
+    {
+        int start = 0;
+        int end = value.Length - 1;
+        if (trimStart)
+        {
+            while (start <= end && IsEcmaWhitespace(value[start]))
+                start++;
+        }
+        if (trimEnd)
+        {
+            while (end >= start && IsEcmaWhitespace(value[end]))
+                end--;
+        }
+        return start == 0 && end == value.Length - 1
+            ? value
+            : value.Substring(start, end - start + 1);
+    }
+
+    private static bool IsEcmaWhitespace(char value)
+        => char.IsWhiteSpace(value) || value == '\uFEFF';
 
     private static RuntimeValue AtV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {

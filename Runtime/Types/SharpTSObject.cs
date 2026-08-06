@@ -18,6 +18,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
+    private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
+        _symbolAccessors;
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
     private HashSet<string>? _accessorProperties;
@@ -420,6 +422,32 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         return _symbolFields.TryGetValue(symbol, out var value) ? value : null;
     }
 
+    /// <summary>Installs a symbol-keyed accessor property.</summary>
+    internal void DefineSymbolAccessor(
+        SharpTSSymbol symbol, ISharpTSCallable? getter, ISharpTSCallable? setter)
+    {
+        _symbolAccessors ??= [];
+        _symbolAccessors[symbol] = (getter, setter);
+        _symbolFields.Remove(symbol);
+    }
+
+    /// <summary>Returns a symbol-keyed accessor pair when one is defined.</summary>
+    internal bool TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_symbolAccessors != null
+            && _symbolAccessors.TryGetValue(symbol, out var pair))
+        {
+            getter = pair.Get;
+            setter = pair.Set;
+            return true;
+        }
+
+        getter = null;
+        setter = null;
+        return false;
+    }
+
     /// <summary>
     /// Sets a value by symbol key.
     /// </summary>
@@ -430,12 +458,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        bool exists = _symbolFields.ContainsKey(symbol);
+        bool exists = HasSymbolProperty(symbol);
         if (!IsExtensible && !exists)
         {
             return;
         }
 
+        _symbolAccessors?.Remove(symbol);
         _symbolFields[symbol] = value;
     }
 
@@ -453,7 +482,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        bool exists = _symbolFields.ContainsKey(symbol);
+        bool exists = HasSymbolProperty(symbol);
         if (!IsExtensible && !exists)
         {
             if (strictMode)
@@ -463,6 +492,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        _symbolAccessors?.Remove(symbol);
         _symbolFields[symbol] = value;
     }
 
@@ -471,7 +501,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public bool HasSymbolProperty(SharpTSSymbol symbol)
     {
-        return _symbolFields.ContainsKey(symbol);
+        return _symbolFields.ContainsKey(symbol)
+            || (_symbolAccessors?.ContainsKey(symbol) ?? false);
     }
 
     /// <summary>
@@ -484,7 +515,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             // Frozen and sealed objects silently ignore property deletions
             return false;
         }
-        return _symbolFields.Remove(symbol);
+        bool removed = _symbolFields.Remove(symbol);
+        return (_symbolAccessors?.Remove(symbol) ?? false) || removed;
     }
 
     /// <summary>
@@ -501,7 +533,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             }
             return false;
         }
-        return _symbolFields.Remove(symbol);
+        bool removed = _symbolFields.Remove(symbol);
+        return (_symbolAccessors?.Remove(symbol) ?? false) || removed;
     }
 
     /// <summary>

@@ -494,7 +494,9 @@ public static partial class ObjectBuiltIns
             switch (target)
             {
                 case SharpTSObject symObj:
-                    if (descriptorHasValue)
+                    if (isAccessor)
+                        symObj.DefineSymbolAccessor(symKey, descriptor.Get, descriptor.Set);
+                    else if (descriptorHasValue)
                         symObj.SetBySymbol(symKey, descriptor.Value);
                     return target;
                 case SharpTSInstance symInst:
@@ -885,6 +887,15 @@ public static partial class ObjectBuiltIns
     {
         switch (target)
         {
+            case SharpTSObject obj
+                when obj.TryGetSymbolAccessor(key, out var getter, out var setter):
+                return new SharpTSPropertyDescriptor
+                {
+                    Get = getter,
+                    Set = setter,
+                    Enumerable = false,
+                    Configurable = true,
+                }.ToObject();
             case SharpTSObject obj when obj.HasSymbolProperty(key):
                 return DescriptorObjectFor(obj.GetBySymbol(key));
             case SharpTSInstance inst when inst.HasSymbolProperty(key):

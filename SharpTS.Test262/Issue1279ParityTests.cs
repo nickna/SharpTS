@@ -937,6 +937,33 @@ public sealed class Issue1279ParityTests
         }
     }
 
+    [Theory]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-2-51.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-2.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-3.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-4.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-5.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-6.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-4-10.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-4-18.js")]
+    [InlineData("built-ins/String/prototype/trim/15.5.4.20-4-34.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-whitespace.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-toprimitive-call-err.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-toprimitive-meth-err.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-toprimitive-meth-priority.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-toprimitive-returns-object-err.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-tostring-meth-priority.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-valueof-meth-priority.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-whitespace.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-toprimitive-call-err.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-toprimitive-meth-err.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-toprimitive-meth-priority.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-toprimitive-returns-object-err.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-tostring-meth-priority.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-valueof-meth-priority.js")]
+    public void String_trimming_uses_spec_whitespace_and_ToPrimitive(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

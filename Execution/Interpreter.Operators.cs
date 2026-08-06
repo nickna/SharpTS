@@ -624,8 +624,11 @@ public partial class Interpreter
         // returns the array, not a primitive, so it is skipped). e.g. `'' + [1,2,3]`
         // -> "1,2,3" and `[1,2,3] == "1,2,3"` -> true. The console/debug ToString
         // ("[1, 2, 3]") is intentionally NOT used here.
+        if (value is SharpTSArguments) return "[object Arguments]";
         if (value is SharpTSArray arr) return ArrayBuiltIns.ToJsString(this, arr);
         if (value is not SharpTSObject obj) return value;
+        if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
+            return exoticResult;
         bool isWrapper = TryGetBoxedPrimitiveValue(obj, out var primitiveValue);
         bool hasOwnValueOf = obj.HasProperty("valueOf");
         bool hasOwnToString = obj.HasProperty("toString");
@@ -737,10 +740,15 @@ public partial class Interpreter
     internal string ToStringForBuiltInArgument(object? value)
     {
         ThrowIfSymbolStringCoercion(value);
+        if (value is SharpTSArguments)
+            return "[object Arguments]";
         if (value is SharpTSArray array)
             return ArrayBuiltIns.ToJsString(this, array);
         if (value is not SharpTSObject obj)
             return Stringify(value);
+
+        if (TryCallExoticToPrimitive(obj, PrimitiveHint.String, out var exoticResult))
+            return Stringify(exoticResult);
 
         if (TryGetBoxedPrimitiveValue(obj, out _))
             return Stringify(ToPrimitive(obj, PrimitiveHint.String));
@@ -752,6 +760,57 @@ public partial class Interpreter
 
         throw new ThrowException(new SharpTSTypeError(
             "Cannot convert object to primitive value"));
+    }
+
+    /// <summary>
+    /// ECMA-262 §7.1.1: consults an object's @@toPrimitive method before
+    /// OrdinaryToPrimitive. An explicitly undefined method is treated as absent;
+    /// a non-callable method or an object result throws TypeError.
+    /// </summary>
+    private bool TryCallExoticToPrimitive(
+        SharpTSObject receiver, PrimitiveHint hint, out object? result)
+    {
+        result = null;
+        object? method;
+        if (receiver.TryGetSymbolAccessor(
+                SharpTSSymbol.ToPrimitive, out var getter, out _))
+        {
+            method = getter is null
+                ? SharpTSUndefined.Instance
+                : FunctionBuiltIns.CallWithThis(this, getter, receiver, []);
+        }
+        else if (receiver.HasSymbolProperty(SharpTSSymbol.ToPrimitive))
+        {
+            method = receiver.GetBySymbol(SharpTSSymbol.ToPrimitive)
+                ?? SharpTSUndefined.Instance;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (method is null or SharpTSUndefined)
+            return false;
+        if (method is not ISharpTSCallable callable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Symbol.toPrimitive is not callable"));
+        }
+
+        string hintName = hint switch
+        {
+            PrimitiveHint.String => "string",
+            PrimitiveHint.Number => "number",
+            _ => "default",
+        };
+        result = FunctionBuiltIns.CallWithThis(
+            this, callable, receiver, [hintName]);
+        if (IsObjectLike(result))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert object to primitive value"));
+        }
+        return true;
     }
 
     /// <summary>
