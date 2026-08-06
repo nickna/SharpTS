@@ -1195,6 +1195,11 @@ public partial class Interpreter
         if (memberName == "name") return klass.Name;
         if (memberName == "length") return 0.0;
 
+        // Class constructors are function objects and therefore inherit the
+        // ordinary Object.prototype methods through Function.prototype.
+        if (InheritedObjectPrototypeMember(klass, memberName) is { } inherited)
+            return inherited;
+
         // Promise subclasses (#242) inherit the Promise static side
         // (resolve/reject/all/race/allSettled/any/withResolvers); inherited
         // statics construct subclass-typed result promises.

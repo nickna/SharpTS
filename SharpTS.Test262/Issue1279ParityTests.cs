@@ -1277,6 +1277,10 @@ public sealed class Issue1279ParityTests
     public void Error_prototype_exposes_its_standard_message_descriptor()
         => AssertPassInBothModes("built-ins/Error/prototype/message/prop-desc.js");
 
+    [Fact]
+    public void Error_constructor_owns_its_prototype_property()
+        => AssertPassInBothModes("built-ins/Error/prototype/S15.11.3.1_A4_T1.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
