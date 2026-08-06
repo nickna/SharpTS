@@ -1249,6 +1249,10 @@ public sealed class Issue1279ParityTests
     public void Array_iterator_methods_share_the_Array_iterator_prototype(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Boolean_constructor_reports_its_spec_length()
+        => AssertPassInBothModes("built-ins/Boolean/S15.6.3_A3.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

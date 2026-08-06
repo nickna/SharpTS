@@ -578,7 +578,7 @@ public class SharpTSBooleanNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     public bool DeleteProperty(string name) => name != "prototype" && _extras.DeleteProperty(name);
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
-    public int Arity() => 0;
+    public int Arity() => 1;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -594,8 +594,12 @@ public class SharpTSBooleanNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
-        if (name == "prototype") return SharpTSBooleanPrototype.Instance;
-        return null;
+        return name switch
+        {
+            "prototype" => SharpTSBooleanPrototype.Instance,
+            "length" => 1.0,
+            _ => null,
+        };
     }
 
     public override string ToString() => "function Boolean() { [native code] }";
