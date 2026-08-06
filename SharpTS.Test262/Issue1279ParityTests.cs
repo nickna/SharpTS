@@ -1222,6 +1222,14 @@ public sealed class Issue1279ParityTests
     public void Array_includes_accepts_optional_arguments_and_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/find/predicate-call-this-strict.js")]
+    [InlineData("built-ins/Array/prototype/findIndex/predicate-call-this-strict.js")]
+    [InlineData("built-ins/Array/prototype/findLast/predicate-call-this-strict.js")]
+    [InlineData("built-ins/Array/prototype/findLastIndex/predicate-call-this-strict.js")]
+    public void Array_find_callbacks_receive_undefined_this_in_strict_mode(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

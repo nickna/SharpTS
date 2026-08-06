@@ -48,7 +48,7 @@ test/built-ins/Array/from/Array.from_arity.js Pass
 test/built-ins/Array/from/Array.from_forwards-length-for-array-likes.js RuntimeError
 test/built-ins/Array/from/array-like-has-length-but-no-indexes-with-values.js Pass
 test/built-ins/Array/from/calling-from-valid-1-noStrict.js Pass
-test/built-ins/Array/from/calling-from-valid-1-onlyStrict.js Fail
+test/built-ins/Array/from/calling-from-valid-1-onlyStrict.js Pass
 test/built-ins/Array/from/calling-from-valid-2.js RuntimeError
 test/built-ins/Array/from/elements-added-after.js Pass
 test/built-ins/Array/from/elements-deleted-after.js RuntimeError
@@ -68,7 +68,7 @@ test/built-ins/Array/from/iter-map-fn-err.js Pass
 test/built-ins/Array/from/iter-map-fn-return.js Pass
 test/built-ins/Array/from/iter-map-fn-this-arg.js RuntimeError
 test/built-ins/Array/from/iter-map-fn-this-non-strict.js Pass
-test/built-ins/Array/from/iter-map-fn-this-strict.js Fail
+test/built-ins/Array/from/iter-map-fn-this-strict.js Pass
 test/built-ins/Array/from/iter-set-elem-prop-err.js Fail
 test/built-ins/Array/from/iter-set-elem-prop-non-writable.js Pass
 test/built-ins/Array/from/iter-set-elem-prop.js Pass
@@ -901,7 +901,7 @@ test/built-ins/Array/prototype/find/name.js Pass
 test/built-ins/Array/prototype/find/not-a-constructor.js Pass
 test/built-ins/Array/prototype/find/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/find/predicate-call-this-non-strict.js Pass
-test/built-ins/Array/prototype/find/predicate-call-this-strict.js Fail
+test/built-ins/Array/prototype/find/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/find/predicate-called-for-each-array-property.js Pass
 test/built-ins/Array/prototype/find/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/find/predicate-not-called-on-empty-array.js Pass
@@ -924,7 +924,7 @@ test/built-ins/Array/prototype/findIndex/name.js Pass
 test/built-ins/Array/prototype/findIndex/not-a-constructor.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-call-this-non-strict.js Pass
-test/built-ins/Array/prototype/findIndex/predicate-call-this-strict.js Fail
+test/built-ins/Array/prototype/findIndex/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-called-for-each-array-property.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-not-called-on-empty-array.js Pass
@@ -948,7 +948,7 @@ test/built-ins/Array/prototype/findLast/name.js Pass
 test/built-ins/Array/prototype/findLast/not-a-constructor.js Pass
 test/built-ins/Array/prototype/findLast/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findLast/predicate-call-this-non-strict.js Pass
-test/built-ins/Array/prototype/findLast/predicate-call-this-strict.js Fail
+test/built-ins/Array/prototype/findLast/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findLast/predicate-called-for-each-array-property.js Pass
 test/built-ins/Array/prototype/findLast/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findLast/predicate-not-called-on-empty-array.js Pass
@@ -972,7 +972,7 @@ test/built-ins/Array/prototype/findLastIndex/name.js Pass
 test/built-ins/Array/prototype/findLastIndex/not-a-constructor.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-call-this-non-strict.js Pass
-test/built-ins/Array/prototype/findLastIndex/predicate-call-this-strict.js Fail
+test/built-ins/Array/prototype/findLastIndex/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-called-for-each-array-property.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-not-called-on-empty-array.js Pass
@@ -7777,7 +7777,7 @@ test/built-ins/Promise/exception-after-resolve-in-executor.js RuntimeError
 test/built-ins/Promise/exception-after-resolve-in-thenable-job.js RuntimeError
 test/built-ins/Promise/exec-args.js Fail
 test/built-ins/Promise/executor-call-context-sloppy.js Pass
-test/built-ins/Promise/executor-call-context-strict.js Fail
+test/built-ins/Promise/executor-call-context-strict.js Pass
 test/built-ins/Promise/executor-function-extensible.js Fail
 test/built-ins/Promise/executor-function-length.js Fail
 test/built-ins/Promise/executor-function-name.js Fail
@@ -7904,14 +7904,14 @@ test/built-ins/Promise/prototype/then/resolve-settled-rejected-prms-cstm-then.js
 test/built-ins/Promise/prototype/then/resolve-settled-rejected-self.js RuntimeError
 test/built-ins/Promise/prototype/then/resolve-settled-rejected-thenable.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-invoke-nonstrict.js Pass
-test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-invoke-strict.js RuntimeError
+test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-invoke-strict.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next-abrupt.js RuntimeError
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-abrupt.js RuntimeError
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-normal.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-identity.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-invoke-nonstrict.js Pass
-test/built-ins/Promise/prototype/then/rxn-handler-rejected-invoke-strict.js RuntimeError
+test/built-ins/Promise/prototype/then/rxn-handler-rejected-invoke-strict.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-next-abrupt.js RuntimeError
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-next.js Pass
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-return-abrupt.js RuntimeError

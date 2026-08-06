@@ -190,6 +190,11 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
 
     public int Arity() => _arity;
 
+    internal bool IsStrict
+        => _closure.IsStrictMode
+            || (_declaration.Body is not null
+                && Parsing.DirectivePrologue.HasUseStrict(_declaration.Body));
+
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         if (_declaration.Body == null)
@@ -198,7 +203,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         }
 
         // Check for function-level "use strict" directive
-        bool functionStrict = Parsing.DirectivePrologue.HasUseStrict(_declaration.Body);
+        bool functionStrict = IsStrict;
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);
@@ -310,7 +315,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
             throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
         }
 
-        bool functionStrict = Parsing.DirectivePrologue.HasUseStrict(_declaration.Body);
+        bool functionStrict = IsStrict;
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);
@@ -510,10 +515,15 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
 
     public int Arity() => _arity;
 
+    internal bool IsStrict
+        => _closure.IsStrictMode
+            || (_declaration.BlockBody is not null
+                && Parsing.DirectivePrologue.HasUseStrict(_declaration.BlockBody));
+
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Check for function-level "use strict" directive in block body
-        bool functionStrict = _declaration.BlockBody != null && Parsing.DirectivePrologue.HasUseStrict(_declaration.BlockBody);
+        bool functionStrict = IsStrict;
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);
@@ -599,7 +609,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     /// </summary>
     public RuntimeValue CallV2(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments)
     {
-        bool functionStrict = _declaration.BlockBody != null && Parsing.DirectivePrologue.HasUseStrict(_declaration.BlockBody);
+        bool functionStrict = IsStrict;
         RuntimeEnvironment environment = functionStrict
             ? new RuntimeEnvironment(_closure, strictMode: true)
             : new RuntimeEnvironment(_closure);

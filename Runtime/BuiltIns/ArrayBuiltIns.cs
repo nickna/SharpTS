@@ -1300,6 +1300,10 @@ public static class ArrayBuiltIns
             // Arrow functions (HasOwnThis=false) ignore the binding per spec.
             if (args.Count >= 2)
                 callback = BindCallbackThis(callback, args[1]);
+            else if (callback is SharpTSFunction { IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
+            else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             return new CallbackIterator(callback, RuntimeValue.FromObject(arr));
         }
 
@@ -1308,6 +1312,10 @@ public static class ArrayBuiltIns
             var callback = RequireCallable(args, methodName);
             if (args.Length >= 2)
                 callback = BindCallbackThis(callback, args[1].ToObject());
+            else if (callback is SharpTSFunction { IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
+            else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             return new CallbackIterator(callback, RuntimeValue.FromObject(arr));
         }
 
@@ -1320,6 +1328,10 @@ public static class ArrayBuiltIns
 
             if (args.Count >= 2)
                 callback = BindCallbackThis(callback, args[1]);
+            else if (callback is SharpTSFunction { IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
+            else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
+                callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             return new CallbackIterator(callback, RuntimeValue.FromObject(receiver));
         }
 
