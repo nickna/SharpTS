@@ -1024,6 +1024,18 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
+        // Arrays inherit @@iterator from Array.prototype. Bracket access on an
+        // instance must therefore return the realm's values method bound to that
+        // instance, just as a dotted Array.prototype method call is receiver-bound.
+        if (obj is SharpTSArray array && ReferenceEquals(index, SharpTSSymbol.Iterator))
+        {
+            var iteratorMethod = GetArrayPrototype().GetMember("values");
+            return RuntimeValue.FromBoxed(
+                iteratorMethod is ArrayPrototypeMethodWrapper wrapper
+                    ? wrapper.Bind(array)
+                    : iteratorMethod ?? SharpTSUndefined.Instance);
+        }
+
         if (obj is SharpTSObject symbolObject && index is SharpTSSymbol objectSymbol)
         {
             if (symbolObject.TryGetSymbolAccessor(objectSymbol, out var getter, out _))

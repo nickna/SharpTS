@@ -1239,6 +1239,16 @@ public sealed class Issue1279ParityTests
     public void Array_join_is_generic_for_array_like_objects(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/entries/returns-iterator.js")]
+    [InlineData("built-ins/Array/prototype/entries/returns-iterator-from-object.js")]
+    [InlineData("built-ins/Array/prototype/keys/returns-iterator.js")]
+    [InlineData("built-ins/Array/prototype/keys/returns-iterator-from-object.js")]
+    [InlineData("built-ins/Array/prototype/values/returns-iterator.js")]
+    [InlineData("built-ins/Array/prototype/values/returns-iterator-from-object.js")]
+    public void Array_iterator_methods_share_the_Array_iterator_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

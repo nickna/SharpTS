@@ -408,8 +408,8 @@ test/built-ins/Array/prototype/entries/resizable-buffer-grow-mid-iteration.js Ru
 test/built-ins/Array/prototype/entries/resizable-buffer-shrink-mid-iteration.js RuntimeError
 test/built-ins/Array/prototype/entries/resizable-buffer.js RuntimeError
 test/built-ins/Array/prototype/entries/return-abrupt-from-this.js Pass
-test/built-ins/Array/prototype/entries/returns-iterator-from-object.js RuntimeError
-test/built-ins/Array/prototype/entries/returns-iterator.js RuntimeError
+test/built-ins/Array/prototype/entries/returns-iterator-from-object.js Pass
+test/built-ins/Array/prototype/entries/returns-iterator.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-0-1.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-1-1.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-1-10.js Pass
@@ -1484,8 +1484,8 @@ test/built-ins/Array/prototype/keys/resizable-buffer-grow-mid-iteration.js Runti
 test/built-ins/Array/prototype/keys/resizable-buffer-shrink-mid-iteration.js RuntimeError
 test/built-ins/Array/prototype/keys/resizable-buffer.js RuntimeError
 test/built-ins/Array/prototype/keys/return-abrupt-from-this.js Pass
-test/built-ins/Array/prototype/keys/returns-iterator-from-object.js RuntimeError
-test/built-ins/Array/prototype/keys/returns-iterator.js RuntimeError
+test/built-ins/Array/prototype/keys/returns-iterator-from-object.js Pass
+test/built-ins/Array/prototype/keys/returns-iterator.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-1.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-10.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-11.js Pass
@@ -3056,8 +3056,8 @@ test/built-ins/Array/prototype/values/prop-desc.js Pass
 test/built-ins/Array/prototype/values/resizable-buffer-grow-mid-iteration.js RuntimeError
 test/built-ins/Array/prototype/values/resizable-buffer-shrink-mid-iteration.js RuntimeError
 test/built-ins/Array/prototype/values/resizable-buffer.js RuntimeError
-test/built-ins/Array/prototype/values/returns-iterator-from-object.js RuntimeError
-test/built-ins/Array/prototype/values/returns-iterator.js RuntimeError
+test/built-ins/Array/prototype/values/returns-iterator-from-object.js Pass
+test/built-ins/Array/prototype/values/returns-iterator.js Pass
 test/built-ins/Array/prototype/values/this-val-non-obj-coercible.js Pass
 test/built-ins/Array/prototype/with/frozen-this-value.js Pass
 test/built-ins/Array/prototype/with/holes-not-preserved.js Fail
