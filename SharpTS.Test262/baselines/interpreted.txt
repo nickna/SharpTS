@@ -3885,7 +3885,7 @@ test/built-ins/Number/prototype/toPrecision/tointeger-precision.js Pass
 test/built-ins/Number/prototype/toPrecision/undefined-precision-arg.js Pass
 test/built-ins/Number/prototype/toString/S15.7.4.2_A1_T01.js Pass
 test/built-ins/Number/prototype/toString/S15.7.4.2_A1_T02.js Pass
-test/built-ins/Number/prototype/toString/S15.7.4.2_A1_T03.js RuntimeError
+test/built-ins/Number/prototype/toString/S15.7.4.2_A1_T03.js Pass
 test/built-ins/Number/prototype/toString/S15.7.4.2_A2_T01.js Pass
 test/built-ins/Number/prototype/toString/S15.7.4.2_A2_T02.js Pass
 test/built-ins/Number/prototype/toString/S15.7.4.2_A2_T03.js Pass
@@ -3934,7 +3934,7 @@ test/built-ins/Number/prototype/toString/length.js Pass
 test/built-ins/Number/prototype/toString/name.js Pass
 test/built-ins/Number/prototype/toString/not-a-constructor.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-default-radix.js Pass
-test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-1.js Fail
+test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-1.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-10.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-11.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-12.js Pass
@@ -3964,14 +3964,14 @@ test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-33.js Pa
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-34.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-35.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-36.js Pass
-test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-37.js Fail
+test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-37.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-4.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-5.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-6.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-7.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-8.js Pass
 test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-9.js Pass
-test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-poisoned.js Fail
+test/built-ins/Number/prototype/toString/numeric-literal-tostring-radix-poisoned.js Pass
 test/built-ins/Number/prototype/toString/prop-desc.js Pass
 test/built-ins/Number/prototype/valueOf/S15.7.4.4_A1_T01.js Pass
 test/built-ins/Number/prototype/valueOf/S15.7.4.4_A1_T02.js RuntimeError

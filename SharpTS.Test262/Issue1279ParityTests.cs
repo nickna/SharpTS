@@ -1031,6 +1031,18 @@ public sealed class Issue1279ParityTests
     public void Number_toFixed_matches_spec_argument_conversion_and_errors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number.prototype.toString treats an absent or undefined radix as decimal, otherwise
+    /// performs full ToIntegerOrInfinity coercion and reports invalid radices as RangeError.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toString/S15.7.4.2_A1_T03.js")]
+    [InlineData("built-ins/Number/prototype/toString/numeric-literal-tostring-radix-1.js")]
+    [InlineData("built-ins/Number/prototype/toString/numeric-literal-tostring-radix-37.js")]
+    [InlineData("built-ins/Number/prototype/toString/numeric-literal-tostring-radix-poisoned.js")]
+    public void Number_toString_matches_spec_radix_conversion_and_errors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

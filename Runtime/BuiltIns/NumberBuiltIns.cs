@@ -254,14 +254,23 @@ public static class NumberBuiltIns
         => System.Text.RegularExpressions.Regex.Replace(
             value, @"e([+-])0+(?=\d)", "e$1");
 
-    private static RuntimeValue ToStringMethodV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ToStringMethodV2(
+        Interpreter interpreter, double value, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length == 0)
+        if (args.IsEmpty || args[0].IsUndefined)
             return RuntimeValue.FromString(Compilation.RuntimeTypes.FormatNumber(value));
-        var radix = (int)Interpreter.ToNumber(args[0]);
-        if (radix < 2 || radix > 36)
-            throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
-        return RuntimeValue.FromString(ToStringWithRadix(value, radix));
+
+        if (args[0].IsBigInt)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert a BigInt value to a number"));
+
+        double radixNumber = interpreter.ToNumberWithPrimitive(args[0].ToObject());
+        radixNumber = double.IsNaN(radixNumber) ? 0 : Math.Truncate(radixNumber);
+        if (radixNumber < 2 || radixNumber > 36)
+            throw new ThrowException(new SharpTSRangeError(
+                "toString() radix must be between 2 and 36"));
+
+        return RuntimeValue.FromString(ToStringWithRadix(value, (int)radixNumber));
     }
 
     /// <summary>
