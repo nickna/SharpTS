@@ -439,6 +439,7 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.BooleanPrototypeMethodWrapper
             or SharpTS.Runtime.Types.SharpTSGlobalFunction
             or SharpTS.Runtime.Types.SharpTSObjectUnboundMethod
+            or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod
             or SharpTS.Runtime.Types.ErrorToStringCallable
             or BoundFunction
             or BuiltInMethod { IsConstructor: false })

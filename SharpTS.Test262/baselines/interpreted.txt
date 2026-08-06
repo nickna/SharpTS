@@ -1918,7 +1918,7 @@ test/built-ins/Array/prototype/pop/clamps-to-integer-limit.js RuntimeError
 test/built-ins/Array/prototype/pop/length-near-integer-limit.js RuntimeError
 test/built-ins/Array/prototype/pop/length.js Pass
 test/built-ins/Array/prototype/pop/name.js Pass
-test/built-ins/Array/prototype/pop/not-a-constructor.js Fail
+test/built-ins/Array/prototype/pop/not-a-constructor.js Pass
 test/built-ins/Array/prototype/pop/prop-desc.js Pass
 test/built-ins/Array/prototype/pop/set-length-array-is-frozen.js Fail
 test/built-ins/Array/prototype/pop/set-length-array-length-is-non-writable.js Fail
@@ -1943,7 +1943,7 @@ test/built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js Fai
 test/built-ins/Array/prototype/push/length-near-integer-limit.js RuntimeError
 test/built-ins/Array/prototype/push/length.js Pass
 test/built-ins/Array/prototype/push/name.js Pass
-test/built-ins/Array/prototype/push/not-a-constructor.js Fail
+test/built-ins/Array/prototype/push/not-a-constructor.js Pass
 test/built-ins/Array/prototype/push/prop-desc.js Pass
 test/built-ins/Array/prototype/push/set-length-array-is-frozen.js Fail
 test/built-ins/Array/prototype/push/set-length-array-length-is-non-writable.js Fail
@@ -2502,7 +2502,7 @@ test/built-ins/Array/prototype/shift/S15.4.4.9_A4_T2.js Fail
 test/built-ins/Array/prototype/shift/call-with-boolean.js RuntimeError
 test/built-ins/Array/prototype/shift/length.js Pass
 test/built-ins/Array/prototype/shift/name.js Pass
-test/built-ins/Array/prototype/shift/not-a-constructor.js Fail
+test/built-ins/Array/prototype/shift/not-a-constructor.js Pass
 test/built-ins/Array/prototype/shift/prop-desc.js Pass
 test/built-ins/Array/prototype/shift/set-length-array-is-frozen.js Fail
 test/built-ins/Array/prototype/shift/set-length-array-length-is-non-writable.js Fail
@@ -3038,7 +3038,7 @@ test/built-ins/Array/prototype/unshift/clamps-to-integer-limit.js RuntimeError
 test/built-ins/Array/prototype/unshift/length-near-integer-limit.js Fail
 test/built-ins/Array/prototype/unshift/length.js Pass
 test/built-ins/Array/prototype/unshift/name.js Pass
-test/built-ins/Array/prototype/unshift/not-a-constructor.js Fail
+test/built-ins/Array/prototype/unshift/not-a-constructor.js Pass
 test/built-ins/Array/prototype/unshift/prop-desc.js Pass
 test/built-ins/Array/prototype/unshift/read-only-property.js Fail
 test/built-ins/Array/prototype/unshift/set-length-array-is-frozen.js Fail

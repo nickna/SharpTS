@@ -1141,6 +1141,7 @@ public partial class Interpreter
         or BooleanPrototypeMethodWrapper
         or SharpTSGlobalFunction
         or SharpTSObjectUnboundMethod
+        or SharpTSArrayUnboundMethod
         or ErrorToStringCallable
         or BuiltInMethod { IsConstructor: false };
 
