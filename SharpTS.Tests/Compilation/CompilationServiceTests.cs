@@ -35,6 +35,9 @@ public class CompilationServiceTests
         Assert.NotEmpty(result.AssemblyBytes!);
         Assert.DoesNotContain(result.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.True(result.CompileTimeMs >= 0);
+        Assert.Equal(
+            result.CompileTimeMs,
+            (long)result.Timings.Single(timing => timing.Name == "compile").DurationMs);
     }
 
     [Fact]
@@ -148,6 +151,10 @@ public class CompilationServiceTests
         Assert.True(run.Success);
         Assert.Null(run.Error);
         Assert.True(run.ExecuteTimeMs >= 0);
+        Assert.Equal(["load", "execute"], run.Timings.Select(timing => timing.Name));
+        Assert.Equal(
+            run.ExecuteTimeMs,
+            (long)run.Timings.Single(timing => timing.Name == "execute").DurationMs);
         Assert.Equal("hello from compiled\n", sw.ToString().Replace("\r\n", "\n"));
     }
 

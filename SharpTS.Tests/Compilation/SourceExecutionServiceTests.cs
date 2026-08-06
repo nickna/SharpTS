@@ -17,6 +17,18 @@ public class SourceExecutionServiceTests
         Assert.Equal("hello\n", Normalize(result.Output));
         Assert.True(result.ExecutionTimeMs >= 0);
         Assert.Null(result.CompileTimeMs);
+        Assert.Equal(
+            ["tokenize", "parse", "typeCheck", "prepareInterpreter", "execute"],
+            result.Timings!.Select(timing => timing.Name));
+        Assert.All(result.Timings!, timing =>
+        {
+            Assert.True(double.IsFinite(timing.DurationMs));
+            Assert.True(timing.DurationMs >= 0);
+            Assert.Equal(ExecutionPhaseTiming.CompletedStatus, timing.Status);
+        });
+        Assert.Equal(
+            result.ExecutionTimeMs,
+            (long)result.Timings!.Single(timing => timing.Name == "execute").DurationMs);
     }
 
     [Fact]
@@ -29,6 +41,8 @@ public class SourceExecutionServiceTests
         Assert.Equal(2, result.Errors.Length);
         Assert.All(result.Errors, error => Assert.Contains("Type Error", error));
         Assert.Equal(0, result.ExecutionTimeMs);
+        Assert.Equal(["tokenize", "parse", "typeCheck"], result.Timings!.Select(timing => timing.Name));
+        Assert.Equal(ExecutionPhaseTiming.FailedStatus, result.Timings![^1].Status);
     }
 
     [Fact]
@@ -39,6 +53,8 @@ public class SourceExecutionServiceTests
         Assert.False(result.Success);
         Assert.Contains("boom", Assert.Single(result.Errors));
         Assert.Contains("Runtime Error", result.Output);
+        Assert.Equal("execute", result.Timings![^1].Name);
+        Assert.Equal(ExecutionPhaseTiming.FailedStatus, result.Timings[^1].Status);
     }
 
     [Fact]
@@ -52,6 +68,15 @@ public class SourceExecutionServiceTests
         Assert.True(result.ExecutionTimeMs >= 0);
         Assert.NotNull(result.CompileTimeMs);
         Assert.True(result.CompileTimeMs >= 0);
+        Assert.Equal(
+            ["tokenize", "parse", "typeCheck", "compile", "load", "execute"],
+            result.Timings!.Select(timing => timing.Name));
+        Assert.Equal(
+            result.CompileTimeMs,
+            (long)result.Timings!.Single(timing => timing.Name == "compile").DurationMs);
+        Assert.Equal(
+            result.ExecutionTimeMs,
+            (long)result.Timings!.Single(timing => timing.Name == "execute").DurationMs);
     }
 
     [Fact]
@@ -61,6 +86,28 @@ public class SourceExecutionServiceTests
 
         Assert.False(result.Success);
         Assert.Contains("compiled boom", Assert.Single(result.Errors));
+        Assert.Equal("execute", result.Timings![^1].Name);
+        Assert.Equal(ExecutionPhaseTiming.FailedStatus, result.Timings[^1].Status);
+    }
+
+    [Theory]
+    [InlineData("let value = 0755;", "tokenize")]
+    [InlineData("let value = ;", "parse")]
+    [InlineData("let value: number = 'wrong';", "typeCheck")]
+    public void Execution_AnalysisFailures_ReturnOnlyReachedPhases(string source, string failedPhase)
+    {
+        foreach (var result in new[]
+        {
+            SourceExecutionService.Interpret(source),
+            SourceExecutionService.CompileAndExecute(source)
+        })
+        {
+            Assert.False(result.Success);
+            Assert.Equal(failedPhase, result.Timings![^1].Name);
+            Assert.Equal(ExecutionPhaseTiming.FailedStatus, result.Timings[^1].Status);
+            Assert.DoesNotContain(result.Timings, timing => timing.Name == "execute");
+            Assert.All(result.Timings, timing => Assert.True(timing.DurationMs >= 0));
+        }
     }
 
     [Theory]
@@ -151,6 +198,9 @@ public class SourceExecutionServiceTests
         Assert.Contains("\"Errors\":[]", json);
         Assert.Contains("\"ExecutionTimeMs\":", json);
         Assert.Contains("\"CompileTimeMs\":null", json);
+        Assert.Contains("\"Timings\":[", json);
+        Assert.Contains("\"Name\":\"tokenize\"", json);
+        Assert.Contains("\"Status\":\"completed\"", json);
     }
 
     [Fact]

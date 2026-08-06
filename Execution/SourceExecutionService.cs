@@ -16,13 +16,18 @@ namespace SharpTS.Execution;
 /// <param name="Output">Captured standard output and standard error from the program.</param>
 /// <param name="Errors">Formatted analysis or runtime errors.</param>
 /// <param name="ExecutionTimeMs">Wall-clock execution time, excluding analysis and compilation.</param>
-/// <param name="CompileTimeMs">Compilation time for compiled execution; null for interpretation.</param>
+/// <param name="CompileTimeMs">
+/// Compiler backend time for compiled execution, excluding tokenization, parsing, and type-checking;
+/// null for interpretation.
+/// </param>
+/// <param name="Timings">Ordered, precise pipeline phase timings.</param>
 public sealed record SourceExecutionResult(
     bool Success,
     string Output,
     string[] Errors,
     long ExecutionTimeMs,
-    long? CompileTimeMs = null);
+    long? CompileTimeMs = null,
+    ExecutionPhaseTiming[]? Timings = null);
 
 /// <summary>
 /// Public embedding facade for executing a single TypeScript source string with bounded output.
@@ -78,7 +83,7 @@ public static class SourceExecutionService
     {
         using var output = new CappedTextWriter(maxOutputLength);
         var errors = new List<string>();
-        long executionTimeMs = 0;
+        var timings = new List<ExecutionPhaseTiming>();
 
         try
         {
@@ -87,6 +92,7 @@ public static class SourceExecutionService
                 new SingleSourceAnalysisOptions(
                     DecoratorMode.None,
                     CompilationService.DefaultSourceFileName));
+            timings.AddRange(analysis.Timings);
             if (!analysis.Success)
             {
                 errors.AddRange(analysis.Diagnostics
@@ -94,29 +100,73 @@ public static class SourceExecutionService
                     .Select(diagnostic => diagnostic.ToString()));
                 if (analysis.HitErrorLimit)
                     errors.Add("Too many errors, stopping.");
-                return Result(false, output, errors, 0);
+                return Result(false, output, errors, 0, timings: timings);
             }
 
-            using var interpreter = new Interpreter(output, output);
-            interpreter.SetDecoratorMode(DecoratorMode.None);
+            Interpreter? interpreter = null;
+            var prepareStartedAt = Stopwatch.GetTimestamp();
+            try
+            {
+                interpreter = new Interpreter(output, output);
+                interpreter.SetDecoratorMode(DecoratorMode.None);
 
-            var resolver = new VariableResolver(interpreter);
-            resolver.Resolve(analysis.Statements);
+                var resolver = new VariableResolver(interpreter);
+                resolver.Resolve(analysis.Statements);
+                timings.Add(ExecutionPhaseTiming.Completed(
+                    "prepareInterpreter", ElapsedMilliseconds(prepareStartedAt)));
+            }
+            catch (Exception ex)
+            {
+                timings.Add(ExecutionPhaseTiming.Failed(
+                    "prepareInterpreter", ElapsedMilliseconds(prepareStartedAt)));
+                errors.Add(ex.Message);
+                interpreter?.Dispose();
+                return Result(false, output, errors, 0, timings: timings);
+            }
 
-            var stopwatch = Stopwatch.StartNew();
-            interpreter.Interpret(analysis.Statements, analysis.TypeMap!);
-            stopwatch.Stop();
-            executionTimeMs = stopwatch.ElapsedMilliseconds;
+            using (interpreter)
+            {
+                var executeStartedAt = Stopwatch.GetTimestamp();
+                try
+                {
+                    interpreter.Interpret(analysis.Statements, analysis.TypeMap!);
+                    var executionDurationMs = ElapsedMilliseconds(executeStartedAt);
 
-            if (interpreter.LastUncaughtError is { } uncaught)
-                errors.Add(uncaught.Message);
+                    if (interpreter.LastUncaughtError is { } uncaught)
+                    {
+                        errors.Add(uncaught.Message);
+                        timings.Add(ExecutionPhaseTiming.Failed("execute", executionDurationMs));
+                    }
+                    else
+                    {
+                        timings.Add(ExecutionPhaseTiming.Completed("execute", executionDurationMs));
+                    }
 
-            return Result(errors.Count == 0, output, errors, executionTimeMs);
+                    return Result(
+                        errors.Count == 0,
+                        output,
+                        errors,
+                        (long)executionDurationMs,
+                        timings: timings);
+                }
+                catch (Exception ex)
+                {
+                    var executionDurationMs = ElapsedMilliseconds(executeStartedAt);
+                    timings.Add(ExecutionPhaseTiming.Failed("execute", executionDurationMs));
+                    errors.Add(ex.Message);
+                    return Result(
+                        false,
+                        output,
+                        errors,
+                        (long)executionDurationMs,
+                        timings: timings);
+                }
+            }
         }
         catch (Exception ex)
         {
             errors.Add(ex.Message);
-            return Result(false, output, errors, executionTimeMs);
+            return Result(false, output, errors, 0, timings: timings);
         }
     }
 
@@ -141,20 +191,29 @@ public static class SourceExecutionService
     {
         using var output = new CappedTextWriter(maxOutputLength);
         var errors = new List<string>();
+        var timings = new List<ExecutionPhaseTiming>();
 
         try
         {
             var compileResult = CompilationService.Compile(
                 source,
                 new CompileOptions(DecoratorMode.None));
+            timings.AddRange(compileResult.Timings);
 
             if (!compileResult.Success)
             {
                 errors.AddRange(compileResult.Diagnostics.Select(diagnostic => diagnostic.ToString()));
-                return Result(false, output, errors, 0, compileResult.CompileTimeMs);
+                return Result(
+                    false,
+                    output,
+                    errors,
+                    0,
+                    compileResult.CompileTimeMs,
+                    timings);
             }
 
             var runResult = CompilationService.Execute(compileResult.AssemblyBytes!, output);
+            timings.AddRange(runResult.Timings);
             if (!runResult.Success && runResult.Error is not null)
                 errors.Add(runResult.Error);
 
@@ -163,12 +222,13 @@ public static class SourceExecutionService
                 output,
                 errors,
                 runResult.ExecuteTimeMs,
-                compileResult.CompileTimeMs);
+                compileResult.CompileTimeMs,
+                timings);
         }
         catch (Exception ex)
         {
             errors.Add(ex.Message);
-            return Result(false, output, errors, 0);
+            return Result(false, output, errors, 0, timings: timings);
         }
     }
 
@@ -207,8 +267,18 @@ public static class SourceExecutionService
         CappedTextWriter output,
         List<string> errors,
         long executionTimeMs,
-        long? compileTimeMs = null) =>
-        new(success, output.GetContent(), errors.ToArray(), executionTimeMs, compileTimeMs);
+        long? compileTimeMs = null,
+        List<ExecutionPhaseTiming>? timings = null) =>
+        new(
+            success,
+            output.GetContent(),
+            errors.ToArray(),
+            executionTimeMs,
+            compileTimeMs,
+            (timings ?? []).ToArray());
+
+    private static double ElapsedMilliseconds(long startedAt) =>
+        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
     private static void ValidateMaxOutputLength(int maxOutputLength)
     {
