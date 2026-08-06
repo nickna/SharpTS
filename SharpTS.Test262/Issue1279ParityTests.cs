@@ -1261,6 +1261,10 @@ public sealed class Issue1279ParityTests
     public void Boxed_Boolean_instances_inherit_from_Boolean_prototype()
         => AssertPassInBothModes("built-ins/Boolean/S15.6.2.1_A2.js");
 
+    [Fact]
+    public void Boolean_prototype_inherits_from_Object_prototype()
+        => AssertPassInBothModes("built-ins/Boolean/prototype/S15.6.4_A2.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

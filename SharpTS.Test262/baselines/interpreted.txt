@@ -3108,7 +3108,7 @@ test/built-ins/Boolean/prototype/S15.6.3.1_A1.js Fail
 test/built-ins/Boolean/prototype/S15.6.3.1_A2.js Pass
 test/built-ins/Boolean/prototype/S15.6.3.1_A3.js Fail
 test/built-ins/Boolean/prototype/S15.6.3.1_A4.js Pass
-test/built-ins/Boolean/prototype/S15.6.4_A2.js Fail
+test/built-ins/Boolean/prototype/S15.6.4_A2.js Pass
 test/built-ins/Boolean/prototype/constructor/S15.6.4.1_A1.js Pass
 test/built-ins/Boolean/prototype/toString/S15.6.4.2_A1_T1.js Pass
 test/built-ins/Boolean/prototype/toString/S15.6.4.2_A1_T2.js Pass
