@@ -76,7 +76,7 @@ public static class ArrayStaticBuiltIns
                     ? interpreter.GetIterableElements(iterable).ToList()
                     : interpreter.ReadArrayLikeElements(iterable);
                 return RuntimeValue.FromObject(new SharpTSArray(elements));
-            }),
+            }).AsNonConstructor(),
             "of" => BuiltInMethod.CreateV2("of", 0, int.MaxValue, static (_, _, args) =>
             {
                 // Array.of() creates an array from all arguments

@@ -77,7 +77,7 @@ test/built-ins/Array/from/iter-set-length.js Pass
 test/built-ins/Array/from/mapfn-is-not-callable-typeerror.js Pass
 test/built-ins/Array/from/mapfn-is-symbol-throws.js Pass
 test/built-ins/Array/from/mapfn-throws-exception.js Pass
-test/built-ins/Array/from/not-a-constructor.js Fail
+test/built-ins/Array/from/not-a-constructor.js Pass
 test/built-ins/Array/from/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Array/from/source-array-boundary.js RuntimeError
 test/built-ins/Array/from/source-object-constructor.js Fail
