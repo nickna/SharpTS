@@ -838,14 +838,14 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromObject(new SharpTSArray(result));
     }
 
-    private static RuntimeValue AtV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue AtV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         int len = arr.Length;
-        int index = (int)Interpreter.ToNumber(args[0]);
-        int actualIndex = index < 0 ? len + index : index;
+        double index = ToIntegerOrInfinity(interpreter, args[0].ToObject());
+        double actualIndex = index < 0 ? len + index : index;
         if (actualIndex < 0 || actualIndex >= len)
             return RuntimeValue.Undefined;
-        return RuntimeValue.FromBoxed(arr[actualIndex]);
+        return RuntimeValue.FromBoxed(arr[(int)actualIndex]);
     }
 
     private static RuntimeValue FillV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)

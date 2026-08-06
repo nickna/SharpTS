@@ -277,7 +277,7 @@ test/built-ins/Array/prototype/Symbol.unscopables/change-array-by-copy.js Fail
 test/built-ins/Array/prototype/Symbol.unscopables/prop-desc.js Fail
 test/built-ins/Array/prototype/Symbol.unscopables/value.js RuntimeError
 test/built-ins/Array/prototype/at/coerced-index-resize.js RuntimeError
-test/built-ins/Array/prototype/at/index-argument-tointeger.js Fail
+test/built-ins/Array/prototype/at/index-argument-tointeger.js Pass
 test/built-ins/Array/prototype/at/index-non-numeric-argument-tointeger-invalid.js Pass
 test/built-ins/Array/prototype/at/index-non-numeric-argument-tointeger.js Pass
 test/built-ins/Array/prototype/at/length.js Pass

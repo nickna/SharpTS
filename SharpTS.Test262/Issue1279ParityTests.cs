@@ -1207,6 +1207,10 @@ public sealed class Issue1279ParityTests
     public void Array_prototype_has_standard_intrinsic_shape(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_at_coerces_its_index_to_integer()
+        => AssertPassInBothModes("built-ins/Array/prototype/at/index-argument-tointeger.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
