@@ -34,7 +34,7 @@ public static class RegExpBuiltIns
                 throw new ThrowException(new SharpTSTypeError(
                     "RegExp.escape called with a non-string argument"));
             return RuntimeValue.FromString(EscapeString(args[0].AsStringUnsafe()));
-        }).WithSpecLength(1);
+        }).WithSpecLength(1).AsNonConstructor();
 
     /// <summary>
     /// ECMA-262 (ES2025) §sec-regexp.escape EncodeForRegExpEscape applied across

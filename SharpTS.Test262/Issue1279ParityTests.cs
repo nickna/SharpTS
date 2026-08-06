@@ -1178,6 +1178,10 @@ public sealed class Issue1279ParityTests
     public void Promise_methods_are_not_constructors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void RegExp_escape_is_not_a_constructor()
+        => AssertPassInBothModes("built-ins/RegExp/escape/not-a-constructor.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

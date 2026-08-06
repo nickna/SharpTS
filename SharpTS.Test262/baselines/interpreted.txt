@@ -8548,7 +8548,7 @@ test/built-ins/RegExp/escape/is-function.js Pass
 test/built-ins/RegExp/escape/length.js Pass
 test/built-ins/RegExp/escape/name.js Pass
 test/built-ins/RegExp/escape/non-string-inputs.js Pass
-test/built-ins/RegExp/escape/not-a-constructor.js Fail
+test/built-ins/RegExp/escape/not-a-constructor.js Pass
 test/built-ins/RegExp/escape/not-escaped-underscore.js Pass
 test/built-ins/RegExp/escape/not-escaped.js Pass
 test/built-ins/RegExp/escape/prop-desc.js Fail
