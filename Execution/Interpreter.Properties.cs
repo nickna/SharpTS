@@ -1143,6 +1143,7 @@ public partial class Interpreter
         or SharpTSObjectUnboundMethod
         or SharpTSArrayUnboundMethod
         or ErrorToStringCallable
+        or BuiltInAsyncMethod
         or BuiltInMethod { IsConstructor: false };
 
     private object? EvaluateGetOnClass(SharpTSClass klass, string memberName)

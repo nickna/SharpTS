@@ -1165,6 +1165,19 @@ public sealed class Issue1279ParityTests
     public void Array_iterators_return_undefined_when_exhausted(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/allSettled/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/any/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/prototype/catch/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/prototype/finally/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/prototype/then/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/race/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/reject/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/resolve/not-a-constructor.js")]
+    public void Promise_methods_are_not_constructors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

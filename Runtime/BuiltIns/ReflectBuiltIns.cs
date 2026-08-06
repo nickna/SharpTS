@@ -441,6 +441,7 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.SharpTSObjectUnboundMethod
             or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod
             or SharpTS.Runtime.Types.ErrorToStringCallable
+            or BuiltInAsyncMethod
             or BoundFunction
             or BuiltInMethod { IsConstructor: false })
             return true;

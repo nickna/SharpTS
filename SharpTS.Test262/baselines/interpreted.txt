@@ -7509,7 +7509,7 @@ test/built-ins/Promise/all/iter-step-err-reject.js Fail
 test/built-ins/Promise/all/length.js Pass
 test/built-ins/Promise/all/name.js Pass
 test/built-ins/Promise/all/new-resolve-function.js Fail
-test/built-ins/Promise/all/not-a-constructor.js Fail
+test/built-ins/Promise/all/not-a-constructor.js Pass
 test/built-ins/Promise/all/prop-desc.js Fail
 test/built-ins/Promise/all/reject-deferred.js RuntimeError
 test/built-ins/Promise/all/reject-ignored-deferred.js Pass
@@ -7613,7 +7613,7 @@ test/built-ins/Promise/allSettled/length.js Pass
 test/built-ins/Promise/allSettled/name.js Pass
 test/built-ins/Promise/allSettled/new-reject-function.js Fail
 test/built-ins/Promise/allSettled/new-resolve-function.js Fail
-test/built-ins/Promise/allSettled/not-a-constructor.js Fail
+test/built-ins/Promise/allSettled/not-a-constructor.js Pass
 test/built-ins/Promise/allSettled/prop-desc.js Fail
 test/built-ins/Promise/allSettled/reject-deferred.js Fail
 test/built-ins/Promise/allSettled/reject-element-function-extensible.js Fail
@@ -7738,7 +7738,7 @@ test/built-ins/Promise/any/iter-step-err-reject.js Fail
 test/built-ins/Promise/any/length.js Pass
 test/built-ins/Promise/any/name.js Pass
 test/built-ins/Promise/any/new-reject-function.js Fail
-test/built-ins/Promise/any/not-a-constructor.js Fail
+test/built-ins/Promise/any/not-a-constructor.js Pass
 test/built-ins/Promise/any/prop-desc.js Fail
 test/built-ins/Promise/any/reject-all-mixed.js Pass
 test/built-ins/Promise/any/reject-deferred.js RuntimeError
@@ -7803,7 +7803,7 @@ test/built-ins/Promise/prototype/catch/S25.4.5.1_A3.1_T2.js Pass
 test/built-ins/Promise/prototype/catch/invokes-then.js RuntimeError
 test/built-ins/Promise/prototype/catch/length.js Pass
 test/built-ins/Promise/prototype/catch/name.js Pass
-test/built-ins/Promise/prototype/catch/not-a-constructor.js Fail
+test/built-ins/Promise/prototype/catch/not-a-constructor.js Pass
 test/built-ins/Promise/prototype/catch/prop-desc.js Fail
 test/built-ins/Promise/prototype/catch/this-value-non-object.js Pass
 test/built-ins/Promise/prototype/catch/this-value-obj-coercible.js RuntimeError
@@ -7816,7 +7816,7 @@ test/built-ins/Promise/prototype/finally/is-a-function.js Pass
 test/built-ins/Promise/prototype/finally/is-a-method.js Fail
 test/built-ins/Promise/prototype/finally/length.js Pass
 test/built-ins/Promise/prototype/finally/name.js Pass
-test/built-ins/Promise/prototype/finally/not-a-constructor.js Fail
+test/built-ins/Promise/prototype/finally/not-a-constructor.js Pass
 test/built-ins/Promise/prototype/finally/prop-desc.js Fail
 test/built-ins/Promise/prototype/finally/rejected-observable-then-calls-PromiseResolve.js RuntimeError
 test/built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js RuntimeError
@@ -7869,7 +7869,7 @@ test/built-ins/Promise/prototype/then/ctor-undef.js Pass
 test/built-ins/Promise/prototype/then/deferred-is-resolved-value.js Fail
 test/built-ins/Promise/prototype/then/length.js Pass
 test/built-ins/Promise/prototype/then/name.js Pass
-test/built-ins/Promise/prototype/then/not-a-constructor.js Fail
+test/built-ins/Promise/prototype/then/not-a-constructor.js Pass
 test/built-ins/Promise/prototype/then/prfm-fulfilled.js Pass
 test/built-ins/Promise/prototype/then/prfm-pending-fulfulled.js Pass
 test/built-ins/Promise/prototype/then/prfm-pending-rejected.js Pass
@@ -7984,7 +7984,7 @@ test/built-ins/Promise/race/iter-step-err-no-close.js Fail
 test/built-ins/Promise/race/iter-step-err-reject.js Fail
 test/built-ins/Promise/race/length.js Pass
 test/built-ins/Promise/race/name.js Pass
-test/built-ins/Promise/race/not-a-constructor.js Fail
+test/built-ins/Promise/race/not-a-constructor.js Pass
 test/built-ins/Promise/race/prop-desc.js Fail
 test/built-ins/Promise/race/reject-deferred.js RuntimeError
 test/built-ins/Promise/race/reject-from-same-thenable.js RuntimeError
@@ -8039,7 +8039,7 @@ test/built-ins/Promise/reject/ctx-non-ctor.js Fail
 test/built-ins/Promise/reject/ctx-non-object.js Fail
 test/built-ins/Promise/reject/length.js Pass
 test/built-ins/Promise/reject/name.js Pass
-test/built-ins/Promise/reject/not-a-constructor.js Fail
+test/built-ins/Promise/reject/not-a-constructor.js Pass
 test/built-ins/Promise/reject/prop-desc.js Fail
 test/built-ins/Promise/resolve-function-extensible.js Pass
 test/built-ins/Promise/resolve-function-length.js Fail
@@ -8081,7 +8081,7 @@ test/built-ins/Promise/resolve/ctx-non-ctor.js Fail
 test/built-ins/Promise/resolve/ctx-non-object.js Fail
 test/built-ins/Promise/resolve/length.js Fail
 test/built-ins/Promise/resolve/name.js Pass
-test/built-ins/Promise/resolve/not-a-constructor.js Fail
+test/built-ins/Promise/resolve/not-a-constructor.js Pass
 test/built-ins/Promise/resolve/prop-desc.js Fail
 test/built-ins/Promise/resolve/resolve-from-promise-capability.js Fail
 test/built-ins/Promise/resolve/resolve-non-obj.js Pass
