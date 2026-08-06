@@ -11,7 +11,7 @@ compiler bundled in the selected package version. It does not require a global
 Create a new project file:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -79,7 +79,7 @@ use `sharpts -p` or `sharpts --build` to type-check every `files`/`include` root
 ### Minimal Project
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -90,7 +90,7 @@ use `sharpts -p` or `sharpts --build` to type-check every `files`/`include` root
 ### With Decorators
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/app.ts</SharpTSEntryPoint>
@@ -113,7 +113,7 @@ myproject/
 
 `myproject.csproj`:
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <!-- Entry point read from tsconfig.json files array -->
@@ -141,7 +141,7 @@ You can pin the SDK version in `global.json`:
 ```json
 {
   "msbuild-sdks": {
-    "SharpTS.Sdk": "1.0.0"
+    "SharpTS.Sdk": "1.0.7"
   }
 }
 ```

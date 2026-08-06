@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "documentedSdkVersion": "1.0.7",
+  "documentationFiles": [
+    "README.md",
+    "SharpTS.Sdk/readme.md",
+    "docs/msbuild-sdk.md",
+    "docs/dotnet-integration.md"
+  ],
+  "packages": [
+    { "id": "SharpTS.LanguageServer" },
+    { "id": "SharpTS.Hosting" },
+    { "id": "SharpTS.Sdk" },
+    { "id": "SharpTS" }
+  ]
+}

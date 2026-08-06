@@ -12,7 +12,7 @@ global `sharpts` tool is neither consulted nor required.
 Create a project file:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -36,7 +36,7 @@ dotnet bin/Debug/net10.0/MyProject.dll
 The SDK is distributed as a NuGet package. Reference it in your project file:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
 ```
 
 ### Version Pinning with global.json
@@ -46,7 +46,7 @@ Pin the SDK version across your solution:
 ```json
 {
   "msbuild-sdks": {
-    "SharpTS.Sdk": "1.0.0"
+    "SharpTS.Sdk": "1.0.7"
   }
 }
 ```
@@ -64,7 +64,7 @@ Then use the SDK without a version number:
 ### Minimal Configuration
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -75,7 +75,7 @@ Then use the SDK without a version number:
 ### Full Configuration
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
 
@@ -201,7 +201,7 @@ This allows you to use tsconfig.json for IDE compatibility while overriding spec
 With this tsconfig.json, you can simplify your project file:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <!-- Entry point and options read from tsconfig.json -->
@@ -250,7 +250,7 @@ MyProject/
 ```
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -296,7 +296,7 @@ MyProject/
 ```
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <!-- Entry point read from tsconfig.json -->
@@ -450,7 +450,7 @@ If you're using manual pre-build targets, migrate to the SDK:
 ### After (SDK)
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -472,7 +472,7 @@ If you're using manual pre-build targets, migrate to the SDK:
 
 ### SDK Not Found
 
-**Error:** `The SDK 'SharpTS.Sdk/1.0.0' could not be resolved`
+**Error:** `The SDK 'SharpTS.Sdk/1.0.7' could not be resolved`
 
 - Ensure the NuGet package is available (nuget.org or private feed)
 - Check your NuGet.config includes the correct package source
@@ -503,7 +503,7 @@ If you're using manual pre-build targets, migrate to the SDK:
 ### Console Application
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -527,7 +527,7 @@ console.log("Fibonacci(10) =", fibonacci(10));
 ### Library with Decorators
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/index.ts</SharpTSEntryPoint>
@@ -541,7 +541,7 @@ console.log("Fibonacci(10) =", fibonacci(10));
 ### With Custom Namespace
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/library.ts</SharpTSEntryPoint>

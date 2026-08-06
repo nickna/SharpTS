@@ -101,7 +101,7 @@ dotnet tool install -g SharpTS
 **Or use TypeScript in a .NET project:**
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.8">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>

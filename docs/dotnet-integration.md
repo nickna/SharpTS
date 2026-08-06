@@ -250,7 +250,7 @@ Generated packages include:
 The easiest way to integrate SharpTS into your build is using the MSBuild SDK:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.0">
+<Project Sdk="SharpTS.Sdk/1.0.7">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
