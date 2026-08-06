@@ -1182,6 +1182,15 @@ public sealed class Issue1279ParityTests
     public void RegExp_escape_is_not_a_constructor()
         => AssertPassInBothModes("built-ins/RegExp/escape/not-a-constructor.js");
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/not-a-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/not-a-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/not-a-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/not-a-constructor.js")]
+    public void RegExp_symbol_methods_are_not_constructors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

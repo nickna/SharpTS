@@ -272,19 +272,19 @@ public static class RegExpBuiltIns
     // arity check only governs argument-count rejection, not the visible
     // .length value used by isConstructor / verifyProperty introspection.
     private static readonly BuiltInMethod _symbolMatch =
-        BuiltInMethod.CreateV2("[Symbol.match]", 0, int.MaxValue, SymbolMatchImpl).WithSpecLength(1);
+        BuiltInMethod.CreateV2("[Symbol.match]", 0, int.MaxValue, SymbolMatchImpl).WithSpecLength(1).AsNonConstructor();
 
     private static readonly BuiltInMethod _symbolMatchAll =
-        BuiltInMethod.CreateV2("[Symbol.matchAll]", 0, int.MaxValue, SymbolMatchAllImpl).WithSpecLength(1);
+        BuiltInMethod.CreateV2("[Symbol.matchAll]", 0, int.MaxValue, SymbolMatchAllImpl).WithSpecLength(1).AsNonConstructor();
 
     private static readonly BuiltInMethod _symbolReplace =
-        BuiltInMethod.CreateV2("[Symbol.replace]", 0, int.MaxValue, SymbolReplaceImpl).WithSpecLength(2);
+        BuiltInMethod.CreateV2("[Symbol.replace]", 0, int.MaxValue, SymbolReplaceImpl).WithSpecLength(2).AsNonConstructor();
 
     private static readonly BuiltInMethod _symbolSearch =
-        BuiltInMethod.CreateV2("[Symbol.search]", 0, int.MaxValue, SymbolSearchImpl).WithSpecLength(1);
+        BuiltInMethod.CreateV2("[Symbol.search]", 0, int.MaxValue, SymbolSearchImpl).WithSpecLength(1).AsNonConstructor();
 
     private static readonly BuiltInMethod _symbolSplit =
-        BuiltInMethod.CreateV2("[Symbol.split]", 0, int.MaxValue, SymbolSplitImpl).WithSpecLength(2);
+        BuiltInMethod.CreateV2("[Symbol.split]", 0, int.MaxValue, SymbolSplitImpl).WithSpecLength(2).AsNonConstructor();
 
     /// <summary>
     /// Builds a fresh per-realm RegExp.prototype object. Each Interpreter

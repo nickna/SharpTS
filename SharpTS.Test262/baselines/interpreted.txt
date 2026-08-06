@@ -9295,7 +9295,7 @@ test/built-ins/RegExp/prototype/Symbol.match/get-global-err.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/get-unicode-error.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/name.js Pass
-test/built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js Fail
+test/built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/this-val-non-obj.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/this-val-non-regexp.js Pass
@@ -9310,7 +9310,7 @@ test/built-ins/RegExp/prototype/Symbol.matchAll/isregexp-called-once.js RuntimeE
 test/built-ins/RegExp/prototype/Symbol.matchAll/isregexp-this-throws.js Fail
 test/built-ins/RegExp/prototype/Symbol.matchAll/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.matchAll/name.js Pass
-test/built-ins/RegExp/prototype/Symbol.matchAll/not-a-constructor.js Fail
+test/built-ins/RegExp/prototype/Symbol.matchAll/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.matchAll/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.matchAll/regexpcreate-this-throws.js Fail
 test/built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-get-constructor-throws.js Fail
@@ -9363,7 +9363,7 @@ test/built-ins/RegExp/prototype/Symbol.replace/match-failure.js Pass
 test/built-ins/RegExp/prototype/Symbol.replace/name.js Pass
 test/built-ins/RegExp/prototype/Symbol.replace/named-groups-fn.js Skipped:skip-feature:regexp-named-groups
 test/built-ins/RegExp/prototype/Symbol.replace/named-groups.js Skipped:skip-feature:regexp-named-groups
-test/built-ins/RegExp/prototype/Symbol.replace/not-a-constructor.js Fail
+test/built-ins/RegExp/prototype/Symbol.replace/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.replace/poisoned-stdlib.js Skipped:skip-feature:regexp-named-groups
 test/built-ins/RegExp/prototype/Symbol.replace/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.replace/replace-with-trailing.js Pass
@@ -9412,7 +9412,7 @@ test/built-ins/RegExp/prototype/Symbol.search/lastindex-no-restore.js Pass
 test/built-ins/RegExp/prototype/Symbol.search/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.search/match-err.js Pass
 test/built-ins/RegExp/prototype/Symbol.search/name.js Pass
-test/built-ins/RegExp/prototype/Symbol.search/not-a-constructor.js Fail
+test/built-ins/RegExp/prototype/Symbol.search/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.search/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.search/set-lastindex-init-err.js Fail
 test/built-ins/RegExp/prototype/Symbol.search/set-lastindex-init-samevalue.js Pass
@@ -9436,7 +9436,7 @@ test/built-ins/RegExp/prototype/Symbol.split/last-index-exceeds-str-size.js Fail
 test/built-ins/RegExp/prototype/Symbol.split/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/limit-0-bail.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/name.js Pass
-test/built-ins/RegExp/prototype/Symbol.split/not-a-constructor.js Fail
+test/built-ins/RegExp/prototype/Symbol.split/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/species-ctor-ctor-get-err.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/species-ctor-ctor-non-obj.js RuntimeError
