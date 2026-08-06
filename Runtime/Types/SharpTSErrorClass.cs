@@ -50,6 +50,17 @@ public class SharpTSErrorClass : SharpTSClass
             Configurable = true,
             HasConfigurable = true,
         });
+        Prototype.DefineExtraProperty("message", new SharpTSPropertyDescriptor
+        {
+            Value = "",
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
     }
 
     /// <summary>
