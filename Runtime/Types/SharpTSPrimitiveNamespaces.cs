@@ -577,6 +577,8 @@ public class SharpTSBooleanNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public bool DeleteProperty(string name) => name != "prototype" && _extras.DeleteProperty(name);
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public bool HasOwnProperty(string name)
+        => name is "name" or "length" or "prototype" || HasExtra(name);
 
     public int Arity() => 1;
 

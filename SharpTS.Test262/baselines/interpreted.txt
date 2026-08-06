@@ -3090,7 +3090,7 @@ test/built-ins/Boolean/S15.6.2.1_A1.js Pass
 test/built-ins/Boolean/S15.6.2.1_A2.js Fail
 test/built-ins/Boolean/S15.6.2.1_A3.js Pass
 test/built-ins/Boolean/S15.6.2.1_A4.js Fail
-test/built-ins/Boolean/S15.6.3_A1.js Fail
+test/built-ins/Boolean/S15.6.3_A1.js Pass
 test/built-ins/Boolean/S15.6.3_A2.js Pass
 test/built-ins/Boolean/S15.6.3_A3.js Pass
 test/built-ins/Boolean/S9.2_A1_T1.js Pass
