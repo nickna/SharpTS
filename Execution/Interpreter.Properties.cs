@@ -943,7 +943,7 @@ public partial class Interpreter
 
         // RegExp instance: user-installed accessor (Object.defineProperty)
         // wins over the built-in slot. ECMA-262 §22.2 declares
-        // flags/global/unicode/lastIndex configurable, so a throwing getter
+        // flags/global/unicode configurable, so a throwing getter
         // must fire and propagate. Has to live above the category-handler
         // dispatch because the registered handler's `(obj, name) => member`
         // shape can't reach the interpreter to invoke the user callable.
@@ -1928,8 +1928,8 @@ public partial class Interpreter
 
             case TypeCategory.RegExp when obj is SharpTSRegExp regex:
                 // User-installed accessor (Object.defineProperty path) wins
-                // over the built-in slot — ECMA-262 declares lastIndex et al
-                // configurable, so a throwing setter MUST fire and propagate.
+                // over configurable built-in slots, so a throwing setter MUST
+                // fire and propagate.
                 if (regex.TryGetAccessor(memberName, out _, out var userSetter)
                     && userSetter != null)
                 {
@@ -1941,12 +1941,13 @@ public partial class Interpreter
                     // Route through RegExpBuiltIns.SetMember so the setter does
                     // ECMA ToLength coercion (handles `undefined`, string, bool,
                     // boxed objects) instead of a hard (double) cast that throws.
-                    Runtime.BuiltIns.RegExpBuiltIns.SetMember(regex, memberName, value);
+                    Runtime.BuiltIns.RegExpBuiltIns.SetMember(
+                        regex, memberName, value, strictMode);
                     return value;
                 }
                 // JS: RegExp instances are objects; allow arbitrary property assignment
                 // (minimatch stores `_src`/`_glob` this way).
-                regex.SetProperty(memberName, value);
+                regex.SetPropertyStrict(memberName, value, strictMode);
                 return value;
 
             case TypeCategory.Error when obj is SharpTSError error:

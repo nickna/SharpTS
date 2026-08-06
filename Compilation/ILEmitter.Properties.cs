@@ -670,36 +670,6 @@ public partial class ILEmitter
         if (TryEmitDirectSetterCall(s.Object, objType, s.Name.Lexeme, s.Value))
             return;
 
-        // Special case: RegExp.lastIndex setter. RegExpSetLastIndex's signature
-        // is `(object regex, double value)` — when s.Value is a literal/typed
-        // number `_stackType == Double` and we must skip `Convert.ToDouble(object)`
-        // (which fails verification because the stack already has an unboxed
-        // Double). Otherwise (any/unknown) we box+unbox-through-Convert so
-        // strings like `r.lastIndex = "1.9"` coerce numerically.
-        if (objType is TypeInfo.RegExp && s.Name.Lexeme == "lastIndex")
-        {
-            EmitExpression(s.Object);
-            EmitBoxIfNeeded(s.Object);
-            EmitExpression(s.Value);
-            if (_stackType != StackType.Double)
-            {
-                EmitBoxIfNeeded(s.Value);
-                EmitUnboxToDouble();
-            }
-            // Dup value for expression result
-            IL.Emit(OpCodes.Dup);
-            var valueTemp = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Stloc, valueTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpSetLastIndex);
-            // Put value back on stack as boxed result. EmitBoxDouble boxes AND resets
-            // _stackType to Unknown (#886): a raw IL.Emit(Box) left _stackType == Double
-            // stale over a boxed value, so a downstream consumer re-boxed it and the
-            // emitted IL failed verification (StackUnexpected: ref 'float64' vs Double).
-            IL.Emit(OpCodes.Ldloc, valueTemp);
-            EmitBoxDouble();
-            return;
-        }
-
         // Type-first dispatch: Use TypeEmitterRegistry for property setters
         if (objType != null && _ctx.TypeEmitterRegistry != null)
         {

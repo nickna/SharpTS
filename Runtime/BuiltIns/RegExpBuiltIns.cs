@@ -171,7 +171,7 @@ public static class RegExpBuiltIns
     public static object? GetMember(SharpTSRegExp receiver, string name, Interpreter? interpreter = null)
     {
         // User-installed accessor wins over the built-in slot — ECMA-262
-        // declares flags/global/unicode/lastIndex as configurable, so a
+        // declares flags/global/unicode as configurable, so a
         // throwing getter installed via defineProperty MUST fire and
         // propagate. Without an interpreter we can't invoke it; legacy
         // call sites without the parameter fall through to the built-in.
@@ -223,25 +223,14 @@ public static class RegExpBuiltIns
             "unicode" => receiver.Unicode,
             "unicodeSets" => receiver.Flags.Contains('v'),
             "hasIndices" => receiver.Flags.Contains('d'),
-            "lastIndex" => (double)receiver.LastIndex,
+            "lastIndex" => receiver.TryGetProperty("lastIndex", out var lastIndex)
+                ? lastIndex
+                : 0d,
 
             // ========== Methods ==========
-            "test" => BuiltInMethod.CreateV2("test", 1, static (_, recv, args) =>
-            {
-                var regex = (SharpTSRegExp)recv.ToObject()!;
-                var str = args[0].ToObject()?.ToString() ?? "";
-                return RuntimeValue.FromBoolean(regex.Test(str));
-            }),
-
-            "exec" => BuiltInMethod.CreateV2("exec", 1, static (_, recv, args) =>
-            {
-                var regex = (SharpTSRegExp)recv.ToObject()!;
-                var str = args[0].ToObject()?.ToString() ?? "";
-                return RuntimeValue.FromObject(regex.Exec(str));
-            }),
-
-            "toString" => BuiltInMethod.CreateV2("toString", 0, static (_, recv, _) =>
-                RuntimeValue.FromString(((SharpTSRegExp)recv.ToObject()!).ToString())),
+            "test" => _protoTest,
+            "exec" => _protoExec,
+            "toString" => _protoToString,
 
             _ => null
         };
@@ -253,43 +242,18 @@ public static class RegExpBuiltIns
     /// Only lastIndex is writable.
     /// </summary>
     /// <returns>True if the property was set, false if the property is not writable.</returns>
-    public static bool SetMember(SharpTSRegExp receiver, string name, object? value)
+    public static bool SetMember(
+        SharpTSRegExp receiver, string name, object? value, bool strictMode = false)
     {
         if (name == "lastIndex")
         {
-            // ECMA-262 ToLength: assignments like `re.lastIndex = undefined`,
-            // `= "1.9"`, `= {valueOf: ...}` are legal — they coerce via
-            // ToNumber → ToInteger → bounded to [0, 2^53-1]. A hard
-            // (int)(double)value cast throws InvalidCastException on the
-            // primitives that aren't already double, so route via JS coercion.
-            receiver.LastIndex = ToLengthAsInt32(value);
+            // lastIndex is an ordinary data property: assignment stores the
+            // value as-is. RegExpBuiltinExec performs ToLength when it reads
+            // the property, so object valueOf/toString hooks run per exec.
+            receiver.SetPropertyStrict(name, value, strictMode);
             return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// ECMA-262 §7.1.20 ToLength via §7.1.5 ToInteger via §7.1.4 ToNumber,
-    /// clamped to int32 (lastIndex storage).
-    /// </summary>
-    private static int ToLengthAsInt32(object? value)
-    {
-        double d = value switch
-        {
-            null => 0,
-            SharpTSUndefined => double.NaN,
-            double dv => dv,
-            int iv => iv,
-            long lv => lv,
-            bool bv => bv ? 1 : 0,
-            string sv => double.TryParse(sv, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN,
-            _ => double.NaN
-        };
-        if (double.IsNaN(d)) return 0;
-        if (d <= 0) return 0;
-        if (d > int.MaxValue) return int.MaxValue;
-        return (int)d;
     }
 
     // ECMA-262 §22.2.5 well-known-symbol-keyed methods on RegExp.prototype.
@@ -391,24 +355,30 @@ public static class RegExpBuiltIns
     }
 
     private static readonly BuiltInMethod _protoExec =
-        BuiltInMethod.CreateV2("exec", 1, static (_, recv, args) =>
+        BuiltInMethod.CreateV2("exec", 0, int.MaxValue, static (interp, recv, args) =>
         {
             if (recv.ToObject() is not SharpTSRegExp regex)
                 throw new ThrowException(new SharpTSTypeError(
                     "RegExp.prototype.exec called on non-RegExp"));
-            return RuntimeValue.FromObject(
-                regex.Exec(args.Length > 0 ? args[0].ToObject()?.ToString() ?? "undefined" : "undefined"));
-        }).WithSpecLength(1);
+            var argument = args.Length > 0
+                ? args[0].ToObject()
+                : SharpTSUndefined.Instance;
+            string input = interp.ToStringForBuiltInArgument(argument);
+            return RuntimeValue.FromObject(RegExpBuiltinExec(interp, regex, input));
+        }).WithSpecLength(1).AsNonConstructor();
 
     private static readonly BuiltInMethod _protoTest =
-        BuiltInMethod.CreateV2("test", 1, static (_, recv, args) =>
+        BuiltInMethod.CreateV2("test", 0, int.MaxValue, static (interp, recv, args) =>
         {
             if (recv.ToObject() is not SharpTSRegExp regex)
                 throw new ThrowException(new SharpTSTypeError(
                     "RegExp.prototype.test called on non-RegExp"));
-            return RuntimeValue.FromBoolean(
-                regex.Test(args.Length > 0 ? args[0].ToObject()?.ToString() ?? "undefined" : "undefined"));
-        }).WithSpecLength(1);
+            var argument = args.Length > 0
+                ? args[0].ToObject()
+                : SharpTSUndefined.Instance;
+            string input = interp.ToStringForBuiltInArgument(argument);
+            return RuntimeValue.FromBoolean(RegExpExec(interp, regex, input) != null);
+        }).WithSpecLength(1).AsNonConstructor();
 
     private static readonly BuiltInMethod _protoToString =
         BuiltInMethod.CreateV2("toString", 0, static (_, recv, _) =>
@@ -417,7 +387,7 @@ public static class RegExpBuiltIns
                 throw new ThrowException(new SharpTSTypeError(
                     "RegExp.prototype.toString called on non-RegExp"));
             return RuntimeValue.FromString(regex.ToString());
-        }).WithSpecLength(0);
+        }).WithSpecLength(0).AsNonConstructor();
 
     // ECMA-262 §22.2.5.3 `get RegExp.prototype.flags` — a GENERIC accessor: it
     // requires only that `this` be an Object (not necessarily a RegExp) and
@@ -536,11 +506,72 @@ public static class RegExpBuiltIns
         // when receiver is an actual RegExp (otherwise spec throws).
         if (rx is SharpTSRegExp regex)
         {
-            var raw = regex.Exec(s);
-            return raw;
+            return RegExpBuiltinExec(interp, regex, s);
         }
         throw new ThrowException(new SharpTSTypeError(
             "RegExp.prototype method called on non-RegExp without a callable exec"));
+    }
+
+    /// <summary>
+    /// ECMA-262 §22.2.5.2.2 RegExpBuiltinExec for interpreter RegExp objects.
+    /// The observable lastIndex operations deliberately use the descriptor
+    /// store: its raw value is ToLength-coerced once on every execution, and
+    /// global/sticky write-back uses Throw=true semantics.
+    /// </summary>
+    private static SharpTSArray? RegExpBuiltinExec(
+        Interpreter interp, SharpTSRegExp regex, string input)
+    {
+        object? rawLastIndex = interp.GetPropertyValue(regex, "lastIndex");
+        int lastIndex = ToLengthAsInt(interp, rawLastIndex);
+        bool useLastIndex = regex.Global || regex.Sticky;
+        int startIndex = useLastIndex ? lastIndex : 0;
+
+        if (startIndex > input.Length)
+        {
+            if (useLastIndex) SetLastIndexOrThrow(interp, regex, 0);
+            return null;
+        }
+
+        var match = regex.InternalRegex.Match(input, startIndex);
+        if (regex.Sticky && match.Success && match.Index != startIndex)
+            match = System.Text.RegularExpressions.Match.Empty;
+
+        if (!match.Success)
+        {
+            if (useLastIndex) SetLastIndexOrThrow(interp, regex, 0);
+            return null;
+        }
+
+        if (useLastIndex)
+            SetLastIndexOrThrow(interp, regex, match.Index + match.Length);
+
+        return regex.CreateExecResult(match, input);
+    }
+
+    private static int ToLengthAsInt(Interpreter interp, object? value)
+    {
+        double number = interp.ToNumberWithPrimitive(value);
+        if (double.IsNaN(number) || number <= 0) return 0;
+        if (double.IsPositiveInfinity(number) || number >= int.MaxValue)
+            return int.MaxValue;
+        return (int)Math.Truncate(number);
+    }
+
+    private static void SetLastIndexOrThrow(
+        Interpreter interp, SharpTSRegExp regex, int value)
+    {
+        var descriptor = regex.GetOwnPropertyDescriptor("lastIndex");
+        if (descriptor is { HasGet: false, HasSet: false, Writable: false })
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot assign to read only property 'lastIndex'"));
+        }
+        if (descriptor is { HasSet: true, Set: null })
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot set property 'lastIndex' which has only a getter"));
+        }
+        interp.SetProperty(regex, "lastIndex", (double)value);
     }
 
     /// <summary>
@@ -762,7 +793,7 @@ public static class RegExpBuiltIns
 
         // Save lastIndex, set to 0, run RegExpExec, restore lastIndex.
         var previousLastIndex = interp.GetProperty(recv, "lastIndex");
-        if (!IsZero(previousLastIndex))
+        if (!SameValue(previousLastIndex, 0.0))
             interp.SetProperty(recv, "lastIndex", 0.0);
 
         var result = RegExpExec(interp, recv, s);
@@ -1145,20 +1176,11 @@ public static class RegExpBuiltIns
         if (a is double da && b is double db)
         {
             if (double.IsNaN(da) && double.IsNaN(db)) return true;
-            return da.Equals(db); // distinguishes +0 / -0
+            if (da == 0 && db == 0)
+                return BitConverter.DoubleToInt64Bits(da)
+                    == BitConverter.DoubleToInt64Bits(db);
+            return da.Equals(db);
         }
         return Equals(a, b);
     }
-
-    /// <summary>
-    /// True iff <paramref name="value"/> is numerically zero (covers +0, -0,
-    /// and the int/long forms used by lastIndex storage).
-    /// </summary>
-    private static bool IsZero(object? value) => value switch
-    {
-        double d => d == 0,
-        int i => i == 0,
-        long l => l == 0,
-        _ => false,
-    };
 }

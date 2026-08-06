@@ -113,8 +113,8 @@ public partial class ILEmitter
             case "lastIndex":
                 EmitExpression(g.Object);
                 EmitBoxIfNeeded(g.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Ldstr, propName);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
                 SetStackUnknown();
                 return true;
             default:

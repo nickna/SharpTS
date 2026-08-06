@@ -60,8 +60,8 @@ public class SharpTSRegExp : ITypeCategorized
     // internal: emitted $RegExp has its own storage; runtime↔emitted parity
     // tests track public methods only (see RuntimeTypeSyncTests).
     private readonly SharpTSObject _properties = new([]);
-    // ECMA-262 §22.2 defines `flags`/`global`/`unicode`/`lastIndex` as
-    // configurable getters on RegExp.prototype — user code can override them
+    // ECMA-262 §22.2 defines `flags`/`global`/`unicode` as configurable
+    // getters on RegExp.prototype — user code can override them
     // via `Object.defineProperty(rx, "flags", {get: ...})`. Without per-
     // instance accessor storage the override is silently ignored: tests that
     // install throwing getters (test262 .../coerce-global.js,
@@ -105,6 +105,9 @@ public class SharpTSRegExp : ITypeCategorized
     }
 
     internal void SetProperty(string name, object? value) => _properties.SetProperty(name, value);
+
+    internal void SetPropertyStrict(string name, object? value, bool strictMode)
+        => _properties.SetPropertyStrict(name, value, strictMode);
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _properties.DefineProperty(name, descriptor);
@@ -162,7 +165,29 @@ public class SharpTSRegExp : ITypeCategorized
     /// <summary>
     /// The index at which to start the next match (used with global flag).
     /// </summary>
-    public int LastIndex { get; set; }
+    public int LastIndex
+    {
+        get
+        {
+            if (!TryGetProperty("lastIndex", out var value)) return 0;
+            double number = value switch
+            {
+                double d => d,
+                int i => i,
+                long l => l,
+                bool b => b ? 1 : 0,
+                string s when double.TryParse(s,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var parsed) => parsed,
+                _ => 0,
+            };
+            if (double.IsNaN(number) || number <= 0) return 0;
+            if (number >= int.MaxValue) return int.MaxValue;
+            return (int)Math.Truncate(number);
+        }
+        set => _properties.SetProperty("lastIndex", (double)value);
+    }
 
     /// <summary>
     /// The pattern string of the regular expression.
@@ -225,7 +250,21 @@ public class SharpTSRegExp : ITypeCategorized
         _global = template.Global;
         _ignoreCase = template.IgnoreCase;
         _multiline = template.Multiline;
-        LastIndex = 0;
+        // ECMA-262 §22.2.4.2: lastIndex is an own, writable,
+        // non-enumerable, non-configurable data property. Keeping its raw
+        // value in the descriptor store preserves object identity until exec
+        // performs ToLength, and lets Object.defineProperty make it read-only.
+        _properties.DefineProperty("lastIndex", new SharpTSPropertyDescriptor
+        {
+            Value = 0d,
+            Writable = true,
+            Enumerable = false,
+            Configurable = false,
+            HasValue = true,
+            HasWritable = true,
+            HasEnumerable = true,
+            HasConfigurable = true,
+        });
     }
 
     /// <summary>
@@ -636,7 +675,9 @@ public class SharpTSRegExp : ITypeCategorized
                 continue;
 
             groups ??= new Dictionary<string, object?>();
-            groups[group.Name] = group.Success ? group.Value : null;
+            groups[group.Name] = group.Success
+                ? group.Value
+                : SharpTSUndefined.Instance;
         }
         return groups != null ? new SharpTSObject(groups) : null;
     }
@@ -734,14 +775,26 @@ public class SharpTSRegExp : ITypeCategorized
             LastIndex = match.Index + match.Length;
         }
 
-        // ECMA-262 §22.2.5.6.6 step 27: build an Array exotic with element 0 =
+        return CreateExecResult(match, input);
+    }
+
+    /// <summary>
+    /// Materializes a successful engine match as the RegExp exec result array.
+    /// Kept separate from matching so spec-facing callers can perform
+    /// lastIndex Get/ToLength/Set through the interpreter.
+    /// </summary>
+    internal SharpTSArray CreateExecResult(Match match, string input)
+    {
+        // ECMA-262 §22.2.5.2.2: build an Array exotic with element 0 =
         // matched substring, elements 1..N = capture groups, plus index/input/
-        // groups as own named properties (CreateDataProperty steps 24-26, 33).
+        // groups as own named properties.
         var elements = new List<object?>(match.Groups.Count) { match.Value };
         for (int i = 1; i < match.Groups.Count; i++)
         {
             var group = match.Groups[i];
-            elements.Add(group.Success ? group.Value : null);
+            elements.Add(group.Success
+                ? group.Value
+                : SharpTSUndefined.Instance);
         }
 
         var result = new SharpTSArray(elements);

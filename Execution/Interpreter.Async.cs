@@ -449,6 +449,7 @@ public partial class Interpreter
             SharpTSInstance inst => inst.GetFieldNames(),
             // for...in skips holes per ECMA-262.
             SharpTSArray arr => Enumerable.Range(0, arr.Length).Where(arr.HasIndex).Select(i => i.ToString()),
+            SharpTSRegExp regex => regex.OwnEnumerableKeys(),
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,

@@ -20,8 +20,8 @@ public partial class RuntimeEmitter
     private FieldBuilder _tsRegExpMultilineField = null!;
     private FieldBuilder _tsRegExpStickyField = null!;
     private FieldBuilder _tsRegExpLastIndexField = null!;
-    // Holds the raw value last assigned to `lastIndex` when it is NOT a plain
-    // number (e.g. `r.lastIndex = {valueOf(){…}}`), so the object identity is
+    // Holds the raw value last assigned to `lastIndex` when it is not a plain
+    // number (e.g. a string or `{valueOf(){…}}`), so its value/identity is
     // preserved per ECMA-262 (lastIndex is an ordinary writable data property;
     // ToLength runs at RegExpBuiltinExec read time, not at assignment). null for
     // the common numeric case, which stays on the typed `_lastIndex` fast path.

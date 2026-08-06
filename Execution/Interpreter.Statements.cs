@@ -760,6 +760,7 @@ public partial class Interpreter
             SharpTSMath math => math.OwnEnumerableKeys(),
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
+            SharpTSRegExp regex => regex.OwnEnumerableKeys(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
             // Every built-in prototype singleton at once — Object/Array/String/Number/
             // Boolean/Function.prototype. Naming them individually is how Object.prototype

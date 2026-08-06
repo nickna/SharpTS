@@ -557,13 +557,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, cjsModuleSetLabel);
         }
 
-        // $RegExp — `r.lastIndex = value` must coerce `value` via JS
-        // ToLength (string "1.9" → 1, NaN → 0, etc.) and write the internal
-        // int32 slot. Without the special case the assignment falls through
-        // to SetFieldsProperty which stores the boxed value on a generic
-        // PDS bag — subsequent built-in matchers ignore it and use the
-        // stale internal slot. Test262 builtin-coerce-lastindex.js etc.
-        // require coerce+round-trip.
+        // $RegExp — `r.lastIndex = value` stores the raw JS value. ToLength is
+        // deferred until RegExpBuiltinExec observes it.
         var tsRegExpSetLabel = il.DefineLabel();
         if (_features.UsesRegExp)
         {
@@ -637,8 +632,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // $RegExp handler: route `r.lastIndex = value` to the typed setter
-        // with JS ToLength coercion. Other property writes fall through to
+        // $RegExp handler: store `r.lastIndex = value` without coercion.
+        // Other property writes fall through to
         // SetFieldsProperty so user data-property assignments
         // (`Object.defineProperty(r, 'foo', {writable:true}); r.foo = ...`)
         // still hit the user-property bag.
@@ -714,10 +709,10 @@ public partial class RuntimeEmitter
 
             // ECMA-262: lastIndex is an ordinary writable data property — store
             // the assigned value as-is (ToLength is deferred to RegExpBuiltinExec).
-            // Only an OBJECT (whose ToLength would run user `valueOf`) needs the
-            // boxed slot to defer that call + preserve identity; primitives
-            // (null/undefined/number/string/bool) ToLength with no user code, so
-            // they fold straight into the typed int slot (and clear the box).
+            // Only a plain number can use the typed slot without changing an
+            // observable read. Strings, booleans, undefined, and objects stay
+            // boxed so `r.lastIndex` returns the assigned value until exec
+            // performs ToLength and global/sticky write-back stores a number.
             // NB: JS `null` ToLengths to 0 — it must take the primitive path, not
             // the box (a boxed C# null is indistinguishable from "no box").
             var numericSetLabel = il.DefineLabel();
@@ -726,16 +721,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Isinst, _types.Double);
             il.Emit(OpCodes.Brtrue, numericSetLabel);
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Isinst, _types.String);
-            il.Emit(OpCodes.Brtrue, numericSetLabel);
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Isinst, _types.Boolean);
-            il.Emit(OpCodes.Brtrue, numericSetLabel);
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-            il.Emit(OpCodes.Brtrue, numericSetLabel);
-            // object → rx._lastIndexBoxed = value (defer ToLength/valueOf to exec)
+            // non-number → rx._lastIndexBoxed = value (defer ToLength/valueOf to exec)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.TSRegExpType);
             il.Emit(OpCodes.Ldarg_2);
@@ -1083,8 +1069,8 @@ public partial class RuntimeEmitter
     /// stack to int32 via the JS ToLength algorithm: null/undefined/NaN → 0,
     /// false → 0, true → 1, double via truncate (clamped to int32), int via
     /// pass-through, string via TryParse → double-path (or 0 on parse
-    /// failure), other types → 0. Used by SetProperty's $RegExp arm so
-    /// `r.lastIndex = '1.9'` stores 1.
+    /// failure), other types → 0. Used by RegExpBuiltinExec after a raw
+    /// <c>lastIndex</c> value has been observed.
     /// </summary>
     private void EmitToLengthBoxed(ILGenerator il, EmittedRuntime runtime)
     {

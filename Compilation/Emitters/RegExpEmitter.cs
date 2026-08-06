@@ -68,7 +68,9 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
             "dotAll" => ctx.Runtime!.RegExpGetDotAll,
             "hasIndices" => ctx.Runtime!.RegExpGetHasIndices,
             "unicodeSets" => ctx.Runtime!.RegExpGetUnicodeSets,
-            "lastIndex" => ctx.Runtime!.RegExpGetLastIndex,
+            // lastIndex may hold any assigned JS value until RegExpBuiltinExec
+            // performs ToLength, so it must use the object-valued property path.
+            "lastIndex" => ctx.Runtime!.GetProperty,
             _ => null
         };
         if (getter is null)
@@ -76,6 +78,8 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
 
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
+        if (propertyName == "lastIndex")
+            il.Emit(OpCodes.Ldstr, propertyName);
         il.Emit(OpCodes.Call, getter);
 
         switch (propertyName)
@@ -84,8 +88,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
             case "flags":
                 break; // already a string reference
             case "lastIndex":
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                break;
+                break; // GetProperty already returns a boxed JS value.
             default:
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 break;
@@ -95,11 +98,10 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
 
     /// <summary>
     /// Attempts to emit IL for a property set on a RegExp receiver.
-    /// Only lastIndex is mutable, but it's handled inline in ILEmitter.Properties.cs.
+    /// RegExp writes use the generic descriptor-aware property path.
     /// </summary>
     public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
     {
-        // RegExp.lastIndex is handled specially in ILEmitter.Properties.cs
         return false;
     }
 

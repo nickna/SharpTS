@@ -1793,20 +1793,22 @@ public class ILVerificationTests
     }
 
     [Fact]
-    public void RegExpLastIndexAssignment_FromCoercedString_PassesILVerification()
+    public void RegExpLastIndexAssignment_FromStringDefersCoercionAndPassesILVerification()
     {
-        // The non-Double branch (box + Convert.ToDouble) must still verify: "1.9" coerces to
-        // 1.9, then RegExpSetLastIndex truncates to an int -> lastIndex == 1.
+        // Assignment preserves the ordinary data property's raw value. exec performs
+        // ToLength at read time, then global write-back replaces it with a number.
         var source = """
-            const r = /a/;
+            const r = /a/g;
             r.lastIndex = "1.9" as any;
+            console.log(typeof r.lastIndex + ":" + r.lastIndex);
+            r.exec("ba");
             console.log(r.lastIndex);
             """;
 
         var (errors, output) = TestHarness.CompileVerifyAndRun(source);
 
         Assert.Empty(errors);
-        Assert.Equal("1\n", output);
+        Assert.Equal("string:1.9\n2\n", output);
         Assert.Equal(output, TestHarness.RunInterpreted(source));
     }
 

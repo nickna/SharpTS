@@ -556,6 +556,27 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/RegExp/S15.10.2.8_A3_T25.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T2.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T11.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T16.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T10.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A4_T11.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A7.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/failure-g-lastindex-reset.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/success-lastindex-access.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/y-fail-lastindex-no-write.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/builtin-success-g-set-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/set-lastindex-init-samevalue.js")]
+    public void RegExp_builtin_exec_observes_coercion_captures_and_lastIndex_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void RegExp_lastIndex_is_an_own_data_property_in_interpreted_mode()
+        => AssertPass("built-ins/RegExp/lastIndex.js", Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
