@@ -998,6 +998,26 @@ public sealed class Issue1279ParityTests
     public void Number_toExponential_matches_spec_coercion_rounding_and_format(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    /// <summary>
+    /// Number.prototype.toPrecision preserves undefined as the ordinary ToString path,
+    /// coerces a supplied precision before handling non-finite receivers, and emits exactly
+    /// the requested significant digits in fixed or exponential notation.
+    /// </summary>
+    [Theory]
+    [InlineData("built-ins/Number/prototype/toPrecision/exponential.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/infinity.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/nan.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/precision-cannot-be-coerced-to-a-number-in-range.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/range.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/return-abrupt-tointeger-precision.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/return-values.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/this-is-0-precision-is-1.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/this-is-0-precision-is-gter-than-1.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/tointeger-precision.js")]
+    [InlineData("built-ins/Number/prototype/toPrecision/undefined-precision-arg.js")]
+    public void Number_toPrecision_matches_spec_coercion_range_and_format(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

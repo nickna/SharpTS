@@ -132,14 +132,25 @@ public static class NumberBuiltIns
         return RuntimeValue.FromString(value.ToString($"F{digits}", CultureInfo.InvariantCulture));
     }
 
-    private static RuntimeValue ToPrecisionV2(Interpreter _, double value, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ToPrecisionV2(
+        Interpreter interpreter, double value, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length == 0)
-            return RuntimeValue.FromString(value.ToString(CultureInfo.InvariantCulture));
-        var precision = (int)Interpreter.ToNumber(args[0]);
+        if (args.IsEmpty || args[0].IsUndefined)
+            return RuntimeValue.FromString(Compilation.RuntimeTypes.FormatNumber(value));
+
+        double precision = interpreter.ToNumberWithPrimitive(args[0].ToObject());
+        precision = double.IsNaN(precision) ? 0 : Math.Truncate(precision);
+
+        // The precision coercion above is observable, but non-finite receiver values
+        // short-circuit before the range check.
+        if (double.IsNaN(value)) return RuntimeValue.FromString("NaN");
+        if (double.IsPositiveInfinity(value)) return RuntimeValue.FromString("Infinity");
+        if (double.IsNegativeInfinity(value)) return RuntimeValue.FromString("-Infinity");
+
         if (precision < 1 || precision > 100)
-            throw new Exception("Runtime Error: toPrecision() argument must be between 1 and 100");
-        return RuntimeValue.FromString(ToPrecisionImpl(value, precision));
+            throw new ThrowException(new SharpTSRangeError(
+                "toPrecision() argument must be between 1 and 100"));
+        return RuntimeValue.FromString(FormatPrecision(value, (int)precision));
     }
 
     private static RuntimeValue ToExponentialV2(
@@ -439,16 +450,29 @@ public static class NumberBuiltIns
         return result.ToString();
     }
 
-    private static string ToPrecisionImpl(double value, int precision)
+    private static string FormatPrecision(double value, int precision)
     {
-        if (double.IsNaN(value)) return "NaN";
-        if (double.IsPositiveInfinity(value)) return "Infinity";
-        if (double.IsNegativeInfinity(value)) return "-Infinity";
+        // ECMA-262 treats -0 as non-negative and preserves exactly p significant digits.
+        if (value == 0)
+            return precision == 1
+                ? "0"
+                : "0." + new string('0', precision - 1);
 
-        // Use G format for general number format with specified precision
-        string result = value.ToString($"G{precision}", CultureInfo.InvariantCulture);
+        int exponent = (int)Math.Floor(Math.Log10(Math.Abs(value)));
+        if (exponent < -6 || exponent >= precision)
+        {
+            // Precision formatting rounds the actual binary value. The standard E format
+            // supplies the requested significant digits; normalize only JS's spelling.
+            string exponential = value.ToString(
+                $"E{precision - 1}", CultureInfo.InvariantCulture)
+                .Replace("E", "e", StringComparison.Ordinal);
+            exponential = NormalizeExponent(exponential);
+            return precision == 1
+                ? exponential.Replace(".0e", "e", StringComparison.Ordinal)
+                : exponential;
+        }
 
-        // JavaScript uses lowercase 'e' for exponential notation
-        return result.Replace("E", "e");
+        int fractionDigits = Math.Max(0, precision - 1 - exponent);
+        return value.ToString($"F{fractionDigits}", CultureInfo.InvariantCulture);
     }
 }
