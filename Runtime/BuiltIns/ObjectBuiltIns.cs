@@ -1533,6 +1533,7 @@ public static partial class ObjectBuiltIns
         // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
         // === RegExp.prototype` (the from-regexp-like tests assert this).
         SharpTSRegExp => interp?.GetRegExpPrototype(),
+        SharpTSMath => interp?.GetObjectPrototype(),
         Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
         // ECMA-262 §20.2.3: every function object — built-in constructors included —
         // has Function.prototype as its [[Prototype]], so
