@@ -1509,6 +1509,11 @@ public sealed class Issue1279ParityTests
     public void Object_assign_throws_for_non_writable_target_properties()
         => AssertPassInBothModes("built-ins/Object/assign/target-set-not-writable.js");
 
+    [Fact]
+    public void Object_assign_rejects_writes_to_boxed_string_indices()
+        => AssertPassInBothModes(
+            "built-ins/Object/assign/assignment-to-readonly-property-of-target-must-throw-a-typeerror-exception.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

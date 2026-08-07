@@ -458,9 +458,27 @@ public static class BuiltInConstructorFactory
         {
             Prototype = interpreter?.GetStringPrototype(),
         };
-        // ECMA-262 §22.1.4.1: a String exotic's `length` is non-enumerable, so it
-        // must not surface in Object.keys/for-in (only the indexed chars do) (#475).
-        wrapper.MarkNonEnumerable("length");
+        // String exotic indexed properties are enumerable but immutable, while
+        // `length` is immutable and non-enumerable (§10.4.3 / §22.1.4.1).
+        for (int i = 0; i < value.Length; i++)
+        {
+            wrapper.DefineProperty(i.ToString(), new SharpTSPropertyDescriptor
+            {
+                Value = value[i].ToString(),
+                HasValue = true,
+                Writable = false,
+                Enumerable = true,
+                Configurable = false,
+            });
+        }
+        wrapper.DefineProperty("length", new SharpTSPropertyDescriptor
+        {
+            Value = (double)value.Length,
+            HasValue = true,
+            Writable = false,
+            Enumerable = false,
+            Configurable = false,
+        });
         return wrapper;
     }
 
