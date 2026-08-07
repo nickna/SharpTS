@@ -593,6 +593,9 @@ public partial class Interpreter
     /// </summary>
     private object? OrdinaryToPrimitiveNumber(SharpTSObject obj)
     {
+        if (TryCallExoticToPrimitive(obj, PrimitiveHint.Number, out var exoticResult))
+            return exoticResult;
+
         // Boxed primitives retain the dedicated internal-slot behavior used by
         // the wider coercion paths.
         if (TryGetBoxedPrimitiveValue(obj, out _))

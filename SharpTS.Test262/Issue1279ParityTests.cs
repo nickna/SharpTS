@@ -1681,6 +1681,14 @@ public sealed class Issue1279ParityTests
     public void Array_findLastIndex_observes_live_generic_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
+    [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
+    [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
+    [InlineData("built-ins/Array/prototype/flatMap/this-value-null-undefined-throws.js")]
+    public void Array_flattening_methods_support_generic_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
