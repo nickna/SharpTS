@@ -29,6 +29,65 @@ public static class TestHarness
     /// </summary>
     internal static readonly object ConsoleLock = new();
 
+    private static readonly TimeSpan InterpreterCleanupTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Runs an interpreter on a dedicated thread. Interpreter tests are invoked synchronously by
+    /// xUnit, so using Task.Run here consumes a second ThreadPool worker that only blocks while the
+    /// test worker waits. Under aggressive suite parallelism that can starve the async operations
+    /// needed by the interpreter itself (notably socket and TLS continuations).
+    /// </summary>
+    private static string RunInterpreterWithTimeout(
+        TimeSpan timeout,
+        string timeoutMessage,
+        Action<Interpreter> execute)
+    {
+        var timeoutCts = new CancellationTokenSource();
+        var task = Task.Factory.StartNew(
+            () =>
+            {
+                try
+                {
+                    var sw = new StringWriter();
+                    using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
+                    interpreter.SetVmTimeoutToken(timeoutCts.Token);
+                    using var registration = timeoutCts.Token.Register(interpreter.Shutdown);
+
+                    execute(interpreter);
+                    return sw.ToString().Replace("\r\n", "\n");
+                }
+                finally
+                {
+                    timeoutCts.Dispose();
+                }
+            },
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default);
+
+        try
+        {
+            if (task.Wait(timeout))
+                return task.GetAwaiter().GetResult();
+        }
+        catch (AggregateException)
+        {
+            // Task.Wait wraps faults; GetAwaiter preserves the exception type expected by tests.
+            return task.GetAwaiter().GetResult();
+        }
+
+        // Cancel synchronously so both statement execution and the event loop observe the
+        // deadline even when the ThreadPool is saturated. Give the dedicated worker a bounded
+        // opportunity to run its using/finally cleanup before returning control to the suite.
+        try { timeoutCts.Cancel(); }
+        catch (ObjectDisposedException) { }
+
+        try { task.Wait(InterpreterCleanupTimeout); }
+        catch (AggregateException) { /* timeout remains the externally observable failure */ }
+
+        throw new TimeoutException(timeoutMessage);
+    }
+
     /// <summary>
     /// Runs TypeScript source using the specified execution mode and captures console output.
     /// This is the primary entry point for parameterized tests that should run against
@@ -176,12 +235,12 @@ public static class TestHarness
     /// <exception cref="TimeoutException">Thrown if execution exceeds the timeout (likely an infinite loop bug)</exception>
     public static string RunInterpreted(string source, DecoratorMode decoratorMode, TimeSpan timeout)
     {
-        // Run interpretation in a task so we can enforce a timeout.
-        // This catches infinite loop bugs (e.g., Promise double-wrapping in async iterators).
-        var task = Task.Run(() =>
+        return RunInterpreterWithTimeout(
+            timeout,
+            $"Interpreter execution exceeded {timeout.TotalSeconds}s timeout. " +
+            "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).",
+            interpreter =>
         {
-            var sw = new StringWriter();
-
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
             var parser = new Parser(tokens, decoratorMode);
@@ -191,7 +250,6 @@ public static class TestHarness
             checker.SetDecoratorMode(decoratorMode);
             var typeMap = checker.Check(statements);
 
-            using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
             interpreter.SetDecoratorMode(decoratorMode);
             // Fire Node process lifecycle events (beforeExit/exit at drain) like
             // the CLI does, so dual-mode tests can observe them. Tests that
@@ -200,32 +258,7 @@ public static class TestHarness
             // ProcessBuiltIns.ResetProcessState() (see ProcessLifecycleTests).
             interpreter.EmitProcessLifecycleEvents = true;
             interpreter.Interpret(statements, typeMap);
-
-            // Normalize line endings for cross-platform test consistency
-            return sw.ToString().Replace("\r\n", "\n");
         });
-
-        try
-        {
-            if (task.Wait(timeout))
-            {
-                return task.Result;
-            }
-
-            throw new TimeoutException(
-                $"Interpreter execution exceeded {timeout.TotalSeconds}s timeout. " +
-                "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
-        }
-        catch (AggregateException ex)
-        {
-            // Unwrap AggregateException to preserve original exception type for tests
-            // that use Assert.Throws<SpecificExceptionType>
-            if (ex.InnerExceptions.Count == 1)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-            }
-            throw;
-        }
     }
 
     /// <summary>
@@ -734,10 +767,11 @@ public static class TestHarness
         // at 12 threads vs ideal 12×, which capped testhost CPU at ~10% during the run.
         var (virtualFiles, entryPath) = BuildVirtualModuleFs(files, entryPoint);
 
-        var task = Task.Run(() =>
+        return RunInterpreterWithTimeout(
+            effectiveTimeout,
+            $"Interpreted module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.",
+            interpreter =>
         {
-            var sw = new StringWriter();
-
             var resolver = new ModuleResolver(entryPath, virtualFiles);
             var entryModule = resolver.LoadModule(entryPath);
             var allModules = resolver.GetModulesInOrder(entryModule);
@@ -745,30 +779,10 @@ public static class TestHarness
             var checker = new TypeChecker();
             var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
-            using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
             // Match the CLI: fire process lifecycle events at loop drain (#1080).
             interpreter.EmitProcessLifecycleEvents = true;
             interpreter.InterpretModules(allModules, resolver, typeMap);
-
-            return sw.ToString().Replace("\r\n", "\n");
         });
-
-        try
-        {
-            if (task.Wait(effectiveTimeout))
-                return task.Result;
-
-            throw new TimeoutException(
-                $"Interpreted module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.");
-        }
-        catch (AggregateException ex)
-        {
-            if (ex.InnerExceptions.Count == 1)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-            }
-            throw;
-        }
     }
 
     /// <summary>
@@ -882,9 +896,11 @@ public static class TestHarness
 
             string entryPath = Path.Combine(tempDir, entryPoint.TrimStart('.', '/', '\\'));
 
-            var task = Task.Run(() =>
+            return RunInterpreterWithTimeout(
+                effectiveTimeout,
+                $"Interpreted module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.",
+                interpreter =>
             {
-                var sw = new StringWriter();
                 var resolver = new ModuleResolver(entryPath);
                 var entryModule = resolver.LoadModule(entryPath);
                 var allModules = resolver.GetModulesInOrder(entryModule);
@@ -892,24 +908,8 @@ public static class TestHarness
                 var checker = new TypeChecker();
                 var typeMap = CheckModulesOrThrow(checker, allModules, resolver, allowTypeErrors);
 
-                using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
                 interpreter.InterpretModules(allModules, resolver, typeMap);
-
-                return sw.ToString().Replace("\r\n", "\n");
             });
-
-            try
-            {
-                if (task.Wait(effectiveTimeout))
-                    return task.Result;
-                throw new TimeoutException(
-                    $"Interpreted module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.");
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
-                throw;
-            }
         }
         finally
         {

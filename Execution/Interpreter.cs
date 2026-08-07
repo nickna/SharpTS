@@ -572,6 +572,13 @@ public partial class Interpreter : IDisposable
     }
 
     /// <summary>
+    /// Allows runtime resources to stop pending asynchronous I/O when their owning interpreter
+    /// shuts down. This is intentionally internal: guest code observes shutdown through normal
+    /// resource events, while hosts retain control of interpreter lifetime.
+    /// </summary>
+    internal CancellationToken ShutdownToken => _shutdownCts.Token;
+
+    /// <summary>
     /// Gets whether there are active handles keeping the event loop alive.
     /// Thread-safe - volatile read of an int, which is atomic on all .NET platforms.
     /// </summary>

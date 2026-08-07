@@ -6,6 +6,7 @@ namespace SharpTS.Tests.SharedTests;
 /// <summary>
 /// Tests for the tls module (TLS/SSL sockets).
 /// </summary>
+[Collection("TlsTests")]
 public class TlsModuleTests
 {
     [Theory, ModeData]
@@ -206,7 +207,7 @@ public class TlsModuleTests
     }
 
     [Fact]
-    public async Task TlsServerAndClientHandshake_Interpreted()
+    public void TlsServerAndClientHandshake_Interpreted()
     {
         // Generate self-signed cert programmatically
         var (certPem, keyPem) = GenerateSelfSignedCert();
@@ -259,23 +260,15 @@ public class TlsModuleTests
             """;
 
         var files = new Dictionary<string, string> { ["./main.ts"] = source };
-        string? output = null;
-        var task = Task.Run(() => output = TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
-        try
-        {
-            await task.WaitAsync(TimeSpan.FromSeconds(15));
-        }
-        catch (TimeoutException)
-        {
-            Assert.Fail("TLS handshake test timed out");
-        }
-        Assert.Contains("secure connection established", output!);
-        Assert.Contains("true", output!);
-        Assert.Contains("received: hello from server", output!);
+        var output = TestHarness.RunModules(
+            files, "./main.ts", ExecutionMode.Interpreted, TimeSpan.FromSeconds(15));
+        Assert.Contains("secure connection established", output);
+        Assert.Contains("true", output);
+        Assert.Contains("received: hello from server", output);
     }
 
     [Fact]
-    public async Task TlsRejectUnauthorized_Interpreted()
+    public void TlsRejectUnauthorized_Interpreted()
     {
         // Generate self-signed cert
         var (certPem, keyPem) = GenerateSelfSignedCert();
@@ -314,17 +307,36 @@ public class TlsModuleTests
             """;
 
         var files = new Dictionary<string, string> { ["./main.ts"] = source };
-        string? output = null;
-        var task = Task.Run(() => output = TestHarness.RunModules(files, "./main.ts", ExecutionMode.Interpreted));
-        try
-        {
-            await task.WaitAsync(TimeSpan.FromSeconds(15));
-        }
-        catch (TimeoutException)
-        {
-            Assert.Fail($"TLS reject test timed out. Partial output: [{output ?? "null"}]");
-        }
-        Assert.Contains("error caught", output!);
+        var output = TestHarness.RunModules(
+            files, "./main.ts", ExecutionMode.Interpreted, TimeSpan.FromSeconds(15));
+        Assert.Contains("error caught", output);
+    }
+
+    [Fact]
+    public void TlsServer_InterpreterTimeout_ReleasesListener()
+    {
+        var reservation = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        reservation.Start();
+        var port = ((System.Net.IPEndPoint)reservation.LocalEndpoint).Port;
+        reservation.Stop();
+
+        var (certPem, keyPem) = GenerateSelfSignedCert();
+        var source = $$"""
+            import * as tls from 'tls';
+            const server = tls.createServer({ key: `{{keyPem}}`, cert: `{{certPem}}` });
+            server.listen({ port: {{port}}, host: '127.0.0.1' });
+            while (true) {}
+            """;
+
+        Assert.Throws<TimeoutException>(() => TestHarness.RunModules(
+            new Dictionary<string, string> { ["./main.ts"] = source },
+            "./main.ts",
+            ExecutionMode.Interpreted,
+            TimeSpan.FromMilliseconds(250)));
+
+        var rebound = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+        try { rebound.Start(); }
+        finally { rebound.Stop(); }
     }
 
     /// <summary>

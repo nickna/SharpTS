@@ -33,6 +33,7 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
     private bool _rejectUnauthorized = true; // Node's tls.createServer default
     private List<SslApplicationProtocol>? _alpnProtocols;
     private ISharpTSCallable? _sniCallback;
+    private CancellationTokenRegistration _shutdownRegistration;
 
     /// <summary>
     /// Creates a new TLS server with certificate options and an optional connection listener.
@@ -177,7 +178,11 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
             _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
         _isListening = true;
-        _cts = new CancellationTokenSource();
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(interpreter.ShutdownToken);
+        _shutdownRegistration = interpreter.ShutdownToken.Register(() =>
+        {
+            try { _listener?.Stop(); } catch { }
+        });
 
         interpreter.Ref();
 
@@ -195,99 +200,114 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
         var token = _cts!.Token;
         var cert = _certificate!;
 
-        _ = Task.Run(async () =>
+        _ = AcceptLoopAsync(interpreter, cert, token);
+    }
+
+    private async Task AcceptLoopAsync(Interp interpreter, X509Certificate2 cert, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && _listener != null)
         {
-            while (!token.IsCancellationRequested && _listener != null)
+            try
             {
-                try
+                var tcpClient = await _listener.AcceptTcpClientAsync(token);
+
+                if (_connections.Count >= _maxConnections)
                 {
-                    var tcpClient = await _listener.AcceptTcpClientAsync(token);
-
-                    if (_connections.Count >= _maxConnections)
-                    {
-                        tcpClient.Close();
-                        continue;
-                    }
-
-                    // Perform TLS handshake in the background
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            var sslStream = new SslStream(tcpClient.GetStream(), false);
-
-                            var authOptions = new SslServerAuthenticationOptions
-                            {
-                                ServerCertificate = cert,
-                                ClientCertificateRequired = _requestCert,
-                                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                                // rejectUnauthorized was parsed from options but never
-                                // applied — .NET's default validation always rejected
-                                // invalid client certs, so { rejectUnauthorized: false }
-                                // (accept the handshake, expose authorized=false; Node
-                                // semantics) could not work. Only consulted when a
-                                // client certificate was actually requested.
-                                RemoteCertificateValidationCallback = (_, _, _, errors) =>
-                                    !_requestCert || !_rejectUnauthorized || errors == SslPolicyErrors.None,
-                            };
-
-                            if (_alpnProtocols != null)
-                                authOptions.ApplicationProtocols = _alpnProtocols;
-
-                            if (_sniCallback != null)
-                            {
-                                var sniCb = _sniCallback;
-                                var interp = interpreter;
-                                authOptions.ServerCertificateSelectionCallback = (sender, hostName) =>
-                                {
-                                    try
-                                    {
-                                        var result = sniCb.Call(interp, [hostName]);
-                                        if (result is SharpTSObject ctx)
-                                        {
-                                            var ctxCert = ctx.GetProperty("cert") as string;
-                                            var ctxKey = ctx.GetProperty("key") as string;
-                                            if (ctxCert != null && ctxKey != null)
-                                            {
-                                                var newCert = X509Certificate2.CreateFromPem(ctxCert, ctxKey);
-                                                return X509CertificateLoader.LoadPkcs12(newCert.Export(X509ContentType.Pfx), null);
-                                            }
-                                        }
-                                    }
-                                    catch { }
-                                    return cert;
-                                };
-                            }
-
-                            await sslStream.AuthenticateAsServerAsync(authOptions);
-
-                            interpreter.ScheduleTimer(0, 0, () =>
-                            {
-                                var tlsSocket = new SharpTSTlsSocket(tcpClient, sslStream);
-                                _connections.Add(tlsSocket);
-
-                                _connectionListener?.Call(interpreter, [tlsSocket]);
-                                EmitEvent(interpreter, "secureConnection", [tlsSocket]);
-
-                                tlsSocket.StartReading(interpreter);
-                            }, isInterval: false);
-                        }
-                        catch (Exception ex)
-                        {
-                            interpreter.ScheduleTimer(0, 0, () =>
-                            {
-                                EmitEvent(interpreter, "tlsClientError", [new SharpTSError(ex.Message)]);
-                            }, isInterval: false);
-
-                            try { tcpClient.Close(); } catch { }
-                        }
-                    }, token);
+                    tcpClient.Close();
+                    continue;
                 }
-                catch (OperationCanceledException) { break; }
-                catch (ObjectDisposedException) { break; }
-                catch (SocketException) { break; }
+
+                _ = AuthenticateClientAsync(interpreter, tcpClient, cert, token);
             }
-        }, token);
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+            catch (ObjectDisposedException) { break; }
+            catch (SocketException) { break; }
+        }
+    }
+
+    private async Task AuthenticateClientAsync(
+        Interp interpreter,
+        TcpClient tcpClient,
+        X509Certificate2 cert,
+        CancellationToken token)
+    {
+        try
+        {
+            var sslStream = new SslStream(tcpClient.GetStream(), false);
+            var authOptions = new SslServerAuthenticationOptions
+            {
+                ServerCertificate = cert,
+                ClientCertificateRequired = _requestCert,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                RemoteCertificateValidationCallback = (_, _, _, errors) =>
+                    !_requestCert || !_rejectUnauthorized || errors == SslPolicyErrors.None,
+            };
+
+            if (_alpnProtocols != null)
+                authOptions.ApplicationProtocols = _alpnProtocols;
+
+            if (_sniCallback != null)
+            {
+                var sniCb = _sniCallback;
+                authOptions.ServerCertificateSelectionCallback = (_, hostName) =>
+                {
+                    try
+                    {
+                        var result = sniCb.Call(interpreter, [hostName]);
+                        if (result is SharpTSObject ctx)
+                        {
+                            var ctxCert = ctx.GetProperty("cert") as string;
+                            var ctxKey = ctx.GetProperty("key") as string;
+                            if (ctxCert != null && ctxKey != null)
+                            {
+                                using var newCert = X509Certificate2.CreateFromPem(ctxCert, ctxKey);
+                                return X509CertificateLoader.LoadPkcs12(newCert.Export(X509ContentType.Pfx), null);
+                            }
+                        }
+                    }
+                    catch { }
+                    return cert;
+                };
+            }
+
+            await sslStream.AuthenticateAsServerAsync(authOptions, token);
+            if (token.IsCancellationRequested)
+            {
+                sslStream.Dispose();
+                tcpClient.Dispose();
+                return;
+            }
+
+            interpreter.ScheduleTimer(0, 0, () =>
+            {
+                if (token.IsCancellationRequested)
+                {
+                    sslStream.Dispose();
+                    tcpClient.Dispose();
+                    return;
+                }
+
+                var tlsSocket = new SharpTSTlsSocket(tcpClient, sslStream);
+                _connections.Add(tlsSocket);
+                _connectionListener?.Call(interpreter, [tlsSocket]);
+                EmitEvent(interpreter, "secureConnection", [tlsSocket]);
+                tlsSocket.StartReading(interpreter);
+            }, isInterval: false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            tcpClient.Dispose();
+        }
+        catch (Exception ex)
+        {
+            if (!token.IsCancellationRequested)
+            {
+                interpreter.ScheduleTimer(0, 0, () =>
+                    EmitEvent(interpreter, "tlsClientError", [new SharpTSError(ex.Message)]),
+                    isInterval: false);
+            }
+            tcpClient.Dispose();
+        }
     }
 
     private RuntimeValue Close(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -298,6 +318,9 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
         _cts?.Cancel();
 
         try { _listener?.Stop(); } catch { }
+        _shutdownRegistration.Dispose();
+        _cts?.Dispose();
+        _cts = null;
 
         _isListening = false;
         _interpreter?.Unref();
@@ -346,9 +369,13 @@ public class SharpTSTlsServer : SharpTSEventEmitter, IDisposable
 
     public void Dispose()
     {
+        _shutdownRegistration.Dispose();
         _cts?.Cancel();
-        _listener?.Stop();
+        try { _listener?.Stop(); } catch { }
         _cts?.Dispose();
+        _cts = null;
+        foreach (var connection in _connections)
+            connection.CloseTransportForShutdown();
         _connections.Clear();
         _certificate?.Dispose();
     }

@@ -19,6 +19,9 @@ public class SharpTSTlsSocket : SharpTSSocket
     private X509Certificate2? _peerCertificate;
     private string? _servername;
     private bool _rejectUnauthorized;
+    private CancellationTokenSource? _handshakeCts;
+    private CancellationTokenRegistration _handshakeShutdownRegistration;
+    private int _handshakeRefHeld;
 
     /// <summary>
     /// Creates a new unconnected TLS socket (client-side).
@@ -96,79 +99,158 @@ public class SharpTSTlsSocket : SharpTSSocket
 
         // Keep event loop alive during async TLS handshake
         interpreter.Ref();
+        _handshakeRefHeld = 1;
 
         var capturedHost = host;
         var capturedPort = port;
         var capturedServername = _servername;
         var capturedReject = _rejectUnauthorized;
 
-        _ = Task.Run(async () =>
+        _handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(interpreter.ShutdownToken);
+        _handshakeShutdownRegistration = _handshakeCts.Token.Register(() =>
         {
-            try
+            try { _sslStream?.Dispose(); } catch { }
+            try { _client?.Dispose(); } catch { }
+            ReleaseHandshakeRef(interpreter);
+        });
+        _ = ConnectTlsAsync(
+            interpreter,
+            capturedHost,
+            capturedPort,
+            capturedServername,
+            capturedReject,
+            options,
+            _handshakeCts);
+    }
+
+    private async Task ConnectTlsAsync(
+        Interp interpreter,
+        string host,
+        int port,
+        string servername,
+        bool rejectUnauthorized,
+        SharpTSObject? options,
+        CancellationTokenSource handshakeCts)
+    {
+        var token = handshakeCts.Token;
+        var completionScheduled = false;
+        try
+        {
+            await _client!.ConnectAsync(host, port, token);
+            var networkStream = _client.GetStream();
+
+            // Always observe the chain validation result so authorized/authorizationError
+            // reflect Node semantics (false + reason for a self-signed/untrusted peer), even
+            // when rejectUnauthorized:false lets the handshake proceed.
+            var capturedErrors = SslPolicyErrors.None;
+            _sslStream = new SslStream(networkStream, false,
+                (sender, cert, chain, errors) =>
+                {
+                    capturedErrors = errors;
+                    return !rejectUnauthorized || errors == SslPolicyErrors.None;
+                });
+
+            var sslOptions = new SslClientAuthenticationOptions
             {
-                await _client.ConnectAsync(capturedHost, capturedPort);
-                var networkStream = _client.GetStream();
+                TargetHost = servername,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            };
 
-                // Always observe the chain validation result so authorized/authorizationError
-                // reflect Node semantics (false + reason for a self-signed/untrusted peer), even
-                // when rejectUnauthorized:false lets the handshake proceed.
-                var capturedErrors = SslPolicyErrors.None;
-                _sslStream = new SslStream(networkStream, false,
-                    (sender, cert, chain, errors) =>
-                    {
-                        capturedErrors = errors;
-                        return !capturedReject || errors == SslPolicyErrors.None;
-                    });
+            if (options?.GetProperty("ALPNProtocols") is SharpTSArray alpnArray)
+            {
+                sslOptions.ApplicationProtocols = alpnArray
+                    .OfType<string>()
+                    .Select(s => new SslApplicationProtocol(s))
+                    .ToList();
+            }
 
-                var sslOptions = new SslClientAuthenticationOptions
+            await _sslStream.AuthenticateAsClientAsync(sslOptions, token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            _stream = _sslStream;
+            _authorized = capturedErrors == SslPolicyErrors.None;
+            _authorizationError = _authorized ? null : DescribePolicyErrors(capturedErrors);
+            _peerCertificate = _sslStream.RemoteCertificate as X509Certificate2;
+            _alpnProtocol = _sslStream.NegotiatedApplicationProtocol.ToString();
+            if (string.IsNullOrEmpty(_alpnProtocol)) _alpnProtocol = null;
+
+            completionScheduled = true;
+            interpreter.ScheduleTimer(0, 0, () =>
+            {
+                if (interpreter.ShutdownToken.IsCancellationRequested)
                 {
-                    TargetHost = capturedServername,
-                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                };
-
-                // Parse ALPNProtocols from options
-                if (options?.GetProperty("ALPNProtocols") is SharpTSArray alpnArray)
-                {
-                    sslOptions.ApplicationProtocols = alpnArray
-                        .OfType<string>()
-                        .Select(s => new SslApplicationProtocol(s))
-                        .ToList();
+                    CloseTransportForShutdown();
+                    return;
                 }
 
-                await _sslStream.AuthenticateAsClientAsync(sslOptions);
-
-                _stream = _sslStream;
-                _authorized = capturedErrors == SslPolicyErrors.None;
-                _authorizationError = _authorized ? null : DescribePolicyErrors(capturedErrors);
-                _peerCertificate = _sslStream.RemoteCertificate as X509Certificate2;
-                _alpnProtocol = _sslStream.NegotiatedApplicationProtocol.ToString();
-                if (string.IsNullOrEmpty(_alpnProtocol)) _alpnProtocol = null;
-
-                interpreter.ScheduleTimer(0, 0, () =>
-                {
-                    // Unref the handshake ref; StartReading will add its own
-                    interpreter.Unref();
-                    EmitEvent(interpreter, "secureConnect", []);
-                    StartReading(interpreter);
-                }, isInterval: false);
-            }
-            catch (AuthenticationException ex)
+                CompleteHandshakeCancellation(handshakeCts);
+                // Unref the handshake ref; StartReading will add its own
+                ReleaseHandshakeRef(interpreter);
+                EmitEvent(interpreter, "secureConnect", []);
+                StartReading(interpreter);
+            }, isInterval: false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            CloseTransportForShutdown();
+        }
+        catch (AuthenticationException ex)
+        {
+            if (!token.IsCancellationRequested)
             {
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
-                    interpreter.Unref();
-                    EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
+                    ReleaseHandshakeRef(interpreter);
+                    if (!interpreter.ShutdownToken.IsCancellationRequested)
+                        EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
                 }, isInterval: false);
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            if (!token.IsCancellationRequested)
             {
                 interpreter.ScheduleTimer(0, 0, () =>
                 {
-                    interpreter.Unref();
-                    EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
+                    ReleaseHandshakeRef(interpreter);
+                    if (!interpreter.ShutdownToken.IsCancellationRequested)
+                        EmitEvent(interpreter, "error", [new SharpTSError(ex.Message)]);
                 }, isInterval: false);
             }
-        });
+        }
+        finally
+        {
+            if (!completionScheduled &&
+                ReferenceEquals(Volatile.Read(ref _handshakeCts), handshakeCts))
+                CompleteHandshakeCancellation(handshakeCts);
+        }
+    }
+
+    private void CompleteHandshakeCancellation(CancellationTokenSource handshakeCts)
+    {
+        if (!ReferenceEquals(Interlocked.CompareExchange(ref _handshakeCts, null, handshakeCts), handshakeCts))
+            return;
+
+        _handshakeShutdownRegistration.Dispose();
+        handshakeCts.Dispose();
+    }
+
+    private void ReleaseHandshakeRef(Interp interpreter)
+    {
+        if (Interlocked.Exchange(ref _handshakeRefHeld, 0) == 1)
+            interpreter.Unref();
+    }
+
+    /// <summary>Stops pending TLS I/O without enqueueing guest callbacks during host shutdown.</summary>
+    internal void CloseTransportForShutdown()
+    {
+        try { _handshakeCts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { _sslStream?.Dispose(); } catch { }
+        try { _client?.Dispose(); } catch { }
+        if (_interpreter != null)
+            ReleaseHandshakeRef(_interpreter);
     }
 
     private RuntimeValue GetCipher(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
