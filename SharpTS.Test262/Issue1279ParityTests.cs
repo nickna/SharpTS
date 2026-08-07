@@ -2046,6 +2046,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/constructor-empty-string.js")]
+    [InlineData("built-ins/BigInt/constructor-from-binary-string.js")]
+    [InlineData("built-ins/BigInt/constructor-from-hex-string.js")]
+    [InlineData("built-ins/BigInt/constructor-from-octal-string.js")]
+    [InlineData("built-ins/BigInt/constructor-trailing-leading-spaces.js")]
+    public void BigInt_constructor_parses_integer_string_grammar(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

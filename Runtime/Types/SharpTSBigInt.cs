@@ -31,7 +31,14 @@ public class SharpTSBigInt : ITypeCategorized
 
     public SharpTSBigInt(string value)
     {
-        // Handle hex strings (0x...) and decimal strings
+        value = value.Trim();
+        if (value.Length == 0)
+        {
+            Value = BigInteger.Zero;
+            return;
+        }
+
+        // Handle prefixed integer strings and decimal strings.
         if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ||
             value.StartsWith("0X", StringComparison.OrdinalIgnoreCase))
         {
@@ -43,10 +50,31 @@ public class SharpTSBigInt : ITypeCategorized
         {
             Value = -BigInteger.Parse("0" + value[3..], NumberStyles.HexNumber);
         }
+        else if (value.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
+        {
+            Value = ParseRadix(value.AsSpan(2), 2);
+        }
+        else if (value.StartsWith("0o", StringComparison.OrdinalIgnoreCase))
+        {
+            Value = ParseRadix(value.AsSpan(2), 8);
+        }
         else
         {
             Value = BigInteger.Parse(value);
         }
+    }
+
+    private static BigInteger ParseRadix(ReadOnlySpan<char> digits, int radix)
+    {
+        if (digits.Length == 0) throw new FormatException();
+        BigInteger result = BigInteger.Zero;
+        foreach (char digit in digits)
+        {
+            int value = digit - '0';
+            if (value < 0 || value >= radix) throw new FormatException();
+            result = result * radix + value;
+        }
+        return result;
     }
 
     public override bool Equals(object? obj)
