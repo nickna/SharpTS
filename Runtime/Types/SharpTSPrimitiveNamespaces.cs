@@ -280,6 +280,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 $"String.prototype.{_name} called on null or undefined"));
         }
 
+        if (_name == "replace"
+            && StringBuiltIns.TryInvokeCustomReplace(
+                interpreter, _receiver, arguments, out object? customResult))
+        {
+            return customResult;
+        }
+
         if (_name is "toString" or "valueOf")
         {
             bool isStringReceiver = _receiver is string or SharpTSStringPrototype

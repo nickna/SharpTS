@@ -1943,6 +1943,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-get-err.js")]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-invocation.js")]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-is-null.js")]
+    public void String_replace_honors_custom_symbol_protocol(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

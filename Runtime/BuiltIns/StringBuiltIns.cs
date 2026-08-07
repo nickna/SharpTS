@@ -22,7 +22,7 @@ public static class StringBuiltIns
             .MethodV2("toLocaleUpperCase", 0, ToUpperCaseV2)
             .MethodV2("toLocaleLowerCase", 0, ToLowerCaseV2)
             .MethodV2("trim", 0, TrimV2)
-            .MethodV2("replace", 2, ReplaceV2)
+            .MethodV2("replace", 0, int.MaxValue, specLength: 2, ReplaceV2)
             .MethodV2("split", 0, int.MaxValue, specLength: 2, SplitV2)
             .MethodV2("match", 0, int.MaxValue, specLength: 1, MatchV2)
             .MethodV2("matchAll", 1, MatchAllV2)
@@ -87,6 +87,47 @@ public static class StringBuiltIns
     public static BuiltInMethod? GetPrototypeMethod(string name)
         => _lookup.GetMethod(name);
 
+    internal static bool TryInvokeCustomReplace(
+        Interpreter interpreter,
+        object receiver,
+        List<object?> arguments,
+        out object? result)
+    {
+        object? searchValue = arguments.Count > 0
+            ? arguments[0]
+            : SharpTSUndefined.Instance;
+        if (searchValue is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+
+        object? replaceMethod = interpreter.GetSymbolPropertyValue(
+            searchValue, SharpTSSymbol.Replace);
+
+        if (replaceMethod is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+        if (replaceMethod is not ISharpTSCallable callable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Symbol.replace property is not callable"));
+        }
+
+        object? replaceValue = arguments.Count > 1
+            ? arguments[1]
+            : SharpTSUndefined.Instance;
+        object protocolReceiver = receiver is SharpTSObject boxed
+            && boxed.GetProperty("__primitiveType") is "String"
+            ? boxed.GetProperty("__primitiveValue")!
+            : receiver;
+        result = FunctionBuiltIns.CallWithThis(
+            interpreter, callable, searchValue, [protocolReceiver, replaceValue]);
+        return true;
+    }
+
     private static RuntimeValue IsWellFormedV2(
         Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
     {
@@ -136,8 +177,29 @@ public static class StringBuiltIns
 
     private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        object? searchValue = args[0].ToObject();
-        object? replaceValue = args[1].ToObject();
+        object? searchValue = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        object? replaceValue = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
+
+        if (searchValue is not (null or SharpTSUndefined))
+        {
+            object? replaceMethod = interpreter.GetSymbolPropertyValue(
+                searchValue, SharpTSSymbol.Replace);
+            if (replaceMethod is ISharpTSCallable customReplace)
+            {
+                object? customResult = FunctionBuiltIns.CallWithThis(
+                    interpreter, customReplace, searchValue, [str, replaceValue]);
+                return RuntimeValue.FromBoxed(customResult);
+            }
+            if (replaceMethod is not (null or SharpTSUndefined))
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    "Symbol.replace property is not callable"));
+            }
+        }
 
         if (searchValue is SharpTSRegExp regex)
         {

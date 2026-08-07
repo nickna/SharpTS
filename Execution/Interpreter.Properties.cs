@@ -583,6 +583,17 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Gets a symbol-keyed property for well-known-symbol protocols while
+    /// preserving accessor invocation and ordinary object prototype lookup.
+    /// </summary>
+    internal object? GetSymbolPropertyValue(object obj, SharpTSSymbol symbol)
+    {
+        if (obj is string or bool or double or SharpTSBigInt or SharpTSSymbol)
+            return SharpTSUndefined.Instance;
+        return PerformIndexGet(null!, obj, symbol).ToObject();
+    }
+
+    /// <summary>
     /// ECMA-262 §7.3.11 HasProperty(O, P): true when <paramref name="obj"/> or
     /// anything on its prototype chain has an own data field OR an accessor
     /// (getter or setter) named <paramref name="name"/>. Unlike the type-specific
