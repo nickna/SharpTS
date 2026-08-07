@@ -1646,6 +1646,12 @@ public sealed class Issue1279ParityTests
     public void Array_filter_uses_correct_length_and_default_this(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-2-4.js")]
+    [InlineData("built-ins/Array/prototype/forEach/15.4.4.18-5-25.js")]
+    public void Array_forEach_uses_correct_length_and_default_this(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
