@@ -444,10 +444,10 @@ public static class StringBuiltIns
             }
         }
 
-        var search = pattern is SharpTSUndefined
+        var source = pattern is SharpTSUndefined
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
-        return RuntimeValue.FromNumber(str.IndexOf(search));
+        return RuntimeValue.FromNumber(new SharpTSRegExp(source).Search(str));
     }
 
     private static RuntimeValue StringRawV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
