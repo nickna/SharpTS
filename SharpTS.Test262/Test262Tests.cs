@@ -26,6 +26,8 @@ namespace SharpTS.Test262;
 ///   <c>SHARPTS_TEST262_UPDATE_BASELINE=1</c> — write baselines instead of diffing.
 ///   <c>SHARPTS_TEST262_WIDE_SWEEP=1</c>      — use <c>wide-sweep.json</c>;
 ///                                              write <c>wide-sweep-report.md</c> instead of diffing.
+///   <c>SHARPTS_TEST262_DIFFERENTIAL_REPORT=1</c> — skip execution while the
+///                                                  report-mode fact compares committed baselines.
 /// </summary>
 public abstract class Test262TestsBase
 {

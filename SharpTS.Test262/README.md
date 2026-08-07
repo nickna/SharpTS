@@ -32,6 +32,22 @@ SHARPTS_TEST262_WIDE_SWEEP=1 dotnet test SharpTS.Test262/SharpTS.Test262.csproj
 
 Switches to the wide-sweep config and writes `wide-sweep-report.md` instead of diffing. Long-running.
 
+## Comparing interpreter and compiler baselines
+
+Generate the issue #1279 differential report directly from the two committed
+baselines; this mode does not execute Test262:
+
+```bash
+SHARPTS_TEST262_DIFFERENTIAL_REPORT=1 dotnet test SharpTS.Test262/SharpTS.Test262.csproj \
+  --filter FullyQualifiedName=SharpTS.Test262.Test262DifferentialReportModeTests.Generate_from_committed_baselines
+```
+
+The command writes `SharpTS.Test262/differential-report.md` with per-mode pass
+rates, the interpreted-to-compiled transition histogram, Track A interpreter
+deficits, Track B compiler deficits, other divergent outcomes, and paths found
+in only one baseline. It also warns when the baseline headers pin different
+Test262 corpus revisions.
+
 ## Bucket model
 
 | Bucket | Meaning |
@@ -78,6 +94,7 @@ the percentage.
 | `config/skip-features.txt` | Feature tags (`generators`, `Atomics`, `decorators`, ...) that cause a test to be skipped |
 | `baselines/interpreted.txt` | Committed baseline for interpreter mode |
 | `baselines/compiled.txt` | Committed baseline for compiled-IL mode |
+| `differential-report.md` | Generated interpreter↔compiler parity report (not committed) |
 
 ## See also
 
