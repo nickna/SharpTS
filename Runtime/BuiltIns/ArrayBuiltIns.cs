@@ -370,14 +370,14 @@ public static class ArrayBuiltIns
     private static RuntimeValue PopV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Null;
+            return RuntimeValue.Undefined;
         return RuntimeValue.FromBoxed(arr.RemoveLast());
     }
 
     private static RuntimeValue ShiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Null;
+            return RuntimeValue.Undefined;
         return RuntimeValue.FromBoxed(arr.RemoveFirst());
     }
 

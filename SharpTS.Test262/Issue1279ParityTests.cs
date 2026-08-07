@@ -1566,6 +1566,12 @@ public sealed class Issue1279ParityTests
     public void Array_empty_mutators_coerce_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A1.1_T1.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A1.1_T1.js")]
+    public void Array_empty_removals_preserve_zero_length(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
