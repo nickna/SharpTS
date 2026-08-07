@@ -22,6 +22,23 @@ public class StringMethodTests
         Assert.Equal("abc:x\n", output);
     }
 
+    [Fact]
+    public void String_ReplaceAll_CoercesSearchBeforeReplacement_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const search: any = { toString: function(): string {
+                console.log("search"); return "a";
+            }};
+            const replacement: any = { toString: function(): string {
+                console.log("replacement"); return "x";
+            }};
+            console.log("aba".replaceAll(search, replacement));
+            """);
+
+        Assert.Equal("search\nreplacement\nxbx\n", output);
+    }
+
+
     #region String Properties
 
     [Theory, ModeData]

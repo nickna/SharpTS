@@ -808,11 +808,11 @@ public static class StringBuiltIns
             }
         }
 
+        string search = interpreter.ToStringForBuiltInArgument(searchValue);
         bool functionalReplace = replaceValue is ISharpTSCallable;
         string? replacementText = functionalReplace
             ? null
             : interpreter.ToStringForBuiltInArgument(replaceValue);
-        string search = interpreter.ToStringForBuiltInArgument(searchValue);
         var result = new StringBuilder(str.Length);
         int sourcePosition = 0;
         while (sourcePosition <= str.Length)
