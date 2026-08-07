@@ -723,6 +723,7 @@ public static partial class ObjectBuiltIns
             SharpTSMath math when math.IsBuiltInDeleted(propertyKey) => null,
             SharpTSMath math => math.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSJSON json when json.IsBuiltInDeleted(propertyKey) => null,
             SharpTSJSON json => json.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
@@ -879,9 +880,11 @@ public static partial class ObjectBuiltIns
             SharpTSObjectNamespace objectNamespace => propertyKey == "prototype"
                 ? interpreter.GetObjectPrototype()
                 : objectNamespace.GetMember(propertyKey),
-            SharpTSJSON json => json.HasExtra(propertyKey)
-                ? json.TryGetExtra(propertyKey)
-                : (JSONBuiltIns.GetStaticMethod(propertyKey) as BuiltInMethod)?.Bind(json),
+            SharpTSJSON json => json.GetMember(propertyKey) switch
+            {
+                BuiltInMethod method => method.Bind(json),
+                var member => member,
+            },
             SharpTSStringNamespace str => propertyKey == "prototype"
                 ? interpreter.GetStringPrototype()
                 : str.GetMember(propertyKey),

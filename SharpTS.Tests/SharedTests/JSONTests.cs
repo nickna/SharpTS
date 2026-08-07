@@ -686,5 +686,27 @@ public class JSONTests
         Assert.Equal("true\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void JSON_Methods_HaveStandardOwnMetadata(ExecutionMode mode)
+    {
+        var source = """
+            const json: any = JSON;
+            const parse = json.parse;
+            const descriptor = Object.getOwnPropertyDescriptor(json, "parse")!;
+            console.log(Object.hasOwn(json, "parse"), parse.length);
+            console.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            console.log(delete json.parse, json.parse === undefined);
+            Object.defineProperty(json, "parse", {
+                value: parse,
+                writable: true,
+                enumerable: false,
+                configurable: true
+            });
+            console.log(json.parse("1"), json.stringify.length);
+            """;
+        Assert.Equal("true 2\ntrue false true\ntrue true\n1 3\n",
+            TestHarness.Run(source, mode));
+    }
+
     #endregion
 }

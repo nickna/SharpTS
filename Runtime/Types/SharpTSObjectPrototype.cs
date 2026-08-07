@@ -243,7 +243,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSArray array => array.HasOwnProperty(key),
             SharpTSMath math => math.HasExtra(key)
                 || (!math.IsBuiltInDeleted(key) && MathBuiltIns.GetMember(key) is not null),
-            SharpTSJSON json => json.HasExtra(key),
+            SharpTSJSON json => json.HasOwnProperty(key),
             SharpTSDate date => date.HasExtra(key)
                 || (date.IsPrototype
                     && !date.IsBuiltInDeleted(key)

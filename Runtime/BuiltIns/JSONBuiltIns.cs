@@ -18,8 +18,8 @@ public static class JSONBuiltIns
     // a fresh BuiltInMethod per access.
     private static readonly BuiltInStaticMemberLookup _lookup =
         BuiltInStaticBuilder.Create()
-            .MethodV2("parse", 1, 2, ParseJson)
-            .MethodV2("stringify", 1, 3, StringifyJson)
+            .MethodV2("parse", 1, 2, 2, ParseJson)
+            .MethodV2("stringify", 1, 3, 3, StringifyJson)
             .Build();
 
     public static object? GetStaticMethod(string name) => _lookup.GetMember(name);

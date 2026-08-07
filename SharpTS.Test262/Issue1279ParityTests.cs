@@ -2335,6 +2335,14 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Error/prototype/toString/called-as-function.js");
 
+    [Theory]
+    [InlineData("built-ins/JSON/parse/length.js")]
+    [InlineData("built-ins/JSON/parse/prop-desc.js")]
+    [InlineData("built-ins/JSON/stringify/length.js")]
+    [InlineData("built-ins/JSON/stringify/prop-desc.js")]
+    public void JSON_method_metadata_matches_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
