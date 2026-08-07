@@ -1112,7 +1112,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(arrayConstructor);
         }
 
-        if (memberName is "toReversed" or "toSorted" or "toSpliced" or "with"
+        if (memberName is "toReversed" or "toSorted" or "toSpliced" or "with" or "find"
             && GetArrayPrototype().GetMember(memberName) is ArrayPrototypeMethodWrapper copyingMethod)
         {
             return RuntimeValue.FromObject(copyingMethod.Bind(obj));

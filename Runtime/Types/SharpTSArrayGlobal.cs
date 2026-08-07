@@ -259,8 +259,7 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         // the point prescribed by the method, so callback/getter mutations of
         // the original array-like remain visible. Dispatching the original
         // callback also lets thisArg binding see its real callable type.
-        if (receiver is not SharpTSArray
-            && BuiltIns.ArrayBuiltIns.IsGenericCallbackMethod(_name))
+        if (BuiltIns.ArrayBuiltIns.IsGenericCallbackMethod(_name))
         {
             return BuiltIns.ArrayBuiltIns.InvokeArrayLikeCallbackMethod(
                 interpreter, receiver!, _name, arguments);

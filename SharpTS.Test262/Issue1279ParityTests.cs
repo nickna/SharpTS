@@ -1657,6 +1657,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Array/prototype/some/15.4.4.17-5-25.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/find/array-altered-during-loop.js")]
+    [InlineData("built-ins/Array/prototype/find/return-abrupt-from-property.js")]
+    public void Array_find_observes_live_generic_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
