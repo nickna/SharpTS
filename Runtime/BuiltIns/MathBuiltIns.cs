@@ -137,14 +137,18 @@ public static class MathBuiltIns
     /// <summary>Member names for REPL autocomplete.</summary>
     public static IEnumerable<string> MemberNames => _lookup.MemberNames;
 
-    private static RuntimeValue Min(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue Min(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.FromNumber(double.PositiveInfinity);
 
-        double min = double.PositiveInfinity;
+        var coerced = new double[args.Length];
         for (int i = 0; i < args.Length; i++)
+            coerced[i] = interpreter.ToNumberWithPrimitive(args[i].ToObject());
+
+        double min = double.PositiveInfinity;
+        for (int i = 0; i < coerced.Length; i++)
         {
-            double val = Interpreter.ToNumber(args[i]);
+            double val = coerced[i];
             // ECMA-262 21.3.2.25: any NaN argument makes the result NaN (a plain
             // `val < min` comparison would silently skip NaN and return a finite
             // value instead).
