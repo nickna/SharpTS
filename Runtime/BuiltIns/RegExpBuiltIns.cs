@@ -874,17 +874,24 @@ public static class RegExpBuiltIns
                     ? s.Length
                     : (int)Math.Truncate(rawPosition);
 
+            int resultLength = ToLengthAsInt(
+                interp, interp.GetProperty(match, "length"));
+            var captures = new List<object?>(Math.Max(0, resultLength - 1));
+            for (int i = 1; i < resultLength; i++)
+            {
+                object? capture = interp.GetProperty(match, i.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture));
+                captures.Add(capture is SharpTSUndefined
+                    ? SharpTSUndefined.Instance
+                    : ToStr(interp, capture));
+            }
+
             string replacement;
             if (isCallable)
             {
                 // Build args: [matched, ...captures, position, string].
                 var callArgs = new List<object?> { matchStr };
-                // The match is a SharpTSArray with capture groups in [1..length-1].
-                if (match is SharpTSArray arr)
-                {
-                    for (int i = 1; i < arr.Length; i++)
-                        callArgs.Add(arr[i]);
-                }
+                callArgs.AddRange(captures);
                 callArgs.Add((double)position);
                 callArgs.Add(s);
                 var fnResult = FunctionBuiltIns.CallWithThis(
@@ -894,12 +901,6 @@ public static class RegExpBuiltIns
             }
             else
             {
-                var captures = new List<object?>();
-                if (match is SharpTSArray arr)
-                {
-                    for (int i = 1; i < arr.Length; i++)
-                        captures.Add(arr[i]);
-                }
                 replacement = ExpandReplacement(
                     interp, replaceStr, s, matchStr, position, captures);
             }
