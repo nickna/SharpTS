@@ -3667,7 +3667,7 @@ test/built-ins/Math/tan/prop-desc.js Pass
 test/built-ins/Math/tanh/length.js Pass
 test/built-ins/Math/tanh/name.js Pass
 test/built-ins/Math/tanh/not-a-constructor.js Pass
-test/built-ins/Math/tanh/prop-desc.js Fail
+test/built-ins/Math/tanh/prop-desc.js Pass
 test/built-ins/Math/tanh/tanh-specialVals.js Pass
 test/built-ins/Math/trunc/Math.trunc_Infinity.js Pass
 test/built-ins/Math/trunc/Math.trunc_NaN.js Pass
