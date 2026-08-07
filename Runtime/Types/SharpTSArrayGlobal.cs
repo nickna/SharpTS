@@ -267,7 +267,9 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         }
 
         // Fast path: receiver is a real array (ToObject is identity for objects).
-        if (receiver is SharpTSArray arr)
+        bool requiresObservableIndexedGet = _name is
+            "toReversed" or "toSorted" or "toSpliced" or "with";
+        if (receiver is SharpTSArray arr && !requiresObservableIndexedGet)
             return _inner.Bind(arr).Call(interpreter, arguments);
 
         // Slow path: receiver is array-like (a wrapper object with `length` +

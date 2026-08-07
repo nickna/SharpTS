@@ -1109,6 +1109,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(arrayConstructor);
         }
 
+        if (memberName is "toReversed" or "toSorted" or "toSpliced" or "with"
+            && GetArrayPrototype().GetMember(memberName) is ArrayPrototypeMethodWrapper copyingMethod)
+        {
+            return RuntimeValue.FromObject(copyingMethod.Bind(obj));
+        }
+
         // Standard array built-in members via category dispatch
         var member = BuiltInRegistry.Instance.GetMemberByCategory(TypeCategory.Array, obj, memberName);
         if (member != null)
