@@ -1497,6 +1497,14 @@ public sealed class Issue1279ParityTests
     public void Object_assign_boxes_primitive_targets(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/assign/Override.js")]
+    [InlineData("built-ins/Object/assign/Override-notstringtarget.js")]
+    [InlineData("built-ins/Object/assign/Source-String.js")]
+    [InlineData("built-ins/Object/assign/source-non-enum.js")]
+    public void Object_assign_copies_own_enumerable_source_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

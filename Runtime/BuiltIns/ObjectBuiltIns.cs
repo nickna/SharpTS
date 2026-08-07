@@ -261,95 +261,33 @@ public static partial class ObjectBuiltIns
                 "Object.assign called on null or undefined"));
 
         args[0] = BuiltInConstructorFactory.ToObject(args[0], interpreter);
-
-        // Handle SharpTSObject target
-        if (args[0] is SharpTSObject targetObj)
-        {
-            for (int i = 1; i < args.Count; i++)
-            {
-                if (args[i] == null) continue;
-
-                if (args[i] is SharpTSObject srcObj)
-                {
-                    foreach (var kv in srcObj.Fields)
-                        targetObj.SetProperty(kv.Key, kv.Value);
-                }
-                else if (args[i] is SharpTSInstance srcInst)
-                {
-                    foreach (var key in srcInst.GetFieldNames())
-                        targetObj.SetProperty(key, srcInst.GetRawField(key));
-                }
-            }
-            return args[0];
-        }
-
-        // Handle SharpTSInstance target
-        if (args[0] is SharpTSInstance targetInst)
-        {
-            for (int i = 1; i < args.Count; i++)
-            {
-                if (args[i] == null) continue;
-
-                if (args[i] is SharpTSObject srcObj)
-                {
-                    foreach (var kv in srcObj.Fields)
-                        targetInst.SetRawField(kv.Key, kv.Value);
-                }
-                else if (args[i] is SharpTSInstance srcInst)
-                {
-                    foreach (var key in srcInst.GetFieldNames())
-                        targetInst.SetRawField(key, srcInst.GetRawField(key));
-                }
-            }
-            return args[0];
-        }
-
-        // JS functions are objects — Object.assign(fn, {...}) should copy props onto the function.
-        if (args[0] is SharpTSFunction targetFn)
-        {
-            CopySourcesOntoFunction(args, (name, value) => targetFn.SetProperty(name, value));
-            return args[0];
-        }
-        if (args[0] is SharpTSArrowFunction targetArrowFn)
-        {
-            CopySourcesOntoFunction(args, (name, value) => targetArrowFn.SetProperty(name, value));
-            return args[0];
-        }
-        if (args[0] is SharpTSAsyncFunction targetAsyncFn)
-        {
-            CopySourcesOntoFunction(args, (name, value) => targetAsyncFn.SetProperty(name, value));
-            return args[0];
-        }
-        if (args[0] is SharpTSAsyncArrowFunction targetAsyncArrowFn)
-        {
-            CopySourcesOntoFunction(args, (name, value) => targetAsyncArrowFn.SetProperty(name, value));
-            return args[0];
-        }
-        // RegExp instances accept arbitrary property assignment in JS.
-        if (args[0] is SharpTSRegExp targetRegExp)
-        {
-            CopySourcesOntoFunction(args, (name, value) => targetRegExp.SetProperty(name, value));
-            return args[0];
-        }
-
-        throw new Exception($"Runtime Error: Object.assign() target must be an object (got {args[0]?.GetType().Name ?? "null"})");
-    }
-
-    private static void CopySourcesOntoFunction(List<object?> args, Action<string, object?> set)
-    {
+        var target = args[0]!;
         for (int i = 1; i < args.Count; i++)
         {
-            if (args[i] == null) continue;
-            if (args[i] is SharpTSObject srcObj)
-            {
-                foreach (var kv in srcObj.Fields)
-                    set(kv.Key, kv.Value);
-            }
-            else if (args[i] is SharpTSInstance srcInst)
-            {
-                foreach (var key in srcInst.GetFieldNames())
-                    set(key, srcInst.GetRawField(key));
-            }
+            if (args[i] is null or SharpTSUndefined) continue;
+            foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
+                SetAssignedProperty(target, entry.Key, entry.Value);
+        }
+        return target;
+    }
+
+    private static void SetAssignedProperty(object target, string name, object? value)
+    {
+        switch (target)
+        {
+            case SharpTSObject obj: obj.SetProperty(name, value); break;
+            case SharpTSInstance instance: instance.SetRawField(name, value); break;
+            case SharpTSArray array when uint.TryParse(name, out uint index): array.Set(index, value); break;
+            case SharpTSArray array: array.SetNamedProperty(name, value); break;
+            case SharpTSFunction function: function.SetProperty(name, value); break;
+            case SharpTSArrowFunction function: function.SetProperty(name, value); break;
+            case SharpTSAsyncFunction function: function.SetProperty(name, value); break;
+            case SharpTSAsyncArrowFunction function: function.SetProperty(name, value); break;
+            case SharpTSRegExp regex: regex.SetProperty(name, value); break;
+            case SharpTSError error: error.SetProperty(name, value); break;
+            case IDictionary<string, object?> dict: dict[name] = value; break;
+            default: throw new ThrowException(new SharpTSTypeError(
+                $"Object.assign target does not support properties ({target.GetType().Name})"));
         }
     }
 
@@ -1156,10 +1094,10 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static List<string> GetAllOwnPropertyNames(SharpTSObject obj)
     {
-        HashSet<string> names = new(obj.Fields.Keys);
+        HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
         foreach (var key in obj.PropertyNames)
         {
-            names.Add(key);
+            if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
         }
         return names.ToList();
     }
@@ -1193,12 +1131,12 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static List<object?> GetOwnPropertyNamesFromObject(SharpTSObject obj)
     {
-        HashSet<string> names = new(obj.Fields.Keys);
+        HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
 
         // Add accessor property names (getters define properties even without data)
         foreach (var key in obj.PropertyNames)
         {
-            names.Add(key);
+            if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
         }
 
         return names.Select(k => (object?)k).ToList();
