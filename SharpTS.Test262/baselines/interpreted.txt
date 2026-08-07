@@ -3500,7 +3500,7 @@ test/built-ins/Math/floor/S15.8.2.9_A7.js Pass
 test/built-ins/Math/floor/length.js Pass
 test/built-ins/Math/floor/name.js Pass
 test/built-ins/Math/floor/not-a-constructor.js Pass
-test/built-ins/Math/floor/prop-desc.js Fail
+test/built-ins/Math/floor/prop-desc.js Pass
 test/built-ins/Math/fround/Math.fround_Infinity.js Pass
 test/built-ins/Math/fround/Math.fround_NaN.js Pass
 test/built-ins/Math/fround/Math.fround_Zero.js Pass
