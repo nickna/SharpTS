@@ -2354,6 +2354,12 @@ public sealed class Issue1279ParityTests
     public void Legacy_global_descriptors_remain_supported(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Promise_race_rejects_when_resolve_throws()
+        => AssertPass(
+            "built-ins/Promise/race/invoke-resolve-error-reject.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

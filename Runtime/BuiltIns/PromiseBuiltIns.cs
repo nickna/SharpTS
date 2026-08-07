@@ -100,8 +100,8 @@ public static class PromiseBuiltIns
             "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, _, args) =>
                 AllImpl(args, interp), factory),
 
-            "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, _, args) =>
-                RaceImpl(args, interp), factory),
+            "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, receiver, args) =>
+                RaceImpl(args, interp, receiver), factory),
 
             "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
                 ResolveImplAsync(args), factory),
@@ -662,7 +662,8 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.race(iterable)
     /// Resolves/rejects with the first promise to settle.
     /// </summary>
-    private static async Task<object?> RaceImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> RaceImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
         var array = IterateCombinatorArgument(args, interpreter, "race");
 
@@ -680,20 +681,50 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
+            object? resolved = ResolveRaceElement(constructor, element, interpreter);
+            if (resolved is SharpTSPromise promise)
             {
                 tasks.Add(promise.GetValueAsync());
             }
             else
             {
                 // Non-promise values are treated as immediately resolved
-                tasks.Add(Task.FromResult(element));
+                tasks.Add(Task.FromResult(resolved));
             }
         }
 
         // Return the result of the first task to complete
         var completedTask = await Task.WhenAny(tasks);
         return await completedTask;
+    }
+
+    private static object? ResolveRaceElement(
+        object? constructor, object? element, Interpreter interpreter)
+    {
+        if (constructor is null
+            || ReferenceEquals(constructor, Interpreter.PromiseGlobalValue)
+            || constructor is SharpTSPromiseClass promiseClass
+                && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase))
+        {
+            return element;
+        }
+
+        object? resolve = interpreter.GetProperty(constructor, "resolve");
+        if (resolve is not ISharpTSCallable callable)
+        {
+            throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                "Promise.race resolve property is not callable"));
+        }
+
+        try
+        {
+            return FunctionBuiltIns.CallWithThis(
+                interpreter, callable, constructor, [element]);
+        }
+        catch (Runtime.Exceptions.ThrowException ex)
+        {
+            throw new SharpTSPromiseRejectedException(ex.Value);
+        }
     }
 
     /// <summary>
