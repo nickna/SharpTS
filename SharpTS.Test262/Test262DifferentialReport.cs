@@ -132,6 +132,7 @@ public sealed class Test262DifferentialReport
             markdown.AppendLine($"| {item.Count} | {item.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
         AppendClusters(markdown, "Track A — interpreter deficits", InterpreterDeficits);
         AppendClusters(markdown, "Track B — compiler deficits", CompilerDeficits);
+        AppendEntries(markdown, "Other divergences", OtherDivergences);
         return markdown.ToString();
     }
 
@@ -150,5 +151,19 @@ public sealed class Test262DifferentialReport
         markdown.AppendLine("|---:|---|");
         foreach (var item in ClusterByFolder(entries))
             markdown.AppendLine($"| {item.Count} | `{item.Folder}` |");
+    }
+
+    private static void AppendEntries(
+        StringBuilder markdown,
+        string title,
+        IReadOnlyList<Test262DifferentialEntry> entries)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"## {title} ({entries.Count})");
+        markdown.AppendLine();
+        markdown.AppendLine("| Test | Interpreted → compiled |");
+        markdown.AppendLine("|---|---|");
+        foreach (var entry in entries)
+            markdown.AppendLine($"| `{entry.RelPath}` | {entry.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
     }
 }

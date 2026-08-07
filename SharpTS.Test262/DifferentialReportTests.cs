@@ -141,6 +141,19 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_lists_other_divergences()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("test/built-ins/Object/a.js", "Fail")),
+            Baseline(("test/built-ins/Object/a.js", "RuntimeError")));
+
+        var markdown = report.ToMarkdown();
+
+        Assert.Contains("## Other divergences (1)", markdown);
+        Assert.Contains("| `test/built-ins/Object/a.js` | Fail → RuntimeError |", markdown);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
