@@ -3678,7 +3678,7 @@ test/built-ins/Math/trunc/Math.trunc_Zero.js Pass
 test/built-ins/Math/trunc/length.js Pass
 test/built-ins/Math/trunc/name.js Pass
 test/built-ins/Math/trunc/not-a-constructor.js Pass
-test/built-ins/Math/trunc/prop-desc.js Fail
+test/built-ins/Math/trunc/prop-desc.js Pass
 test/built-ins/Math/trunc/trunc-sampleTests.js Pass
 test/built-ins/Math/trunc/trunc-specialVals.js Pass
 test/built-ins/Number/15.7.3-1.js Pass
