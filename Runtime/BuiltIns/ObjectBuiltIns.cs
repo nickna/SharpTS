@@ -1134,7 +1134,7 @@ public static partial class ObjectBuiltIns
     private static List<string> GetAllOwnPropertyNames(SharpTSObject obj)
     {
         HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
-        foreach (var key in obj.PropertyNames)
+        foreach (var key in obj.AccessorPropertyNames)
         {
             if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
         }
@@ -1176,7 +1176,7 @@ public static partial class ObjectBuiltIns
         HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
 
         // Add accessor property names (getters define properties even without data)
-        foreach (var key in obj.PropertyNames)
+        foreach (var key in obj.AccessorPropertyNames)
         {
             if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
         }
@@ -1194,11 +1194,14 @@ public static partial class ObjectBuiltIns
         // Add numeric indices
         for (int i = 0; i < arr.Length; i++)
         {
-            names.Add(i.ToString());
+            if (arr.HasIndex(i)) names.Add(i.ToString());
         }
 
         // Add "length"
         names.Add("length");
+
+        foreach (var name in arr.NamedPropertyNames)
+            names.Add(name);
 
         return names;
     }

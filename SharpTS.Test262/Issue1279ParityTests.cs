@@ -1429,6 +1429,15 @@ public sealed class Issue1279ParityTests
     public void Object_getOwnPropertyNames_rejects_nullish_targets(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-39.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-43.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-47.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-48.js")]
+    public void Object_getOwnPropertyNames_includes_own_expandos(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_getOwnPropertySymbols_rejects_nullish_targets()
         => AssertPassInBothModes(

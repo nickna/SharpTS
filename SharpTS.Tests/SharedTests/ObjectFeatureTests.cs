@@ -2072,6 +2072,25 @@ public class ObjectFeatureTests
     }
 
     [Theory, ModeData]
+    public void Object_GetOwnPropertyNames_IncludesAccessorsAndArrayExpandos(
+        ExecutionMode mode)
+    {
+        var source = """
+            const objectValue: any = {};
+            Object.defineProperty(objectValue, "accessor", { get() { return 1; } });
+            const arrayValue: any[] = [1, 2];
+            arrayValue.data = 3;
+            Object.defineProperty(arrayValue, "accessor", { get() { return 4; } });
+            console.log(Object.getOwnPropertyNames(objectValue).includes("accessor"));
+            console.log(Object.getOwnPropertyNames(arrayValue).includes("data"));
+            console.log(Object.getOwnPropertyNames(arrayValue).includes("accessor"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_DoesNotIncludeMethods(ExecutionMode mode)
     {
         // Methods defined on the class should NOT appear in getOwnPropertyNames

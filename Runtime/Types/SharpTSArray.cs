@@ -884,6 +884,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public bool HasNamedProperty(string name)
         => _namedProperties?.ContainsKey(name) ?? false;
 
+    internal IEnumerable<string> NamedPropertyNames
+        => _namedProperties?.Keys ?? Enumerable.Empty<string>();
+
     /// <summary>
     /// Checks the array's own properties, including its non-enumerable length
     /// property, present numeric indices, and user-defined named properties.
