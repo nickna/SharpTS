@@ -496,6 +496,22 @@ public class ObjectFeatureTests
     // run the body with a fresh `this` and propagate property writes. Fixed for both
     // modes in #54.
     [Theory, ModeData]
+    public void Function_ConstructedObject_SeparatesOwnAndPrototypeProperties(ExecutionMode mode)
+    {
+        var source = """
+            function Ctor(this: any): void { this.own = 1; }
+            (Ctor as any).prototype.inherited = 2;
+            const instance = new (Ctor as any)();
+            console.log(Object.keys(instance).join(','));
+            console.log(instance.inherited);
+            console.log(instance.constructor === Ctor);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("own\n2\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Function_ConstructorPattern_CapturesEnclosingVariable(ExecutionMode mode)
     {
         var source = """

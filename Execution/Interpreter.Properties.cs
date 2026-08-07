@@ -12,6 +12,20 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
+    private static SharpTSObject CreateFunctionPrototype(object constructor)
+    {
+        var prototype = new SharpTSObject([]);
+        prototype.DefineProperty("constructor", new SharpTSPropertyDescriptor(
+            value: constructor,
+            writable: true,
+            enumerable: false,
+            configurable: true));
+        return prototype;
+    }
+
+    private static SharpTSObject CreateConstructedThis(object? prototype)
+        => new([]) { Prototype = prototype };
+
     /// <summary>
     /// Extracts the simple class name from a new expression callee for runtime use.
     /// </summary>
@@ -81,14 +95,10 @@ public partial class Interpreter
             // Build a new `this` object backed by the function's prototype.
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(userFn);
                 userFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = userFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = userFn.BindThis(newThis);
             var result = bound.CallBoxed(this, fnArgs);
             // JS spec: if the constructor returns an object (incl. a function), use
@@ -113,14 +123,10 @@ public partial class Interpreter
             // Function expressions have prototype too — lazy-create on first read.
             if (!userArrowFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(userArrowFn);
                 userArrowFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = userArrowFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = userArrowFn.Bind(newThis);
             var result = bound.CallBoxed(this, arrowArgs);
             return IsConstructorReturnObject(result) ? result : newThis;
@@ -204,14 +210,10 @@ public partial class Interpreter
         {
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(userFn);
                 userFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = userFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = userFn.BindThis(newThis);
             var result = bound.CallBoxed(this, [.. args]);
             return IsConstructorReturnObject(result) ? result : newThis;
@@ -220,14 +222,10 @@ public partial class Interpreter
         {
             if (!arrowFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(arrowFn);
                 arrowFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = arrowFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = arrowFn.Bind(newThis);
             var result = bound.CallBoxed(this, [.. args]);
             return IsConstructorReturnObject(result) ? result : newThis;
@@ -327,14 +325,10 @@ public partial class Interpreter
             }
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(userFn);
                 userFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = userFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = userFn.BindThis(newThis);
             var result = bound.CallBoxed(this, fnArgs);
             return RuntimeValue.FromBoxed(IsConstructorReturnObject(result) ? result : newThis);
@@ -353,14 +347,10 @@ public partial class Interpreter
             }
             if (!userArrowFn.TryGetProperty("prototype", out var protoObj))
             {
-                protoObj = new SharpTSObject(new Dictionary<string, object?>());
+                protoObj = CreateFunctionPrototype(userArrowFn);
                 userArrowFn.SetProperty("prototype", protoObj);
             }
-            var newThis = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__proto__"] = protoObj,
-                ["constructor"] = userArrowFn,
-            });
+            var newThis = CreateConstructedThis(protoObj);
             var bound = userArrowFn.Bind(newThis);
             var result = bound.CallBoxed(this, arrowArgs);
             return RuntimeValue.FromBoxed(IsConstructorReturnObject(result) ? result : newThis);
@@ -924,7 +914,7 @@ public partial class Interpreter
             // Lazy-init `fn.prototype` on first access (JS semantics).
             if (memberName == "prototype")
             {
-                var proto = new SharpTSObject(new Dictionary<string, object?>());
+                var proto = CreateFunctionPrototype(fn);
                 fn.SetProperty("prototype", proto);
                 return RuntimeValue.FromBoxed(proto);
             }
@@ -943,7 +933,7 @@ public partial class Interpreter
             // returns false.
             if (memberName == "prototype" && arrowFn.HasOwnThis)
             {
-                var proto = new SharpTSObject(new Dictionary<string, object?>());
+                var proto = CreateFunctionPrototype(arrowFn);
                 arrowFn.SetProperty("prototype", proto);
                 return RuntimeValue.FromBoxed(proto);
             }
@@ -1590,7 +1580,7 @@ public partial class Interpreter
             {
                 if (!fn.TryGetProperty("prototype", out var proto))
                 {
-                    proto = new SharpTSObject(new Dictionary<string, object?>());
+                    proto = CreateFunctionPrototype(fn);
                     fn.SetProperty("prototype", proto);
                 }
                 return proto;
