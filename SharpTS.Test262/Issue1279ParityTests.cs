@@ -1420,6 +1420,11 @@ public sealed class Issue1279ParityTests
     public void Object_getOwnPropertyNames_rejects_nullish_targets(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_getOwnPropertySymbols_rejects_nullish_targets()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

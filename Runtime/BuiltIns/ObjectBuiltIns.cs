@@ -1504,8 +1504,9 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? GetOwnPropertySymbols(Interpreter _, List<object?> args)
     {
-        if (args[0] == null)
-            throw new Exception("TypeError: Cannot convert null to object");
+        if (args[0] is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.getOwnPropertySymbols called on null or undefined"));
 
         List<object?> symbols = args[0] switch
         {
