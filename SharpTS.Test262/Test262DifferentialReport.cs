@@ -131,6 +131,7 @@ public sealed class Test262DifferentialReport
         foreach (var item in Histogram)
             markdown.AppendLine($"| {item.Count} | {item.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
         AppendClusters(markdown, "Track A — interpreter deficits", InterpreterDeficits);
+        AppendClusters(markdown, "Track B — compiler deficits", CompilerDeficits);
         return markdown.ToString();
     }
 

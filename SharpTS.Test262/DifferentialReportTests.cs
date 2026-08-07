@@ -128,6 +128,19 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_clusters_track_b_compiler_deficits()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("test/built-ins/Array/a.js", "Pass")),
+            Baseline(("test/built-ins/Array/a.js", "Fail")));
+
+        var markdown = report.ToMarkdown();
+
+        Assert.Contains("## Track B — compiler deficits (1)", markdown);
+        Assert.Contains("| 1 | `test/built-ins/Array` |", markdown);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
