@@ -2248,6 +2248,11 @@ public sealed class Issue1279ParityTests
     public void Array_flattening_methods_support_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_with_does_not_read_the_replaced_index()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/with/no-get-replaced-index.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
