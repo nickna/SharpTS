@@ -2148,6 +2148,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/String/prototype/search/cstm-search-is-null.js")]
     [InlineData("built-ins/String/prototype/search/invoke-builtin-search.js")]
     [InlineData("built-ins/String/prototype/search/invoke-builtin-search-searcher-undef.js")]
+    [InlineData("built-ins/String/prototype/search/cstm-search-get-err.js")]
     public void String_search_invokes_symbol_protocol(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
