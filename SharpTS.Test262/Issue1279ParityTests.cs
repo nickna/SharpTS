@@ -1274,6 +1274,11 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes("built-ins/Boolean/S15.6.2.1_A4.js");
 
     [Fact]
+    public void Boolean_prototype_coerces_to_false_for_loose_equality()
+        => AssertPassInBothModes(
+            "built-ins/Boolean/prototype/S15.6.3.1_A1.js");
+
+    [Fact]
     public void Error_prototype_exposes_its_standard_name()
         => AssertPassInBothModes("built-ins/Error/name.js");
 

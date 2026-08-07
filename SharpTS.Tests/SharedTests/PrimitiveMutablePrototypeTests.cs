@@ -79,6 +79,19 @@ public class PrimitiveMutablePrototypeTests
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
+    [Fact]
+    public void BooleanPrototype_LooseEqualityUsesFalsePrimitiveValue()
+    {
+        var source = """
+            console.log(Boolean.prototype == false);
+            console.log(false == Boolean.prototype);
+            console.log(Boolean.prototype != false);
+            """;
+        Assert.Equal(
+            "true\ntrue\nfalse\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
     // ── String.prototype mutability ──────────────────────────────────────────
 
     [Fact]

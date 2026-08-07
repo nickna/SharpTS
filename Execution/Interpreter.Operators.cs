@@ -662,6 +662,8 @@ public partial class Interpreter
         if (value is SharpTSNumberPrototype) return 0.0;
         // String.prototype is itself a String object with [[StringData]] "".
         if (value is SharpTSStringPrototype) return "";
+        // Boolean.prototype is itself a Boolean object with [[BooleanData]] false.
+        if (value is SharpTSBooleanPrototype) return false;
         // Arrays have no own valueOf/toString and inherit Array.prototype.toString
         // (= join(',')); OrdinaryToPrimitive resolves to it for every hint (valueOf
         // returns the array, not a primitive, so it is skipped). e.g. `'' + [1,2,3]`
@@ -1148,9 +1150,11 @@ public partial class Interpreter
         // through ToPrimitive, so `new Number(0) == 0` is true (#708). Only when
         // the other operand is a primitive — object == object stays reference-based.
         if (a is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+                or SharpTSBooleanPrototype
             && IsPrimitiveOperand(b))
             a = ToPrimitive(a, PrimitiveHint.Default);
         else if (b is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+                or SharpTSBooleanPrototype
             && IsPrimitiveOperand(a))
             b = ToPrimitive(b, PrimitiveHint.Default);
         return a!.Equals(b);
