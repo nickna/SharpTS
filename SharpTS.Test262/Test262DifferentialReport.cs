@@ -1,5 +1,7 @@
 namespace SharpTS.Test262;
 
+public sealed record Test262TransitionCount(string Transition, int Count);
+
 public sealed record Test262DifferentialEntry(
     string RelPath,
     string InterpretedBucket,
@@ -32,6 +34,13 @@ public sealed class Test262DifferentialReport
 
     public IReadOnlyList<Test262DifferentialEntry> Divergences =>
         Entries.Where(entry => entry.InterpretedOutcome != entry.CompiledOutcome).ToList();
+
+    public IReadOnlyList<Test262TransitionCount> Histogram => Divergences
+        .GroupBy(entry => entry.Transition, StringComparer.Ordinal)
+        .Select(group => new Test262TransitionCount(group.Key, group.Count()))
+        .OrderByDescending(item => item.Count)
+        .ThenBy(item => item.Transition, StringComparer.Ordinal)
+        .ToList();
 
     public static Test262DifferentialReport Create(
         IReadOnlyDictionary<string, string> interpreted,

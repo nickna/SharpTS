@@ -43,6 +43,19 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_builds_a_stable_transition_histogram()
+    {
+        var interpreted = Baseline(("a.js", "Fail"), ("b.js", "Fail"), ("c.js", "Pass"));
+        var compiled = Baseline(("a.js", "Pass"), ("b.js", "Pass"), ("c.js", "RuntimeError"));
+
+        var report = Test262DifferentialReport.Create(interpreted, compiled);
+
+        Assert.Equal(
+            [new("Fail -> Pass", 2), new("Pass -> RuntimeError", 1)],
+            report.Histogram);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
