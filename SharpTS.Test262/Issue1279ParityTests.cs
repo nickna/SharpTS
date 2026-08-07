@@ -1864,6 +1864,18 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/prototype/toString/length.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/name.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/not-a-constructor.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/prop-desc.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/default-radix.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/prototype-call.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/string-is-code-units-of-decimal-digits-only.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/radix-2-to-36.js")]
+    public void BigInt_prototype_toString_formats_radices(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

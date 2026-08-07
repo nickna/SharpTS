@@ -325,7 +325,7 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     {
         _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
-        if (name is "constructor" or "valueOf" && !HasExtra(name))
+        if (name is "constructor" or "valueOf" or "toString" && !HasExtra(name))
         {
             _extras.DefineProperty(name, new SharpTSPropertyDescriptor
             {
@@ -355,25 +355,25 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     public bool HasOwnProperty(string name)
         => HasExtra(name)
             || name == "constructor" && !_constructorDeleted
-            || name == "valueOf" && !_deletedMethods.Contains(name);
+            || name is "valueOf" or "toString" && !_deletedMethods.Contains(name);
     public bool DeleteProperty(string name)
     {
         if (HasExtra(name))
         {
             bool deleted = _extras.DeleteProperty(name);
             if (deleted && name == "constructor") _constructorDeleted = true;
-            if (deleted && name == "valueOf") _deletedMethods.Add(name);
+            if (deleted && name is "valueOf" or "toString") _deletedMethods.Add(name);
             return deleted;
         }
         if (name == "constructor") _constructorDeleted = true;
-        if (name == "valueOf") _deletedMethods.Add(name);
+        if (name is "valueOf" or "toString") _deletedMethods.Add(name);
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
             : name == "constructor" && !_constructorDeleted ? RealmConstructor
-            : name == "valueOf" && !_deletedMethods.Contains(name)
+            : name is "valueOf" or "toString" && !_deletedMethods.Contains(name)
                 ? _methodCache.GetValueOrDefault(name)
                     ?? (_methodCache[name] = new BigIntPrototypeMethodWrapper(name))
             : null;
@@ -421,7 +421,11 @@ internal sealed class BigIntPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
         if (!_hasReceiver || value is null)
             throw new ThrowException(new SharpTSTypeError(
                 $"BigInt.prototype.{_name} called on incompatible receiver"));
-        return value;
+        if (_name == "valueOf") return value;
+        var method = BigIntBuiltIns.GetInstanceMember(value, _name) as ISharpTSCallable
+            ?? throw new ThrowException(new SharpTSTypeError(
+                $"BigInt.prototype.{_name} is unavailable"));
+        return method.Call(interpreter, arguments);
     }
 
     public override string ToString() => $"function {_name}() {{ [native code] }}";
