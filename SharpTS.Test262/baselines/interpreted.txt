@@ -3446,7 +3446,7 @@ test/built-ins/Math/ceil/S15.8.2.6_A7.js Pass
 test/built-ins/Math/ceil/length.js Pass
 test/built-ins/Math/ceil/name.js Pass
 test/built-ins/Math/ceil/not-a-constructor.js Pass
-test/built-ins/Math/ceil/prop-desc.js Fail
+test/built-ins/Math/ceil/prop-desc.js Pass
 test/built-ins/Math/clz32/Math.clz32.js Pass
 test/built-ins/Math/clz32/Math.clz32_1.js Pass
 test/built-ins/Math/clz32/Math.clz32_2.js Pass
