@@ -36,4 +36,13 @@ public class BaselineContractTests
     {
         Assert.Equal(expected, Test262Bucket.IsPass(bucket));
     }
+
+    [Theory]
+    [InlineData("Skipped", true)]
+    [InlineData("Skipped:skip-feature:Proxy", true)]
+    [InlineData("Pass", false)]
+    public void Bucket_IdentifiesSkips(string bucket, bool expected)
+    {
+        Assert.Equal(expected, Test262Bucket.IsSkipped(bucket));
+    }
 }

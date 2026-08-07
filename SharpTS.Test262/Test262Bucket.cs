@@ -8,6 +8,9 @@ public static class Test262Bucket
     public static bool IsPass(string bucket) =>
         ParseOutcome(bucket) == Test262Outcome.Pass;
 
+    public static bool IsSkipped(string bucket) =>
+        ParseOutcome(bucket) == Test262Outcome.Skipped;
+
     public static Test262Outcome ParseOutcome(string bucket)
     {
         var colon = bucket.IndexOf(':');
