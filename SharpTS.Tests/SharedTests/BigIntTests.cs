@@ -62,6 +62,20 @@ public class BigIntTests
         Assert.Equal("true\n42\nundefined\ntrue\ntrue\nfalse\n", output);
     }
 
+    [Fact]
+    public void Object_BoxesBigInt_InInterpreter()
+    {
+        var source = """
+            const boxed = Object(1n);
+            console.log(typeof boxed);
+            console.log(Object.getPrototypeOf(boxed) === BigInt.prototype);
+            console.log((boxed as any).__primitiveValue === 1n);
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("object\ntrue\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void BigInt_ConstructorFromNumber_Works(ExecutionMode mode)
     {

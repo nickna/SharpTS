@@ -638,7 +638,7 @@ public partial class Interpreter
         primitive = null;
         if (value is SharpTSObject obj
             && obj.GetProperty("__primitiveType") is string pt
-            && pt is "Number" or "String" or "Boolean"
+            && pt is "Number" or "String" or "Boolean" or "BigInt"
             && obj.HasProperty("__primitiveValue"))
         {
             primitive = obj.GetProperty("__primitiveValue");

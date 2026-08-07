@@ -686,6 +686,7 @@ public partial class Interpreter
                 "String" => GetStringPrototype(),
                 "Number" => GetNumberPrototype(),
                 "Boolean" => GetBooleanPrototype(),
+                "BigInt" => GetBigIntPrototype(),
                 _ => GetObjectPrototype(),
             };
         }

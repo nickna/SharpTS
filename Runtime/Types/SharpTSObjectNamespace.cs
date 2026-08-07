@@ -90,6 +90,15 @@ public class SharpTSObjectNamespace : ISharpTSCallable
                 ["__primitiveType"] = "Symbol",
                 ["__primitiveValue"] = value,
             });
+        if (value is SharpTSBigInt)
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["__primitiveType"] = "BigInt",
+                ["__primitiveValue"] = value,
+            })
+            {
+                Prototype = interpreter.GetBigIntPrototype(),
+            };
         // Primitives use the same internal-slot wrappers as their dedicated
         // constructors. This preserves Object(value)'s primitive identity for
         // later ToPrimitive operations.
