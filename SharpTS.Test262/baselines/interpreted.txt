@@ -3598,7 +3598,7 @@ test/built-ins/Math/pow/int32_min-exponent.js Pass
 test/built-ins/Math/pow/length.js Pass
 test/built-ins/Math/pow/name.js Pass
 test/built-ins/Math/pow/not-a-constructor.js Pass
-test/built-ins/Math/pow/prop-desc.js Fail
+test/built-ins/Math/pow/prop-desc.js Pass
 test/built-ins/Math/prop-desc.js Fail
 test/built-ins/Math/proto.js Fail
 test/built-ins/Math/random/S15.8.2.14_A1.js Pass
