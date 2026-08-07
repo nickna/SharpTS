@@ -1077,7 +1077,13 @@ public static class StringBuiltIns
         string methodName)
     {
         object? value = ArgumentOrUndefined(args, 0);
-        if (value is SharpTSRegExp)
+        object? matcher = value is null or SharpTSUndefined
+            ? SharpTSUndefined.Instance
+            : interpreter.GetSymbolPropertyValue(value, SharpTSSymbol.Match);
+        bool isRegExp = matcher is null or SharpTSUndefined
+            ? value is SharpTSRegExp
+            : Compilation.RuntimeTypes.IsTruthy(matcher);
+        if (isRegExp)
             throw new ThrowException(new SharpTSTypeError(
                 $"String.prototype.{methodName} does not accept a RegExp"));
         return interpreter.ToStringForBuiltInArgument(value);
