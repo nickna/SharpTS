@@ -9,6 +9,23 @@ namespace SharpTS.Tests.SharedTests;
 public class StringMethodTests
 {
     [Fact]
+    public void String_ReplaceAll_ObservesRegExpPrototypeSymbolHook_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const original: any = RegExp.prototype[Symbol.replace];
+            RegExp.prototype[Symbol.replace] = function(value: any, replacement: any): any {
+                console.log(this instanceof RegExp);
+                console.log(value + ":" + replacement);
+                return "custom";
+            };
+            console.log("aba".replaceAll(/a/g, "x"));
+            RegExp.prototype[Symbol.replace] = original;
+            """);
+
+        Assert.Equal("true\naba:x\ncustom\n", output);
+    }
+
+    [Fact]
     public void String_EndsWith_UsesSymbolMatchForRegExpDetection_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""
