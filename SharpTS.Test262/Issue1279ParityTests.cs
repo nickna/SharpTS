@@ -1983,6 +1983,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/result-coerce-matched-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/result-coerce-matched-global.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/result-coerce-matched.js")]
+    public void RegExp_replace_coerces_custom_match_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
