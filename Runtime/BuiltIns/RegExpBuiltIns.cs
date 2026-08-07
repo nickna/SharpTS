@@ -810,7 +810,8 @@ public static class RegExpBuiltIns
     {
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.search]");
-        var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
+        var s = interp.ToStringForBuiltInArgument(
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
 
         // Save lastIndex, set to 0, run RegExpExec, restore lastIndex.
         var previousLastIndex = interp.GetProperty(recv, "lastIndex");

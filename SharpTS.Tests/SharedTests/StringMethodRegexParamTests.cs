@@ -88,4 +88,15 @@ public class StringMethodRegexParamTests
 
         Assert.Equal("aundefinedc\n", output);
     }
+
+    [Theory, ModeData]
+    public void Search_OnBoxedStringReceiver(ExecutionMode mode)
+    {
+        var output = TestHarness.Run("""
+            const value: any = new String("test string");
+            console.log(value.search(/String/i));
+            """, mode);
+
+        Assert.Equal("5\n", output);
+    }
 }
