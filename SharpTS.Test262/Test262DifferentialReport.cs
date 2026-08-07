@@ -133,6 +133,7 @@ public sealed class Test262DifferentialReport
         AppendClusters(markdown, "Track A — interpreter deficits", InterpreterDeficits);
         AppendClusters(markdown, "Track B — compiler deficits", CompilerDeficits);
         AppendEntries(markdown, "Other divergences", OtherDivergences);
+        AppendCoverageGaps(markdown);
         return markdown.ToString();
     }
 
@@ -165,5 +166,18 @@ public sealed class Test262DifferentialReport
         markdown.AppendLine("|---|---|");
         foreach (var entry in entries)
             markdown.AppendLine($"| `{entry.RelPath}` | {entry.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
+    }
+
+    private void AppendCoverageGaps(StringBuilder markdown)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"## Coverage gaps ({InterpretedOnly.Count + CompiledOnly.Count})");
+        markdown.AppendLine();
+        foreach (var path in InterpretedOnly)
+            markdown.AppendLine($"- Interpreted only: `{path}`");
+        foreach (var path in CompiledOnly)
+            markdown.AppendLine($"- Compiled only: `{path}`");
+        if (InterpretedOnly.Count == 0 && CompiledOnly.Count == 0)
+            markdown.AppendLine("None.");
     }
 }

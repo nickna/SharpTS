@@ -154,6 +154,20 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_lists_mode_specific_coverage_gaps()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("both.js", "Pass"), ("only-i.js", "Fail")),
+            Baseline(("both.js", "Pass"), ("only-c.js", "Fail")));
+
+        var markdown = report.ToMarkdown();
+
+        Assert.Contains("## Coverage gaps (2)", markdown);
+        Assert.Contains("- Interpreted only: `only-i.js`", markdown);
+        Assert.Contains("- Compiled only: `only-c.js`", markdown);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
