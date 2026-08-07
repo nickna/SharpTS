@@ -3484,7 +3484,7 @@ test/built-ins/Math/expm1/expm1-specialVals.js Pass
 test/built-ins/Math/expm1/length.js Pass
 test/built-ins/Math/expm1/name.js Pass
 test/built-ins/Math/expm1/not-a-constructor.js Pass
-test/built-ins/Math/expm1/prop-desc.js Fail
+test/built-ins/Math/expm1/prop-desc.js Pass
 test/built-ins/Math/f16round/length.js Pass
 test/built-ins/Math/f16round/name.js Pass
 test/built-ins/Math/f16round/not-a-constructor.js Pass
