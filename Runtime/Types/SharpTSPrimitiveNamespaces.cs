@@ -310,6 +310,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
             return splitResult;
         }
 
+        if (_name == "matchAll"
+            && StringBuiltIns.TryInvokeCustomMatchAll(
+                interpreter, _receiver, arguments, out object? matchAllResult))
+        {
+            return matchAllResult;
+        }
+
         if (_name is "toString" or "valueOf")
         {
             bool isStringReceiver = _receiver is string or SharpTSStringPrototype

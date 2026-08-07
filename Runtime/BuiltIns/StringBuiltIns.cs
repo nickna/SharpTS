@@ -235,6 +235,39 @@ public static class StringBuiltIns
         return true;
     }
 
+    internal static bool TryInvokeCustomMatchAll(
+        Interpreter interpreter,
+        object receiver,
+        List<object?> arguments,
+        out object? result)
+    {
+        object? pattern = arguments.Count > 0
+            ? arguments[0]
+            : SharpTSUndefined.Instance;
+        if (pattern is null or SharpTSUndefined or SharpTSRegExp)
+        {
+            result = null;
+            return false;
+        }
+
+        object? matcher = interpreter.GetSymbolPropertyValue(
+            pattern, SharpTSSymbol.MatchAll);
+        if (matcher is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+        if (matcher is not ISharpTSCallable callable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Symbol.matchAll property is not callable"));
+        }
+
+        result = FunctionBuiltIns.CallWithThis(
+            interpreter, callable, pattern, [receiver]);
+        return true;
+    }
+
     private static RuntimeValue IsWellFormedV2(
         Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
     {
