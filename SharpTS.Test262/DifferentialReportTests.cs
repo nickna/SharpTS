@@ -29,6 +29,18 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_excludes_matching_outcomes_from_divergences()
+    {
+        var interpreted = Baseline(("same.js", "Pass"), ("skip.js", "Skipped:left"), ("diff.js", "Fail"));
+        var compiled = Baseline(("same.js", "Pass"), ("skip.js", "Skipped:right"), ("diff.js", "Pass"));
+
+        var report = Test262DifferentialReport.Create(interpreted, compiled);
+
+        var divergence = Assert.Single(report.Divergences);
+        Assert.Equal("diff.js", divergence.RelPath);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
