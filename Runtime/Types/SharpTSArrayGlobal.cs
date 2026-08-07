@@ -276,7 +276,9 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         // by materializing into a temp SharpTSArray for dispatch, but wrap any
         // callable argument so the callback sees O as its final "array"
         // parameter — per spec, callbacks get O, not the internal materialization.
-        if (TryMaterializeArrayLike(receiver, interpreter, out var tempArr))
+        if (TryMaterializeArrayLike(
+                receiver, interpreter, out var tempArr,
+                rejectInvalidArrayLength: _name == "slice"))
         {
             var wrappedArgs = WrapCallbackArguments(arguments, tempArr, receiver);
             return _inner.Bind(tempArr).Call(interpreter, wrappedArgs);
@@ -295,7 +297,11 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
     /// Caps length at 1M to protect against accidental runaway allocation
     /// from a stray <c>length: 2**53-1</c> configuration.
     /// </summary>
-    private static bool TryMaterializeArrayLike(object? receiver, Interp interpreter, out SharpTSArray tempArr)
+    private static bool TryMaterializeArrayLike(
+        object? receiver,
+        Interp interpreter,
+        out SharpTSArray tempArr,
+        bool rejectInvalidArrayLength = false)
     {
         tempArr = null!;
         if (receiver is null or SharpTSUndefined)
@@ -308,6 +314,8 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         // code gives them a length and indexed properties.
         object? rawLen = interpreter.GetProperty(receiver, "length");
         long len = ToLength(rawLen, interpreter);
+        if (rejectInvalidArrayLength && len > uint.MaxValue)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
         len = Math.Min(len, 1 << 20);
         var list = new List<object?>((int)len);
         for (int i = 0; i < len; i++)

@@ -1591,6 +1591,12 @@ public sealed class Issue1279ParityTests
     public void Array_slice_supports_legacy_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/create-non-array-invalid-len.js")]
+    [InlineData("built-ins/Array/prototype/slice/create-proxied-array-invalid-len.js")]
+    public void Array_slice_rejects_unrepresentable_result_lengths(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
