@@ -3570,7 +3570,7 @@ test/built-ins/Math/min/length.js Pass
 test/built-ins/Math/min/name.js Pass
 test/built-ins/Math/min/not-a-constructor.js Pass
 test/built-ins/Math/min/prop-desc.js Pass
-test/built-ins/Math/min/zeros.js Fail
+test/built-ins/Math/min/zeros.js Pass
 test/built-ins/Math/pow/applying-the-exp-operator_A1.js RuntimeError
 test/built-ins/Math/pow/applying-the-exp-operator_A10.js Pass
 test/built-ins/Math/pow/applying-the-exp-operator_A11.js Pass

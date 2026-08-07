@@ -149,7 +149,7 @@ public static class MathBuiltIns
             // `val < min` comparison would silently skip NaN and return a finite
             // value instead).
             if (double.IsNaN(val)) return RuntimeValue.FromNumber(double.NaN);
-            if (val < min) min = val;
+            if (val < min || val == 0 && min == 0 && double.IsNegative(val)) min = val;
         }
         return RuntimeValue.FromNumber(min);
     }
