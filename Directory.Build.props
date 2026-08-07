@@ -13,9 +13,9 @@
 
     <!-- Single version source of truth: MinVer derives the version from Git tags
          (prefix `v`) for every packable project, replacing the former hard-coded
-         <Version>. At release time CI passes -p:Version explicitly to `dotnet pack`
-         to pin the published artifacts to the exact tag (.github/workflows/publish.yml);
-         that override and MinVer agree because the tagged commit is HEAD. -->
+         <Version>. At release time CI passes -p:MinVerVersionOverride explicitly
+         to `dotnet pack` so tags and workflow-dispatch dry runs produce the exact
+         version selected by .github/workflows/publish.yml. -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
 
     <!-- Shared package metadata -->

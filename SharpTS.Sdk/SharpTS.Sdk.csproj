@@ -28,7 +28,7 @@
   <ItemGroup>
     <None Include="..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll"
           Pack="true"
-          PackagePath="build\"
+          PackagePath="build"
           Condition="Exists('..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll')" />
   </ItemGroup>
 
@@ -36,7 +36,7 @@
   <ItemGroup>
     <None Include="..\bin\Release\net10.0\publish\**"
           Pack="true"
-          PackagePath="tools\net10.0\any\"
+          PackagePath="tools/net10.0/any/"
           Condition="Exists('..\bin\Release\net10.0\publish\')" />
   </ItemGroup>
 

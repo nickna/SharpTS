@@ -58,6 +58,10 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
 
+      - name: Test NuGet release helper
+        shell: pwsh
+        run: ./scripts/test-nuget-release.ps1
+
       - name: Publish SharpTS for SDK bundling
         run: dotnet publish SharpTS.csproj --configuration Release --no-build
 
@@ -69,7 +73,7 @@ jobs:
           echo "✓ All SDK dependencies found"
 
       - name: Pack packages
-        run: dotnet pack --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
+        run: dotnet pack --no-build --configuration Release -p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }} --output ./nupkg
 
       - name: Verify packages created
         run: |
@@ -80,6 +84,17 @@ jobs:
           test -f "./nupkg/SharpTS.Hosting.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Hosting package not found"; exit 1; }
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
           echo "✓ All packages created successfully"
+
+      # A new package ID must be onboarded on NuGet and added to the API key's
+      # scope before a tag can publish any established package. This also keeps
+      # every copyable SDK version in the docs pinned to a version NuGet serves.
+      - name: Preflight NuGet package IDs and documentation
+        shell: pwsh
+        run: >-
+          ./scripts/nuget-release.ps1
+          -Action Preflight
+          -Version "${{ steps.version.outputs.VERSION }}"
+          -PackageDirectory ./nupkg
 
       - name: Smoke test packaged SDK
         shell: pwsh
@@ -466,6 +481,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -491,8 +508,15 @@ jobs:
           path: ./assets
           merge-multiple: true
 
-      - name: Push to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push and verify NuGet packages
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: >-
+          ./scripts/nuget-release.ps1
+          -Action Publish
+          -Version "${{ needs.build.outputs.version }}"
+          -PackageDirectory ./nupkg
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

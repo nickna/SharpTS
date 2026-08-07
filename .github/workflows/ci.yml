@@ -77,6 +77,10 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
+      - name: Test NuGet release helper
+        shell: pwsh
+        run: ./scripts/test-nuget-release.ps1
+
       # Exercise the SDK through its nupkg rather than repository-relative build
       # outputs. The script uses a local-only feed, a clean package cache, and no
       # global dotnet-tool directory on PATH.
