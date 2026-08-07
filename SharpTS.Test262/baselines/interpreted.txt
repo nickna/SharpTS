@@ -3605,7 +3605,7 @@ test/built-ins/Math/random/S15.8.2.14_A1.js Pass
 test/built-ins/Math/random/length.js Pass
 test/built-ins/Math/random/name.js Pass
 test/built-ins/Math/random/not-a-constructor.js Pass
-test/built-ins/Math/random/prop-desc.js Fail
+test/built-ins/Math/random/prop-desc.js Pass
 test/built-ins/Math/round/S15.8.2.15_A1.js Pass
 test/built-ins/Math/round/S15.8.2.15_A2.js Pass
 test/built-ins/Math/round/S15.8.2.15_A3.js Fail
