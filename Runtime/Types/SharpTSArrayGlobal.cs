@@ -67,7 +67,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
         {
             if (d < 0 || d > uint.MaxValue || Math.Floor(d) != d)
                 throw new ThrowException(new SharpTSRangeError("Invalid array length."));
-            int len = (int)d;
+            long len = (long)d;
             // new Array(N) gives an array of length N with N holes — not N
             // explicit undefined values. Use SetLength so large N is sparse
             // storage, not an eager allocation (see SharpTSArray #73 Stage B).
@@ -133,6 +133,7 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
     private object? GetBuiltInMember(string name)
     {
         if (name == "constructor") return RealmConstructor ?? SharpTSArrayGlobal.Instance;
+        if (name == "length") return 0d;
 
         var legacy = name switch
         {
