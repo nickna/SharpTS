@@ -1364,6 +1364,13 @@ public sealed class Issue1279ParityTests
     public void Math_hypot_coerces_before_inspection()
         => AssertPassInBothModes("built-ins/Math/hypot/Math.hypot_ToNumberErr.js");
 
+    [Theory]
+    [InlineData("built-ins/Math/pow/applying-the-exp-operator_A1.js")]
+    [InlineData("built-ins/Math/pow/applying-the-exp-operator_A7.js")]
+    [InlineData("built-ins/Math/pow/applying-the-exp-operator_A8.js")]
+    public void Math_pow_handles_nan_and_infinite_exponents(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

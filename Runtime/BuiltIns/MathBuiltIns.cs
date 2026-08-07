@@ -112,7 +112,15 @@ public static class MathBuiltIns
             .MethodV2("sumPrecise", 1, SumPrecise)
             // Two argument methods
             .MethodV2("pow", 2, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Pow(Interpreter.ToNumber(args[0]), Interpreter.ToNumber(args[1]))))
+            {
+                double baseValue = Interpreter.ToNumber(args[0]);
+                double exponent = Interpreter.ToNumber(args[1]);
+                // ECMA-262 differs from System.Math.Pow for these two cases.
+                if (double.IsNaN(exponent)
+                    || Math.Abs(baseValue) == 1 && double.IsInfinity(exponent))
+                    return RuntimeValue.FromNumber(double.NaN);
+                return RuntimeValue.FromNumber(Math.Pow(baseValue, exponent));
+            })
             .MethodV2("atan2", 2, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Atan2(Interpreter.ToNumber(args[0]), Interpreter.ToNumber(args[1]))))
             // Variable arity methods
