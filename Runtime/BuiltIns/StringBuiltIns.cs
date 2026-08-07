@@ -427,9 +427,21 @@ public static class StringBuiltIns
     private static RuntimeValue SearchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         object? pattern = ArgumentOrUndefined(args, 0);
-        if (pattern is SharpTSRegExp regex)
+        if (pattern is not (null or SharpTSUndefined))
         {
-            return RuntimeValue.FromNumber(regex.Search(str));
+            object? searcher = interpreter.GetSymbolPropertyValue(
+                pattern, SharpTSSymbol.Search);
+            if (searcher is not (null or SharpTSUndefined))
+            {
+                if (searcher is not ISharpTSCallable callable)
+                {
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Symbol.search property is not callable"));
+                }
+
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, callable, pattern, [str]));
+            }
         }
 
         var search = pattern is SharpTSUndefined
