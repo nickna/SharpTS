@@ -835,6 +835,24 @@ public static partial class ObjectBuiltIns
         object target,
         string propertyKey)
     {
+        // Date instances inherit registry-backed methods from Date.prototype;
+        // only the intrinsic prototype owns them. Date.prototype uses the same
+        // SharpTSDate representation so the marker is required to distinguish
+        // the two object roles for own-property introspection.
+        if (target is SharpTSDate date)
+        {
+            if (!date.IsPrototype || date.IsBuiltInDeleted(propertyKey))
+                return null;
+            var dateMember = DateBuiltIns.GetMember(date, propertyKey);
+            return dateMember is null
+                ? null
+                : DataDescriptor(
+                    dateMember,
+                    writable: true,
+                    enumerable: false,
+                    configurable: true);
+        }
+
         bool isKnownBuiltIn = target is ISharpTSCallable
             || target is SharpTSArrayPrototype or SharpTSFunctionPrototype or SharpTSMath
             || BuiltInRegistry.Instance.HasInstanceMembers(target);

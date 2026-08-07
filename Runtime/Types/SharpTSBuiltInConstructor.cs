@@ -10,7 +10,10 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 public sealed class SharpTSBuiltInConstructor : ISharpTSCallable
 {
-    private static readonly SharpTSDate DatePrototype = new(double.NaN);
+    private static readonly SharpTSDate DatePrototype = new(double.NaN)
+    {
+        IsPrototype = true,
+    };
 
     public string Name { get; }
     private readonly BuiltInConstructorFactory.ConstructorHandler _factory;

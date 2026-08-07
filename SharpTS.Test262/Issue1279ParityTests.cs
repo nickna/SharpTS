@@ -1420,6 +1420,12 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_methods_omit_inherited_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
+    public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
