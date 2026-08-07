@@ -3507,7 +3507,7 @@ test/built-ins/Math/fround/Math.fround_Zero.js Pass
 test/built-ins/Math/fround/length.js Pass
 test/built-ins/Math/fround/name.js Pass
 test/built-ins/Math/fround/not-a-constructor.js Pass
-test/built-ins/Math/fround/prop-desc.js Fail
+test/built-ins/Math/fround/prop-desc.js Pass
 test/built-ins/Math/fround/ties.js Pass
 test/built-ins/Math/fround/value-convertion.js Pass
 test/built-ins/Math/hypot/Math.hypot_Infinity.js Pass
