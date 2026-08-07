@@ -440,6 +440,20 @@ public class ErrorTests
     }
 
     [Theory, ModeData]
+    public void Error_PrototypeInheritsObjectPrototypeMethods(ExecutionMode mode)
+    {
+        var source = """
+            const constructed = new Error("constructed");
+            const called = Error("called");
+            console.log(Error.prototype.isPrototypeOf(constructed));
+            console.log(Error.prototype.isPrototypeOf(called));
+            console.log(Error.prototype.hasOwnProperty("message"));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Error_WithStringCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
