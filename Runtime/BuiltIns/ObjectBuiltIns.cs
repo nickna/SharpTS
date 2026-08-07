@@ -586,6 +586,9 @@ public static partial class ObjectBuiltIns
             case SharpTSClassPrototype classPrototype:
                 success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSGlobalThis globalThis:
+                success = globalThis.DefineProperty(propertyKey, descriptor);
+                break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
                 var compiledDesc = CompiledPropertyDescriptor.FromAny(descriptorArg);
@@ -729,6 +732,7 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey),
             SharpTSClass klass when propertyKey == "prototype" => DataDescriptor(
                 klass.Prototype,
                 writable: false,

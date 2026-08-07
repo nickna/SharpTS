@@ -2268,6 +2268,11 @@ public sealed class Issue1279ParityTests
     public void Error_instances_inherit_from_Error_prototype()
         => AssertPassInBothModes("built-ins/Error/instance-prototype.js");
 
+    [Fact]
+    public void Error_toString_unbound_call_uses_undefined_receiver()
+        => AssertPassInBothModes(
+            "built-ins/Error/prototype/toString/called-as-function.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

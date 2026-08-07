@@ -1709,6 +1709,13 @@ public partial class Interpreter
         // realm's instance, not the process-global singleton, so
         // `globalThis.Math === Math` within a realm. A guest own-assignment
         // (`globalThis.Math = x`) takes precedence per ECMA-262.
+        if (obj is SharpTSGlobalThis globalObject
+            && globalObject.TryGetUserAccessor(memberName, out var globalGetter, out _))
+        {
+            return globalGetter is null
+                ? SharpTSUndefined.Instance
+                : BindAccessorToObject(globalGetter, globalObject).CallBoxed(this, []);
+        }
         if (obj is SharpTSGlobalThis gtAccessor
             && !gtAccessor.HasUserProperty(memberName)
             && TryGetRealmIntrinsic(memberName, out var gtIntrinsic))
@@ -2194,10 +2201,16 @@ public partial class Interpreter
     /// Fallback for property assignment on types without TypeCategory dispatch
     /// (GlobalThis, process, Agent, AbortSignal).
     /// </summary>
-    private static object? EvaluateSetFallback(object? obj, string memberName, object? value)
+    private object? EvaluateSetFallback(object? obj, string memberName, object? value)
     {
         if (obj is SharpTSGlobalThis globalThis)
         {
+            if (globalThis.TryGetUserAccessor(memberName, out _, out var setter))
+            {
+                if (setter != null)
+                    BindAccessorToObject(setter, globalThis).CallBoxed(this, [value]);
+                return value;
+            }
             globalThis.SetProperty(memberName, value);
             return value;
         }

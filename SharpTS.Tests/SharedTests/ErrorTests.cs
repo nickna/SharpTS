@@ -454,6 +454,25 @@ public class ErrorTests
     }
 
     [Theory, ModeData]
+    public void Error_ToStringUnboundDoesNotReadGlobalAccessors(ExecutionMode mode)
+    {
+        var source = """
+            Object.defineProperty(globalThis, "name", {
+                get() { throw new Error("name getter called"); }
+            });
+            const toString = Error.prototype.toString;
+            try {
+                toString();
+                console.log("no error");
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory, ModeData]
     public void Error_WithStringCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
