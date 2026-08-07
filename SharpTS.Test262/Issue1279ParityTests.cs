@@ -2130,6 +2130,7 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-invocation.js")]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-is-null.js")]
+    [InlineData("built-ins/String/prototype/match/invoke-builtin-match.js")]
     public void String_match_invokes_symbol_protocol(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 

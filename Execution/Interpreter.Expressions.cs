@@ -1122,7 +1122,17 @@ public partial class Interpreter
             // depends on this override winning.
             if (regexObj.TryGetSymbolProperty(regexSym, out var ownSym))
                 return RuntimeValue.FromBoxed(ownSym ?? SharpTSUndefined.Instance);
-            var member = Runtime.BuiltIns.RegExpBuiltIns.GetSymbolMember(regexObj, regexSym);
+            var prototype = GetRegExpPrototype();
+            if (prototype.TryGetSymbolAccessor(regexSym, out var getter, out _))
+            {
+                return getter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(getter, regexObj).Call(this, []));
+            }
+            var member = prototype.HasSymbolProperty(regexSym)
+                ? prototype.GetBySymbol(regexSym)
+                : null;
             if (member is BuiltInMethod bim) return RuntimeValue.FromBoxed(bim.Bind(regexObj));
             return RuntimeValue.FromBoxed(member ?? SharpTSUndefined.Instance);
         }

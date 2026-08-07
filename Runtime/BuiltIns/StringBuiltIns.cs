@@ -525,7 +525,16 @@ public static class StringBuiltIns
         string source = pattern is SharpTSUndefined
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
-        return RuntimeValue.FromBoxed(new SharpTSRegExp(source).Exec(str));
+        var created = new SharpTSRegExp(source);
+        object? createdMatcher = interpreter.GetSymbolPropertyValue(
+            created, SharpTSSymbol.Match);
+        if (createdMatcher is not ISharpTSCallable createdCallable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Constructed RegExp Symbol.match property is not callable"));
+        }
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter, createdCallable, created, [str]));
     }
 
     private static RuntimeValue MatchAllV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
