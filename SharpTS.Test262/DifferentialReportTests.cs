@@ -40,6 +40,16 @@ public sealed class DifferentialReportTests
 
         var divergence = Assert.Single(report.Divergences);
         Assert.Equal("diff.js", divergence.RelPath);
+        Assert.Equal(2, report.AgreementCount);
+        Assert.Equal(200.0 / 3, report.AgreementPercentage, precision: 10);
+    }
+
+    [Fact]
+    public void Empty_report_has_complete_agreement()
+    {
+        var report = Test262DifferentialReport.Create(Baseline(), Baseline());
+
+        Assert.Equal(100, report.AgreementPercentage);
     }
 
     [Fact]

@@ -35,6 +35,12 @@ public sealed class Test262DifferentialReport
     public IReadOnlyList<Test262DifferentialEntry> Divergences =>
         Entries.Where(entry => entry.InterpretedOutcome != entry.CompiledOutcome).ToList();
 
+    public int AgreementCount => Entries.Count - Divergences.Count;
+
+    public double AgreementPercentage => Entries.Count == 0
+        ? 100
+        : AgreementCount * 100.0 / Entries.Count;
+
     public IReadOnlyList<Test262TransitionCount> Histogram => Divergences
         .GroupBy(entry => entry.Transition, StringComparer.Ordinal)
         .Select(group => new Test262TransitionCount(group.Key, group.Count()))
