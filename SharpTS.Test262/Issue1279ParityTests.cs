@@ -2194,6 +2194,11 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/startsWith/searchstring-is-regexp-throws.js")]
+    public void String_startsWith_rejects_regexp_search_strings(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
