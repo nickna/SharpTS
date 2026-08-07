@@ -28,7 +28,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("preventExtensions", 1, PreventExtensionsV2)
             .MethodV2("isExtensible", 1, IsExtensibleMethodV2)
             .MethodV2("getOwnPropertySymbols", 1, GetOwnPropertySymbolsV2)
-            .MethodV2("getPrototypeOf", 1, GetPrototypeOfV2)
+            .MethodV2("getPrototypeOf", 0, 1, 1, GetPrototypeOfV2)
             .MethodV2("setPrototypeOf", 2, SetPrototypeOfV2)
             .MethodV2("groupBy", 2, GroupByV2)
             .MethodV2("defineProperties", 2, DefinePropertiesV2)
@@ -1521,8 +1521,10 @@ public static partial class ObjectBuiltIns
 
     private static RuntimeValue GetPrototypeOfV2(Interpreter interp, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var target = args[0].ToObject()
-            ?? throw new Exception("TypeError: Cannot convert null to object");
+        var target = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.getPrototypeOf called on null or undefined"));
 
         var proto = PrototypeOf(interp, target);
         return proto != null ? RuntimeValue.FromObject(proto) : RuntimeValue.Null;
@@ -1556,6 +1558,11 @@ public static partial class ObjectBuiltIns
         // === RegExp.prototype` (the from-regexp-like tests assert this).
         SharpTSRegExp => interp?.GetRegExpPrototype(),
         SharpTSMath => interp?.GetObjectPrototype(),
+        SharpTSJSON => interp?.GetObjectPrototype(),
+        string => interp?.GetStringPrototype(),
+        bool => interp?.GetBooleanPrototype(),
+        double or int or long or System.Numerics.BigInteger or SharpTSBigInt
+            => interp?.GetNumberPrototype(),
         Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
         // ECMA-262 §20.2.3: every function object — built-in constructors included —
         // has Function.prototype as its [[Prototype]], so

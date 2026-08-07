@@ -1425,6 +1425,16 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
 
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-3.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-4.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-18.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-22.js")]
+    public void Object_getPrototypeOf_applies_ToObject(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
