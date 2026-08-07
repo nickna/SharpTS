@@ -2162,6 +2162,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-bigint-primitive.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-number-primitive.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-on-string-primitive.js")]
+    public void String_split_ignores_symbol_hooks_on_primitive_separators(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
