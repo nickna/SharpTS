@@ -1007,6 +1007,29 @@ public partial class Interpreter
             }
         }
 
+        // Number primitives inherit from this realm's mutable Number.prototype.
+        // Consult it before the process-wide category registry so borrowed methods
+        // and user expandos (for example Number.prototype.toLowerCase =
+        // String.prototype.toLowerCase) are observable on numeric values.
+        if (category == TypeCategory.Number)
+        {
+            var numberPrototype = GetNumberPrototype();
+            if (numberPrototype.GetExtraGetter(memberName) is { } numberGetter)
+            {
+                return RuntimeValue.FromBoxed(
+                    FunctionBuiltIns.CallWithThis(this, numberGetter, obj, []));
+            }
+            if (numberPrototype.GetMember(memberName) is { } prototypeMember)
+            {
+                return RuntimeValue.FromBoxed(prototypeMember switch
+                {
+                    StringPrototypeMethodWrapper stringMethod => stringMethod.Bind(obj),
+                    NumberPrototypeMethodWrapper numberMethod => numberMethod.Bind(obj),
+                    _ => prototypeMember,
+                });
+            }
+        }
+
         var member = BuiltInRegistry.Instance.GetMemberByCategory(category, obj, memberName);
         if (member != null)
         {

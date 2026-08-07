@@ -1769,6 +1769,22 @@ public sealed class Issue1279ParityTests
             "built-ins/String/prototype/indexOf/searchstring-tostring-errors.js");
 
     [Theory]
+    [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T7.js")]
+    [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T8.js")]
+    [InlineData("built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T7.js")]
+    [InlineData("built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A1_T8.js")]
+    [InlineData("built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T7.js")]
+    [InlineData("built-ins/String/prototype/toUpperCase/S15.5.4.18_A1_T8.js")]
+    [InlineData("built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T7.js")]
+    [InlineData("built-ins/String/prototype/toLocaleUpperCase/S15.5.4.19_A1_T8.js")]
+    public void String_case_methods_coerce_numeric_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
