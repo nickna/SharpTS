@@ -13,7 +13,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "test1 test2 test3";
-            const matches = str.matchAll(/test\d/g);
+            const matches = Array.from(str.matchAll(/test\d/g));
             console.log(matches.length);
             const m0 = matches[0];
             const m1 = matches[1];
@@ -32,7 +32,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "hello world";
-            const matches = str.matchAll(/\w+/g);
+            const matches = Array.from(str.matchAll(/\w+/g));
             console.log(matches[0].index);
             console.log(matches[1].index);
             """;
@@ -46,7 +46,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "abc 123";
-            const matches = str.matchAll(/\d+/g);
+            const matches = Array.from(str.matchAll(/\d+/g));
             console.log(matches[0].input);
             """;
 
@@ -59,7 +59,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "12-ab 34-cd";
-            const matches = str.matchAll(/(\d+)-(\w+)/g);
+            const matches = Array.from(str.matchAll(/(\d+)-(\w+)/g));
             console.log(matches.length);
             console.log(matches[0]["0"]);
             console.log(matches[0]["1"]);
@@ -78,7 +78,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "hello world";
-            const matches = str.matchAll(/\d+/g);
+            const matches = Array.from(str.matchAll(/\d+/g));
             console.log(matches.length);
             """;
 
@@ -123,7 +123,7 @@ public class StringMatchAllTests
     {
         var source = """
             const str = "foo bar foo baz foo";
-            const matches = str.matchAll("foo");
+            const matches = Array.from(str.matchAll("foo"));
             console.log(matches.length);
             console.log(matches[0]["0"]);
             console.log(matches[0].index);

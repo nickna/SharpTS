@@ -553,15 +553,17 @@ public static class StringBuiltIns
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.matchAll called with a non-global RegExp argument");
             var matchObjects = regex.MatchAllObjects(str);
-            return RuntimeValue.FromObject(new SharpTSArray(matchObjects.Select(m => (object?)m).ToList()));
+            return RuntimeValue.FromObject(new SharpTSIterator(
+                matchObjects.Select(m => (object?)m)));
         }
 
-        var source = pattern is null or SharpTSUndefined
+        var source = pattern is SharpTSUndefined
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
         var tempRegex = new SharpTSRegExp(System.Text.RegularExpressions.Regex.Escape(source), "g");
         var results = tempRegex.MatchAllObjects(str);
-        return RuntimeValue.FromObject(new SharpTSArray(results.Select(m => (object?)m).ToList()));
+        return RuntimeValue.FromObject(new SharpTSIterator(
+            results.Select(m => (object?)m)));
     }
 
     private static RuntimeValue SearchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
