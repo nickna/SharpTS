@@ -877,6 +877,7 @@ public partial class Interpreter
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
     private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
     {
+        (SharpTSArray array, SharpTSSymbol symbol) => new IndexTarget.ArraySymbol(array, symbol),
         (SharpTSArray array, double idx)
             when idx >= 0
                 && idx <= SharpTSArray.MaxWriteIndex
@@ -1150,6 +1151,8 @@ public partial class Interpreter
             IndexTarget.ArrayString t => t.Target.HasNamedProperty(t.Key)
                 ? t.Target.GetNamedProperty(t.Key)
                 : SharpTSUndefined.Instance,
+            IndexTarget.ArraySymbol t => t.Target.GetBySymbol(t.Key)
+                ?? SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
@@ -1461,6 +1464,23 @@ public partial class Interpreter
 
             case IndexTarget.ArrayString t:
                 t.Target.SetNamedProperty(t.Key, value);
+                break;
+
+            case IndexTarget.ArraySymbol t:
+                if (t.Target.TryGetSymbolAccessor(
+                    t.Key, out _, out var arraySymbolSetter))
+                {
+                    if (arraySymbolSetter != null)
+                        BindAccessorToObject(arraySymbolSetter, t.Target)
+                            .CallBoxed(this, [value]);
+                    else if (strictMode)
+                        throw new InterpreterException(
+                            $"Cannot set symbol property '{t.Key}' which has only a getter.");
+                }
+                else if (strictMode)
+                    t.Target.SetBySymbolStrict(t.Key, value, strictMode);
+                else
+                    t.Target.SetBySymbol(t.Key, value);
                 break;
 
             case IndexTarget.TypedArray t:

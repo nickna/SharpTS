@@ -1482,6 +1482,11 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
 
+    [Fact]
+    public void Object_getOwnPropertySymbols_preserves_creation_order()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertySymbols/order-after-define-property.js");
+
     [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-3.js")]

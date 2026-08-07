@@ -18,6 +18,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
+    private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
     private Dictionary<SharpTSSymbol, PropertyDescriptorFlags>? _symbolDescriptors;
@@ -151,10 +152,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// Gets all symbol-keyed property names.
     /// </summary>
     public IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
-    {
-        if (_symbolAccessors is null) return _symbolFields.Keys;
-        return _symbolFields.Keys.Concat(_symbolAccessors.Keys);
-    }
+        => _symbolPropertyOrder;
 
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
@@ -440,11 +438,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal void DefineSymbolAccessor(
         SharpTSSymbol symbol, ISharpTSCallable? getter, ISharpTSCallable? setter)
     {
+        bool exists = HasSymbolProperty(symbol);
         _symbolAccessors ??= [];
         _symbolAccessors[symbol] = (getter, setter);
         _symbolFields.Remove(symbol);
         _symbolDescriptors ??= [];
         _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
+        if (!exists) _symbolPropertyOrder.Add(symbol);
     }
 
     /// <summary>Returns a symbol-keyed accessor pair when one is defined.</summary>
@@ -487,6 +487,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         _symbolFields[symbol] = value;
         if (!exists)
         {
+            _symbolPropertyOrder.Add(symbol);
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
@@ -526,6 +527,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         _symbolFields[symbol] = value;
         if (!exists)
         {
+            _symbolPropertyOrder.Add(symbol);
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
@@ -554,7 +556,11 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         bool removed = _symbolFields.Remove(symbol);
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
-        if (removed) _symbolDescriptors?.Remove(symbol);
+        if (removed)
+        {
+            _symbolPropertyOrder.Remove(symbol);
+            _symbolDescriptors?.Remove(symbol);
+        }
         return removed;
     }
 
@@ -580,7 +586,11 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
         bool removed = _symbolFields.Remove(symbol);
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
-        if (removed) _symbolDescriptors?.Remove(symbol);
+        if (removed)
+        {
+            _symbolPropertyOrder.Remove(symbol);
+            _symbolDescriptors?.Remove(symbol);
+        }
         return removed;
     }
 
@@ -659,6 +669,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             else if (!hasExisting)
                 _symbolFields[symbol] = SharpTSUndefined.Instance;
         }
+
+        if (!hasExisting) _symbolPropertyOrder.Add(symbol);
 
         return true;
     }

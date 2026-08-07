@@ -22,6 +22,7 @@ public abstract record IndexTarget
     /// a negative number, or a fractional number).
     /// </summary>
     public sealed record ArrayString(SharpTSArray Target, string Key) : IndexTarget;
+    public sealed record ArraySymbol(SharpTSArray Target, SharpTSSymbol Key) : IndexTarget;
     public sealed record TypedArray(SharpTSTypedArray Target, int Index) : IndexTarget;
     public sealed record Buffer(SharpTSBuffer Target, int Index) : IndexTarget;
     public sealed record ObjectString(SharpTSObject Target, string Key) : IndexTarget;
