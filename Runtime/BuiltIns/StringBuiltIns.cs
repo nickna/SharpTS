@@ -128,12 +128,8 @@ public static class StringBuiltIns
         object? replaceValue = arguments.Count > 1
             ? arguments[1]
             : SharpTSUndefined.Instance;
-        object protocolReceiver = receiver is SharpTSObject boxed
-            && boxed.GetProperty("__primitiveType") is "String"
-            ? boxed.GetProperty("__primitiveValue")!
-            : receiver;
         result = FunctionBuiltIns.CallWithThis(
-            interpreter, callable, searchValue, [protocolReceiver, replaceValue]);
+            interpreter, callable, searchValue, [receiver, replaceValue]);
         return true;
     }
 

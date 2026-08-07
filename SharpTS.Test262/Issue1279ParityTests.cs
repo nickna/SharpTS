@@ -2115,6 +2115,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-call-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-call.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-method-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-before-tostring.js")]
+    public void String_replaceAll_preserves_borrowed_receiver_for_symbol_hook(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
