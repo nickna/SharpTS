@@ -3488,7 +3488,7 @@ test/built-ins/Math/expm1/prop-desc.js Pass
 test/built-ins/Math/f16round/length.js Pass
 test/built-ins/Math/f16round/name.js Pass
 test/built-ins/Math/f16round/not-a-constructor.js Pass
-test/built-ins/Math/f16round/prop-desc.js Fail
+test/built-ins/Math/f16round/prop-desc.js Pass
 test/built-ins/Math/f16round/value-conversion.js Pass
 test/built-ins/Math/floor/S15.8.2.9_A1.js Pass
 test/built-ins/Math/floor/S15.8.2.9_A2.js Pass
@@ -3516,7 +3516,7 @@ test/built-ins/Math/hypot/Math.hypot_NaN.js Pass
 test/built-ins/Math/hypot/Math.hypot_NegInfinity.js Pass
 test/built-ins/Math/hypot/Math.hypot_NoArgs.js Pass
 test/built-ins/Math/hypot/Math.hypot_Success_2.js Pass
-test/built-ins/Math/hypot/Math.hypot_ToNumberErr.js Fail
+test/built-ins/Math/hypot/Math.hypot_ToNumberErr.js Pass
 test/built-ins/Math/hypot/Math.hypot_Zero_2.js Pass
 test/built-ins/Math/hypot/length.js Pass
 test/built-ins/Math/hypot/name.js Pass
@@ -3648,7 +3648,7 @@ test/built-ins/Math/sqrt/results.js Pass
 test/built-ins/Math/sumPrecise/length.js Pass
 test/built-ins/Math/sumPrecise/name.js Pass
 test/built-ins/Math/sumPrecise/not-a-constructor.js Pass
-test/built-ins/Math/sumPrecise/prop-desc.js Fail
+test/built-ins/Math/sumPrecise/prop-desc.js Pass
 test/built-ins/Math/sumPrecise/sum-is-NaN.js Pass
 test/built-ins/Math/sumPrecise/sum-is-infinite.js Pass
 test/built-ins/Math/sumPrecise/sum-is-minus-zero.js Pass
@@ -6716,7 +6716,7 @@ test/built-ins/Object/getPrototypeOf/15.2.3.2-2-4.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-5.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-6.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-7.js Pass
-test/built-ins/Object/getPrototypeOf/15.2.3.2-2-8.js Fail
+test/built-ins/Object/getPrototypeOf/15.2.3.2-2-8.js Pass
 test/built-ins/Object/getPrototypeOf/15.2.3.2-2-9.js Pass
 test/built-ins/Object/getPrototypeOf/name.js Pass
 test/built-ins/Object/getPrototypeOf/not-a-constructor.js Pass

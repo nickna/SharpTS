@@ -177,22 +177,26 @@ public static class MathBuiltIns
         return RuntimeValue.FromNumber(max);
     }
 
-    private static RuntimeValue Hypot(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue Hypot(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
+        var coerced = new double[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            coerced[i] = interpreter.ToNumberWithPrimitive(args[i].ToObject());
+
         // ECMA-262 21.3.2.16: the Infinity check fires BEFORE NaN, so
         // Math.hypot(NaN, Infinity) === Infinity (not NaN). The naive
         // sqrt(Σx²) below would propagate the NaN instead.
-        for (int i = 0; i < args.Length; i++)
+        for (int i = 0; i < coerced.Length; i++)
         {
-            if (double.IsInfinity(Interpreter.ToNumber(args[i])))
+            if (double.IsInfinity(coerced[i]))
                 return RuntimeValue.FromNumber(double.PositiveInfinity);
         }
 
         // sqrt(sum of squares); any remaining NaN propagates through Sqrt.
         double sum = 0;
-        for (int i = 0; i < args.Length; i++)
+        for (int i = 0; i < coerced.Length; i++)
         {
-            double v = Interpreter.ToNumber(args[i]);
+            double v = coerced[i];
             sum += v * v;
         }
         return RuntimeValue.FromNumber(Math.Sqrt(sum));

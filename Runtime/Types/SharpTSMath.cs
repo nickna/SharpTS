@@ -45,8 +45,8 @@ public class SharpTSMath
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return SharpTSUndefined.Instance;
-        return BuiltIns.MathBuiltIns.GetMember(name) ?? SharpTSUndefined.Instance;
+        if (_deletedBuiltIns.Contains(name)) return null;
+        return BuiltIns.MathBuiltIns.GetMember(name);
     }
 
     /// <summary>
@@ -70,33 +70,7 @@ public class SharpTSMath
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _extras.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-    {
-        var extra = _extras.GetOwnPropertyDescriptor(name);
-        if (extra is not null) return extra;
-        if (_deletedBuiltIns.Contains(name)) return null;
-
-        var value = BuiltIns.MathBuiltIns.GetMember(name);
-        return value switch
-        {
-            BuiltIns.BuiltInMethod method => new SharpTSPropertyDescriptor
-            {
-                Value = method,
-                HasValue = true,
-                Writable = true,
-                Enumerable = false,
-                Configurable = true,
-            },
-            not null => new SharpTSPropertyDescriptor
-            {
-                Value = value,
-                HasValue = true,
-                Writable = false,
-                Enumerable = false,
-                Configurable = false,
-            },
-            _ => null,
-        };
-    }
+        => _extras.GetOwnPropertyDescriptor(name);
 
     public bool DeleteExtra(string name)
     {

@@ -696,6 +696,7 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSMath math when math.IsBuiltInDeleted(propertyKey) => null,
             SharpTSMath math => math.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSJSON json => json.GetOwnPropertyDescriptor(propertyKey)
