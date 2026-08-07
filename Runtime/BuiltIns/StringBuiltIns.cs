@@ -369,16 +369,10 @@ public static class StringBuiltIns
             }
         }
 
-        if (pattern is SharpTSUndefined)
-            return RuntimeValue.FromBoxed(new SharpTSRegExp("").Exec(str));
-
-        var search = interpreter.ToStringForBuiltInArgument(pattern);
-        var index = str.IndexOf(search);
-        if (index < 0) return RuntimeValue.Null;
-        var result = new SharpTSArray([(object?)search]);
-        result.SetNamedProperty("index", (double)index);
-        result.SetNamedProperty("input", str);
-        return RuntimeValue.FromObject(result);
+        string source = pattern is SharpTSUndefined
+            ? ""
+            : interpreter.ToStringForBuiltInArgument(pattern);
+        return RuntimeValue.FromBoxed(new SharpTSRegExp(source).Exec(str));
     }
 
     private static RuntimeValue MatchAllV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
