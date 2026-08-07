@@ -591,7 +591,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         {
             if (strictMode)
             {
-                throw new Exception($"TypeError: Cannot assign to read only symbol property of object");
+                throw StrictModeErrors.TypeError("Cannot assign to read only symbol property of object");
             }
             return;
         }
@@ -601,7 +601,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         {
             if (strictMode)
             {
-                throw new Exception($"TypeError: Cannot add symbol property to a non-extensible object");
+                throw StrictModeErrors.TypeError("Cannot add symbol property to a non-extensible object");
             }
             return;
         }

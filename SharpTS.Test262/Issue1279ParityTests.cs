@@ -1514,6 +1514,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/assign/assignment-to-readonly-property-of-target-must-throw-a-typeerror-exception.js");
 
+    [Theory]
+    [InlineData("built-ins/Object/assign/target-is-frozen-data-property-set-throws.js")]
+    [InlineData("built-ins/Object/assign/target-is-non-extensible-existing-data-property.js")]
+    [InlineData("built-ins/Object/assign/target-is-sealed-existing-data-property.js")]
+    public void Object_assign_handles_symbol_keys_at_integrity_levels(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

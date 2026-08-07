@@ -267,6 +267,17 @@ public static partial class ObjectBuiltIns
             if (args[i] is null or SharpTSUndefined) continue;
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
                 SetAssignedProperty(target, entry.Key, entry.Value);
+            switch (args[i])
+            {
+                case SharpTSObject source:
+                    foreach (var symbol in source.GetSymbolPropertyNames())
+                        SetAssignedSymbol(target, symbol, source.GetBySymbol(symbol));
+                    break;
+                case SharpTSInstance source:
+                    foreach (var symbol in source.GetSymbolPropertyNames())
+                        SetAssignedSymbol(target, symbol, source.GetBySymbol(symbol));
+                    break;
+            }
         }
         return target;
     }
@@ -288,6 +299,17 @@ public static partial class ObjectBuiltIns
             case IDictionary<string, object?> dict: dict[name] = value; break;
             default: throw new ThrowException(new SharpTSTypeError(
                 $"Object.assign target does not support properties ({target.GetType().Name})"));
+        }
+    }
+
+    private static void SetAssignedSymbol(object target, SharpTSSymbol symbol, object? value)
+    {
+        switch (target)
+        {
+            case SharpTSObject obj: obj.SetBySymbolStrict(symbol, value, strictMode: true); break;
+            case SharpTSInstance instance: instance.SetBySymbolStrict(symbol, value, strictMode: true); break;
+            default: throw new ThrowException(new SharpTSTypeError(
+                $"Object.assign target does not support symbol properties ({target.GetType().Name})"));
         }
     }
 
