@@ -38,6 +38,23 @@ public class StringMethodTests
         Assert.Equal("search\nreplacement\nxbx\n", output);
     }
 
+    [Fact]
+    public void String_ReplaceAll_UsesObservableRegexFlags_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const search: any = /a/g;
+            Object.defineProperty(search, "flags", { value: "" });
+            try {
+                "aba".replaceAll(search, "x");
+            } catch (error) {
+                console.log("threw");
+            }
+            """);
+
+        Assert.Equal("threw\n", output);
+    }
+
+
 
     #region String Properties
 

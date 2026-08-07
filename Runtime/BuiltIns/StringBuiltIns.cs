@@ -788,8 +788,11 @@ public static class StringBuiltIns
         if (searchValue is SharpTSRegExp regex)
         {
             // String.prototype.replaceAll requires a global RegExp (spec §22.1.3.18).
-            if (!regex.Global)
-                throw new Exception("TypeError: String.prototype.replaceAll called with a non-global RegExp argument");
+            string flags = interpreter.ToStringForBuiltInArgument(
+                interpreter.GetProperty(searchValue, "flags"));
+            if (!flags.Contains('g'))
+                throw new ThrowException(new SharpTSTypeError(
+                    "String.prototype.replaceAll called with a non-global RegExp argument"));
         }
 
         if (searchValue is not (null or SharpTSUndefined))
