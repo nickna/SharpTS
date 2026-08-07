@@ -1284,11 +1284,14 @@ public static class ArrayBuiltIns
     {
         private readonly ISharpTSCallable _callback;
         private readonly RuntimeValue[] _argsV2;
+        private readonly bool _useDefaultGlobalThis;
 
-        private CallbackIterator(ISharpTSCallable callback, RuntimeValue arrRV)
+        private CallbackIterator(
+            ISharpTSCallable callback, RuntimeValue arrRV, bool useDefaultGlobalThis = false)
         {
             _callback = callback;
             _argsV2 = [default, default, arrRV];
+            _useDefaultGlobalThis = useDefaultGlobalThis;
         }
 
         public static CallbackIterator Create(List<object?> args, SharpTSArray arr, string methodName)
@@ -1306,7 +1309,10 @@ public static class ArrayBuiltIns
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
-            return new CallbackIterator(callback, RuntimeValue.FromObject(arr));
+            bool useDefaultGlobalThis = args.Count < 2
+                && callback is SharpTSFunction { IsStrict: false };
+            return new CallbackIterator(
+                callback, RuntimeValue.FromObject(arr), useDefaultGlobalThis);
         }
 
         public static CallbackIterator CreateFromRV(ReadOnlySpan<RuntimeValue> args, SharpTSArray arr, string methodName)
@@ -1318,7 +1324,10 @@ public static class ArrayBuiltIns
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
-            return new CallbackIterator(callback, RuntimeValue.FromObject(arr));
+            bool useDefaultGlobalThis = args.Length < 2
+                && callback is SharpTSFunction { IsStrict: false };
+            return new CallbackIterator(
+                callback, RuntimeValue.FromObject(arr), useDefaultGlobalThis);
         }
 
         public static CallbackIterator CreateForArrayLike(
@@ -1334,13 +1343,24 @@ public static class ArrayBuiltIns
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
             else if (callback is SharpTSArrowFunction { HasOwnThis: true, IsStrict: true })
                 callback = BindCallbackThis(callback, SharpTSUndefined.Instance);
-            return new CallbackIterator(callback, RuntimeValue.FromObject(receiver));
+            bool useDefaultGlobalThis = args.Count < 2
+                && callback is SharpTSFunction { IsStrict: false };
+            return new CallbackIterator(
+                callback, RuntimeValue.FromObject(receiver), useDefaultGlobalThis);
         }
 
         public object? Invoke(Interpreter interp, object? element, int index)
         {
             _argsV2[0] = RuntimeValue.FromBoxed(element);
             _argsV2[1] = RuntimeValue.FromNumber(index);
+            if (_useDefaultGlobalThis)
+            {
+                return FunctionBuiltIns.CallWithThis(
+                    interp,
+                    _callback,
+                    interp.GlobalThis,
+                    [element, (double)index, _argsV2[2].ToObject()]);
+            }
             return _callback.CallV2(interp, _argsV2).ToObject();
         }
 
@@ -1351,6 +1371,14 @@ public static class ArrayBuiltIns
         {
             _argsV2[0] = RuntimeValue.FromBoxed(element);
             _argsV2[1] = RuntimeValue.FromNumber(index);
+            if (_useDefaultGlobalThis)
+            {
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interp,
+                    _callback,
+                    interp.GlobalThis,
+                    [element, (double)index, _argsV2[2].ToObject()]));
+            }
             return _callback.CallV2(interp, _argsV2);
         }
 
