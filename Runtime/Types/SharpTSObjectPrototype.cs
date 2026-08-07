@@ -25,6 +25,7 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     // Object.prototype constantly to exercise inherited-property paths.
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
+    internal SharpTSObjectNamespace? RealmConstructor { get; set; }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
@@ -72,6 +73,8 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     {
         if (HasExtra(name)) return TryGetExtra(name);
         if (_deletedBuiltIns.Contains(name)) return null;
+        if (name == "constructor")
+            return RealmConstructor ?? SharpTSObjectNamespace.Instance;
         var template = BuiltInMemberTemplate(name);
         return template is SharpTSObjectUnboundMethod unbound
             ? _methodCache.GetOrAdd(name, _ => unbound.CloneUnbound())

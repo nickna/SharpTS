@@ -1538,6 +1538,11 @@ public sealed class Issue1279ParityTests
     public void Object_constructor_owns_its_prototype_property()
         => AssertPassInBothModes("built-ins/Object/S15.2.3_A1.js");
 
+    [Fact]
+    public void Object_prototype_constructor_uses_the_realm_Object()
+        => AssertPassInBothModes(
+            "built-ins/Object/prototype/constructor/S15.2.4.1_A1_T1.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

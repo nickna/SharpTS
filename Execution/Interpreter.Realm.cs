@@ -385,7 +385,8 @@ public partial class Interpreter
         return _arrayPrototype;
     }
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
-    internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype() => _objectPrototype ??= new();
+    internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype()
+        => _objectPrototype ??= new() { RealmConstructor = GetObjectNamespace() };
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
     internal Runtime.Types.SharpTSStringNamespace GetStringNamespace() => _stringNamespace ??= new();
     internal Runtime.Types.SharpTSNumberNamespace GetNumberNamespace()
