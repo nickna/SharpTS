@@ -67,7 +67,8 @@ public sealed class BuiltInTypeBuilder<TReceiver>
         Func<Interpreter, TReceiver, ReadOnlySpan<RuntimeValue>, RuntimeValue> implementation)
     {
         _methods[name] = BuiltInMethod.CreateV2(name, minArity, maxArity,
-            (interp, receiver, args) => implementation(interp, (TReceiver)receiver.ToObject()!, args));
+            (interp, receiver, args) => implementation(interp, (TReceiver)receiver.ToObject()!, args))
+            .WithExpectedReceiverType(typeof(TReceiver));
         return this;
     }
 
@@ -87,6 +88,7 @@ public sealed class BuiltInTypeBuilder<TReceiver>
     {
         _methods[name] = BuiltInMethod.CreateV2(name, minArity, maxArity,
             (interp, receiver, args) => implementation(interp, (TReceiver)receiver.ToObject()!, args))
+            .WithExpectedReceiverType(typeof(TReceiver))
             .WithSpecLength(specLength);
         return this;
     }

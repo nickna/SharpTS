@@ -1572,6 +1572,15 @@ public sealed class Issue1279ParityTests
     public void Array_empty_removals_preserve_zero_length(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-get-length.js")]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-get-prop.js")]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-tonumber-length-symbol.js")]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-tonumber-length.js")]
+    [InlineData("built-ins/Array/prototype/includes/values-are-not-cached.js")]
+    public void Array_includes_observes_generic_property_access(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

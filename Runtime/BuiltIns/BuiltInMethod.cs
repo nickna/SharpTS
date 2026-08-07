@@ -85,6 +85,14 @@ public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
     /// </summary>
     public bool HasV2Implementation => _implementationV2 != null;
 
+    internal Type? ExpectedReceiverType { get; private set; }
+
+    internal BuiltInMethod WithExpectedReceiverType(Type receiverType)
+    {
+        ExpectedReceiverType = receiverType;
+        return this;
+    }
+
     /// <summary>
     /// Own (function-object) properties carried by this method, resolved by the
     /// interpreter's function-member path before the Function.prototype surface.
@@ -275,6 +283,7 @@ public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
             valBound._specLength = _specLength;
             valBound.OwnProperties = OwnProperties;
             valBound.IsConstructor = IsConstructor;
+            valBound.ExpectedReceiverType = ExpectedReceiverType;
             return valBound;
         }
 
@@ -292,6 +301,7 @@ public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
         bound._specLength = _specLength;
         bound.OwnProperties = OwnProperties;
         bound.IsConstructor = IsConstructor;
+        bound.ExpectedReceiverType = ExpectedReceiverType;
         _boundMethodCache.AddOrUpdate(receiver, bound);
         return bound;
     }

@@ -257,6 +257,13 @@ public static class FunctionBuiltIns
         // (typically null), and the implementation sees a null receiver.
         if (callable is BuiltInMethod builtIn)
         {
+            if (builtIn.ExpectedReceiverType == typeof(SharpTSArray)
+                && builtIn.Name == "includes")
+            {
+                return new Types.ArrayPrototypeMethodWrapper(builtIn.Name, builtIn)
+                    .Bind(thisArg)
+                    .Call(interp, args);
+            }
             return builtIn.Bind(thisArg).Call(interp, args);
         }
 
