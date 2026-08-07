@@ -28,6 +28,8 @@ public sealed class DifferentialReportTests
             entry => Assert.Equal("b.js", entry.RelPath));
         Assert.Equal(["only-i.js"], report.InterpretedOnly);
         Assert.Equal(["only-c.js"], report.CompiledOnly);
+        Assert.Equal(3, report.InterpretedSummary.Total);
+        Assert.Equal(3, report.CompiledSummary.Total);
     }
 
     [Fact]

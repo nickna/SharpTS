@@ -34,11 +34,15 @@ public sealed class Test262DifferentialReport
     private Test262DifferentialReport(
         IReadOnlyList<Test262DifferentialEntry> entries,
         IReadOnlyList<string> interpretedOnly,
-        IReadOnlyList<string> compiledOnly)
+        IReadOnlyList<string> compiledOnly,
+        Test262ModeSummary interpretedSummary,
+        Test262ModeSummary compiledSummary)
     {
         Entries = entries;
         InterpretedOnly = interpretedOnly;
         CompiledOnly = compiledOnly;
+        InterpretedSummary = interpretedSummary;
+        CompiledSummary = compiledSummary;
     }
 
     public IReadOnlyList<Test262DifferentialEntry> Entries { get; }
@@ -46,6 +50,10 @@ public sealed class Test262DifferentialReport
     public IReadOnlyList<string> InterpretedOnly { get; }
 
     public IReadOnlyList<string> CompiledOnly { get; }
+
+    public Test262ModeSummary InterpretedSummary { get; }
+
+    public Test262ModeSummary CompiledSummary { get; }
 
     public IReadOnlyList<Test262DifferentialEntry> Divergences =>
         Entries.Where(entry => entry.InterpretedOutcome != entry.CompiledOutcome).ToList();
@@ -93,6 +101,11 @@ public sealed class Test262DifferentialReport
             .Except(interpreted.Keys, StringComparer.Ordinal)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToList();
-        return new Test262DifferentialReport(entries, interpretedOnly, compiledOnly);
+        return new Test262DifferentialReport(
+            entries,
+            interpretedOnly,
+            compiledOnly,
+            Test262ModeSummary.Create(interpreted),
+            Test262ModeSummary.Create(compiled));
     }
 }
