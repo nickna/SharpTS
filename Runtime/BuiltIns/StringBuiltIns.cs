@@ -279,48 +279,39 @@ public static class StringBuiltIns
         return RuntimeValue.FromNumber(str.IndexOf(search));
     }
 
-    private static RuntimeValue StringRawV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue StringRawV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0)
-            throw new Exception("TypeError: String.raw requires at least 1 argument.");
+            throw new ThrowException(new SharpTSTypeError(
+                "String.raw requires a template object"));
 
         object? stringsArg = args[0].ToObject();
-        IReadOnlyList<object?>? rawStrings = null;
+        if (stringsArg is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "String.raw template cannot be null or undefined"));
 
-        if (stringsArg is SharpTSTemplateStringsArray tsa)
-        {
-            rawStrings = tsa.Raw;
-        }
-        else if (stringsArg is SharpTSObject obj)
-        {
-            var rawProp = obj.GetProperty("raw");
-            if (rawProp is SharpTSArray rawArr)
-                rawStrings = rawArr;
-        }
-        else if (stringsArg is SharpTSArray arr)
-        {
-            if (stringsArg is ISharpTSPropertyAccessor accessor)
-            {
-                var rawProp = accessor.GetProperty("raw");
-                if (rawProp is SharpTSArray rawArr)
-                    rawStrings = rawArr;
-            }
-            if (rawStrings == null)
-            {
-                rawStrings = arr;
-            }
-        }
+        object? raw = stringsArg is SharpTSTemplateStringsArray template
+            ? new SharpTSArray(template.Raw.ToList())
+            : interpreter.GetPropertyValue(stringsArg, "raw");
+        if (raw is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "String.raw template.raw cannot be null or undefined"));
 
-        if (rawStrings == null || rawStrings.Count == 0)
+        long literalSegments = ArrayBuiltIns.ToLength(
+            interpreter.GetPropertyValue(raw, "length"), interpreter);
+        if (literalSegments == 0)
             return RuntimeValue.EmptyString;
 
         var result = new StringBuilder();
-        for (int i = 0; i < rawStrings.Count; i++)
+        for (long i = 0; i < literalSegments; i++)
         {
-            result.Append(rawStrings[i]?.ToString() ?? "");
-            if (i < args.Length - 1 && i < rawStrings.Count - 1)
+            string key = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            result.Append(interpreter.ToStringForBuiltInArgument(
+                interpreter.GetPropertyValue(raw, key)));
+            if (i + 1 < literalSegments && i + 1 < args.Length)
             {
-                result.Append(args[i + 1].ToObject()?.ToString() ?? "");
+                result.Append(interpreter.ToStringForBuiltInArgument(
+                    args[(int)i + 1].ToObject()));
             }
         }
 

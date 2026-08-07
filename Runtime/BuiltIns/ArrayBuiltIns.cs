@@ -514,7 +514,7 @@ public static class ArrayBuiltIns
         return -1;
     }
 
-    private static long ToLength(object? value, Interpreter interpreter)
+    internal static long ToLength(object? value, Interpreter interpreter)
     {
         double number = interpreter.ToNumberWithPrimitive(value);
         if (double.IsNaN(number) || number <= 0) return 0;

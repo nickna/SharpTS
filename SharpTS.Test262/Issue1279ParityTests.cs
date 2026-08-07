@@ -1900,6 +1900,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/raw/return-the-string-value.js")]
+    [InlineData("built-ins/String/raw/template-not-object-throws.js")]
+    [InlineData("built-ins/String/raw/template-raw-not-object-throws.js")]
+    [InlineData("built-ins/String/raw/returns-abrupt-from-substitution-symbol.js")]
+    [InlineData("built-ins/String/raw/substitutions-are-limited-to-template-raw-length.js")]
+    public void String_raw_reads_generic_template_objects(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
