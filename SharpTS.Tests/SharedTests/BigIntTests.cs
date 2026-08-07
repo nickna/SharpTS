@@ -40,6 +40,21 @@ public class BigIntTests
 
     #region Constructor Tests
 
+    [Fact]
+    public void BigInt_ExposesMutablePrototype_InInterpreter()
+    {
+        var source = """
+            console.log(BigInt.prototype.constructor === BigInt);
+            (BigInt.prototype as any).marker = 42;
+            console.log((BigInt.prototype as any).marker);
+            delete (BigInt.prototype as any).marker;
+            console.log((BigInt.prototype as any).marker);
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\n42\nundefined\n", output);
+    }
+
     [Theory, ModeData]
     public void BigInt_ConstructorFromNumber_Works(ExecutionMode mode)
     {

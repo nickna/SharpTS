@@ -305,6 +305,66 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 }
 
 /// <summary>
+/// Realm-local <c>BigInt.prototype</c> object. BigInt conversion is exposed by
+/// a first-class global function, while this ordinary mutable object carries
+/// its constructor back-reference and guest-defined properties.
+/// </summary>
+public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
+{
+    internal object? RealmConstructor { get; set; }
+    private readonly SharpTSObject _extras = new([]);
+    private bool _constructorDeleted;
+
+    internal SharpTSBigIntPrototype() { }
+
+    public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    public object? TryGetExtra(string name) => _extras.GetProperty(name);
+    public void SetExtra(string name, object? value)
+    {
+        if (name == "constructor") _constructorDeleted = false;
+        if (name == "constructor" && !HasExtra(name))
+        {
+            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+            return;
+        }
+        _extras.SetProperty(name, value);
+    }
+    public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (name == "constructor") _constructorDeleted = false;
+        return _extras.DefineProperty(name, descriptor);
+    }
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _extras.GetOwnPropertyDescriptor(name);
+    public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || name == "constructor" && !_constructorDeleted;
+    public bool DeleteProperty(string name)
+    {
+        if (HasExtra(name)) return _extras.DeleteProperty(name);
+        if (name == "constructor") _constructorDeleted = true;
+        return true;
+    }
+    public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    public object? GetMember(string name)
+        => HasExtra(name) ? TryGetExtra(name)
+            : name == "constructor" && !_constructorDeleted ? RealmConstructor
+            : null;
+    public override string ToString() => "[object BigInt]";
+}
+
+/// <summary>
 /// Singleton representing the Number namespace/constructor.
 /// Callable as Number(value) for type conversion, and provides static methods.
 /// </summary>

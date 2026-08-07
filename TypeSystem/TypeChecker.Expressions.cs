@@ -1794,6 +1794,7 @@ public partial class TypeChecker
         if (name.Lexeme == "Number") return TypeInfo.Any.Shared; // Number is a special global object
         if (name.Lexeme == "String") return TypeInfo.Any.Shared; // String is a special global object
         if (name.Lexeme == "Boolean") return TypeInfo.Any.Shared; // Boolean is a special global object
+        if (name.Lexeme == "BigInt") return TypeInfo.Any.Shared; // BigInt is a special global function object
         if (name.Lexeme == "Symbol")
         {
             // tsc lets user code augment the global `SymbolConstructor` interface via declaration

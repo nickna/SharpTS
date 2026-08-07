@@ -564,6 +564,9 @@ public static partial class ObjectBuiltIns
             case SharpTSBooleanPrototype booleanPrototype:
                 success = booleanPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSBigIntPrototype bigIntPrototype:
+                success = bigIntPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -701,6 +704,8 @@ public static partial class ObjectBuiltIns
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
@@ -1510,8 +1515,8 @@ public static partial class ObjectBuiltIns
         SharpTSJSON => interp?.GetObjectPrototype(),
         string => interp?.GetStringPrototype(),
         bool => interp?.GetBooleanPrototype(),
-        double or int or long or System.Numerics.BigInteger or SharpTSBigInt
-            => interp?.GetNumberPrototype(),
+        double or int or long => interp?.GetNumberPrototype(),
+        System.Numerics.BigInteger or SharpTSBigInt => interp?.GetBigIntPrototype(),
         Dictionary<string, object?> dict => PropertyDescriptorStore.GetPrototype(dict),
         // ECMA-262 §20.2.3: every function object — built-in constructors included —
         // has Function.prototype as its [[Prototype]], so
@@ -1526,6 +1531,7 @@ public static partial class ObjectBuiltIns
         // Object.prototype.
         SharpTSNumberPrototype => interp?.GetObjectPrototype(),
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
+        SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
         // §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
         // `Object.getPrototypeOf(RangeError) === Error`. A base class falls back to
         // Function.prototype like any other function object.

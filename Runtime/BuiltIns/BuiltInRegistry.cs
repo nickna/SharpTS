@@ -516,6 +516,8 @@ public sealed class BuiltInRegistry
         // every other callable — mirror ArrayPrototypeMethodWrapper below.
         registry.RegisterInstanceType(typeof(Types.StringPrototypeMethodWrapper), (instance, name) =>
             FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
+        registry.RegisterInstanceType(typeof(Types.SharpTSBigIntPrototype), (instance, name) =>
+            ((Types.SharpTSBigIntPrototype)instance).GetMember(name));
     }
 
     private static void RegisterBooleanNamespace(BuiltInRegistry registry)

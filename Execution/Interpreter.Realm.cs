@@ -354,6 +354,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSStringPrototype? _stringPrototype;
     private Runtime.Types.SharpTSNumberPrototype? _numberPrototype;
     private Runtime.Types.SharpTSBooleanPrototype? _booleanPrototype;
+    private Runtime.Types.SharpTSBigIntPrototype? _bigIntPrototype;
     private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
@@ -376,6 +377,11 @@ public partial class Interpreter
         => _numberPrototype ??= new() { RealmConstructor = GetNumberNamespace() };
     internal Runtime.Types.SharpTSBooleanPrototype GetBooleanPrototype()
         => _booleanPrototype ??= new() { RealmConstructor = GetBooleanNamespace() };
+    internal Runtime.Types.SharpTSBigIntPrototype GetBigIntPrototype()
+        => _bigIntPrototype ??= new()
+        {
+            RealmConstructor = _globalConstants[BuiltInNames.BigInt],
+        };
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype()
     {
         if (_arrayPrototype is null)
@@ -477,6 +483,9 @@ public partial class Interpreter
                 return true;
             case Runtime.Types.SharpTSBooleanNamespace:
                 prototype = GetBooleanPrototype();
+                return true;
+            case Runtime.Types.SharpTSGlobalFunction { Name: BuiltInNames.BigInt }:
+                prototype = GetBigIntPrototype();
                 return true;
             case Runtime.Types.SharpTSArrayGlobal:
                 prototype = GetArrayPrototype();
