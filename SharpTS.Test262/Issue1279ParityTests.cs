@@ -2060,6 +2060,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/infinity-throws-rangeerror.js")]
+    [InlineData("built-ins/BigInt/nan-throws-rangeerror.js")]
+    [InlineData("built-ins/BigInt/negative-infinity-throws.rangeerror.js")]
+    [InlineData("built-ins/BigInt/non-integer-rangeerror.js")]
+    public void BigInt_constructor_rejects_non_integer_numbers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
