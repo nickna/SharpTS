@@ -1405,6 +1405,10 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_methods_apply_ToObject(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_fromEntries_rejects_an_omitted_iterable()
+        => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

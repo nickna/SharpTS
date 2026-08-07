@@ -13,7 +13,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("keys", 1, KeysV2)
             .MethodV2("values", 1, ValuesV2)
             .MethodV2("entries", 1, EntriesV2)
-            .MethodV2("fromEntries", 1, FromEntriesV2)
+            .MethodV2("fromEntries", 0, 1, 1, FromEntriesV2)
             .MethodV2("hasOwn", 2, HasOwnV2)
             .MethodV2("is", 0, 2, 2, IsV2)
             .MethodV2("assign", 1, int.MaxValue, AssignV2)
@@ -159,8 +159,9 @@ public static partial class ObjectBuiltIns
 
     private static object? FromEntries(Interpreter interpreter, List<object?> args)
     {
-        if (args[0] == null)
-            throw new Exception("Runtime Error: Object.fromEntries() requires an iterable argument");
+        if (args.Count == 0 || args[0] is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.fromEntries requires an iterable argument"));
 
         var elements = interpreter.GetIterableElements(args[0]);
         Dictionary<string, object?> result = [];
