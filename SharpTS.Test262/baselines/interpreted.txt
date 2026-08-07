@@ -3465,7 +3465,7 @@ test/built-ins/Math/cos/S15.8.2.7_A5.js Pass
 test/built-ins/Math/cos/length.js Pass
 test/built-ins/Math/cos/name.js Pass
 test/built-ins/Math/cos/not-a-constructor.js Pass
-test/built-ins/Math/cos/prop-desc.js Fail
+test/built-ins/Math/cos/prop-desc.js Pass
 test/built-ins/Math/cosh/cosh-specialVals.js Pass
 test/built-ins/Math/cosh/length.js Pass
 test/built-ins/Math/cosh/name.js Pass
