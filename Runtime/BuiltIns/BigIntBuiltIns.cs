@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 using SharpTS.Runtime.Types;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -40,14 +41,16 @@ public static class BigIntBuiltIns
         return name switch
         {
             // BigInt.prototype.toString([radix]) — ECMA-262 21.2.3.3.
-            "toString" => BuiltInMethod.CreateV2("toString", 0, 1, (_, _, args) =>
+            "toString" => BuiltInMethod.CreateV2("toString", 0, 1, (interpreter, _, args) =>
             {
                 int radix = 10;
-                if (args.Length > 0 && args[0].Kind == ValueKind.Number)
+                if (args.Length > 0 && !args[0].IsUndefined)
                 {
-                    radix = (int)Interpreter.ToNumber(args[0]);
+                    double number = interpreter.ToNumberWithPrimitive(args[0].ToObject());
+                    radix = double.IsNaN(number) ? 0 : (int)Math.Truncate(number);
                     if (radix < 2 || radix > 36)
-                        throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
+                        throw new ThrowException(new SharpTSRangeError(
+                            "toString() radix must be between 2 and 36"));
                 }
                 return RuntimeValue.FromString(ToStringWithRadix(value, radix));
             }).AsNonConstructor(),

@@ -1893,6 +1893,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/prototype/toString/radix-err.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/radix-tointegerorinfinity-throws-symbol.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/radix-tointegerorinfinity-throws-toprimitive-or-bigint.js")]
+    public void BigInt_toString_coerces_and_validates_radix(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
