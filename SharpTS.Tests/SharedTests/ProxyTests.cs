@@ -285,4 +285,24 @@ public class ProxyTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("outer_inner_base\n", output);
     }
+
+    [Theory, ModeData]
+    public void Proxy_OwnDescriptorOperations_UseDedicatedTraps(ExecutionMode mode)
+    {
+        var source = """
+            let ordinaryGets = 0;
+            const proxy: any = new Proxy({}, {
+                ownKeys(): string[] { return ['hidden']; },
+                getOwnPropertyDescriptor(): any { return undefined; },
+                get(): any { ordinaryGets++; throw new Error('unexpected get'); }
+            });
+            console.log(Reflect.ownKeys(proxy).join(','));
+            console.log(Object.getOwnPropertyDescriptor(proxy, 'hidden') === undefined);
+            console.log(Object.keys(Object.getOwnPropertyDescriptors(proxy)).length);
+            console.log(ordinaryGets);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hidden\ntrue\n0\n0\n", output);
+    }
 }

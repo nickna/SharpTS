@@ -275,12 +275,22 @@ public static class ReflectBuiltIns
                 return RuntimeValue.True;
             }),
 
-            "getOwnPropertyDescriptor" => BuiltInMethod.CreateV2("getOwnPropertyDescriptor", 2, static (_, _, args) =>
+            "getOwnPropertyDescriptor" => BuiltInMethod.CreateV2("getOwnPropertyDescriptor", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.getOwnPropertyDescriptor requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
+                if (target is SharpTSProxy proxy)
+                {
+                    var proxyDescriptor = proxy.TrapGetOwnPropertyDescriptor(propertyKey, interpreter);
+                    return proxyDescriptor is null or SharpTSUndefined
+                        ? RuntimeValue.Undefined
+                        : RuntimeValue.FromBoxed(proxyDescriptor);
+                }
                 // Delegate to ObjectBuiltIns which handles all target types
-                return RuntimeValue.FromBoxed(ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey));
+                var descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey);
+                return descriptor is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(descriptor);
             }),
 
             "defineProperty" => BuiltInMethod.CreateV2("defineProperty", 3, static (interpreter, _, args) =>
@@ -316,12 +326,15 @@ public static class ReflectBuiltIns
                 }
             }),
 
-            "ownKeys" => BuiltInMethod.CreateV2("ownKeys", 1, static (_, _, args) =>
+            "ownKeys" => BuiltInMethod.CreateV2("ownKeys", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.ownKeys requires a target object.");
                 List<object?> keys = [];
                 switch (target)
                 {
+                    case SharpTSProxy proxy:
+                        keys.AddRange(proxy.TrapOwnKeys(interpreter).Select(k => (object?)k));
+                        break;
                     case SharpTSObject obj:
                         keys.AddRange(obj.Fields.Keys.Select(k => (object?)k));
                         keys.AddRange(obj.GetSymbolPropertyNames().Select(s => (object?)s));

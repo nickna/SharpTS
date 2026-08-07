@@ -1447,6 +1447,12 @@ public sealed class Issue1279ParityTests
     public void Object_call_and_construction_apply_legacy_coercion(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/inherited-properties-omitted.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/proxy-undefined-descriptor.js")]
+    public void Object_getOwnPropertyDescriptors_uses_own_descriptor_semantics(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");

@@ -671,6 +671,14 @@ public static partial class ObjectBuiltIns
         // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
         var propertyKey = interpreter.ToPropertyKeyString(args[1]);
 
+        if (target is SharpTSProxy proxy)
+        {
+            var proxyDescriptor = proxy.TrapGetOwnPropertyDescriptor(propertyKey, interpreter);
+            return proxyDescriptor is null or SharpTSUndefined
+                ? SharpTSUndefined.Instance
+                : proxyDescriptor;
+        }
+
         var descriptor = OwnPropertyDescriptorOf(interpreter, target, propertyKey);
 
         if (descriptor == null)
@@ -1128,6 +1136,7 @@ public static partial class ObjectBuiltIns
             SharpTSObject obj => GetAllOwnPropertyNames(obj),
             SharpTSInstance inst => inst.GetFieldNames().ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr).Select(n => n!.ToString()!).ToList(),
+            SharpTSProxy proxy => proxy.TrapOwnKeys(interpreter),
             Dictionary<string, object?> dict => dict.Keys.ToList(),
             _ => []
         };
@@ -1137,7 +1146,7 @@ public static partial class ObjectBuiltIns
         foreach (var name in names)
         {
             var descriptor = GetOwnPropertyDescriptor(interpreter, [target, name]);
-            if (descriptor != null)
+            if (descriptor is not (null or SharpTSUndefined))
             {
                 result[name] = descriptor;
             }
