@@ -80,6 +80,23 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_clusters_entries_by_stable_folder_prefix()
+    {
+        var entries = new[]
+        {
+            new Test262DifferentialEntry("test/built-ins/Object/a.js", "Fail", "Pass"),
+            new Test262DifferentialEntry("test/built-ins/Object/b.js", "Fail", "Pass"),
+            new Test262DifferentialEntry("test/built-ins/Array/a.js", "Fail", "Pass"),
+        };
+
+        Assert.Equal(
+            [new("test/built-ins/Object", 2), new("test/built-ins/Array", 1)],
+            Test262DifferentialReport.ClusterByFolder(entries));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Test262DifferentialReport.ClusterByFolder(entries, 0));
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(

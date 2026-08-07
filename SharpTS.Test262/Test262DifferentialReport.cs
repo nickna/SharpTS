@@ -2,6 +2,8 @@ namespace SharpTS.Test262;
 
 public sealed record Test262TransitionCount(string Transition, int Count);
 
+public sealed record Test262FolderCount(string Folder, int Count);
+
 public sealed record Test262DifferentialEntry(
     string RelPath,
     string InterpretedBucket,
@@ -16,6 +18,19 @@ public sealed record Test262DifferentialEntry(
 
 public sealed class Test262DifferentialReport
 {
+    public static IReadOnlyList<Test262FolderCount> ClusterByFolder(
+        IEnumerable<Test262DifferentialEntry> entries,
+        int depth = 3)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(depth, 1);
+        return entries
+            .GroupBy(entry => string.Join('/', entry.RelPath.Split('/').Take(depth)), StringComparer.Ordinal)
+            .Select(group => new Test262FolderCount(group.Key, group.Count()))
+            .OrderByDescending(item => item.Count)
+            .ThenBy(item => item.Folder, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private Test262DifferentialReport(
         IReadOnlyList<Test262DifferentialEntry> entries,
         IReadOnlyList<string> interpretedOnly,
