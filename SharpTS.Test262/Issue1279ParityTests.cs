@@ -1479,6 +1479,10 @@ public sealed class Issue1279ParityTests
     public void JSON_method_descriptors_preserve_callable_identity(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_assign_reports_its_spec_length()
+        => AssertPassInBothModes("built-ins/Object/assign/assign-length.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
