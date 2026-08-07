@@ -130,9 +130,24 @@ public sealed class Test262DifferentialReport
         markdown.AppendLine("|---:|---|");
         foreach (var item in Histogram)
             markdown.AppendLine($"| {item.Count} | {item.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
+        AppendClusters(markdown, "Track A — interpreter deficits", InterpreterDeficits);
         return markdown.ToString();
     }
 
     private static void AppendMode(StringBuilder markdown, string mode, Test262ModeSummary summary) =>
         markdown.AppendLine($"| {mode} | {summary.Count(Test262Outcome.Pass)} | {summary.Executed} | {summary.Skipped} | {summary.PassPercentage.ToString("F1", CultureInfo.InvariantCulture)}% |");
+
+    private static void AppendClusters(
+        StringBuilder markdown,
+        string title,
+        IReadOnlyList<Test262DifferentialEntry> entries)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"## {title} ({entries.Count})");
+        markdown.AppendLine();
+        markdown.AppendLine("| Count | Folder |");
+        markdown.AppendLine("|---:|---|");
+        foreach (var item in ClusterByFolder(entries))
+            markdown.AppendLine($"| {item.Count} | `{item.Folder}` |");
+    }
 }

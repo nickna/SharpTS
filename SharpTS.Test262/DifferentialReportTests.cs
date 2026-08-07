@@ -115,6 +115,19 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_clusters_track_a_interpreter_deficits()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("test/built-ins/Object/a.js", "Fail"), ("test/built-ins/Object/b.js", "RuntimeError")),
+            Baseline(("test/built-ins/Object/a.js", "Pass"), ("test/built-ins/Object/b.js", "Pass")));
+
+        var markdown = report.ToMarkdown();
+
+        Assert.Contains("## Track A — interpreter deficits (2)", markdown);
+        Assert.Contains("| 2 | `test/built-ins/Object` |", markdown);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
