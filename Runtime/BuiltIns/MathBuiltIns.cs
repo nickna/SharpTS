@@ -31,7 +31,11 @@ public static class MathBuiltIns
             .MethodV2("ceil", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Ceiling(Interpreter.ToNumber(args[0]))))
             .MethodV2("round", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Floor(Interpreter.ToNumber(args[0]) + 0.5)))
+            {
+                double x = Interpreter.ToNumber(args[0]);
+                double rounded = Math.Floor(x + 0.5);
+                return RuntimeValue.FromNumber(rounded == 0 && double.IsNegative(x) ? -0.0 : rounded);
+            })
             .MethodV2("sqrt", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Sqrt(Interpreter.ToNumber(args[0]))))
             .MethodV2("sin", 1, (_, _, args) =>
