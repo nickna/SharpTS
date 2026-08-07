@@ -1581,6 +1581,16 @@ public sealed class Issue1279ParityTests
     public void Array_includes_observes_generic_property_access(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T5.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A3_T3.js")]
+    public void Array_slice_supports_legacy_generic_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

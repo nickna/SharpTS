@@ -1292,10 +1292,10 @@ public partial class Interpreter
         {
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
-            // join has complete generic array-like dispatch in the wrapper. Other
+            // join and slice have complete generic array-like dispatch in the wrapper. Other
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
-            ArrayPrototypeMethodWrapper m when m.FunctionName == "join" => m.Bind(receiver),
+            ArrayPrototypeMethodWrapper m when m.FunctionName is "join" or "slice" => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
