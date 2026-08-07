@@ -876,6 +876,14 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateGetOnBuiltInRV(TypeCategory category, object obj, string memberName)
     {
+        if (obj is SharpTSError error)
+        {
+            if (error.TryGetAccessor(memberName, out var getter, out _) && getter != null)
+                return RuntimeValue.FromBoxed(
+                    FunctionBuiltIns.CallWithThis(this, getter, error, []));
+            if (error.TryGetProperty(memberName, out var value))
+                return RuntimeValue.FromBoxed(value);
+        }
         // Native errors created by runtime helpers carry their built-in name but
         // not a constructor reference. Resolve `constructor` through this realm;
         // the old process-static SharpTSErrorClass registry leaked the latest
@@ -1975,9 +1983,15 @@ public partial class Interpreter
                 return value;
 
             case TypeCategory.Error when obj is SharpTSError error:
+                if (error.TryGetAccessor(memberName, out _, out var setter) && setter != null)
+                {
+                    FunctionBuiltIns.CallWithThis(this, setter, error, [value]);
+                    return value;
+                }
                 if (ErrorBuiltIns.SetMember(error, memberName, value))
                     return value;
-                throw new InterpreterException($"Cannot set property '{memberName}' on Error.");
+                error.SetProperty(memberName, value);
+                return value;
 
             case TypeCategory.Promise when obj is SharpTSPromiseSubclassInstance promiseSub:
                 // Promise subclass instances (#242): class setters win, then

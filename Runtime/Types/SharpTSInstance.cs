@@ -29,6 +29,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Instance;
     private readonly Dictionary<string, object?> _fields = [];
+    private Dictionary<string, ISharpTSCallable>? _getters;
+    private Dictionary<string, ISharpTSCallable>? _setters;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Interpreter? _interpreter;
@@ -119,6 +121,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private enum ResolutionType
     {
         Getter,      // Resolved to a getter (invoke on each access)
+        OwnAccessor, // Accessor installed with Object.defineProperty
         Field,       // Resolved to an instance field (read from _fields)
         Method,      // Resolved to a method (bind on access)
         AutoAccessor,// Resolved to an auto-accessor (TypeScript 4.9+)
@@ -146,6 +149,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         {
             return new PropertyResolution { Type = ResolutionType.ClassSelf };
         }
+
+        if ((_getters?.ContainsKey(name) ?? false) || (_setters?.ContainsKey(name) ?? false))
+            return new PropertyResolution { Type = ResolutionType.OwnAccessor };
 
         // Check for auto-accessor first (TypeScript 4.9+)
         // Auto-accessors take precedence since they're a specific declaration
@@ -203,6 +209,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         {
             ResolutionType.AutoAccessor => _klass.GetAutoAccessorValue(this, propName),
             ResolutionType.Getter => ((SharpTSFunction)resolution.Function!).Bind(this).Call(_interpreter!, []),
+            ResolutionType.OwnAccessor => _getters?.TryGetValue(propName, out var ownGetter) == true
+                ? InvokeOwnAccessor(ownGetter, [])
+                : SharpTSUndefined.Instance,
             ResolutionType.Field => _fields[propName],
             ResolutionType.Method => GetOrCreateBoundMethod(propName, resolution.Function!),
             ResolutionType.ClassSelf => _klass,
@@ -212,6 +221,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     }
 
     public RuntimeValue GetRV(Token name) => RuntimeValue.FromBoxed(Get(name));
+
+    private object? InvokeOwnAccessor(ISharpTSCallable callable, List<object?> args)
+        => callable switch
+        {
+            SharpTSFunction function => function.Bind(this).Call(_interpreter!, args),
+            SharpTSArrowFunction function => function.Bind(this).Call(_interpreter!, args),
+            _ => callable.Call(_interpreter!, args),
+        };
 
     /// <summary>
     /// Gets a cached bound method or creates and caches a new one.
@@ -231,6 +248,12 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public void Set(Token name, object? value)
     {
         string propName = name.Lexeme;
+
+        if (_setters?.TryGetValue(propName, out var ownSetter) == true)
+        {
+            InvokeOwnAccessor(ownSetter, [value]);
+            return;
+        }
 
         // Check frozen state first
         if (IsFrozen)
@@ -287,6 +310,12 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public void SetStrict(Token name, object? value, bool strictMode)
     {
         string propName = name.Lexeme;
+
+        if (_setters?.TryGetValue(propName, out var ownSetter) == true)
+        {
+            InvokeOwnAccessor(ownSetter, [value]);
+            return;
+        }
 
         if (IsFrozen)
         {
@@ -358,7 +387,11 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// <summary>
     /// Get all field names for Object.keys() support
     /// </summary>
-    public IEnumerable<string> GetFieldNames() => _fields.Keys;
+    public IEnumerable<string> GetFieldNames()
+        => _fields.Keys
+            .Concat(_getters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
+            .Concat(_setters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
+            .Distinct();
 
     /// <summary>
     /// Enumerates own string keys whose descriptors are enumerable.
@@ -368,7 +401,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        foreach (var key in _fields.Keys)
+        foreach (var key in GetFieldNames())
             if (GetPropertyFlags(key).Enumerable)
                 yield return key;
     }
@@ -620,7 +653,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
         // Get existing descriptor flags if any
-        bool hasExisting = _fields.ContainsKey(name);
+        bool hasExisting = _fields.ContainsKey(name)
+            || (_getters?.ContainsKey(name) ?? false)
+            || (_setters?.ContainsKey(name) ?? false);
         PropertyDescriptorFlags existingFlags = default;
 
         if (hasExisting && _descriptors?.TryGetValue(name, out existingFlags) != true)
@@ -666,11 +701,42 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             descriptor.Configurable
         );
 
-        // Set the value (class instances only support data properties via defineProperty)
-        _fields[name] = descriptor.Value;
+        if (descriptor.HasGet || descriptor.HasSet)
+        {
+            _fields.Remove(name);
+            if (descriptor.Get is not null)
+            {
+                _getters ??= [];
+                _getters[name] = descriptor.Get;
+            }
+            else
+            {
+                _getters?.Remove(name);
+            }
+            if (descriptor.Set is not null)
+            {
+                _setters ??= [];
+                _setters[name] = descriptor.Set;
+            }
+            else
+            {
+                _setters?.Remove(name);
+            }
+        }
+        else
+        {
+            _getters?.Remove(name);
+            _setters?.Remove(name);
+            _fields[name] = descriptor.Value;
+        }
 
         // Update lookup cache
-        _lookupCache[name] = new PropertyResolution { Type = ResolutionType.Field };
+        _lookupCache[name] = new PropertyResolution
+        {
+            Type = descriptor.HasGet || descriptor.HasSet
+                ? ResolutionType.OwnAccessor
+                : ResolutionType.Field
+        };
 
         return true;
     }
@@ -682,7 +748,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// </summary>
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
     {
-        if (!_fields.TryGetValue(name, out var fieldValue))
+        bool isAccessor = (_getters?.ContainsKey(name) ?? false)
+            || (_setters?.ContainsKey(name) ?? false);
+        if (!_fields.TryGetValue(name, out var fieldValue) && !isAccessor)
         {
             return null;
         }
@@ -692,6 +760,19 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         if (_descriptors?.TryGetValue(name, out flags) != true)
         {
             flags = PropertyDescriptorFlags.Default;
+        }
+
+        if (isAccessor)
+        {
+            return new SharpTSPropertyDescriptor
+            {
+                Get = _getters?.GetValueOrDefault(name),
+                Set = _setters?.GetValueOrDefault(name),
+                HasGet = true,
+                HasSet = true,
+                Enumerable = flags.Enumerable,
+                Configurable = flags.Configurable
+            };
         }
 
         return new SharpTSPropertyDescriptor

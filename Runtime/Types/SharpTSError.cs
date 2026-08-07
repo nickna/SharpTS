@@ -11,6 +11,8 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 public class SharpTSError : ITypeCategorized
 {
+    private readonly SharpTSObject _properties = new([]);
+
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Error;
 
@@ -58,6 +60,23 @@ public class SharpTSError : ITypeCategorized
     /// Whether the cause property was explicitly set (even to undefined/null).
     /// </summary>
     public bool HasCause { get; internal set; }
+
+    internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnPropertyNames => _properties.PropertyNames;
+    internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => _properties.DefineProperty(name, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _properties.GetOwnPropertyDescriptor(name);
+    internal bool TryGetProperty(string name, out object? value)
+        => _properties.Fields.TryGetValue(name, out value);
+    internal bool TryGetAccessor(
+        string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        getter = _properties.GetGetter(name);
+        setter = _properties.GetSetter(name);
+        return getter is not null || setter is not null;
+    }
+    internal void SetProperty(string name, object? value) => _properties.SetProperty(name, value);
 
     /// <summary>
     /// Creates a new Error with the specified message.

@@ -121,6 +121,10 @@ public static partial class ObjectBuiltIns
                 foreach (var key in regex.OwnEnumerableKeys())
                     yield return new(key, regex.TryGetProperty(key, out var value) ? value : null);
                 yield break;
+            case SharpTSError error:
+                foreach (var key in error.OwnEnumerableKeys())
+                    yield return new(key, interpreter.GetProperty(error, key));
+                yield break;
             case SharpTSFunction fn:
                 foreach (var k in fn.PropertyKeys)
                     yield return new(k, fn.TryGetProperty(k, out var v) ? v : null);
@@ -482,7 +486,8 @@ public static partial class ObjectBuiltIns
             or float or double or decimal or SharpTSBigInt or SharpTSSymbol)
         {
             throw new ThrowException(
-                new SharpTSTypeError("Property description must be an object"));
+                new SharpTSTypeError(
+                    $"Property description must be an object (got {descriptorArg?.GetType().Name ?? "null"})"));
         }
 
         // Parse descriptor from object - use FromAnyObject to handle any object type
@@ -621,6 +626,9 @@ public static partial class ObjectBuiltIns
                 // reject illegal redefinitions and omitted fields are retained.
                 success = rx.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSError error:
+                success = error.DefineProperty(propertyKey, descriptor);
+                break;
             case SharpTSPromise promise:
                 // Promise instances are objects; user code may install own
                 // accessor or data properties — notably a poisoned `constructor`
@@ -738,6 +746,8 @@ public static partial class ObjectBuiltIns
             SharpTSClassPrototype classPrototype => classPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`
@@ -1037,6 +1047,7 @@ public static partial class ObjectBuiltIns
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSRegExp regex => regex.OwnEnumerableKeys(),
+            SharpTSError error => error.OwnEnumerableKeys(),
             SharpTSFunction function => function.PropertyKeys,
             SharpTSArrowFunction arrow => arrow.PropertyKeys,
             ISharpTSCallable => [],
@@ -1053,10 +1064,12 @@ public static partial class ObjectBuiltIns
         {
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(key),
             SharpTSArray array => array.GetOwnPropertyDescriptor(key),
+            SharpTSInstance instance => instance.GetOwnPropertyDescriptor(key),
             SharpTSMath math => math.GetOwnPropertyDescriptor(key),
             SharpTSJSON json => json.GetOwnPropertyDescriptor(key),
             SharpTSDate date => date.GetOwnPropertyDescriptor(key),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(key),
+            SharpTSError error => error.GetOwnPropertyDescriptor(key),
             SharpTSFunction function => function.GetOwnPropertyDescriptor(key),
             SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(key),
             _ => null,
@@ -1164,6 +1177,7 @@ public static partial class ObjectBuiltIns
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
+            SharpTSError error => error.OwnPropertyNames.Select(k => (object?)k).ToList(),
             Dictionary<string, object?> dict => dict.Keys.Select(k => (object?)k).ToList(),
             _ => []
         };
