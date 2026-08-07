@@ -1114,7 +1114,7 @@ public partial class Interpreter
 
         if (memberName is "toReversed" or "toSorted" or "toSpliced" or "with"
             or "find" or "findIndex"
-            or "findLast"
+            or "findLast" or "findLastIndex"
             && GetArrayPrototype().GetMember(memberName) is ArrayPrototypeMethodWrapper copyingMethod)
         {
             return RuntimeValue.FromObject(copyingMethod.Bind(obj));
