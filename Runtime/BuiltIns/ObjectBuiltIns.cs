@@ -1470,6 +1470,12 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 arr.PreventExtensions();
                 return arr;
+            case SharpTSFunction function:
+                function.PreventExtensions();
+                return function;
+            case SharpTSArrowFunction arrow:
+                arrow.PreventExtensions();
+                return arrow;
             case Dictionary<string, object?> dict:
                 PropertyDescriptorStore.PreventExtensions(dict);
                 return dict;
@@ -1492,6 +1498,8 @@ public static partial class ObjectBuiltIns
             SharpTSObject obj => obj.IsExtensible,
             SharpTSInstance inst => inst.IsExtensible,
             SharpTSArray arr => arr.IsExtensible,
+            SharpTSFunction function => function.IsExtensible,
+            SharpTSArrowFunction arrow => arrow.IsExtensible,
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsExtensible(idict),
             // Primitives are not extensible

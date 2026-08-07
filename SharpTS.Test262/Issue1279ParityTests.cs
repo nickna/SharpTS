@@ -1435,6 +1435,12 @@ public sealed class Issue1279ParityTests
     public void Object_getPrototypeOf_applies_ToObject(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-3.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-13.js")]
+    public void Object_preventExtensions_handles_function_objects(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
