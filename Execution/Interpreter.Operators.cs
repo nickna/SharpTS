@@ -511,6 +511,9 @@ public partial class Interpreter
         if (rv.Kind == ValueKind.Symbol)
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot convert a Symbol value to a number"));
+        if (rv.Kind == ValueKind.BigInt)
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert a BigInt value to a number"));
         if (rv.Kind == ValueKind.Null) return 0.0;
         if (rv.Kind == ValueKind.Undefined) return double.NaN;
         if (rv.IsString)

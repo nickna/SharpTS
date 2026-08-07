@@ -957,13 +957,13 @@ public partial class Interpreter
     /// Converts a boxed double to a 32-bit signed integer per ECMA-262 ToInt32.
     /// </summary>
     /// <seealso href="https://tc39.es/ecma262/#sec-toint32">ECMAScript ToInt32</seealso>
-    private static int ToInt32(object? value) => JsToInt32(CoerceToNumber(value));
+    private int ToInt32(object? value) => JsToInt32(ToNumberWithPrimitive(value));
 
     /// <summary>
     /// Converts a boxed double to a 32-bit unsigned integer per ECMA-262 ToUint32.
     /// </summary>
     /// <seealso href="https://tc39.es/ecma262/#sec-touint32">ECMAScript ToUint32</seealso>
-    private static uint ToUint32(object? value) => JsToUint32(CoerceToNumber(value));
+    private uint ToUint32(object? value) => JsToUint32(ToNumberWithPrimitive(value));
 
     // ECMA-262 ToInt32 / ToUint32 on a double. Unlike C#'s saturating (int) cast,
     // non-finite → 0 and out-of-range doubles wrap modulo 2^32. Mirrors JsToInt32 in

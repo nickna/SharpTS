@@ -284,15 +284,14 @@ public static class StringBuiltIns
 
         if (args.Length == 1)
         {
-            var code = (int)NumArg(interpreter, args[0]);
-            return RuntimeValue.FromString(((char)(code & 0xFFFF)).ToString());
+            return RuntimeValue.FromString(
+                ((char)ToUint16(NumArg(interpreter, args[0]))).ToString());
         }
 
         var chars = new char[args.Length];
         for (int i = 0; i < args.Length; i++)
         {
-            var code = (int)NumArg(interpreter, args[i]);
-            chars[i] = (char)(code & 0xFFFF);
+            chars[i] = (char)ToUint16(NumArg(interpreter, args[i]));
         }
         return RuntimeValue.FromString(new string(chars));
     }
@@ -306,6 +305,16 @@ public static class StringBuiltIns
         => rv.Kind == ValueKind.Number
             ? Interpreter.ToNumber(rv)
             : interpreter.ToNumberWithPrimitive(rv.ToObject());
+
+    private static ushort ToUint16(double number)
+    {
+        if (number == 0 || double.IsNaN(number) || double.IsInfinity(number))
+            return 0;
+        const double Modulus = 65536d;
+        double modulo = Math.Truncate(number) % Modulus;
+        if (modulo < 0) modulo += Modulus;
+        return (ushort)modulo;
+    }
 
     private static RuntimeValue FromCodePointV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {

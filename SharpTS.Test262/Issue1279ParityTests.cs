@@ -1731,6 +1731,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/fromCharCode/S15.5.3.2_A1.js")]
+    [InlineData("built-ins/String/fromCharCode/S9.7_A1.js")]
+    [InlineData("built-ins/String/fromCharCode/S9.7_A2.1.js")]
+    [InlineData("built-ins/String/fromCharCode/S9.7_A3.1_T4.js")]
+    [InlineData("built-ins/String/fromCharCode/touint16-tonumber-throws-bigint.js")]
+    public void String_fromCharCode_applies_ToUint16(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
