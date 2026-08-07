@@ -3414,7 +3414,7 @@ test/built-ins/Math/atan/S15.8.2.4_A3.js Pass
 test/built-ins/Math/atan/length.js Pass
 test/built-ins/Math/atan/name.js Pass
 test/built-ins/Math/atan/not-a-constructor.js Pass
-test/built-ins/Math/atan/prop-desc.js Fail
+test/built-ins/Math/atan/prop-desc.js Pass
 test/built-ins/Math/atan2/S15.8.2.5_A1.js Pass
 test/built-ins/Math/atan2/S15.8.2.5_A14.js Pass
 test/built-ins/Math/atan2/S15.8.2.5_A16.js Pass
