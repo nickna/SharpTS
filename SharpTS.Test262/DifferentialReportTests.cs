@@ -64,6 +64,7 @@ public sealed class DifferentialReportTests
             [new("Fail -> Pass", 2), new("Pass -> RuntimeError", 1)],
             report.Histogram);
         Assert.Equal(["a.js", "b.js"], report.InterpreterDeficits.Select(entry => entry.RelPath));
+        Assert.Equal(["c.js"], report.CompilerDeficits.Select(entry => entry.RelPath));
     }
 
     [Fact]
