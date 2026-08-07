@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -90,20 +91,36 @@ internal static class GlobalFunctionHandlers
 
         var argRV = await evaluateArg(arguments[0]);
 
-        if (argRV.IsBigInt)
-            return argRV;
-        if (argRV.IsNumber)
-            return RuntimeValue.FromBigInt(new SharpTSBigInt(Interpreter.ToNumber(argRV)));
-        if (argRV.IsString)
-            return RuntimeValue.FromBigInt(new SharpTSBigInt(argRV.AsString()));
-
-        var arg = argRV.ToObject();
-        if (arg is SharpTSBigInt bi)
+        object? primitive = interpreter.ToPrimitiveForBuiltIn(argRV.ToObject());
+        if (primitive is SharpTSBigInt bi)
             return RuntimeValue.FromBigInt(bi);
-        if (arg is System.Numerics.BigInteger biVal)
+        if (primitive is System.Numerics.BigInteger biVal)
             return RuntimeValue.FromBigInt(new SharpTSBigInt(biVal));
+        if (primitive is bool boolean)
+            return RuntimeValue.FromBigInt(new SharpTSBigInt(
+                boolean ? System.Numerics.BigInteger.One : System.Numerics.BigInteger.Zero));
+        if (primitive is double number)
+        {
+            if (!double.IsFinite(number) || Math.Truncate(number) != number)
+                throw new ThrowException(new SharpTSRangeError(
+                    "Cannot convert a non-integer Number to BigInt"));
+            return RuntimeValue.FromBigInt(new SharpTSBigInt(number));
+        }
+        if (primitive is string text)
+        {
+            try
+            {
+                return RuntimeValue.FromBigInt(new SharpTSBigInt(text));
+            }
+            catch (FormatException)
+            {
+                throw new ThrowException(new SharpTSSyntaxError(
+                    "Cannot convert string to BigInt"));
+            }
+        }
 
-        throw new Exception($"Runtime Error: Cannot convert {arg?.GetType().Name ?? "null"} to bigint.");
+        throw new ThrowException(new SharpTSTypeError(
+            $"Cannot convert {primitive?.GetType().Name ?? "null"} to BigInt"));
     }
 
     private static ValueTask<RuntimeValue> HandleDate(

@@ -48,7 +48,10 @@ public class SharpTSBigInt : ITypeCategorized
         else if (value.StartsWith("-0x", StringComparison.OrdinalIgnoreCase) ||
                  value.StartsWith("-0X", StringComparison.OrdinalIgnoreCase))
         {
-            Value = -BigInteger.Parse("0" + value[3..], NumberStyles.HexNumber);
+            // StringToBigInt permits a sign only for decimal syntax. Negative
+            // hexadecimal source literals are represented as unary minus over
+            // a positive literal, not as a signed prefixed string.
+            throw new FormatException();
         }
         else if (value.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
         {
@@ -60,6 +63,12 @@ public class SharpTSBigInt : ITypeCategorized
         }
         else
         {
+            int digitStart = value[0] is '+' or '-' ? 1 : 0;
+            if (digitStart == value.Length
+                || value.AsSpan(digitStart).IndexOfAnyExceptInRange('0', '9') >= 0)
+            {
+                throw new FormatException();
+            }
             Value = BigInteger.Parse(value);
         }
     }
