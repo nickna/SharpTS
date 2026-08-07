@@ -375,6 +375,8 @@ public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
     internal object? RealmConstructor { get; set; }
     private readonly SharpTSObject _extras = new([]);
     private bool _constructorDeleted;
+    private readonly Dictionary<string, SymbolPrototypeMethodWrapper> _methodCache = [];
+    private readonly HashSet<string> _deletedMethods = [];
 
     internal SharpTSSymbolPrototype() { }
 
@@ -382,8 +384,9 @@ public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {
+        _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
-        if (name == "constructor" && !HasExtra(name))
+        if (name is "constructor" or "toString" or "valueOf" && !HasExtra(name))
         {
             _extras.DefineProperty(name, new SharpTSPropertyDescriptor
             {
@@ -402,6 +405,7 @@ public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
     }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
+        _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
         return _extras.DefineProperty(name, descriptor);
     }
@@ -410,24 +414,78 @@ public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public bool HasOwnProperty(string name)
-        => HasExtra(name) || name == "constructor" && !_constructorDeleted;
+        => HasExtra(name)
+            || name == "constructor" && !_constructorDeleted
+            || name is "toString" or "valueOf" && !_deletedMethods.Contains(name);
     public bool DeleteProperty(string name)
     {
         if (HasExtra(name))
         {
             bool deleted = _extras.DeleteProperty(name);
             if (deleted && name == "constructor") _constructorDeleted = true;
+            if (deleted && name is "toString" or "valueOf") _deletedMethods.Add(name);
             return deleted;
         }
         if (name == "constructor") _constructorDeleted = true;
+        if (name is "toString" or "valueOf") _deletedMethods.Add(name);
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
             : name == "constructor" && !_constructorDeleted ? RealmConstructor
+            : name is "toString" or "valueOf" && !_deletedMethods.Contains(name)
+                ? _methodCache.GetValueOrDefault(name)
+                    ?? (_methodCache[name] = new SymbolPrototypeMethodWrapper(name))
             : null;
     public override string ToString() => "[object Symbol]";
+}
+
+internal sealed class SymbolPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
+{
+    private readonly string _name;
+    private readonly BuiltInFunctionMetadata _metadata;
+    private readonly object? _receiver;
+    private readonly bool _hasReceiver;
+
+    public SymbolPrototypeMethodWrapper(string name)
+    {
+        _name = name;
+        _metadata = new BuiltInFunctionMetadata();
+    }
+
+    private SymbolPrototypeMethodWrapper(
+        string name, BuiltInFunctionMetadata metadata, object? receiver)
+    {
+        _name = name;
+        _metadata = metadata;
+        _receiver = receiver;
+        _hasReceiver = true;
+    }
+
+    public SymbolPrototypeMethodWrapper Bind(object? receiver)
+        => new(_name, _metadata, receiver);
+    public int Arity() => 0;
+    public string FunctionName => _name;
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+
+    public object? Call(Interpreter interpreter, List<object?> arguments)
+    {
+        SharpTSSymbol? symbol = _receiver switch
+        {
+            SharpTSSymbol primitive => primitive,
+            SharpTSObject boxed when boxed.GetProperty("__primitiveType") is "Symbol"
+                => boxed.GetProperty("__primitiveValue") as SharpTSSymbol,
+            _ => null,
+        };
+        if (!_hasReceiver || symbol is null)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Symbol.prototype.{_name} called on incompatible receiver"));
+        return _name == "toString" ? symbol.ToString() : symbol;
+    }
+
+    public override string ToString() => $"function {_name}() {{ [native code] }}";
 }
 
 /// <summary>

@@ -82,11 +82,11 @@ public static class SymbolBuiltIns
 
             // Symbol.prototype.toString - returns SymbolDescriptiveString, e.g. "Symbol(desc)"
             "toString" => BuiltInMethod.CreateV2("toString", 0, (_, _, _) =>
-                RuntimeValue.FromString(symbol.ToString())),
+                RuntimeValue.FromString(symbol.ToString())).AsNonConstructor(),
 
             // Symbol.prototype.valueOf - returns the symbol itself
             "valueOf" => BuiltInMethod.CreateV2("valueOf", 0, (_, _, _) =>
-                RuntimeValue.FromSymbol(symbol)),
+                RuntimeValue.FromSymbol(symbol)).AsNonConstructor(),
 
             _ => null
         };

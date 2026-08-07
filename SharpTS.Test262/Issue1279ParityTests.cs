@@ -1831,6 +1831,16 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Symbol/prototype/toString/length.js")]
+    [InlineData("built-ins/Symbol/prototype/toString/name.js")]
+    [InlineData("built-ins/Symbol/prototype/toString/not-a-constructor.js")]
+    [InlineData("built-ins/Symbol/prototype/toString/prop-desc.js")]
+    [InlineData("built-ins/Symbol/prototype/toString/toString.js")]
+    [InlineData("built-ins/Symbol/prototype/toString/undefined.js")]
+    public void Symbol_prototype_toString_is_callable(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

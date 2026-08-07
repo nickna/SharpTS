@@ -296,6 +296,11 @@ public static class FunctionBuiltIns
             return boolProto.Bind(thisArg).Call(interp, args);
         }
 
+        if (callable is Types.SymbolPrototypeMethodWrapper symbolProto)
+        {
+            return symbolProto.Bind(thisArg).Call(interp, args);
+        }
+
         // For other callables, just call directly
         return callable.Call(interp, args);
     }

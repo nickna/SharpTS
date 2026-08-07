@@ -449,6 +449,7 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.StringPrototypeMethodWrapper
             or SharpTS.Runtime.Types.NumberPrototypeMethodWrapper
             or SharpTS.Runtime.Types.BooleanPrototypeMethodWrapper
+            or SharpTS.Runtime.Types.SymbolPrototypeMethodWrapper
             or SharpTS.Runtime.Types.SharpTSGlobalFunction
             or SharpTS.Runtime.Types.SharpTSObjectUnboundMethod
             or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod

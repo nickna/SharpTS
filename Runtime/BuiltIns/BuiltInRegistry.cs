@@ -520,6 +520,8 @@ public sealed class BuiltInRegistry
             ((Types.SharpTSBigIntPrototype)instance).GetMember(name));
         registry.RegisterInstanceType(typeof(Types.SharpTSSymbolPrototype), (instance, name) =>
             ((Types.SharpTSSymbolPrototype)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(Types.SymbolPrototypeMethodWrapper), (instance, name) =>
+            FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
     }
 
     private static void RegisterBooleanNamespace(BuiltInRegistry registry)

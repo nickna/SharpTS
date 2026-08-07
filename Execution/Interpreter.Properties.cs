@@ -1182,6 +1182,7 @@ public partial class Interpreter
         or StringPrototypeMethodWrapper
         or NumberPrototypeMethodWrapper
         or BooleanPrototypeMethodWrapper
+        or SymbolPrototypeMethodWrapper
         or SharpTSGlobalFunction
         or SharpTSObjectUnboundMethod
         or SharpTSArrayUnboundMethod
