@@ -1613,6 +1613,13 @@ public sealed class Issue1279ParityTests
     public void Array_copying_methods_cache_source_length(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/toReversed/length-exceeding-array-length-limit.js")]
+    [InlineData("built-ins/Array/prototype/toSorted/length-exceeding-array-length-limit.js")]
+    [InlineData("built-ins/Array/prototype/with/length-exceeding-array-length-limit.js")]
+    public void Array_copying_methods_reject_oversized_results(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

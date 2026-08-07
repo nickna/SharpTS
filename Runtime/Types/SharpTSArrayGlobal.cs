@@ -280,7 +280,8 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         // parameter — per spec, callbacks get O, not the internal materialization.
         if (TryMaterializeArrayLike(
                 receiver, interpreter, out var tempArr,
-                rejectInvalidArrayLength: _name == "slice"))
+                rejectInvalidArrayLength: _name is
+                    "slice" or "toReversed" or "toSorted" or "with"))
         {
             var wrappedArgs = WrapCallbackArguments(arguments, tempArr, receiver);
             return _inner.Bind(tempArr).Call(interpreter, wrappedArgs);
