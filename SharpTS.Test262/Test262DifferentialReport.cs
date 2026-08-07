@@ -56,6 +56,11 @@ public sealed class Test262DifferentialReport
         .Where(entry => entry.InterpretedOutcome == Test262Outcome.Pass)
         .ToList();
 
+    public IReadOnlyList<Test262DifferentialEntry> OtherDivergences => Divergences
+        .Where(entry => entry.InterpretedOutcome != Test262Outcome.Pass &&
+                        entry.CompiledOutcome != Test262Outcome.Pass)
+        .ToList();
+
     public static Test262DifferentialReport Create(
         IReadOnlyDictionary<string, string> interpreted,
         IReadOnlyDictionary<string, string> compiled)

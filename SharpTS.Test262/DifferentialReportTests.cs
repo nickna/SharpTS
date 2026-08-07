@@ -68,6 +68,18 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_keeps_nonpass_transitions_in_the_other_bucket()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("a.js", "Fail")),
+            Baseline(("a.js", "RuntimeError")));
+
+        Assert.Equal(["a.js"], report.OtherDivergences.Select(entry => entry.RelPath));
+        Assert.Empty(report.InterpreterDeficits);
+        Assert.Empty(report.CompilerDeficits);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
