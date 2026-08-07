@@ -2023,11 +2023,8 @@ public partial class Interpreter
                     // ECMA-262: `a.length = N` truncates (if N < length) or extends
                     // with holes (if N > length). SharpTSArray.SetLength handles both
                     // paths and transitions to sparse storage for large extensions.
-                    uint newLength = JsToUint32(ToNumberWithPrimitive(value));
-                    double numberLength = ToNumberWithPrimitive(value);
-                    if (newLength != numberLength)
-                        throw new ThrowException(new SharpTSRangeError("Invalid array length."));
-                    array.SetLength(newLength);
+                    double newLength = ArrayBuiltIns.CoerceArrayLength(this, value);
+                    array.SetLength((long)newLength);
                     return value;
                 }
                 array.SetNamedProperty(memberName, value);

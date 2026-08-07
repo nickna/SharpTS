@@ -536,7 +536,8 @@ public static partial class ObjectBuiltIns
             case SharpTSArray arr:
                 // Arrays can have properties defined on them
                 if (propertyKey == "length" && descriptor.HasValue)
-                    descriptor.Value = interpreter.ToNumberWithPrimitive(descriptor.Value);
+                    descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
+                        interpreter, descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSArrayGlobal arrayGlobal:

@@ -523,6 +523,31 @@ public static class ArrayBuiltIns
         return (long)Math.Min(Math.Truncate(number), MaxSafeInteger);
     }
 
+    /// <summary>
+    /// ECMA-262 ArraySetLength steps 3-5. The descriptor value is converted
+    /// separately for ToUint32 and ToNumber, so user conversion hooks run twice
+    /// before descriptor attributes are validated.
+    /// </summary>
+    internal static double CoerceArrayLength(Interpreter interpreter, object? value)
+    {
+        uint newLength = ToUint32(interpreter.ToNumberWithPrimitive(value));
+        double numberLength = interpreter.ToNumberWithPrimitive(value);
+        if (newLength != numberLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+        return newLength;
+    }
+
+    private static uint ToUint32(double number)
+    {
+        if (number == 0 || double.IsNaN(number) || double.IsInfinity(number))
+            return 0;
+        const double Modulus = 4294967296d;
+        double integer = Math.Truncate(number);
+        double modulo = integer % Modulus;
+        if (modulo < 0) modulo += Modulus;
+        return (uint)modulo;
+    }
+
     internal static bool IsGenericCallbackMethod(string name)
         => name is "map" or "filter" or "flatMap" or "forEach"
             or "find" or "findIndex" or "findLast" or "findLastIndex"

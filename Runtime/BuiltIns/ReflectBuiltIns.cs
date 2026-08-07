@@ -283,7 +283,7 @@ public static class ReflectBuiltIns
                 return RuntimeValue.FromBoxed(ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey));
             }),
 
-            "defineProperty" => BuiltInMethod.CreateV2("defineProperty", 3, static (_, _, args) =>
+            "defineProperty" => BuiltInMethod.CreateV2("defineProperty", 3, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.defineProperty requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
@@ -291,6 +291,13 @@ public static class ReflectBuiltIns
                 try
                 {
                     SharpTSPropertyDescriptor descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorArg);
+                    if (target is SharpTSArray
+                        && propertyKey == "length"
+                        && descriptor.HasValue)
+                    {
+                        descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
+                            interpreter, descriptor.Value);
+                    }
                     switch (target)
                     {
                         case SharpTSObject obj:

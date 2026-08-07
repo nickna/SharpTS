@@ -1714,6 +1714,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/length/define-own-prop-length-coercion-order.js")]
+    [InlineData("built-ins/Array/length/define-own-prop-length-error.js")]
+    [InlineData("built-ins/Array/length/define-own-prop-length-overflow-order.js")]
+    public void Array_length_descriptors_validate_after_numeric_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
