@@ -1521,6 +1521,10 @@ public sealed class Issue1279ParityTests
     public void Object_assign_handles_symbol_keys_at_integrity_levels(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_constructor_reports_function_metadata_in_property_order()
+        => AssertPassInBothModes("built-ins/Object/property-order.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

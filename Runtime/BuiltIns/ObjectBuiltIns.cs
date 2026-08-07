@@ -1137,6 +1137,9 @@ public static partial class ObjectBuiltIns
 
         List<object?> names = target switch
         {
+            SharpTSObjectNamespace =>
+                new object?[] { "length", "name", "prototype" }
+                    .Concat(StaticMemberNames.Cast<object?>()).ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
