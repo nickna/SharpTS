@@ -123,6 +123,13 @@ public sealed class Test262DifferentialReport
         AppendMode(markdown, "Compiled", CompiledSummary);
         markdown.AppendLine();
         markdown.AppendLine($"Outcome agreement: **{AgreementCount:N0}/{Entries.Count:N0} ({AgreementPercentage.ToString("F1", CultureInfo.InvariantCulture)}%)**.");
+        markdown.AppendLine();
+        markdown.AppendLine("## Divergence histogram");
+        markdown.AppendLine();
+        markdown.AppendLine("| Count | Interpreted → compiled |");
+        markdown.AppendLine("|---:|---|");
+        foreach (var item in Histogram)
+            markdown.AppendLine($"| {item.Count} | {item.Transition.Replace(" -> ", " → ", StringComparison.Ordinal)} |");
         return markdown.ToString();
     }
 

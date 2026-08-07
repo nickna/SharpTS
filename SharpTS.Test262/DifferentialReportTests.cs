@@ -111,6 +111,7 @@ public sealed class DifferentialReportTests
         Assert.Contains("| Interpreted | 1 | 1 | 1 | 100.0% |", markdown);
         Assert.Contains("| Compiled | 1 | 2 | 0 | 50.0% |", markdown);
         Assert.Contains("Outcome agreement: **1/2 (50.0%)**.", markdown);
+        Assert.Contains("| 1 | Skipped → Fail |", markdown);
     }
 
     [Fact]
