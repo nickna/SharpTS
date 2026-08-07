@@ -35,6 +35,12 @@ public abstract class Test262TestsBase
 
     protected void RunBaseline(Test262ExecutionMode mode)
     {
+        if (Test262ReportMode.IsEnabled())
+        {
+            _output.WriteLine($"[{mode}] baseline execution disabled in differential-report mode");
+            return;
+        }
+
         var test262Root = Test262Paths.TryFindRoot();
         var projectDir = Test262Paths.TryFindProjectDir();
         if (test262Root is null || projectDir is null)

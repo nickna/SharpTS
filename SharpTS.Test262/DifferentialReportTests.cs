@@ -4,6 +4,17 @@ namespace SharpTS.Test262;
 
 public sealed class DifferentialReportTests
 {
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("true", true)]
+    [InlineData("TRUE", true)]
+    [InlineData("0", false)]
+    [InlineData(null, false)]
+    public void Report_mode_parses_its_environment_switch(string? value, bool expected)
+    {
+        Assert.Equal(expected, Test262ReportMode.IsEnabled(value));
+    }
+
     [Fact]
     public void Differential_entry_exposes_outcomes_and_transition()
     {
