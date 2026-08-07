@@ -1884,6 +1884,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("language/expressions/prefix-increment/bigint.js")]
+    [InlineData("language/expressions/prefix-decrement/bigint.js")]
+    [InlineData("language/expressions/postfix-increment/bigint.js")]
+    [InlineData("language/expressions/postfix-decrement/bigint.js")]
+    [InlineData("built-ins/BigInt/prototype/toString/a-z.js")]
+    public void BigInt_update_operators_preserve_bigint_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

@@ -226,6 +226,13 @@ public partial class Interpreter
             _environment.Assign(variable.Name, clrValue);
             return returnOld ? oldValue : clrValue;
         }
+        if (oldValue.IsBigInt)
+        {
+            var newBigInt = new SharpTSBigInt(
+                oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
+            _environment.Assign(variable.Name, RuntimeValue.FromBigInt(newBigInt));
+            return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
+        }
 
         // ECMA-262 13.4 (postfix)/13.5.7 (prefix): apply ToNumber to the operand's current
         // value before adding ±1. A widened (`any`) variable can hold a non-number — a numeric
@@ -285,6 +292,13 @@ public partial class Interpreter
             {
                 return returnOld ? oldValue : externalValue;
             }
+            if (oldValue.IsBigInt)
+            {
+                var newBigInt = new SharpTSBigInt(
+                    oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
+                if (TrySetProperty(obj, name, newBigInt))
+                    return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
+            }
 
             // ECMA-262 ToNumber on the member's current value (matches the variable path and
             // compiled mode's ConvertToNumber): a non-numeric `any` member ("5"→5, undefined→NaN)
@@ -316,6 +330,13 @@ public partial class Interpreter
                 TrySetIndex(obj, index, externalValue.ToObject()))
             {
                 return returnOld ? oldValue : externalValue;
+            }
+            if (oldValue.IsBigInt)
+            {
+                var newBigInt = new SharpTSBigInt(
+                    oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
+                if (TrySetIndex(obj, index, newBigInt))
+                    return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
             }
 
             // ECMA-262 ToNumber on the element's current value (see IncrementProperty): a
