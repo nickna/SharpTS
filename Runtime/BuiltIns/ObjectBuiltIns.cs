@@ -275,8 +275,8 @@ public static partial class ObjectBuiltIns
     {
         switch (target)
         {
-            case SharpTSObject obj: obj.SetProperty(name, value); break;
-            case SharpTSInstance instance: instance.SetRawField(name, value); break;
+            case SharpTSObject obj: obj.SetPropertyStrict(name, value, strictMode: true); break;
+            case SharpTSInstance instance: instance.SetRawFieldStrict(name, value, strictMode: true); break;
             case SharpTSArray array when uint.TryParse(name, out uint index): array.Set(index, value); break;
             case SharpTSArray array: array.SetNamedProperty(name, value); break;
             case SharpTSFunction function: function.SetProperty(name, value); break;

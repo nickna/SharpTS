@@ -1505,6 +1505,10 @@ public sealed class Issue1279ParityTests
     public void Object_assign_copies_own_enumerable_source_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_assign_throws_for_non_writable_target_properties()
+        => AssertPassInBothModes("built-ins/Object/assign/target-set-not-writable.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
