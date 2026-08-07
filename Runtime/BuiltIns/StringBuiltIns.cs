@@ -560,7 +560,7 @@ public static class StringBuiltIns
         var source = pattern is SharpTSUndefined
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
-        var tempRegex = new SharpTSRegExp(System.Text.RegularExpressions.Regex.Escape(source), "g");
+        var tempRegex = new SharpTSRegExp(source, "g");
         var results = tempRegex.MatchAllObjects(str);
         return RuntimeValue.FromObject(new SharpTSIterator(
             results.Select(m => (object?)m)));

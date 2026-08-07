@@ -133,4 +133,18 @@ public class StringMatchAllTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("3\nfoo\n0\n16\n", output);
     }
+
+    [Fact]
+    public void MatchAll_StringPattern_UsesRegExpGrammar_InInterpreter()
+    {
+        var source = """
+            const matches = Array.from("abc".matchAll("."));
+            console.log(matches.length);
+            console.log(matches[0]["0"]);
+            console.log(matches[2]["0"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\na\nc\n", output);
+    }
 }
