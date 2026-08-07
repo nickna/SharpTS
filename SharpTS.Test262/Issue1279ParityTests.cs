@@ -1460,6 +1460,11 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-1-1.js");
 
+    [Fact]
+    public void Object_getOwnPropertyDescriptor_boxes_symbol_primitives()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertyDescriptor/primitive-symbol.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
