@@ -1665,6 +1665,8 @@ public partial class Interpreter
             // read as undefined and every Promise/prototype/* access died on it.
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Promise)
                 return GetPromisePrototype();
+            if (memberName == "prototype" && ctor.Name == BuiltInNames.Symbol)
+                return GetSymbolPrototype();
             var ctorMember = ctor.GetMember(memberName);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic

@@ -355,6 +355,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSNumberPrototype? _numberPrototype;
     private Runtime.Types.SharpTSBooleanPrototype? _booleanPrototype;
     private Runtime.Types.SharpTSBigIntPrototype? _bigIntPrototype;
+    private Runtime.Types.SharpTSSymbolPrototype? _symbolPrototype;
     private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
@@ -381,6 +382,11 @@ public partial class Interpreter
         => _bigIntPrototype ??= new()
         {
             RealmConstructor = _globalConstants[BuiltInNames.BigInt],
+        };
+    internal Runtime.Types.SharpTSSymbolPrototype GetSymbolPrototype()
+        => _symbolPrototype ??= new()
+        {
+            RealmConstructor = _globalConstants[BuiltInNames.Symbol],
         };
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype()
     {
