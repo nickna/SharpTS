@@ -545,9 +545,11 @@ public static class ArrayBuiltIns
         string methodName,
         IReadOnlyList<object?> args)
     {
-        int len = (int)Math.Min(
-            ToLength(interpreter.GetPropertyValue(receiver, "length"), interpreter),
-            1 << 20);
+        long arrayLikeLength = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (methodName == "map" && arrayLikeLength > uint.MaxValue)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+        int len = (int)Math.Min(arrayLikeLength, 1 << 20);
 
         if (methodName is "reduce" or "reduceRight")
             return ReduceArrayLike(interpreter, receiver, methodName, args, len);

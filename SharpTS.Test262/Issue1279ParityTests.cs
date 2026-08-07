@@ -1625,6 +1625,16 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Array/prototype/with/index-throw-completion.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-3-14.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-3-28.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-3-29.js")]
+    [InlineData("built-ins/Array/prototype/map/15.4.4.19-3-8.js")]
+    [InlineData("built-ins/Array/prototype/map/create-non-array-invalid-len.js")]
+    [InlineData("built-ins/Array/prototype/map/create-species-undef-invalid-len.js")]
+    public void Array_map_rejects_unrepresentable_result_lengths(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
