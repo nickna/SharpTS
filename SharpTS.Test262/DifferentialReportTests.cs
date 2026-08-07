@@ -26,6 +26,8 @@ public sealed class DifferentialReportTests
             report.Entries,
             entry => Assert.Equal("a.js", entry.RelPath),
             entry => Assert.Equal("b.js", entry.RelPath));
+        Assert.Equal(["only-i.js"], report.InterpretedOnly);
+        Assert.Equal(["only-c.js"], report.CompiledOnly);
     }
 
     [Fact]
