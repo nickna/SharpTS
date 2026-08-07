@@ -296,6 +296,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
             return matchResult;
         }
 
+        if (_name == "search"
+            && StringBuiltIns.TryInvokeCustomSearch(
+                interpreter, _receiver, arguments, out object? searchResult))
+        {
+            return searchResult;
+        }
+
         if (_name is "toString" or "valueOf")
         {
             bool isStringReceiver = _receiver is string or SharpTSStringPrototype

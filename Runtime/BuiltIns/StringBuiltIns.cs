@@ -166,6 +166,39 @@ public static class StringBuiltIns
         return true;
     }
 
+    internal static bool TryInvokeCustomSearch(
+        Interpreter interpreter,
+        object receiver,
+        List<object?> arguments,
+        out object? result)
+    {
+        object? pattern = arguments.Count > 0
+            ? arguments[0]
+            : SharpTSUndefined.Instance;
+        if (pattern is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+
+        object? searcher = interpreter.GetSymbolPropertyValue(
+            pattern, SharpTSSymbol.Search);
+        if (searcher is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+        if (searcher is not ISharpTSCallable callable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Symbol.search property is not callable"));
+        }
+
+        result = FunctionBuiltIns.CallWithThis(
+            interpreter, callable, pattern, [receiver]);
+        return true;
+    }
+
     private static RuntimeValue IsWellFormedV2(
         Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
     {
