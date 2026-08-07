@@ -5,6 +5,9 @@ namespace SharpTS.Test262;
 /// </summary>
 public static class Test262Bucket
 {
+    public static bool IsPass(string bucket) =>
+        ParseOutcome(bucket) == Test262Outcome.Pass;
+
     public static Test262Outcome ParseOutcome(string bucket)
     {
         var colon = bucket.IndexOf(':');

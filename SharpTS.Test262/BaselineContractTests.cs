@@ -27,4 +27,13 @@ public class BaselineContractTests
     {
         Assert.Equal(expected, Test262Bucket.ParseOutcome(bucket));
     }
+
+    [Theory]
+    [InlineData("Pass", true)]
+    [InlineData("Fail", false)]
+    [InlineData("Skipped:reason", false)]
+    public void Bucket_IdentifiesPasses(string bucket, bool expected)
+    {
+        Assert.Equal(expected, Test262Bucket.IsPass(bucket));
+    }
 }
