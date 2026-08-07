@@ -1785,6 +1785,17 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/isWellFormed/length.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/name.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/not-a-constructor.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/prop-desc.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/return-abrupt-from-this.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/returns-boolean.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/to-string.js")]
+    public void String_isWellFormed_supports_unicode_and_coercion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

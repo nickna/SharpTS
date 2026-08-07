@@ -45,6 +45,7 @@ public static class StringBuiltIns
             .MethodV2("at", 0, int.MaxValue, specLength: 1, AtV2)
             .MethodV2("normalize", 0, int.MaxValue, specLength: 0, NormalizeV2)
             .MethodV2("localeCompare", 0, int.MaxValue, specLength: 1, LocaleCompareV2)
+            .MethodV2("isWellFormed", 0, IsWellFormedV2)
             // ECMA-262 §22.1.3.28/.31: String.prototype.toString and valueOf both
             // return thisStringValue. Needed so `(new String("x")).toString()` and
             // ToPrimitive(string-wrapper) unwrap to the primitive instead of
@@ -84,6 +85,27 @@ public static class StringBuiltIns
     /// </summary>
     public static BuiltInMethod? GetPrototypeMethod(string name)
         => _lookup.GetMethod(name);
+
+    private static RuntimeValue IsWellFormedV2(
+        Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        for (int i = 0; i < str.Length; i++)
+        {
+            char codeUnit = str[i];
+            if (char.IsHighSurrogate(codeUnit))
+            {
+                if (i + 1 >= str.Length || !char.IsLowSurrogate(str[i + 1]))
+                    return RuntimeValue.False;
+                i++;
+            }
+            else if (char.IsLowSurrogate(codeUnit))
+            {
+                return RuntimeValue.False;
+            }
+        }
+
+        return RuntimeValue.True;
+    }
 
     private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
