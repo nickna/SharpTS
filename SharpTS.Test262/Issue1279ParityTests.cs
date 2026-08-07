@@ -1597,6 +1597,14 @@ public sealed class Issue1279ParityTests
     public void Array_slice_rejects_unrepresentable_result_lengths(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/toReversed/this-value-boolean.js")]
+    [InlineData("built-ins/Array/prototype/toSorted/this-value-boolean.js")]
+    [InlineData("built-ins/Array/prototype/toSpliced/this-value-boolean.js")]
+    [InlineData("built-ins/Array/prototype/with/this-value-boolean.js")]
+    public void Array_copying_methods_box_boolean_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

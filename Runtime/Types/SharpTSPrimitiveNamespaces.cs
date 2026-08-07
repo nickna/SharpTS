@@ -646,6 +646,7 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    public bool DeleteProperty(string name) => _extras.DeleteProperty(name);
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
     {
