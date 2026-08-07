@@ -24,7 +24,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("defineProperty", 3, DefinePropertyV2)
             .MethodV2("getOwnPropertyDescriptor", 2, GetOwnPropertyDescriptorV2)
             .MethodV2("getOwnPropertyNames", 1, GetOwnPropertyNamesV2)
-            .MethodV2("create", 1, 2, CreateV2)
+            .MethodV2("create", 1, 2, 2, CreateV2)
             .MethodV2("preventExtensions", 1, PreventExtensionsV2)
             .MethodV2("isExtensible", 1, IsExtensibleMethodV2)
             .MethodV2("getOwnPropertySymbols", 1, GetOwnPropertySymbolsV2)

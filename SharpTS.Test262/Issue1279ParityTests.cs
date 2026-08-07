@@ -1447,6 +1447,10 @@ public sealed class Issue1279ParityTests
     public void Object_setPrototypeOf_links_without_copying_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_create_reports_its_spec_length()
+        => AssertPassInBothModes("built-ins/Object/create/15.2.3.5-0-2.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
