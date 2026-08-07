@@ -3535,7 +3535,7 @@ test/built-ins/Math/log/S15.8.2.10_A5.js Pass
 test/built-ins/Math/log/length.js Pass
 test/built-ins/Math/log/name.js Pass
 test/built-ins/Math/log/not-a-constructor.js Pass
-test/built-ins/Math/log/prop-desc.js Fail
+test/built-ins/Math/log/prop-desc.js Pass
 test/built-ins/Math/log10/Log10-specialVals.js Pass
 test/built-ins/Math/log10/length.js Pass
 test/built-ins/Math/log10/name.js Pass
