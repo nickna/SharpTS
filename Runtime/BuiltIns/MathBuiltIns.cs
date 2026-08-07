@@ -164,7 +164,7 @@ public static class MathBuiltIns
             double val = Interpreter.ToNumber(args[i]);
             // ECMA-262 21.3.2.24: any NaN argument makes the result NaN.
             if (double.IsNaN(val)) return RuntimeValue.FromNumber(double.NaN);
-            if (val > max) max = val;
+            if (val > max || val == 0 && max == 0 && !double.IsNegative(val)) max = val;
         }
         return RuntimeValue.FromNumber(max);
     }

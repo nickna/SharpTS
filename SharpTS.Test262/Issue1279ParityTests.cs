@@ -1344,6 +1344,10 @@ public sealed class Issue1279ParityTests
     public void Math_round_preserves_negative_zero()
         => AssertPassInBothModes("built-ins/Math/round/S15.8.2.15_A3.js");
 
+    [Fact]
+    public void Math_max_prefers_positive_zero()
+        => AssertPassInBothModes("built-ins/Math/max/zeros.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -3560,7 +3560,7 @@ test/built-ins/Math/max/length.js Pass
 test/built-ins/Math/max/name.js Pass
 test/built-ins/Math/max/not-a-constructor.js Pass
 test/built-ins/Math/max/prop-desc.js Pass
-test/built-ins/Math/max/zeros.js Fail
+test/built-ins/Math/max/zeros.js Pass
 test/built-ins/Math/min/15.8.2.12-1.js Pass
 test/built-ins/Math/min/Math.min_each-element-coerced.js Fail
 test/built-ins/Math/min/S15.8.2.12_A1.js Pass
