@@ -9,6 +9,26 @@ namespace SharpTS.Tests.SharedTests;
 public class StringMethodTests
 {
     [Fact]
+    public void String_EndsWith_UsesSymbolMatchForRegExpDetection_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const disabled: any = /x/;
+            disabled[Symbol.match] = false;
+            console.log("value/x/tail".endsWith(disabled, 8));
+
+            const enabled: any = { toString: function(): string { return "x"; } };
+            enabled[Symbol.match] = true;
+            try {
+                "xyz".endsWith(enabled);
+            } catch (error) {
+                console.log("threw");
+            }
+            """);
+
+        Assert.Equal("true\nthrew\n", output);
+    }
+
+    [Fact]
     public void String_StartsWith_UsesSymbolMatchForRegExpDetection_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""
