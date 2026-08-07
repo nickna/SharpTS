@@ -256,8 +256,9 @@ public static partial class ObjectBuiltIns
     private static object? Assign(Interpreter _, List<object?> args)
     {
         // Object.assign(target, ...sources)
-        if (args.Count == 0 || args[0] == null)
-            throw new Exception("Runtime Error: Object.assign() requires a target object");
+        if (args.Count == 0 || args[0] is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.assign called on null or undefined"));
 
         // Handle SharpTSObject target
         if (args[0] is SharpTSObject targetObj)

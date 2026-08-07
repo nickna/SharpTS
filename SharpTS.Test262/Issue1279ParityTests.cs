@@ -1483,6 +1483,12 @@ public sealed class Issue1279ParityTests
     public void Object_assign_reports_its_spec_length()
         => AssertPassInBothModes("built-ins/Object/assign/assign-length.js");
 
+    [Theory]
+    [InlineData("built-ins/Object/assign/Target-Null.js")]
+    [InlineData("built-ins/Object/assign/Target-Undefined.js")]
+    public void Object_assign_rejects_nullish_targets(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
