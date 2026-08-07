@@ -37,6 +37,20 @@ public static class Test262Baseline
         return dict;
     }
 
+    public static string? ReadCorpusRevision(string path)
+    {
+        if (!File.Exists(path)) return null;
+        var header = File.ReadLines(path).FirstOrDefault(line => line.StartsWith('#'));
+        if (header is null) return null;
+        const string marker = "corpus=";
+        var start = header.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += marker.Length;
+        if (header.Length < start + 40) return null;
+        var revision = header.Substring(start, 40);
+        return revision.All(char.IsAsciiHexDigit) ? revision.ToLowerInvariant() : null;
+    }
+
     public static void Write(string path, IEnumerable<(string RelPath, string Bucket)> entries,
         string corpusRevision)
     {

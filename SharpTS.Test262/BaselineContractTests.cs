@@ -45,4 +45,21 @@ public class BaselineContractTests
     {
         Assert.Equal(expected, Test262Bucket.IsSkipped(bucket));
     }
+
+    [Fact]
+    public void Baseline_reads_pinned_corpus_revision()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            const string revision = "ABCDEF0123456789ABCDEF0123456789ABCDEF01";
+            File.WriteAllText(path, Test262Baseline.Header(revision) + "\na.js Pass\n");
+
+            Assert.Equal(revision.ToLowerInvariant(), Test262Baseline.ReadCorpusRevision(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
