@@ -748,7 +748,8 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
-            SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSClass klass when propertyKey == "prototype" => DataDescriptor(
                 klass.Prototype,
                 writable: false,
@@ -860,6 +861,8 @@ public static partial class ObjectBuiltIns
             if (!date.IsPrototype || date.IsBuiltInDeleted(propertyKey))
                 return null;
             var dateMember = DateBuiltIns.GetMember(date, propertyKey);
+            if (dateMember is null && propertyKey == "constructor")
+                dateMember = interpreter.GetProperty(date, propertyKey);
             return dateMember is null
                 ? null
                 : DataDescriptor(
