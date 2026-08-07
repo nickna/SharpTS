@@ -495,9 +495,27 @@ public static class StringBuiltIns
         return RuntimeValue.FromBoxed(new SharpTSRegExp(source).Exec(str));
     }
 
-    private static RuntimeValue MatchAllV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue MatchAllV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        object? pattern = ArgumentOrUndefined(args, 0);
+        if (pattern is not (null or SharpTSUndefined or SharpTSRegExp))
+        {
+            object? matcher = interpreter.GetSymbolPropertyValue(
+                pattern, SharpTSSymbol.MatchAll);
+            if (matcher is not (null or SharpTSUndefined))
+            {
+                if (matcher is not ISharpTSCallable callable)
+                {
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Symbol.matchAll property is not callable"));
+                }
+
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, callable, pattern, [str]));
+            }
+        }
+
+        if (pattern is SharpTSRegExp regex)
         {
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.matchAll called with a non-global RegExp argument");
@@ -505,8 +523,10 @@ public static class StringBuiltIns
             return RuntimeValue.FromObject(new SharpTSArray(matchObjects.Select(m => (object?)m).ToList()));
         }
 
-        var pattern = args[0].ToObject()?.ToString() ?? "";
-        var tempRegex = new SharpTSRegExp(System.Text.RegularExpressions.Regex.Escape(pattern), "g");
+        var source = pattern is null or SharpTSUndefined
+            ? ""
+            : interpreter.ToStringForBuiltInArgument(pattern);
+        var tempRegex = new SharpTSRegExp(System.Text.RegularExpressions.Regex.Escape(source), "g");
         var results = tempRegex.MatchAllObjects(str);
         return RuntimeValue.FromObject(new SharpTSArray(results.Select(m => (object?)m).ToList()));
     }
