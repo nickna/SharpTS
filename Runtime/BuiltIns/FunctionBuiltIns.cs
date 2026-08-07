@@ -200,7 +200,11 @@ public static class FunctionBuiltIns
         if (callable is SharpTSArrowFunction arrowWithThis)
         {
             // Function expression with its own 'this'
-            var bound = arrowWithThis.Bind(thisArg!);
+            object? effectiveThis = !arrowWithThis.IsStrict
+                && thisArg is null or SharpTSUndefined
+                    ? interp.GlobalThis
+                    : thisArg;
+            var bound = arrowWithThis.Bind(effectiveThis!);
             return bound.Call(interp, args);
         }
 

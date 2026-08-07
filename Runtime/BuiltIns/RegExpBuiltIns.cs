@@ -883,7 +883,8 @@ public static class RegExpBuiltIns
                 callArgs.Add((double)position);
                 callArgs.Add(s);
                 var fnResult = FunctionBuiltIns.CallWithThis(
-                    interp, (ISharpTSCallable)replaceValue!, null, callArgs);
+                    interp, (ISharpTSCallable)replaceValue!,
+                    SharpTSUndefined.Instance, callArgs);
                 replacement = ToStr(interp, fnResult);
             }
             else

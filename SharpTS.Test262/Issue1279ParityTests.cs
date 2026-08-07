@@ -1960,6 +1960,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/fn-invoke-this-no-strict.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/fn-invoke-this-strict.js")]
+    public void RegExp_replace_uses_undefined_callback_receiver(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
