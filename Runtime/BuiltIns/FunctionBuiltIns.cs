@@ -301,6 +301,11 @@ public static class FunctionBuiltIns
             return symbolProto.Bind(thisArg).Call(interp, args);
         }
 
+        if (callable is Types.BigIntPrototypeMethodWrapper bigIntProto)
+        {
+            return bigIntProto.Bind(thisArg).Call(interp, args);
+        }
+
         // For other callables, just call directly
         return callable.Call(interp, args);
     }

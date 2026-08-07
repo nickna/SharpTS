@@ -314,6 +314,8 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     internal object? RealmConstructor { get; set; }
     private readonly SharpTSObject _extras = new([]);
     private bool _constructorDeleted;
+    private readonly Dictionary<string, BigIntPrototypeMethodWrapper> _methodCache = [];
+    private readonly HashSet<string> _deletedMethods = [];
 
     internal SharpTSBigIntPrototype() { }
 
@@ -321,8 +323,9 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {
+        _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
-        if (name == "constructor" && !HasExtra(name))
+        if (name is "constructor" or "valueOf" && !HasExtra(name))
         {
             _extras.DefineProperty(name, new SharpTSPropertyDescriptor
             {
@@ -341,6 +344,7 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
+        _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
         return _extras.DefineProperty(name, descriptor);
     }
@@ -349,24 +353,78 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
     public bool HasOwnProperty(string name)
-        => HasExtra(name) || name == "constructor" && !_constructorDeleted;
+        => HasExtra(name)
+            || name == "constructor" && !_constructorDeleted
+            || name == "valueOf" && !_deletedMethods.Contains(name);
     public bool DeleteProperty(string name)
     {
         if (HasExtra(name))
         {
             bool deleted = _extras.DeleteProperty(name);
             if (deleted && name == "constructor") _constructorDeleted = true;
+            if (deleted && name == "valueOf") _deletedMethods.Add(name);
             return deleted;
         }
         if (name == "constructor") _constructorDeleted = true;
+        if (name == "valueOf") _deletedMethods.Add(name);
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
             : name == "constructor" && !_constructorDeleted ? RealmConstructor
+            : name == "valueOf" && !_deletedMethods.Contains(name)
+                ? _methodCache.GetValueOrDefault(name)
+                    ?? (_methodCache[name] = new BigIntPrototypeMethodWrapper(name))
             : null;
     public override string ToString() => "[object BigInt]";
+}
+
+internal sealed class BigIntPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFunctionMetadata
+{
+    private readonly string _name;
+    private readonly BuiltInFunctionMetadata _metadata;
+    private readonly object? _receiver;
+    private readonly bool _hasReceiver;
+
+    public BigIntPrototypeMethodWrapper(string name)
+    {
+        _name = name;
+        _metadata = new BuiltInFunctionMetadata();
+    }
+
+    private BigIntPrototypeMethodWrapper(
+        string name, BuiltInFunctionMetadata metadata, object? receiver)
+    {
+        _name = name;
+        _metadata = metadata;
+        _receiver = receiver;
+        _hasReceiver = true;
+    }
+
+    public BigIntPrototypeMethodWrapper Bind(object? receiver)
+        => new(_name, _metadata, receiver);
+    public int Arity() => 0;
+    public string FunctionName => _name;
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
+
+    public object? Call(Interpreter interpreter, List<object?> arguments)
+    {
+        SharpTSBigInt? value = _receiver switch
+        {
+            SharpTSBigInt primitive => primitive,
+            SharpTSObject boxed when boxed.GetProperty("__primitiveType") is "BigInt"
+                => boxed.GetProperty("__primitiveValue") as SharpTSBigInt,
+            _ => null,
+        };
+        if (!_hasReceiver || value is null)
+            throw new ThrowException(new SharpTSTypeError(
+                $"BigInt.prototype.{_name} called on incompatible receiver"));
+        return value;
+    }
+
+    public override string ToString() => $"function {_name}() {{ [native code] }}";
 }
 
 /// <summary>Realm-local ordinary object backing <c>Symbol.prototype</c>.</summary>

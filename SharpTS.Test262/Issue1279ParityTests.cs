@@ -1853,6 +1853,17 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/prototype/valueOf/length.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/name.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/not-a-constructor.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/prop-desc.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/return.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/this-value-invalid-object-throws.js")]
+    [InlineData("built-ins/BigInt/prototype/valueOf/this-value-invalid-primitive-throws.js")]
+    public void BigInt_prototype_valueOf_checks_receiver_brand(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

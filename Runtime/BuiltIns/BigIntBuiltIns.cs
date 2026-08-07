@@ -50,15 +50,15 @@ public static class BigIntBuiltIns
                         throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
                 }
                 return RuntimeValue.FromString(ToStringWithRadix(value, radix));
-            }),
+            }).AsNonConstructor(),
 
             // BigInt.prototype.toLocaleString() — no Intl options support; decimal form.
             "toLocaleString" => BuiltInMethod.CreateV2("toLocaleString", 0, 1, (_, _, _) =>
-                RuntimeValue.FromString(value.ToString(CultureInfo.InvariantCulture))),
+                RuntimeValue.FromString(value.ToString(CultureInfo.InvariantCulture))).AsNonConstructor(),
 
             // BigInt.prototype.valueOf() — returns the bigint itself.
             "valueOf" => BuiltInMethod.CreateV2("valueOf", 0, (_, _, _) =>
-                RuntimeValue.FromBigInt(new SharpTSBigInt(value))),
+                RuntimeValue.FromBigInt(new SharpTSBigInt(value))).AsNonConstructor(),
 
             _ => null
         };
