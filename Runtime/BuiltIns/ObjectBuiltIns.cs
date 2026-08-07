@@ -676,10 +676,9 @@ public static partial class ObjectBuiltIns
     {
         var target = args[0];
 
-        if (target == null)
-        {
-            throw new Exception("TypeError: Object.getOwnPropertyDescriptor called on null or undefined");
-        }
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.getOwnPropertyDescriptor called on null or undefined"));
 
         // Symbol-keyed lookup goes through the symbol-dict path; the spec keeps
         // symbols distinct from string keys, and SharpTSObject/Instance store

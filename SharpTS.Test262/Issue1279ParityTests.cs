@@ -1455,6 +1455,11 @@ public sealed class Issue1279ParityTests
     public void Object_create_reads_descriptors_from_Error_objects()
         => AssertPassInBothModes("built-ins/Object/create/15.2.3.5-4-14.js");
 
+    [Fact]
+    public void Object_getOwnPropertyDescriptor_rejects_undefined_target()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-1-1.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
