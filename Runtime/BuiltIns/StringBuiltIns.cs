@@ -352,26 +352,20 @@ public static class StringBuiltIns
     private static RuntimeValue MatchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         object? pattern = ArgumentOrUndefined(args, 0);
-        if (pattern is SharpTSRegExp regex)
+        if (pattern is not (null or SharpTSUndefined))
         {
-            if (regex.Global)
+            object? matcher = interpreter.GetSymbolPropertyValue(
+                pattern, SharpTSSymbol.Match);
+            if (matcher is not (null or SharpTSUndefined))
             {
-                var matches = regex.MatchAll(str);
-                if (matches.Count == 0) return RuntimeValue.Null;
-                return RuntimeValue.FromObject(new SharpTSArray(matches));
-            }
-            else
-            {
-                var match = regex.Exec(str);
-                if (match != null)
+                if (matcher is not ISharpTSCallable callable)
                 {
-                    for (int i = 1; i < match.Length; i++)
-                    {
-                        if (match.Get(i) is null)
-                            match.Set(i, SharpTSUndefined.Instance);
-                    }
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Symbol.match property is not callable"));
                 }
-                return RuntimeValue.FromBoxed(match);
+
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, callable, pattern, [str]));
             }
         }
 
