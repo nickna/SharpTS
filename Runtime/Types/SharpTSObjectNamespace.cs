@@ -62,6 +62,7 @@ public class SharpTSObjectNamespace : ISharpTSCallable
 
     public bool DeleteProperty(string name)
     {
+        if (name == "prototype") return false;
         bool hadExtra = _extras.HasProperty(name);
         if (hadExtra && !_extras.DeleteProperty(name)) return false;
         if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
