@@ -218,6 +218,11 @@ public static class ReflectBuiltIns
                 {
                     switch (target)
                     {
+                        case SharpTSObjectPrototype:
+                            // %Object.prototype% is an immutable-prototype exotic:
+                            // setting its existing null prototype succeeds, any
+                            // different prototype is rejected.
+                            return RuntimeValue.FromBoolean(proto is null);
                         case SharpTSObject obj:
                             if (!obj.IsExtensible) return RuntimeValue.False;
                             obj.Prototype = proto;

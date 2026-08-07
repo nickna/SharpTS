@@ -1547,6 +1547,11 @@ public sealed class Issue1279ParityTests
     public void Object_constructor_prototype_is_non_configurable()
         => AssertPassInBothModes("built-ins/Object/prototype/S15.2.3.1_A3.js");
 
+    [Fact]
+    public void Object_prototype_accepts_its_existing_null_prototype()
+        => AssertPassInBothModes(
+            "built-ins/Object/prototype/setPrototypeOf-with-same-value.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
