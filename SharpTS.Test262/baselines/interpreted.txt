@@ -3643,7 +3643,7 @@ test/built-ins/Math/sqrt/S15.8.2.17_A5.js Pass
 test/built-ins/Math/sqrt/length.js Pass
 test/built-ins/Math/sqrt/name.js Pass
 test/built-ins/Math/sqrt/not-a-constructor.js Pass
-test/built-ins/Math/sqrt/prop-desc.js Fail
+test/built-ins/Math/sqrt/prop-desc.js Pass
 test/built-ins/Math/sqrt/results.js Pass
 test/built-ins/Math/sumPrecise/length.js Pass
 test/built-ins/Math/sumPrecise/name.js Pass
