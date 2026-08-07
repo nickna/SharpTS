@@ -1483,6 +1483,19 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void RegExp_replace_callback_receiver_passes_in_interpreter()
+        => AssertPass(
+            "built-ins/String/prototype/replace/S15.5.4.11_A12.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A2_T3.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A2_T5.js")]
+    public void Boxed_string_search_regressions_pass_in_interpreter(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-176.js")]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-177.js")]

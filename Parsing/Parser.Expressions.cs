@@ -5,6 +5,30 @@ public partial class Parser
     private Expr Expression() => Assignment();
 
     /// <summary>
+    /// Parses a function-like block body with its own directive prologue and
+    /// restores the surrounding parser strictness afterward. Function
+    /// expressions, methods, accessors, and block-bodied arrows all use this
+    /// path so a leading <c>"use strict"</c> is retained in the AST and applies
+    /// while the remainder of that body is parsed.
+    /// </summary>
+    private List<Stmt> ParseFunctionExpressionBody(
+        List<Stmt.Parameter>? parameters = null)
+    {
+        bool previousStrictMode = _isStrictMode;
+        try
+        {
+            var body = Block(parseFunctionPrologue: true, setStrictMode: true);
+            if (_isStrictMode && parameters is not null)
+                ValidateNoDuplicateParameters(parameters);
+            return body;
+        }
+        finally
+        {
+            _isStrictMode = previousStrictMode;
+        }
+    }
+
+    /// <summary>
     /// Parses a comma (sequence) expression. Lowest precedence operator.
     /// Evaluates all operands left-to-right, returns the last value.
     /// Only called from contexts where comma is an operator, not a separator
@@ -43,7 +67,7 @@ public partial class Parser
 
             if (Match(TokenType.LEFT_BRACE))
             {
-                body = Block();
+                body = ParseFunctionExpressionBody();
                 body = VarHoister.Hoist(body, _spans);
             }
             else
@@ -929,7 +953,8 @@ public partial class Parser
                         Consume(TokenType.LEFT_BRACE, isGetter
                             ? "Expect '{' before getter body."
                             : "Expect '{' before setter body.");
-                        List<Stmt> accessorBody = Block();
+                        List<Stmt> accessorBody =
+                            ParseFunctionExpressionBody(accessorParams);
                         accessorBody = VarHoister.Hoist(accessorBody, _spans);
 
                         var accessorExpr = new Expr.ArrowFunction(
@@ -1201,7 +1226,7 @@ public partial class Parser
         }
 
         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
-        List<Stmt> body = Block();
+        List<Stmt> body = ParseFunctionExpressionBody(parameters);
 
         body = PrependDestructuringPrologue(destructuredParams, body);
         body = VarHoister.Hoist(body, _spans);
@@ -1407,7 +1432,7 @@ public partial class Parser
 
         if (Match(TokenType.LEFT_BRACE))
         {
-            body = Block();
+            body = ParseFunctionExpressionBody(parameters);
         }
         else
         {
@@ -1563,7 +1588,7 @@ public partial class Parser
         }
 
         Consume(TokenType.LEFT_BRACE, "Expect '{' before function body.");
-        List<Stmt> body = Block();
+        List<Stmt> body = ParseFunctionExpressionBody(parameters);
 
         // Prepend destructuring statements for patterned parameters
         body = PrependDestructuringPrologue(destructuredParams, body);

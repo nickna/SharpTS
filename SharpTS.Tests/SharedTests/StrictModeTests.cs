@@ -154,6 +154,38 @@ public class StrictModeTests
         Assert.Contains("TypeError", ex.Message);
     }
 
+    [Fact]
+    public void UseStrict_FunctionExpression_PreservesUndefinedThis_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const f: any = function() {
+                "use strict";
+                return this === undefined;
+            };
+            console.log(f());
+            """);
+
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory, ModeData]
+    public void UseStrict_ObjectMethod_AppliesOnlyInsideMethod(ExecutionMode mode)
+    {
+        var source = """
+            const obj = {
+                run() {
+                    "use strict";
+                    const frozen = Object.freeze({ x: 1 });
+                    frozen.x = 2;
+                }
+            };
+            obj.run();
+            """;
+
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("TypeError", ex.Message);
+    }
+
     // Strict mode inheritance to nested functions (uses arrow functions for compiler compatibility)
     [Theory, ModeData]
     public void UseStrict_InheritsToNestedFunctions(ExecutionMode mode)
