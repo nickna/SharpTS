@@ -3393,7 +3393,7 @@ test/built-ins/Math/acosh/length.js Pass
 test/built-ins/Math/acosh/name.js Pass
 test/built-ins/Math/acosh/nan-returns.js Pass
 test/built-ins/Math/acosh/not-a-constructor.js Pass
-test/built-ins/Math/acosh/prop-desc.js Fail
+test/built-ins/Math/acosh/prop-desc.js Pass
 test/built-ins/Math/asin/S15.8.2.3_A1.js Pass
 test/built-ins/Math/asin/S15.8.2.3_A2.js Pass
 test/built-ins/Math/asin/S15.8.2.3_A3.js Pass
