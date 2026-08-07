@@ -15,6 +15,20 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_aligns_entries_present_in_both_modes()
+    {
+        var interpreted = Baseline(("b.js", "Fail"), ("a.js", "Pass"), ("only-i.js", "Pass"));
+        var compiled = Baseline(("a.js", "Fail"), ("b.js", "Pass"), ("only-c.js", "Pass"));
+
+        var report = Test262DifferentialReport.Create(interpreted, compiled);
+
+        Assert.Collection(
+            report.Entries,
+            entry => Assert.Equal("a.js", entry.RelPath),
+            entry => Assert.Equal("b.js", entry.RelPath));
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
