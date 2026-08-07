@@ -395,6 +395,15 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
     {
         RequireObjectCoercible(target, "propertyIsEnumerable");
         if (args.Count == 0) return false;
+        if (args[0] is SharpTSSymbol symbol)
+        {
+            return target switch
+            {
+                SharpTSObject obj => obj.HasSymbolProperty(symbol),
+                SharpTSInstance instance => instance.HasSymbolProperty(symbol),
+                _ => false,
+            };
+        }
         var key = args[0]?.ToString() ?? "";
         return target switch
         {

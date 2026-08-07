@@ -1525,6 +1525,11 @@ public sealed class Issue1279ParityTests
     public void Object_constructor_reports_function_metadata_in_property_order()
         => AssertPassInBothModes("built-ins/Object/property-order.js");
 
+    [Fact]
+    public void Object_propertyIsEnumerable_accepts_symbol_keys()
+        => AssertPassInBothModes(
+            "built-ins/Object/prototype/propertyIsEnumerable/symbol_own_property.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
