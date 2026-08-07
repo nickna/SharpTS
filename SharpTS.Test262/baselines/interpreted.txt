@@ -3540,7 +3540,7 @@ test/built-ins/Math/log10/Log10-specialVals.js Pass
 test/built-ins/Math/log10/length.js Pass
 test/built-ins/Math/log10/name.js Pass
 test/built-ins/Math/log10/not-a-constructor.js Pass
-test/built-ins/Math/log10/prop-desc.js Fail
+test/built-ins/Math/log10/prop-desc.js Pass
 test/built-ins/Math/log1p/length.js Pass
 test/built-ins/Math/log1p/name.js Pass
 test/built-ins/Math/log1p/not-a-constructor.js Pass
