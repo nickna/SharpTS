@@ -3521,7 +3521,7 @@ test/built-ins/Math/hypot/Math.hypot_Zero_2.js Pass
 test/built-ins/Math/hypot/length.js Pass
 test/built-ins/Math/hypot/name.js Pass
 test/built-ins/Math/hypot/not-a-constructor.js Pass
-test/built-ins/Math/hypot/prop-desc.js Fail
+test/built-ins/Math/hypot/prop-desc.js Pass
 test/built-ins/Math/imul/length.js Pass
 test/built-ins/Math/imul/name.js Pass
 test/built-ins/Math/imul/not-a-constructor.js Pass
