@@ -2196,6 +2196,28 @@ public class ObjectFeatureTests
     }
 
     [Theory, ModeData]
+    public void Object_LegacyAccessorLookup_PreservesDescriptorFunctionIdentity(ExecutionMode mode)
+    {
+        var source = """
+            const getter = function (): number { return 1; };
+            const setter = function (value: number): void {};
+            const descriptors: any = {
+                get: getter,
+                set: setter,
+                configurable: true
+            };
+            const prototype: any = {};
+            Object.defineProperty(prototype, 'value', descriptors);
+            const subject: any = Object.create(prototype);
+            console.log(subject.__lookupGetter__('value') === descriptors.get);
+            console.log(subject.__lookupSetter__('value') === descriptors.set);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Object_DefineProperty_ReadsInheritedValueViaSetterOnlyAccessor(ExecutionMode mode)
     {
         // #801: ECMA-262 §6.2.5.5 ToPropertyDescriptor reads `value` via HasProperty/Get,

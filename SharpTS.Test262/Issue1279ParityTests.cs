@@ -1426,6 +1426,14 @@ public sealed class Issue1279ParityTests
     public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-own-acsr-w-getter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-proto-acsr-w-getter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-own-acsr-w-setter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-proto-acsr-w-setter.js")]
+    public void Object_legacy_accessor_lookup_walks_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");

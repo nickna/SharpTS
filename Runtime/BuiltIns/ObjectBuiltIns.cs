@@ -1377,6 +1377,21 @@ public static partial class ObjectBuiltIns
                     new SharpTSTypeError("Setter must be a function or undefined")),
             };
         }
+
+        // Descriptor fields are ordinary data properties. Reading a callable
+        // from `desc.value` / `desc.get` / `desc.set` must return that exact
+        // function object; receiver binding belongs to a subsequent call, not
+        // the property read. Remember this on interpreter record objects after
+        // extraction so identity checks remain stable.
+        if (descObj is SharpTSObject identityObject)
+        {
+            if (descriptor.HasValue && descriptor.Value is ISharpTSCallable)
+                identityObject.PreserveCallableValueIdentityFor("value");
+            if (descriptor.HasGet && descriptor.Get is not null)
+                identityObject.PreserveCallableValueIdentityFor("get");
+            if (descriptor.HasSet && descriptor.Set is not null)
+                identityObject.PreserveCallableValueIdentityFor("set");
+        }
     }
 
     /// <summary>
