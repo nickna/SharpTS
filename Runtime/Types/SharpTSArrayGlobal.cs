@@ -418,6 +418,7 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
     private readonly Func<SharpTSArray, List<object?>, object?> _impl;
     private readonly BuiltInFunctionMetadata _metadata;
     private readonly object? _boundThis;
+    private readonly bool _hasBoundThis;
     private readonly int _jsLength;
 
     private SharpTSArrayUnboundMethod(string name, Func<SharpTSArray, List<object?>, object?> impl, int jsLength)
@@ -426,6 +427,7 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
         _impl = impl;
         _jsLength = jsLength;
         _metadata = new BuiltInFunctionMetadata();
+        _hasBoundThis = false;
     }
 
     private SharpTSArrayUnboundMethod(
@@ -440,6 +442,7 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
         _jsLength = jsLength;
         _metadata = metadata;
         _boundThis = boundThis;
+        _hasBoundThis = true;
     }
 
     public string FunctionName => _name;
@@ -454,7 +457,7 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
     /// True once <see cref="BindTo"/> has supplied a receiver. Callers use this to avoid
     /// re-binding an already-bound method.
     /// </summary>
-    public bool HasBoundThis => _boundThis is not null;
+    public bool HasBoundThis => _hasBoundThis;
 
     public object? Call(Interp interpreter, List<object?> arguments)
     {
@@ -462,9 +465,26 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
         // otherwise treat the first argument as the receiver (pragmatic form).
         SharpTSArray? target = _boundThis as SharpTSArray;
         List<object?> rest;
-        if (target != null)
+        if (_hasBoundThis && target != null)
         {
             rest = arguments;
+        }
+        else if (_hasBoundThis)
+        {
+            if (_boundThis is null or SharpTSUndefined)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Array.prototype.{_name} called on null or undefined"));
+
+            if (arguments.Count == 0 && _name is "push" or "unshift")
+            {
+                object receiver = BuiltIns.BuiltInConstructorFactory.ToObject(_boundThis)!;
+                long length = ToLength(interpreter.GetProperty(receiver, "length"), interpreter);
+                interpreter.SetProperty(receiver, "length", (double)length);
+                return (double)length;
+            }
+
+            throw new ThrowException(new SharpTSTypeError(
+                $"Array.prototype.{_name} requires an array receiver"));
         }
         else
         {
@@ -474,6 +494,14 @@ public sealed class SharpTSArrayUnboundMethod : ISharpTSCallable, IBuiltInFuncti
             rest = arguments.Count > 1 ? arguments.GetRange(1, arguments.Count - 1) : new List<object?>();
         }
         return _impl(target, rest);
+    }
+
+    private static long ToLength(object? value, Interp interpreter)
+    {
+        double number = interpreter.ToNumberWithPrimitive(value);
+        if (double.IsNaN(number) || number <= 0) return 0;
+        if (double.IsPositiveInfinity(number)) return (1L << 53) - 1;
+        return (long)Math.Min(Math.Truncate(number), (double)((1L << 53) - 1));
     }
 
     /// <summary>
