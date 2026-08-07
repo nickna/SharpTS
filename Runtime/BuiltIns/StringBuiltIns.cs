@@ -561,9 +561,15 @@ public static class StringBuiltIns
         {
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.matchAll called with a non-global RegExp argument");
-            var matchObjects = regex.MatchAllObjects(str);
-            return RuntimeValue.FromObject(new SharpTSIterator(
-                matchObjects.Select(m => (object?)m)));
+            object? matcher = interpreter.GetSymbolPropertyValue(
+                regex, SharpTSSymbol.MatchAll);
+            if (matcher is not ISharpTSCallable callable)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    "Symbol.matchAll property is not callable"));
+            }
+            return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                interpreter, callable, regex, [str]));
         }
 
         var source = pattern is SharpTSUndefined
