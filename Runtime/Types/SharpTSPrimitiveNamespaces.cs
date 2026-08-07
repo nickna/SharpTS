@@ -332,7 +332,7 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     {
         _deletedMethods.Remove(name);
         if (name == "constructor") _constructorDeleted = false;
-        if (name is "constructor" or "valueOf" or "toString" && !HasExtra(name))
+        if (name is "constructor" or "valueOf" or "toString" or "toLocaleString" && !HasExtra(name))
         {
             _extras.DefineProperty(name, new SharpTSPropertyDescriptor
             {
@@ -362,25 +362,25 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     public bool HasOwnProperty(string name)
         => HasExtra(name)
             || name == "constructor" && !_constructorDeleted
-            || name is "valueOf" or "toString" && !_deletedMethods.Contains(name);
+            || name is "valueOf" or "toString" or "toLocaleString" && !_deletedMethods.Contains(name);
     public bool DeleteProperty(string name)
     {
         if (HasExtra(name))
         {
             bool deleted = _extras.DeleteProperty(name);
             if (deleted && name == "constructor") _constructorDeleted = true;
-            if (deleted && name is "valueOf" or "toString") _deletedMethods.Add(name);
+            if (deleted && name is "valueOf" or "toString" or "toLocaleString") _deletedMethods.Add(name);
             return deleted;
         }
         if (name == "constructor") _constructorDeleted = true;
-        if (name is "valueOf" or "toString") _deletedMethods.Add(name);
+        if (name is "valueOf" or "toString" or "toLocaleString") _deletedMethods.Add(name);
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
             : name == "constructor" && !_constructorDeleted ? RealmConstructor
-            : name is "valueOf" or "toString" && !_deletedMethods.Contains(name)
+            : name is "valueOf" or "toString" or "toLocaleString" && !_deletedMethods.Contains(name)
                 ? _methodCache.GetValueOrDefault(name)
                     ?? (_methodCache[name] = new BigIntPrototypeMethodWrapper(name))
             : null;

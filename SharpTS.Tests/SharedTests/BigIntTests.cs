@@ -22,6 +22,18 @@ public class BigIntTests
         Assert.Equal("171n\n-85n\n3n\n-1n\n", output);
     }
 
+    [Fact]
+    public void BigInt_Prototype_ToLocaleString_IsCallable_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            console.log((12345678901234567890n).toLocaleString());
+            console.log(BigInt.prototype.toLocaleString.call(Object(-42n)));
+            console.log(BigInt.prototype.hasOwnProperty("toLocaleString"));
+            """);
+
+        Assert.Equal("12345678901234567890\n-42\ntrue\n", output);
+    }
+
     #region Literal and Typeof Tests
 
     [Theory, ModeData]
