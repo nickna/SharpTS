@@ -1519,6 +1519,7 @@ public static partial class ObjectBuiltIns
         // bottoms out at Object.prototype.
         SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
         SharpTSArrayPrototype => interp?.GetObjectPrototype(),
+        SharpTSStringPrototype => interp?.GetObjectPrototype(),
         SharpTSClassPrototype classPrototype
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's

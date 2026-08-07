@@ -660,6 +660,8 @@ public partial class Interpreter
     {
         // Number.prototype is itself a Number object with [[NumberData]] +0.
         if (value is SharpTSNumberPrototype) return 0.0;
+        // String.prototype is itself a String object with [[StringData]] "".
+        if (value is SharpTSStringPrototype) return "";
         // Arrays have no own valueOf/toString and inherit Array.prototype.toString
         // (= join(',')); OrdinaryToPrimitive resolves to it for every hint (valueOf
         // returns the array, not a primitive, so it is skipped). e.g. `'' + [1,2,3]`
@@ -1110,9 +1112,11 @@ public partial class Interpreter
         // ECMA-262 §7.2.15 steps 10-11: Object vs primitive coerces the object
         // through ToPrimitive, so `new Number(0) == 0` is true (#708). Only when
         // the other operand is a primitive — object == object stays reference-based.
-        if (a is SharpTSObject or SharpTSNumberPrototype && IsPrimitiveOperand(b))
+        if (a is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+            && IsPrimitiveOperand(b))
             a = ToPrimitive(a, PrimitiveHint.Default);
-        else if (b is SharpTSObject or SharpTSNumberPrototype && IsPrimitiveOperand(a))
+        else if (b is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+            && IsPrimitiveOperand(a))
             b = ToPrimitive(b, PrimitiveHint.Default);
         return a!.Equals(b);
     }
