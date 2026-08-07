@@ -1473,6 +1473,12 @@ public sealed class Issue1279ParityTests
     public void RegExp_prototype_methods_have_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-176.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-177.js")]
+    public void JSON_method_descriptors_preserve_callable_identity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
