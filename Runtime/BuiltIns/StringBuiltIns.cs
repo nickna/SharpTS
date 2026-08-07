@@ -570,9 +570,15 @@ public static class StringBuiltIns
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
         var tempRegex = new SharpTSRegExp(source, "g");
-        var results = tempRegex.MatchAllObjects(str);
-        return RuntimeValue.FromObject(new SharpTSIterator(
-            results.Select(m => (object?)m)));
+        object? createdMatcher = interpreter.GetSymbolPropertyValue(
+            tempRegex, SharpTSSymbol.MatchAll);
+        if (createdMatcher is not ISharpTSCallable createdCallable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Constructed RegExp Symbol.matchAll property is not callable"));
+        }
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter, createdCallable, tempRegex, [str]));
     }
 
     private static RuntimeValue SearchV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)

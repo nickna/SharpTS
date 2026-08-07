@@ -2188,6 +2188,7 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/String/prototype/matchAll/regexp-is-null.js")]
     [InlineData("built-ins/String/prototype/matchAll/regexp-is-undefined.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-is-undefined-or-null-invokes-matchAll.js")]
     public void String_matchAll_handles_nullish_patterns(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
