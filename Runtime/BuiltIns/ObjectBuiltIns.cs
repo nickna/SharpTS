@@ -15,7 +15,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("entries", 1, EntriesV2)
             .MethodV2("fromEntries", 1, FromEntriesV2)
             .MethodV2("hasOwn", 2, HasOwnV2)
-            .MethodV2("is", 2, IsV2)
+            .MethodV2("is", 0, 2, 2, IsV2)
             .MethodV2("assign", 1, int.MaxValue, AssignV2)
             .MethodV2("freeze", 1, FreezeV2)
             .MethodV2("seal", 1, SealV2)
@@ -182,8 +182,8 @@ public static partial class ObjectBuiltIns
 
     private static RuntimeValue IsV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var value1 = args[0];
-        var value2 = args[1];
+        var value1 = args.Length > 0 ? args[0] : RuntimeValue.Undefined;
+        var value2 = args.Length > 1 ? args[1] : RuntimeValue.Undefined;
 
         // Handle null/undefined cases
         if (value1.Kind is ValueKind.Null or ValueKind.Undefined

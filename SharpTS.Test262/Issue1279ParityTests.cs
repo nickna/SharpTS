@@ -1371,6 +1371,14 @@ public sealed class Issue1279ParityTests
     public void Math_pow_handles_nan_and_infinite_exponents(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/is/same-value-x-y-empty.js")]
+    [InlineData("built-ins/Object/is/same-value-x-y-undefined.js")]
+    [InlineData("built-ins/Object/is/not-same-value-x-y-null.js")]
+    [InlineData("built-ins/Object/is/not-same-value-x-y-number.js")]
+    public void Object_is_treats_omitted_arguments_as_undefined(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
