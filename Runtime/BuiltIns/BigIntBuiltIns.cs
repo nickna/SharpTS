@@ -58,10 +58,15 @@ public static class BigIntBuiltIns
         object? bigintValue = args.Length > 1
             ? args[1].ToObject()
             : SharpTSUndefined.Instance;
-        BigInteger value = bigintValue switch
+        object? primitive = bigintValue is SharpTSObject or SharpTSArray or SharpTSInstance
+            ? interpreter.ToPrimitiveForBuiltIn(bigintValue)
+            : bigintValue;
+        BigInteger value = primitive switch
         {
             SharpTSBigInt bigint => bigint.Value,
             BigInteger raw => raw,
+            bool boolean => boolean ? BigInteger.One : BigInteger.Zero,
+            string text => ParseBigIntString(text),
             _ => throw new ThrowException(new SharpTSTypeError(
                 "BigInt value is required")),
         };
@@ -73,6 +78,40 @@ public static class BigIntBuiltIns
         if (signed && truncated >= (BigInteger.One << (bits - 1)))
             truncated -= modulus;
         return new SharpTSBigInt(truncated);
+    }
+
+    private static BigInteger ParseBigIntString(string text)
+    {
+        string value = text.Trim();
+        if (value.Length == 0) return BigInteger.Zero;
+        try
+        {
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return BigInteger.Parse("0" + value[2..], NumberStyles.HexNumber);
+            if (value.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
+                return ParseRadix(value.AsSpan(2), 2);
+            if (value.StartsWith("0o", StringComparison.OrdinalIgnoreCase))
+                return ParseRadix(value.AsSpan(2), 8);
+            return BigInteger.Parse(value, CultureInfo.InvariantCulture);
+        }
+        catch (FormatException)
+        {
+            throw new ThrowException(new SharpTSSyntaxError(
+                "Cannot convert string to BigInt"));
+        }
+    }
+
+    private static BigInteger ParseRadix(ReadOnlySpan<char> digits, int radix)
+    {
+        if (digits.Length == 0) throw new FormatException();
+        BigInteger result = BigInteger.Zero;
+        foreach (char digit in digits)
+        {
+            int value = digit - '0';
+            if (value < 0 || value >= radix) throw new FormatException();
+            result = result * radix + value;
+        }
+        return result;
     }
 
     /// <summary>

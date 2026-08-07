@@ -820,6 +820,9 @@ public partial class Interpreter
             "Cannot convert object to primitive value"));
     }
 
+    internal object? ToPrimitiveForBuiltIn(object? value)
+        => ToPrimitive(value, PrimitiveHint.Number);
+
     /// <summary>
     /// ECMA-262 §7.1.1: consults an object's @@toPrimitive method before
     /// OrdinaryToPrimitive. An explicitly undefined method is treated as absent;
