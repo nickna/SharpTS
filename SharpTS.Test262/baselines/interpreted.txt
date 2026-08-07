@@ -3628,7 +3628,7 @@ test/built-ins/Math/sin/S15.8.2.16_A5.js Pass
 test/built-ins/Math/sin/length.js Pass
 test/built-ins/Math/sin/name.js Pass
 test/built-ins/Math/sin/not-a-constructor.js Pass
-test/built-ins/Math/sin/prop-desc.js Fail
+test/built-ins/Math/sin/prop-desc.js Pass
 test/built-ins/Math/sin/zero.js Pass
 test/built-ins/Math/sinh/length.js Pass
 test/built-ins/Math/sinh/name.js Pass
