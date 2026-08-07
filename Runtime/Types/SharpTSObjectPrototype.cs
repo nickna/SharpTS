@@ -238,7 +238,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // it through the class chain and answer true.
             SharpTSInstance inst => inst.HasField(key) || inst.GetOwnPropertyDescriptor(key) is not null,
             SharpTSArray array => array.HasOwnProperty(key),
-            SharpTSMath math => math.HasExtra(key),
+            SharpTSMath math => math.HasExtra(key)
+                || (!math.IsBuiltInDeleted(key) && MathBuiltIns.GetMember(key) is not null),
             SharpTSJSON json => json.HasExtra(key),
             SharpTSDate date => date.HasExtra(key),
             SharpTSRegExp regex => regex.HasOwnProperty(key),

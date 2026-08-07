@@ -813,7 +813,7 @@ public static partial class ObjectBuiltIns
         string propertyKey)
     {
         bool isKnownBuiltIn = target is ISharpTSCallable
-            || target is SharpTSArrayPrototype or SharpTSFunctionPrototype
+            || target is SharpTSArrayPrototype or SharpTSFunctionPrototype or SharpTSMath
             || BuiltInRegistry.Instance.HasInstanceMembers(target);
         if (!isKnownBuiltIn)
             return null;

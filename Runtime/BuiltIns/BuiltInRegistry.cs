@@ -431,8 +431,7 @@ public sealed class BuiltInRegistry
         registry.RegisterInstanceType(typeof(SharpTSMath), (instance, name) =>
         {
             var math = (SharpTSMath)instance;
-            if (math.HasExtra(name)) return math.TryGetExtra(name);
-            return MathBuiltIns.GetMember(name);
+            return math.GetMember(name);
         });
     }
 

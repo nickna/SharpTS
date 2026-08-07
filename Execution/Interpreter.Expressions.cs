@@ -1078,8 +1078,7 @@ public partial class Interpreter
         if (obj is SharpTSMath math)
         {
             var key = Stringify(index);
-            if (math.HasExtra(key)) return RuntimeValue.FromBoxed(math.TryGetExtra(key));
-            return RuntimeValue.FromBoxed(Runtime.BuiltIns.MathBuiltIns.GetMember(key) ?? SharpTSUndefined.Instance);
+            return RuntimeValue.FromBoxed(math.GetMember(key));
         }
 
         // Number/Boolean/String.prototype bracket read — extras first, then built-in methods.

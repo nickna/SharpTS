@@ -33,6 +33,7 @@ public class SharpTSMath
     // Math is an ordinary object. Descriptor-aware storage preserves the
     // writable/enumerable/configurable attributes of defineProperty expandos.
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Returns the user-assigned value for <paramref name="name"/> if one
@@ -41,22 +42,69 @@ public class SharpTSMath
     public object? TryGetExtra(string name)
         => _extras.GetProperty(name);
 
+    public object? GetMember(string name)
+    {
+        if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return SharpTSUndefined.Instance;
+        return BuiltIns.MathBuiltIns.GetMember(name) ?? SharpTSUndefined.Instance;
+    }
+
     /// <summary>
     /// True when a user-assigned property with this name exists.
     /// </summary>
     public bool HasExtra(string name)
         => _extras.HasProperty(name) || _extras.HasSetter(name);
 
+    internal bool IsBuiltInDeleted(string name) => _deletedBuiltIns.Contains(name);
+
     /// <summary>
     /// Assigns a user property. Allowed per JS spec — Math is a regular
     /// extensible object.
     /// </summary>
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (BuiltIns.MathBuiltIns.IsConstant(name) && !HasExtra(name)) return;
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _extras.DefineProperty(name, descriptor);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _extras.GetOwnPropertyDescriptor(name);
-    public bool DeleteExtra(string name) => _extras.DeleteProperty(name);
+    {
+        var extra = _extras.GetOwnPropertyDescriptor(name);
+        if (extra is not null) return extra;
+        if (_deletedBuiltIns.Contains(name)) return null;
+
+        var value = BuiltIns.MathBuiltIns.GetMember(name);
+        return value switch
+        {
+            BuiltIns.BuiltInMethod method => new SharpTSPropertyDescriptor
+            {
+                Value = method,
+                HasValue = true,
+                Writable = true,
+                Enumerable = false,
+                Configurable = true,
+            },
+            not null => new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = false,
+                Enumerable = false,
+                Configurable = false,
+            },
+            _ => null,
+        };
+    }
+
+    public bool DeleteExtra(string name)
+    {
+        if (BuiltIns.MathBuiltIns.IsConstant(name)) return false;
+        bool deleted = _extras.DeleteProperty(name);
+        if (BuiltIns.MathBuiltIns.IsMember(name)) _deletedBuiltIns.Add(name);
+        return deleted || BuiltIns.MathBuiltIns.IsMember(name);
+    }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     /// <summary>

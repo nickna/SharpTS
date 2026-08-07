@@ -3364,7 +3364,7 @@ test/built-ins/Math/LOG10E/prop-desc.js Fail
 test/built-ins/Math/LOG10E/value.js Pass
 test/built-ins/Math/LOG2E/prop-desc.js Fail
 test/built-ins/Math/LOG2E/value.js Pass
-test/built-ins/Math/PI/prop-desc.js Fail
+test/built-ins/Math/PI/prop-desc.js Pass
 test/built-ins/Math/PI/value.js Pass
 test/built-ins/Math/SQRT1_2/prop-desc.js Fail
 test/built-ins/Math/SQRT1_2/value.js Pass
@@ -3378,7 +3378,7 @@ test/built-ins/Math/abs/absolute-value.js Pass
 test/built-ins/Math/abs/length.js Pass
 test/built-ins/Math/abs/name.js Pass
 test/built-ins/Math/abs/not-a-constructor.js Pass
-test/built-ins/Math/abs/prop-desc.js Fail
+test/built-ins/Math/abs/prop-desc.js Pass
 test/built-ins/Math/acos/S15.8.2.2_A1.js Pass
 test/built-ins/Math/acos/S15.8.2.2_A2.js Pass
 test/built-ins/Math/acos/S15.8.2.2_A3.js Pass

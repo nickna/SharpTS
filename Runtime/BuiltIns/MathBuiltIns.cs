@@ -122,6 +122,11 @@ public static class MathBuiltIns
     public static object? GetMember(string name)
         => _lookup.GetMember(name);
 
+    internal static bool IsMember(string name) => _lookup.GetMember(name) is not null;
+
+    internal static bool IsConstant(string name)
+        => _lookup.GetMember(name) is not null and not BuiltInMethod;
+
     /// <summary>Member names for REPL autocomplete.</summary>
     public static IEnumerable<string> MemberNames => _lookup.MemberNames;
 
