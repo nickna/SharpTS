@@ -3425,7 +3425,7 @@ test/built-ins/Math/atan2/S15.8.2.5_A9.js Pass
 test/built-ins/Math/atan2/length.js Pass
 test/built-ins/Math/atan2/name.js Pass
 test/built-ins/Math/atan2/not-a-constructor.js Pass
-test/built-ins/Math/atan2/prop-desc.js Fail
+test/built-ins/Math/atan2/prop-desc.js Pass
 test/built-ins/Math/atanh/atanh-specialVals.js Pass
 test/built-ins/Math/atanh/length.js Pass
 test/built-ins/Math/atanh/name.js Pass
