@@ -3386,7 +3386,7 @@ test/built-ins/Math/acos/S15.8.2.2_A4.js Pass
 test/built-ins/Math/acos/length.js Pass
 test/built-ins/Math/acos/name.js Pass
 test/built-ins/Math/acos/not-a-constructor.js Pass
-test/built-ins/Math/acos/prop-desc.js Fail
+test/built-ins/Math/acos/prop-desc.js Pass
 test/built-ins/Math/acosh/arg-is-infinity.js Pass
 test/built-ins/Math/acosh/arg-is-one.js Pass
 test/built-ins/Math/acosh/length.js Pass
