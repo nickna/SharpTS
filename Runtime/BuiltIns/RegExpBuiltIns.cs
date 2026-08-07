@@ -888,7 +888,14 @@ public static class RegExpBuiltIns
             }
             else
             {
-                replacement = replaceStr;
+                var captures = new List<object?>();
+                if (match is SharpTSArray arr)
+                {
+                    for (int i = 1; i < arr.Length; i++)
+                        captures.Add(arr[i]);
+                }
+                replacement = ExpandReplacement(
+                    interp, replaceStr, s, matchStr, position, captures);
             }
 
             // Append the un-modified slice + replacement.
@@ -902,6 +909,93 @@ public static class RegExpBuiltIns
         if (nextSourcePosition < s.Length)
             sb.Append(s, nextSourcePosition, s.Length - nextSourcePosition);
         return RuntimeValue.FromString(sb.ToString());
+    }
+
+    private static string ExpandReplacement(
+        Interpreter interp,
+        string replacement,
+        string input,
+        string matched,
+        int position,
+        List<object?> captures)
+    {
+        var result = new System.Text.StringBuilder(replacement.Length);
+        for (int i = 0; i < replacement.Length; i++)
+        {
+            if (replacement[i] != '$' || i + 1 >= replacement.Length)
+            {
+                result.Append(replacement[i]);
+                continue;
+            }
+
+            char next = replacement[i + 1];
+            switch (next)
+            {
+                case '$':
+                    result.Append('$');
+                    i++;
+                    continue;
+                case '&':
+                    result.Append(matched);
+                    i++;
+                    continue;
+                case '`':
+                    result.Append(input, 0, position);
+                    i++;
+                    continue;
+                case '\'':
+                    int tailStart = position + matched.Length;
+                    result.Append(input, tailStart, input.Length - tailStart);
+                    i++;
+                    continue;
+            }
+
+            if (next == '0'
+                && i + 2 < replacement.Length
+                && replacement[i + 2] is >= '1' and <= '9')
+            {
+                int leadingZeroCapture = replacement[i + 2] - '0';
+                if (leadingZeroCapture <= captures.Count)
+                {
+                    object? leadingCaptureValue = captures[leadingZeroCapture - 1];
+                    if (leadingCaptureValue is not (null or SharpTSUndefined))
+                        result.Append(ToStr(interp, leadingCaptureValue));
+                    i += 2;
+                    continue;
+                }
+            }
+
+            if (next is < '1' or > '9')
+            {
+                result.Append('$');
+                continue;
+            }
+
+            int captureNumber = next - '0';
+            int consumedDigits = 1;
+            if (i + 2 < replacement.Length
+                && replacement[i + 2] is >= '0' and <= '9')
+            {
+                int twoDigit = captureNumber * 10 + replacement[i + 2] - '0';
+                if (twoDigit <= captures.Count)
+                {
+                    captureNumber = twoDigit;
+                    consumedDigits = 2;
+                }
+            }
+
+            if (captureNumber > captures.Count)
+            {
+                result.Append('$');
+                continue;
+            }
+
+            object? capture = captures[captureNumber - 1];
+            if (capture is not (null or SharpTSUndefined))
+                result.Append(ToStr(interp, capture));
+            i += consumedDigits;
+        }
+        return result.ToString();
     }
 
     /// <summary>

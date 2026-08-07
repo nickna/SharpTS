@@ -1950,6 +1950,16 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-after.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-before.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-capture-idx-1.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-capture-idx-2.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-dollar.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/subst-matched.js")]
+    public void RegExp_replace_expands_replacement_substitutions(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
