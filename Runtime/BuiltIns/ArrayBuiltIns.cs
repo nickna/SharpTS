@@ -1250,7 +1250,7 @@ public static class ArrayBuiltIns
     /// <c>toString</c> and leaked the console/debug array/object format (#922 follow-up).
     /// </summary>
     private static string CoerceToJsString(Interpreter interp, object? v)
-        => v is SharpTSArray a ? ToJsString(interp, a) : interp.ToStringForStringCall(v);
+        => v is SharpTSArray a ? ToJsString(interp, a) : interp.ToStringForBuiltInArgument(v);
 
     #region Iterator Methods
 

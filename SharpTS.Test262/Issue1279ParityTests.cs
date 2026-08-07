@@ -1688,6 +1688,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A3.1_T2.js")]
+    [InlineData("built-ins/Array/prototype/join/S15.4.4.5_A3.2_T2.js")]
+    [InlineData("built-ins/Array/prototype/toString/S15.4.4.2_A1_T4.js")]
+    public void Array_stringification_uses_string_hint_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
