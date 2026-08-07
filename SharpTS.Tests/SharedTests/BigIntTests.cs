@@ -9,6 +9,19 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class BigIntTests
 {
+    [Fact]
+    public void BigInt_FixedWidthStatics_TruncateSmallValues_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            console.log(BigInt.asUintN(8, -85n));
+            console.log(BigInt.asIntN(8, 171n));
+            console.log(BigInt.asUintN(2, -1n));
+            console.log(BigInt.asIntN(2, 3n));
+            """);
+
+        Assert.Equal("171n\n-85n\n3n\n-1n\n", output);
+    }
+
     #region Literal and Typeof Tests
 
     [Theory, ModeData]

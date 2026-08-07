@@ -1996,6 +1996,16 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/asIntN/length.js")]
+    [InlineData("built-ins/BigInt/asIntN/name.js")]
+    [InlineData("built-ins/BigInt/asIntN/not-a-constructor.js")]
+    [InlineData("built-ins/BigInt/asUintN/length.js")]
+    [InlineData("built-ins/BigInt/asUintN/name.js")]
+    [InlineData("built-ins/BigInt/asUintN/not-a-constructor.js")]
+    public void BigInt_fixed_width_statics_truncate_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

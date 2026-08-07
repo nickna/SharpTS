@@ -742,6 +742,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(nsPrototype);
         }
 
+        if (obj is SharpTSGlobalFunction { Name: BuiltInNames.BigInt }
+            && BigIntBuiltIns.GetStaticMember(get.Name.Lexeme) is { } bigIntStatic)
+        {
+            return RuntimeValue.FromBoxed(bigIntStatic);
+        }
+
         // Object is a per-realm mutable constructor object. Its static methods
         // are already callables with no receiver semantics, so return the exact
         // stored value instead of routing through instance-member dispatch,

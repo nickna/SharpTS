@@ -21,6 +21,60 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 public static class BigIntBuiltIns
 {
+    private static readonly BuiltInMethod _asUintN = BuiltInMethod.CreateV2(
+        "asUintN", 0, int.MaxValue, (interpreter, _, args) =>
+            RuntimeValue.FromBigInt(Truncate(interpreter, args, signed: false)))
+        .WithSpecLength(2)
+        .AsNonConstructor();
+
+    private static readonly BuiltInMethod _asIntN = BuiltInMethod.CreateV2(
+        "asIntN", 0, int.MaxValue, (interpreter, _, args) =>
+            RuntimeValue.FromBigInt(Truncate(interpreter, args, signed: true)))
+        .WithSpecLength(2)
+        .AsNonConstructor();
+
+    public static object? GetStaticMember(string name) => name switch
+    {
+        "asUintN" => _asUintN,
+        "asIntN" => _asIntN,
+        _ => null,
+    };
+
+    private static SharpTSBigInt Truncate(
+        Interpreter interpreter, ReadOnlySpan<RuntimeValue> args, bool signed)
+    {
+        object? bitsValue = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        double bitsNumber = interpreter.ToNumberWithPrimitive(bitsValue);
+        double bitsInteger = double.IsNaN(bitsNumber) ? 0 : Math.Truncate(bitsNumber);
+        if (bitsInteger < 0 || double.IsInfinity(bitsInteger)
+            || bitsInteger > int.MaxValue)
+        {
+            throw new ThrowException(new SharpTSRangeError(
+                "BigInt bit width is outside the supported index range"));
+        }
+
+        object? bigintValue = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
+        BigInteger value = bigintValue switch
+        {
+            SharpTSBigInt bigint => bigint.Value,
+            BigInteger raw => raw,
+            _ => throw new ThrowException(new SharpTSTypeError(
+                "BigInt value is required")),
+        };
+
+        int bits = (int)bitsInteger;
+        if (bits == 0) return new SharpTSBigInt(BigInteger.Zero);
+        BigInteger modulus = BigInteger.One << bits;
+        BigInteger truncated = ((value % modulus) + modulus) % modulus;
+        if (signed && truncated >= (BigInteger.One << (bits - 1)))
+            truncated -= modulus;
+        return new SharpTSBigInt(truncated);
+    }
+
     /// <summary>
     /// Gets an instance member for a bigint value (BigInt.prototype surface).
     /// Accepts either the interpreter wrapper (<see cref="SharpTSBigInt"/>) or a raw
