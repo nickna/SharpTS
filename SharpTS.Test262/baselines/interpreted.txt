@@ -3616,7 +3616,7 @@ test/built-ins/Math/round/S15.8.2.15_A7.js Fail
 test/built-ins/Math/round/length.js Pass
 test/built-ins/Math/round/name.js Pass
 test/built-ins/Math/round/not-a-constructor.js Pass
-test/built-ins/Math/round/prop-desc.js Fail
+test/built-ins/Math/round/prop-desc.js Pass
 test/built-ins/Math/sign/length.js Pass
 test/built-ins/Math/sign/name.js Pass
 test/built-ins/Math/sign/not-a-constructor.js Pass
