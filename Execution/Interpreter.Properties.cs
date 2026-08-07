@@ -736,10 +736,11 @@ public partial class Interpreter
         // which binds BuiltInMethod and breaks identity with descriptor.value.
         if (obj is SharpTSObjectNamespace objectNamespace)
         {
-            return RuntimeValue.FromBoxed(
-                objectNamespace.HasOwnProperty(get.Name.Lexeme)
-                    ? objectNamespace.GetMember(get.Name.Lexeme)
-                    : SharpTSUndefined.Instance);
+            if (objectNamespace.HasOwnProperty(get.Name.Lexeme)
+                && objectNamespace.GetMember(get.Name.Lexeme) is { } ownMember)
+            {
+                return RuntimeValue.FromBoxed(ownMember);
+            }
         }
 
         // String/Number/Boolean are the same shape — per-realm constructor objects whose

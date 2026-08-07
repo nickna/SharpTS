@@ -1530,6 +1530,14 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/prototype/propertyIsEnumerable/symbol_own_property.js");
 
+    [Fact]
+    public void Object_constructor_reports_length_one()
+        => AssertPassInBothModes("built-ins/Object/S15.2.3_A3.js");
+
+    [Fact]
+    public void Object_constructor_owns_its_prototype_property()
+        => AssertPassInBothModes("built-ins/Object/S15.2.3_A1.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
