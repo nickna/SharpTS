@@ -49,10 +49,17 @@ public class BigIntTests
             console.log((BigInt.prototype as any).marker);
             delete (BigInt.prototype as any).marker;
             console.log((BigInt.prototype as any).marker);
+            const descriptor = Object.getOwnPropertyDescriptor(BigInt.prototype, "constructor")!;
+            console.log(descriptor.configurable);
+            const original = BigInt.prototype.constructor;
+            (BigInt.prototype as any).constructor = "unlikelyValue";
+            (BigInt.prototype as any).constructor = original;
+            console.log(delete (BigInt.prototype as any).constructor);
+            console.log(Object.prototype.hasOwnProperty.call(BigInt.prototype, "constructor"));
             """;
 
         var output = TestHarness.Run(source, ExecutionMode.Interpreted);
-        Assert.Equal("true\n42\nundefined\n", output);
+        Assert.Equal("true\n42\nundefined\ntrue\ntrue\nfalse\n", output);
     }
 
     [Theory, ModeData]

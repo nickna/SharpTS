@@ -352,7 +352,12 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
         => HasExtra(name) || name == "constructor" && !_constructorDeleted;
     public bool DeleteProperty(string name)
     {
-        if (HasExtra(name)) return _extras.DeleteProperty(name);
+        if (HasExtra(name))
+        {
+            bool deleted = _extras.DeleteProperty(name);
+            if (deleted && name == "constructor") _constructorDeleted = true;
+            return deleted;
+        }
         if (name == "constructor") _constructorDeleted = true;
         return true;
     }
