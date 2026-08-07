@@ -16,6 +16,28 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_mode_generates_from_a_project_baseline_directory()
+    {
+        var directory = Directory.CreateTempSubdirectory("sharpts-report-mode-");
+        try
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            var baselines = Directory.CreateDirectory(Path.Combine(directory.FullName, "baselines"));
+            Test262Baseline.Write(Path.Combine(baselines.FullName, "interpreted.txt"), [("a.js", "Fail")], revision);
+            Test262Baseline.Write(Path.Combine(baselines.FullName, "compiled.txt"), [("a.js", "Pass")], revision);
+
+            var output = Test262ReportMode.Generate(directory.FullName);
+
+            Assert.True(File.Exists(output));
+            Assert.Contains("| 1 | Fail → Pass |", File.ReadAllText(output));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Differential_entry_exposes_outcomes_and_transition()
     {
         var entry = new Test262DifferentialEntry("a.js", "Fail", "Pass");
