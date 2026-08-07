@@ -9,6 +9,24 @@ namespace SharpTS.Tests.SharedTests;
 public class StringMethodTests
 {
     [Fact]
+    public void String_Match_PreservesBorrowedReceiverForSymbolHook_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const receiver: any = { marker: "original" };
+            receiver.toString = function(): string { throw new Error("unexpected"); };
+            const pattern: any = {};
+            pattern[Symbol.match] = function(value: any): any {
+                console.log(value === receiver);
+                console.log(this === pattern);
+                return "matched";
+            };
+            console.log(String.prototype.match.call(receiver, pattern));
+            """);
+
+        Assert.Equal("true\ntrue\nmatched\n", output);
+    }
+
+    [Fact]
     public void String_ReplaceAll_InvokesCustomSymbolReplace_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""
