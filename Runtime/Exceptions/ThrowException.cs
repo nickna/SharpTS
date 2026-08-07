@@ -79,20 +79,31 @@ public class ThrowException : Exception
 
     private static string ExtractFromObject(SharpTSObject obj)
     {
-        string? name = obj.HasProperty("name") ? obj.GetProperty("name")?.ToString() : null;
-        if (string.IsNullOrEmpty(name) && obj.HasProperty("constructor"))
+        string? name = FindObjectProperty(obj, "name")?.ToString();
+        if (string.IsNullOrEmpty(name))
         {
             // User-defined error types (e.g. Test262Error) don't set .name on
             // each instance — read it off the constructor function instead so
             // `throw new Test262Error(msg)` surfaces as "Test262Error: msg".
-            name = ExtractFunctionName(obj.GetProperty("constructor"));
+            name = ExtractFunctionName(FindObjectProperty(obj, "constructor"));
         }
-        string? message = obj.HasProperty("message") ? obj.GetProperty("message")?.ToString() : null;
+        string? message = FindObjectProperty(obj, "message")?.ToString();
         if (!string.IsNullOrEmpty(name))
             return string.IsNullOrEmpty(message) ? name : $"{name}: {message}";
         if (!string.IsNullOrEmpty(message))
             return message;
         return "[object Object]";
+    }
+
+    private static object? FindObjectProperty(SharpTSObject obj, string name)
+    {
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is SharpTSObject record; depth++)
+        {
+            if (record.HasProperty(name)) return record.GetProperty(name);
+            current = record.Prototype;
+        }
+        return null;
     }
 
     private static string? ExtractFunctionName(object? fn) => fn switch
