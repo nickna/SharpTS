@@ -3407,7 +3407,7 @@ test/built-ins/Math/asinh/asinh-specialVals.js Pass
 test/built-ins/Math/asinh/length.js Pass
 test/built-ins/Math/asinh/name.js Pass
 test/built-ins/Math/asinh/not-a-constructor.js Pass
-test/built-ins/Math/asinh/prop-desc.js Fail
+test/built-ins/Math/asinh/prop-desc.js Pass
 test/built-ins/Math/atan/S15.8.2.4_A1.js Pass
 test/built-ins/Math/atan/S15.8.2.4_A2.js Pass
 test/built-ins/Math/atan/S15.8.2.4_A3.js Pass

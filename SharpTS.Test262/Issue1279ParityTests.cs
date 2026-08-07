@@ -1298,6 +1298,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Math/acos/prop-desc.js")]
     [InlineData("built-ins/Math/acosh/prop-desc.js")]
     [InlineData("built-ins/Math/asin/prop-desc.js")]
+    [InlineData("built-ins/Math/asinh/prop-desc.js")]
     public void Math_members_have_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
