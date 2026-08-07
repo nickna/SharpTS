@@ -46,6 +46,7 @@ public static class StringBuiltIns
             .MethodV2("normalize", 0, int.MaxValue, specLength: 0, NormalizeV2)
             .MethodV2("localeCompare", 0, int.MaxValue, specLength: 1, LocaleCompareV2)
             .MethodV2("isWellFormed", 0, IsWellFormedV2)
+            .MethodV2("toWellFormed", 0, ToWellFormedV2)
             // ECMA-262 §22.1.3.28/.31: String.prototype.toString and valueOf both
             // return thisStringValue. Needed so `(new String("x")).toString()` and
             // ToPrimitive(string-wrapper) unwrap to the primitive instead of
@@ -105,6 +106,32 @@ public static class StringBuiltIns
         }
 
         return RuntimeValue.True;
+    }
+
+    private static RuntimeValue ToWellFormedV2(
+        Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    {
+        StringBuilder? result = null;
+        for (int i = 0; i < str.Length; i++)
+        {
+            char codeUnit = str[i];
+            bool isUnpaired = char.IsHighSurrogate(codeUnit)
+                ? i + 1 >= str.Length || !char.IsLowSurrogate(str[i + 1])
+                : char.IsLowSurrogate(codeUnit)
+                    && (i == 0 || !char.IsHighSurrogate(str[i - 1]));
+
+            if (isUnpaired)
+            {
+                result ??= new StringBuilder(str, 0, i, str.Length);
+                result.Append('\uFFFD');
+            }
+            else if (result is not null)
+            {
+                result.Append(codeUnit);
+            }
+        }
+
+        return RuntimeValue.FromString(result?.ToString() ?? str);
     }
 
     private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
