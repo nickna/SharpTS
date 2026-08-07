@@ -2163,6 +2163,7 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/String/prototype/split/cstm-split-invocation.js")]
     [InlineData("built-ins/String/prototype/split/cstm-split-is-null.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-get-err.js")]
     public void String_split_invokes_symbol_protocol(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
