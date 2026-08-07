@@ -316,9 +316,18 @@ public static class RegExpBuiltIns
         // `Function.prototype.call.bind(RegExp.prototype.exec)` is a real
         // pattern. These are the unbound prototype methods; user code rebinds
         // via `.call(re, str)` which routes through `BuiltInMethod.Bind`.
-        proto.SetProperty("exec", RealmLocal(_protoExec));
-        proto.SetProperty("test", RealmLocal(_protoTest));
-        proto.SetProperty("toString", RealmLocal(_protoToString));
+        void DefineMethod(string name, object value) =>
+            proto.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = true,
+                Enumerable = false,
+                Configurable = true,
+            });
+        DefineMethod("exec", RealmLocal(_protoExec));
+        DefineMethod("test", RealmLocal(_protoTest));
+        DefineMethod("toString", RealmLocal(_protoToString));
         // ECMA-262 §22.2.6.1: RegExp.prototype.constructor is the RegExp
         // constructor. Wiring it here makes `RegExp.prototype.constructor ===
         // RegExp` hold and gives property-descriptor introspection
@@ -326,7 +335,7 @@ public static class RegExpBuiltIns
         // singleton is returned for instance `.constructor` access (see
         // Interpreter EvaluateGetOnRegExp).
         if (Execution.Interpreter.RegExpConstructorObject is { } rxCtor)
-            proto.SetProperty("constructor", rxCtor);
+            DefineMethod("constructor", rxCtor);
         // ECMA-262 §22.2.5: the flag/source accessors live on the prototype as
         // accessor properties { enumerable: false, configurable: true } so
         // descriptor introspection works (getOwnPropertyDescriptor returns a
