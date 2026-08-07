@@ -3525,7 +3525,7 @@ test/built-ins/Math/hypot/prop-desc.js Pass
 test/built-ins/Math/imul/length.js Pass
 test/built-ins/Math/imul/name.js Pass
 test/built-ins/Math/imul/not-a-constructor.js Pass
-test/built-ins/Math/imul/prop-desc.js Fail
+test/built-ins/Math/imul/prop-desc.js Pass
 test/built-ins/Math/imul/results.js Pass
 test/built-ins/Math/log/S15.8.2.10_A1.js Pass
 test/built-ins/Math/log/S15.8.2.10_A2.js Pass
