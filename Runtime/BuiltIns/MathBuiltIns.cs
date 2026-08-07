@@ -154,14 +154,18 @@ public static class MathBuiltIns
         return RuntimeValue.FromNumber(min);
     }
 
-    private static RuntimeValue Max(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue Max(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0) return RuntimeValue.FromNumber(double.NegativeInfinity);
 
-        double max = double.NegativeInfinity;
+        var coerced = new double[args.Length];
         for (int i = 0; i < args.Length; i++)
+            coerced[i] = interpreter.ToNumberWithPrimitive(args[i].ToObject());
+
+        double max = double.NegativeInfinity;
+        for (int i = 0; i < coerced.Length; i++)
         {
-            double val = Interpreter.ToNumber(args[i]);
+            double val = coerced[i];
             // ECMA-262 21.3.2.24: any NaN argument makes the result NaN.
             if (double.IsNaN(val)) return RuntimeValue.FromNumber(double.NaN);
             if (val > max || val == 0 && max == 0 && !double.IsNegative(val)) max = val;

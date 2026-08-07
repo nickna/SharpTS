@@ -1352,6 +1352,10 @@ public sealed class Issue1279ParityTests
     public void Math_min_prefers_negative_zero()
         => AssertPassInBothModes("built-ins/Math/min/zeros.js");
 
+    [Fact]
+    public void Math_max_coerces_every_argument()
+        => AssertPassInBothModes("built-ins/Math/max/Math.max_each-element-coerced.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
