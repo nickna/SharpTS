@@ -29,7 +29,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("isExtensible", 1, IsExtensibleMethodV2)
             .MethodV2("getOwnPropertySymbols", 1, GetOwnPropertySymbolsV2)
             .MethodV2("getPrototypeOf", 0, 1, 1, GetPrototypeOfV2)
-            .MethodV2("setPrototypeOf", 2, SetPrototypeOfV2)
+            .MethodV2("setPrototypeOf", 0, 2, 2, SetPrototypeOfV2)
             .MethodV2("groupBy", 2, GroupByV2)
             .MethodV2("defineProperties", 2, DefinePropertiesV2)
             .MethodV2("getOwnPropertyDescriptors", 1, GetOwnPropertyDescriptorsV2)
@@ -1288,46 +1288,6 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// Copies properties from a source object to a target SharpTSObject.
-    /// </summary>
-    private static void CopyPropertiesFrom(object source, SharpTSObject target)
-    {
-        switch (source)
-        {
-            case SharpTSObject srcObj:
-                foreach (var kv in srcObj.Fields)
-                {
-                    target.SetProperty(kv.Key, kv.Value);
-                }
-                // Copy getters and setters
-                foreach (var propName in srcObj.PropertyNames)
-                {
-                    var getter = srcObj.GetGetter(propName);
-                    var setter = srcObj.GetSetter(propName);
-                    if (getter != null)
-                        target.DefineGetter(propName, getter);
-                    if (setter != null)
-                        target.DefineSetter(propName, setter);
-                }
-                break;
-
-            case SharpTSInstance srcInst:
-                foreach (var key in srcInst.GetFieldNames())
-                {
-                    target.SetProperty(key, srcInst.GetRawField(key));
-                }
-                break;
-
-            case Dictionary<string, object?> dict:
-                foreach (var kv in dict)
-                {
-                    target.SetProperty(kv.Key, kv.Value);
-                }
-                break;
-        }
-    }
-
-    /// <summary>
     /// ECMA-262 §6.2.5.5 ToPropertyDescriptor boolean-attribute coercion done
     /// with interpreter access: each of writable/enumerable/configurable, when
     /// resolvable via <c>Get</c> (own or inherited, data or accessor), is
@@ -1597,11 +1557,12 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? SetPrototypeOf(Interpreter _, List<object?> args)
     {
-        var target = args[0];
-        var proto = args.Count > 1 ? args[1] : null;
+        var target = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        var proto = args.Count > 1 ? args[1] : SharpTSUndefined.Instance;
 
-        if (target == null)
-            throw new Exception("TypeError: Cannot convert null to object");
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.setPrototypeOf called on null or undefined"));
 
         switch (target)
         {
@@ -1613,9 +1574,6 @@ public static partial class ObjectBuiltIns
                 // still inherits Object.prototype. Record which one this is so
                 // Object.getPrototypeOf can tell them apart.
                 obj.IsNullPrototype = proto is null or SharpTSUndefined;
-                // Copy properties from new prototype if non-null
-                if (proto != null)
-                    CopyPropertiesFrom(proto, obj);
                 return obj;
 
             case SharpTSInstance:
@@ -1626,8 +1584,6 @@ public static partial class ObjectBuiltIns
                 if (!PropertyDescriptorStore.IsExtensible(dict))
                     throw new Exception("TypeError: Object is not extensible");
                 PropertyDescriptorStore.SetPrototype(dict, proto);
-                if (proto != null)
-                    RuntimeCopyPropertiesFrom(proto, dict);
                 return dict;
 
             default:

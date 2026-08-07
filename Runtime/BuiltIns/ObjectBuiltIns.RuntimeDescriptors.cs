@@ -32,58 +32,6 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// Copies properties from a source object to a target dictionary; used by
-    /// the interpreter's Object.setPrototypeOf when re-pointing a dictionary
-    /// object's prototype.
-    /// </summary>
-    private static void RuntimeCopyPropertiesFrom(object source, Dictionary<string, object?> target)
-    {
-        switch (source)
-        {
-            case SharpTSObject srcObj:
-                foreach (var kv in srcObj.Fields)
-                {
-                    target[kv.Key] = kv.Value;
-                }
-                break;
-
-            case SharpTSInstance srcInst:
-                foreach (var key in srcInst.GetFieldNames())
-                {
-                    target[key] = srcInst.GetRawField(key);
-                }
-                break;
-
-            case Dictionary<string, object?> dict:
-                foreach (var kv in dict)
-                {
-                    target[kv.Key] = kv.Value;
-                }
-                break;
-
-            case System.Collections.IDictionary idict:
-                foreach (System.Collections.DictionaryEntry entry in idict)
-                {
-                    target[entry.Key?.ToString() ?? ""] = entry.Value;
-                }
-                break;
-
-            default:
-                // Compiler-emitted classes expose a combined view of typed
-                // backing fields and expando properties through $IHasFields.
-                if (ManagedEmittedShapeReflection.TryGetFields(
-                        source, out var emittedFields))
-                {
-                    foreach (var kv in emittedFields!)
-                    {
-                        target[kv.Key] = kv.Value;
-                    }
-                }
-                break;
-        }
-    }
-
-    /// <summary>
     /// Runtime helper for Object.getOwnPropertyDescriptor; the live caller is
     /// Reflect.getOwnPropertyDescriptor (ReflectBuiltIns).
     /// </summary>
