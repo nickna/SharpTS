@@ -3456,7 +3456,7 @@ test/built-ins/Math/clz32/length.js Pass
 test/built-ins/Math/clz32/name.js Pass
 test/built-ins/Math/clz32/nan.js Pass
 test/built-ins/Math/clz32/not-a-constructor.js Pass
-test/built-ins/Math/clz32/prop-desc.js Fail
+test/built-ins/Math/clz32/prop-desc.js Pass
 test/built-ins/Math/cos/S15.8.2.7_A1.js Pass
 test/built-ins/Math/cos/S15.8.2.7_A2.js Pass
 test/built-ins/Math/cos/S15.8.2.7_A3.js Pass
