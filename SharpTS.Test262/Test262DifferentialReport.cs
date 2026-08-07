@@ -39,13 +39,17 @@ public sealed class Test262DifferentialReport
         IReadOnlyList<string> interpretedOnly,
         IReadOnlyList<string> compiledOnly,
         Test262ModeSummary interpretedSummary,
-        Test262ModeSummary compiledSummary)
+        Test262ModeSummary compiledSummary,
+        string? interpretedCorpusRevision,
+        string? compiledCorpusRevision)
     {
         Entries = entries;
         InterpretedOnly = interpretedOnly;
         CompiledOnly = compiledOnly;
         InterpretedSummary = interpretedSummary;
         CompiledSummary = compiledSummary;
+        InterpretedCorpusRevision = interpretedCorpusRevision;
+        CompiledCorpusRevision = compiledCorpusRevision;
     }
 
     public IReadOnlyList<Test262DifferentialEntry> Entries { get; }
@@ -57,6 +61,10 @@ public sealed class Test262DifferentialReport
     public Test262ModeSummary InterpretedSummary { get; }
 
     public Test262ModeSummary CompiledSummary { get; }
+
+    public string? InterpretedCorpusRevision { get; }
+
+    public string? CompiledCorpusRevision { get; }
 
     public IReadOnlyList<Test262DifferentialEntry> Divergences =>
         Entries.Where(entry => entry.InterpretedOutcome != entry.CompiledOutcome).ToList();
@@ -89,7 +97,9 @@ public sealed class Test262DifferentialReport
 
     public static Test262DifferentialReport Create(
         IReadOnlyDictionary<string, string> interpreted,
-        IReadOnlyDictionary<string, string> compiled)
+        IReadOnlyDictionary<string, string> compiled,
+        string? interpretedCorpusRevision = null,
+        string? compiledCorpusRevision = null)
     {
         var entries = interpreted.Keys
             .Intersect(compiled.Keys, StringComparer.Ordinal)
@@ -109,7 +119,9 @@ public sealed class Test262DifferentialReport
             interpretedOnly,
             compiledOnly,
             Test262ModeSummary.Create(interpreted),
-            Test262ModeSummary.Create(compiled));
+            Test262ModeSummary.Create(compiled),
+            interpretedCorpusRevision,
+            compiledCorpusRevision);
     }
 
     public string ToMarkdown()
@@ -117,6 +129,7 @@ public sealed class Test262DifferentialReport
         var markdown = new StringBuilder();
         markdown.AppendLine("# Test262 Differential Report");
         markdown.AppendLine();
+        AppendCorpusRevision(markdown);
         markdown.AppendLine("| Mode | Pass | Executed | Skipped | Pass rate |");
         markdown.AppendLine("|---|---:|---:|---:|---:|");
         AppendMode(markdown, "Interpreted", InterpretedSummary);
@@ -139,6 +152,17 @@ public sealed class Test262DifferentialReport
 
     private static void AppendMode(StringBuilder markdown, string mode, Test262ModeSummary summary) =>
         markdown.AppendLine($"| {mode} | {summary.Count(Test262Outcome.Pass)} | {summary.Executed} | {summary.Skipped} | {summary.PassPercentage.ToString("F1", CultureInfo.InvariantCulture)}% |");
+
+    private void AppendCorpusRevision(StringBuilder markdown)
+    {
+        if (InterpretedCorpusRevision is not null && InterpretedCorpusRevision == CompiledCorpusRevision)
+            markdown.AppendLine($"Corpus revision: `{InterpretedCorpusRevision}`.");
+        else if (InterpretedCorpusRevision is not null || CompiledCorpusRevision is not null)
+            markdown.AppendLine($"> Warning: baseline corpus mismatch (interpreted `{InterpretedCorpusRevision ?? "unknown"}`, compiled `{CompiledCorpusRevision ?? "unknown"}`).");
+        else
+            markdown.AppendLine("Corpus revision: unavailable.");
+        markdown.AppendLine();
+    }
 
     private static void AppendClusters(
         StringBuilder markdown,

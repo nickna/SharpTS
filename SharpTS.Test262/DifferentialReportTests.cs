@@ -168,6 +168,17 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_warns_when_baseline_corpus_revisions_differ()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(), Baseline(), "aaaa", "bbbb");
+
+        Assert.Contains(
+            "> Warning: baseline corpus mismatch (interpreted `aaaa`, compiled `bbbb`).",
+            report.ToMarkdown());
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
