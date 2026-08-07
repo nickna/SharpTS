@@ -826,8 +826,11 @@ public static class RegExpBuiltIns
     {
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.replace]");
-        var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
-        var replaceValue = args.Length > 1 ? args[1].ToObject() : null;
+        var s = interp.ToStringForBuiltInArgument(
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
+        var replaceValue = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
 
         // Read flags via Get so user getters fire.
         var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
@@ -860,7 +863,9 @@ public static class RegExpBuiltIns
 
         // Build the result string with replacements.
         bool isCallable = replaceValue is ISharpTSCallable;
-        string replaceStr = isCallable ? "" : ToStr(interp, replaceValue);
+        string replaceStr = isCallable
+            ? ""
+            : interp.ToStringForBuiltInArgument(replaceValue);
         var sb = new System.Text.StringBuilder();
         int nextSourcePosition = 0;
         foreach (var match in matches)

@@ -58,4 +58,34 @@ public class StringMethodRegexParamTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("aBc\n", output);
     }
+
+    [Theory, ModeData]
+    public void Replace_ReplacementObjectWhoseToStringReturnsObject_ThrowsTypeError(
+        ExecutionMode mode)
+    {
+        var source = """
+            const replacement: any = {
+                toString() { return function() {}; }
+            };
+            const receiver: any = new Number(1100.00777001);
+            (Number.prototype as any).replace = String.prototype.replace;
+            try {
+                receiver.replace(/77/, replacement);
+                console.log("no throw");
+            } catch (error: any) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Replace_OmittedReplacementUsesUndefined_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("console.log('abc'.replace(/b/));");
+
+        Assert.Equal("aundefinedc\n", output);
+    }
 }
