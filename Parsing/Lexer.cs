@@ -1243,6 +1243,17 @@ public class Lexer(string source)
 
         while (!IsAtEnd() && Peek() != '`' && !(Peek() == '$' && PeekNext() == '{'))
         {
+            // Template source characters normalize CR and CRLF to LF in both
+            // cooked and raw strings (ECMA-262 TV/TRV semantics).
+            if (Peek() == '\r')
+            {
+                Advance();
+                if (!IsAtEnd() && Peek() == '\n') Advance();
+                raw.Append('\n');
+                cooked.Append('\n');
+                _line++;
+                continue;
+            }
             if (Peek() == '\n') _line++;
 
             if (Peek() == '\\' && !IsAtEnd())
@@ -1264,8 +1275,17 @@ public class Lexer(string source)
                     {
                         char next = Peek();
 
+                        // A line continuation contributes no cooked character,
+                        // while its raw line terminator is normalized to LF.
+                        if (next is '\r' or '\n')
+                        {
+                            Advance();
+                            if (next == '\r' && !IsAtEnd() && Peek() == '\n') Advance();
+                            raw.Append('\n');
+                            _line++;
+                        }
                         // \uXXXX or \u{XXXXXX} — Unicode escape
-                        if (next == 'u')
+                        else if (next == 'u')
                         {
                             raw.Append(Advance()); // consume 'u'
                             var unicode = ProcessUnicodeEscape(raw);
