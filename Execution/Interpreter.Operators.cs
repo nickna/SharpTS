@@ -790,16 +790,31 @@ public partial class Interpreter
         if (value is not SharpTSObject obj)
             return Stringify(value);
 
+        if (obj.GetProperty("__primitiveType") is "Symbol"
+            && obj.GetProperty("__primitiveValue") is SharpTSSymbol boxedSymbol)
+        {
+            ThrowIfSymbolStringCoercion(boxedSymbol);
+        }
+
         if (TryCallExoticToPrimitive(obj, PrimitiveHint.String, out var exoticResult))
+        {
+            ThrowIfSymbolStringCoercion(exoticResult);
             return Stringify(exoticResult);
+        }
 
         if (TryGetBoxedPrimitiveValue(obj, out _))
             return Stringify(ToPrimitive(obj, PrimitiveHint.String));
 
         if (TryCallConversion(obj, "toString", out var stringResult))
+        {
+            ThrowIfSymbolStringCoercion(stringResult);
             return Stringify(stringResult);
+        }
         if (TryCallConversion(obj, "valueOf", out var valueResult))
+        {
+            ThrowIfSymbolStringCoercion(valueResult);
             return Stringify(valueResult);
+        }
 
         throw new ThrowException(new SharpTSTypeError(
             "Cannot convert object to primitive value"));

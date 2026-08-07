@@ -1763,6 +1763,11 @@ public sealed class Issue1279ParityTests
             "built-ins/String/prototype/valueOf/non-generic.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void String_indexOf_propagates_search_string_coercion_errors()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/indexOf/searchstring-tostring-errors.js");
+
     [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
