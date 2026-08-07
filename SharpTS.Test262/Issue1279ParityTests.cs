@@ -1409,6 +1409,11 @@ public sealed class Issue1279ParityTests
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
 
+    [Fact]
+    public void Object_getOwnPropertyDescriptors_rejects_nullish_targets()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertyDescriptors/exception-not-object-coercible.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
