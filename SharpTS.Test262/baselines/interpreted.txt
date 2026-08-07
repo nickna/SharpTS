@@ -3402,7 +3402,7 @@ test/built-ins/Math/asin/S15.8.2.3_A5.js Pass
 test/built-ins/Math/asin/length.js Pass
 test/built-ins/Math/asin/name.js Pass
 test/built-ins/Math/asin/not-a-constructor.js Pass
-test/built-ins/Math/asin/prop-desc.js Fail
+test/built-ins/Math/asin/prop-desc.js Pass
 test/built-ins/Math/asinh/asinh-specialVals.js Pass
 test/built-ins/Math/asinh/length.js Pass
 test/built-ins/Math/asinh/name.js Pass
