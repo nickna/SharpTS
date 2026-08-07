@@ -505,6 +505,10 @@ public static partial class ObjectBuiltIns
                     else if (descriptorHasValue)
                         symArrow.SetBySymbol(symKey, descriptor.Value);
                     return target;
+                case SharpTSRegExp symRegex:
+                    if (descriptorHasValue)
+                        symRegex.SetBySymbol(symKey, descriptor.Value);
+                    return target;
                 // `Object.defineProperty(Error.prototype, Symbol.toStringTag, …)` and friends.
                 case SharpTSClassPrototype symClassProto:
                     if (descriptorHasValue)

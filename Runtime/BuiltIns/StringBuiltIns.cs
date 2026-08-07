@@ -784,7 +784,18 @@ public static class StringBuiltIns
             // String.prototype.replaceAll requires a global RegExp (spec §22.1.3.18).
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.replaceAll called with a non-global RegExp argument");
-            return RuntimeValue.FromString(regex.Replace(str, replacementText ?? ""));
+            object? replaceMethod = interpreter.GetSymbolPropertyValue(
+                regex, SharpTSSymbol.Replace);
+            if (replaceMethod is ISharpTSCallable callable)
+            {
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, callable, regex, [str, replaceValue]));
+            }
+            if (replaceMethod is not (null or SharpTSUndefined))
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    "RegExp Symbol.replace is not callable"));
+            }
         }
 
         string search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());

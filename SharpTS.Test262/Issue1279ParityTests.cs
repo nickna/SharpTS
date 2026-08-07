@@ -2089,6 +2089,17 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x0024.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x0026.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x0027.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x0060.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024N.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024NN.js")]
+    public void String_replaceAll_expands_replacement_substitutions(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
