@@ -900,11 +900,69 @@ public partial class Interpreter
             return RuntimeValue.FromBoolean(isNegated ? !equal : equal);
         }
 
+        // Relational comparison permits a BigInt/Number pair. Compare their
+        // mathematical values without converting the BigInt to double (which
+        // would lose precision above 2^53). Mixed arithmetic remains invalid.
+        if (BigIntOperatorHelper.IsComparisonOperator(op)
+            && leftBi.HasValue != rightBi.HasValue)
+        {
+            double number = leftBi.HasValue ? rightRV.AsNumber() : leftRV.AsNumber();
+            int? comparison = CompareBigIntAndNumber(
+                leftBi ?? rightBi!.Value, number);
+            if (comparison is null)
+                return RuntimeValue.False;
+            int ordered = leftBi.HasValue ? comparison.Value : -comparison.Value;
+            return RuntimeValue.FromBoolean(op switch
+            {
+                TokenType.LESS => ordered < 0,
+                TokenType.LESS_EQUAL => ordered <= 0,
+                TokenType.GREATER => ordered > 0,
+                TokenType.GREATER_EQUAL => ordered >= 0,
+                _ => false,
+            });
+        }
+
         // All other operators require both to be bigint.
         if (!leftBi.HasValue || !rightBi.HasValue)
             throw new InterpreterException("Cannot mix bigint and other types in operations.");
 
         return BigIntOperatorHelper.EvaluateBinaryRV(op, leftBi.Value, rightBi.Value);
+    }
+
+    private static int? CompareBigIntAndNumber(
+        System.Numerics.BigInteger bigint, double number)
+    {
+        if (double.IsNaN(number)) return null;
+        if (double.IsPositiveInfinity(number)) return -1;
+        if (double.IsNegativeInfinity(number)) return 1;
+
+        var integerPart = TruncateDoubleToBigInteger(number);
+        int comparison = bigint.CompareTo(integerPart);
+        if (comparison != 0 || number == Math.Truncate(number))
+            return comparison;
+
+        // BigInteger(double) truncates toward zero. If the integer values tie,
+        // the fractional sign determines which mathematical value is larger.
+        return number > 0 ? -1 : 1;
+    }
+
+    private static System.Numerics.BigInteger TruncateDoubleToBigInteger(double number)
+    {
+        long bits = BitConverter.DoubleToInt64Bits(number);
+        bool negative = bits < 0;
+        int exponentBits = (int)((bits >> 52) & 0x7ff);
+        if (exponentBits == 0)
+            return System.Numerics.BigInteger.Zero;
+
+        int exponent = exponentBits - 1023;
+        if (exponent < 0)
+            return System.Numerics.BigInteger.Zero;
+        ulong significand = ((ulong)bits & 0x000f_ffff_ffff_ffffUL)
+            | 0x0010_0000_0000_0000UL;
+        System.Numerics.BigInteger integer = exponent >= 52
+            ? new System.Numerics.BigInteger(significand) << (exponent - 52)
+            : new System.Numerics.BigInteger(significand >> (52 - exponent));
+        return negative ? -integer : integer;
     }
 
     /// <summary>
