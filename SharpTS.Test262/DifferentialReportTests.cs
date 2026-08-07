@@ -202,6 +202,23 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_writes_markdown_and_creates_its_directory()
+    {
+        var directory = Directory.CreateTempSubdirectory("sharpts-differential-");
+        try
+        {
+            var path = Path.Combine(directory.FullName, "nested", "report.md");
+            Test262DifferentialReport.Create(Baseline(), Baseline()).WriteMarkdown(path);
+
+            Assert.StartsWith("# Test262 Differential Report", File.ReadAllText(path));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(

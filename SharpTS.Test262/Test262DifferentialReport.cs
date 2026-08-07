@@ -159,6 +159,13 @@ public sealed class Test262DifferentialReport
         return markdown.ToString();
     }
 
+    public void WriteMarkdown(string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        File.WriteAllText(path, ToMarkdown());
+    }
+
     private static void AppendMode(StringBuilder markdown, string mode, Test262ModeSummary summary) =>
         markdown.AppendLine($"| {mode} | {summary.Count(Test262Outcome.Pass)} | {summary.Executed} | {summary.Skipped} | {summary.PassPercentage.ToString("F1", CultureInfo.InvariantCulture)}% |");
 
