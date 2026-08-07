@@ -305,11 +305,23 @@ public static class RegExpBuiltIns
         static BuiltInMethod RealmLocal(BuiltInMethod method) => method.Bind(null);
 
         var proto = new SharpTSObject(new Dictionary<string, object?>());
-        proto.SetBySymbol(SharpTSSymbol.Match, RealmLocal(_symbolMatch));
-        proto.SetBySymbol(SharpTSSymbol.MatchAll, RealmLocal(_symbolMatchAll));
-        proto.SetBySymbol(SharpTSSymbol.Replace, RealmLocal(_symbolReplace));
-        proto.SetBySymbol(SharpTSSymbol.Search, RealmLocal(_symbolSearch));
-        proto.SetBySymbol(SharpTSSymbol.Split, RealmLocal(_symbolSplit));
+        void DefineSymbolMethod(SharpTSSymbol symbol, BuiltInMethod method) =>
+            proto.DefineProperty(symbol, new SharpTSPropertyDescriptor
+            {
+                Value = RealmLocal(method),
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+        DefineSymbolMethod(SharpTSSymbol.Match, _symbolMatch);
+        DefineSymbolMethod(SharpTSSymbol.MatchAll, _symbolMatchAll);
+        DefineSymbolMethod(SharpTSSymbol.Replace, _symbolReplace);
+        DefineSymbolMethod(SharpTSSymbol.Search, _symbolSearch);
+        DefineSymbolMethod(SharpTSSymbol.Split, _symbolSplit);
         // ECMA-262 §22.2.5: instance-method slots that are introspectable on
         // the prototype itself (`RegExp.prototype.exec`, `.test`, `.toString`)
         // — propertyHelper.js's verifyNotWritable runs against them, and

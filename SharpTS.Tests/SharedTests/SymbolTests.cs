@@ -114,6 +114,49 @@ public class SymbolTests
         Assert.Equal("string key\nsymbol key\n", output);
     }
 
+    [Fact]
+    public void Symbol_AssignmentCreatesEnumerableProperty_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const key = Symbol("key");
+            const obj: any = {};
+            obj[key] = 1;
+            const descriptor = Object.getOwnPropertyDescriptor(obj, key)!;
+            console.log(descriptor.writable);
+            console.log(descriptor.enumerable);
+            console.log(descriptor.configurable);
+            console.log(obj.propertyIsEnumerable(key));
+            """);
+
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Symbol_DefinePropertyPreservesDescriptorFlags_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const key = Symbol("key");
+            const obj: any = {};
+            Object.defineProperty(obj, key, {
+                value: 1,
+                writable: false,
+                enumerable: false,
+                configurable: false
+            });
+            const descriptor = Object.getOwnPropertyDescriptor(obj, key)!;
+            console.log(descriptor.value);
+            console.log(descriptor.writable);
+            console.log(descriptor.enumerable);
+            console.log(descriptor.configurable);
+            console.log(obj.propertyIsEnumerable(key));
+            obj[key] = 2;
+            console.log(obj[key]);
+            console.log(delete obj[key]);
+            """);
+
+        Assert.Equal("1\nfalse\nfalse\nfalse\nfalse\n1\nfalse\n", output);
+    }
+
     #endregion
 
     #region Symbol Type Annotation

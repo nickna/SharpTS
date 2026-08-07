@@ -405,7 +405,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             return target switch
             {
-                SharpTSObject obj => obj.HasSymbolProperty(symbol),
+                SharpTSObject obj
+                    => obj.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
                 _ => false,
             };

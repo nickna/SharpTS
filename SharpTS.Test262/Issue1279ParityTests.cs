@@ -1474,6 +1474,16 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/prop-desc.js")]
+    public void RegExp_symbol_methods_have_standard_descriptors_in_interpreter(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-176.js")]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-177.js")]
     public void JSON_method_descriptors_preserve_callable_identity(string relativePath)

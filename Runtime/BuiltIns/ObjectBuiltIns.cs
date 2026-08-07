@@ -484,10 +484,11 @@ public static partial class ObjectBuiltIns
             switch (target)
             {
                 case SharpTSObject symObj:
-                    if (isAccessor)
-                        symObj.DefineSymbolAccessor(symKey, descriptor.Get, descriptor.Set);
-                    else if (descriptorHasValue)
-                        symObj.SetBySymbol(symKey, descriptor.Value);
+                    if (!symObj.DefineProperty(symKey, descriptor))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot redefine symbol property"));
+                    }
                     return target;
                 case SharpTSInstance symInst:
                     if (descriptorHasValue)
@@ -897,26 +898,16 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// Returns a data descriptor reflecting a Symbol-keyed property if one
-    /// exists on the target, or null. Symbol-keyed properties are always
-    /// writable/configurable but not enumerable per <c>SharpTSObject</c>'s
-    /// internal storage.
+    /// Returns the complete descriptor for a Symbol-keyed property when the
+    /// target tracks one. Plain objects preserve symbol descriptor attributes;
+    /// legacy specialized runtime types retain their existing default shape.
     /// </summary>
     private static object? GetOwnPropertyDescriptorBySymbol(object target, SharpTSSymbol key)
     {
         switch (target)
         {
-            case SharpTSObject obj
-                when obj.TryGetSymbolAccessor(key, out var getter, out var setter):
-                return new SharpTSPropertyDescriptor
-                {
-                    Get = getter,
-                    Set = setter,
-                    Enumerable = false,
-                    Configurable = true,
-                }.ToObject();
-            case SharpTSObject obj when obj.HasSymbolProperty(key):
-                return DescriptorObjectFor(obj.GetBySymbol(key));
+            case SharpTSObject obj when obj.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case SharpTSInstance inst when inst.HasSymbolProperty(key):
                 return DescriptorObjectFor(inst.GetBySymbol(key));
             default:
