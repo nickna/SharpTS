@@ -3663,7 +3663,7 @@ test/built-ins/Math/tan/S15.8.2.18_A5.js Pass
 test/built-ins/Math/tan/length.js Pass
 test/built-ins/Math/tan/name.js Pass
 test/built-ins/Math/tan/not-a-constructor.js Pass
-test/built-ins/Math/tan/prop-desc.js Fail
+test/built-ins/Math/tan/prop-desc.js Pass
 test/built-ins/Math/tanh/length.js Pass
 test/built-ins/Math/tanh/name.js Pass
 test/built-ins/Math/tanh/not-a-constructor.js Pass

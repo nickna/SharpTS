@@ -1326,6 +1326,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Math/sin/prop-desc.js")]
     [InlineData("built-ins/Math/sinh/prop-desc.js")]
     [InlineData("built-ins/Math/sqrt/prop-desc.js")]
+    [InlineData("built-ins/Math/tan/prop-desc.js")]
     public void Math_members_have_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
