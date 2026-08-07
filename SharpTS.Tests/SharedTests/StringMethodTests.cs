@@ -9,6 +9,23 @@ namespace SharpTS.Tests.SharedTests;
 public class StringMethodTests
 {
     [Fact]
+    public void String_Split_ObservesRegExpPrototypeSymbolHook_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const original: any = RegExp.prototype[Symbol.split];
+            RegExp.prototype[Symbol.split] = function(value: any, limit: any): any {
+                console.log(this instanceof RegExp);
+                console.log(value + ":" + limit);
+                return "custom";
+            };
+            console.log("aba".split(/a/, 2));
+            RegExp.prototype[Symbol.split] = original;
+            """);
+
+        Assert.Equal("true\naba:2\ncustom\n", output);
+    }
+
+    [Fact]
     public void String_ReplaceAll_ObservesRegExpPrototypeSymbolHook_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""

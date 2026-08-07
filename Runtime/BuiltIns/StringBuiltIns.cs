@@ -208,7 +208,7 @@ public static class StringBuiltIns
         object? separator = arguments.Count > 0
             ? arguments[0]
             : SharpTSUndefined.Instance;
-        if (separator is null or SharpTSUndefined or SharpTSRegExp)
+        if (separator is null or SharpTSUndefined)
         {
             result = null;
             return false;
@@ -216,6 +216,11 @@ public static class StringBuiltIns
 
         object? splitter = interpreter.GetSymbolPropertyValue(
             separator, SharpTSSymbol.Split);
+        if (separator is SharpTSRegExp && splitter is BuiltInMethod)
+        {
+            result = null;
+            return false;
+        }
         if (splitter is null or SharpTSUndefined)
         {
             result = null;
@@ -425,11 +430,12 @@ public static class StringBuiltIns
     private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         object? separatorValue = ArgumentOrUndefined(args, 0);
-        if (separatorValue is not (null or SharpTSUndefined or SharpTSRegExp))
+        if (separatorValue is not (null or SharpTSUndefined))
         {
             object? splitter = interpreter.GetSymbolPropertyValue(
                 separatorValue, SharpTSSymbol.Split);
-            if (splitter is not (null or SharpTSUndefined))
+            if (splitter is not (null or SharpTSUndefined)
+                && !(separatorValue is SharpTSRegExp && splitter is BuiltInMethod))
             {
                 if (splitter is not ISharpTSCallable callable)
                 {
