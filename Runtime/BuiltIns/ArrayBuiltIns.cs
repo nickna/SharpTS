@@ -251,21 +251,17 @@ public static class ArrayBuiltIns
     /// Implements JavaScript's ToIntegerOrInfinity algorithm (ECMA-262 7.1.5).
     /// Converts a value to an integer, handling NaN, Infinity, and null.
     /// </summary>
-    private static int ToIntegerOrInfinity(object? value, int defaultValue)
+    private static int ToIntegerOrInfinityAsInt(Interpreter interpreter, object? value)
     {
-        if (value == null) return defaultValue;
-        if (value is int i) return i;
-        if (value is double d)
-        {
-            if (double.IsNaN(d)) return 0;
-            if (double.IsPositiveInfinity(d)) return int.MaxValue;
-            if (double.IsNegativeInfinity(d)) return int.MinValue;
-            return (int)Math.Truncate(d);
-        }
-        return defaultValue;
+        double integer = ToIntegerOrInfinity(interpreter, value);
+        if (double.IsPositiveInfinity(integer) || integer >= int.MaxValue)
+            return int.MaxValue;
+        if (double.IsNegativeInfinity(integer) || integer <= int.MinValue)
+            return int.MinValue;
+        return (int)integer;
     }
 
-    private static object? Splice(Interpreter _, SharpTSArray arr, List<object?> args)
+    private static object? Splice(Interpreter interpreter, SharpTSArray arr, List<object?> args)
     {
         int len = arr.Length;
 
@@ -278,7 +274,7 @@ public static class ArrayBuiltIns
             return new SharpTSArray([]);
 
         // Parse start with negative handling (RelativeIndex to ActualIndex)
-        int relStart = ToIntegerOrInfinity(args[0], 0);
+        int relStart = ToIntegerOrInfinityAsInt(interpreter, args[0]);
         int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
 
         // Parse deleteCount
@@ -290,7 +286,7 @@ public static class ArrayBuiltIns
         }
         else
         {
-            int dc = ToIntegerOrInfinity(args[1], 0);
+            int dc = ToIntegerOrInfinityAsInt(interpreter, args[1]);
             actualDeleteCount = Math.Max(0, Math.Min(dc, len - actualStart));
         }
 
@@ -308,7 +304,7 @@ public static class ArrayBuiltIns
         return new SharpTSArray(deleted);
     }
 
-    private static object? ToSpliced(Interpreter _, SharpTSArray arr, List<object?> args)
+    private static object? ToSpliced(Interpreter interpreter, SharpTSArray arr, List<object?> args)
     {
         int len = arr.Length;
 
@@ -319,7 +315,7 @@ public static class ArrayBuiltIns
             return new SharpTSArray(new List<object?>(arr));
 
         // Parse start with negative handling
-        int relStart = ToIntegerOrInfinity(args[0], 0);
+        int relStart = ToIntegerOrInfinityAsInt(interpreter, args[0]);
         int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
 
         // Parse skipCount (deleteCount equivalent)
@@ -331,7 +327,7 @@ public static class ArrayBuiltIns
         }
         else
         {
-            int sc = ToIntegerOrInfinity(args[1], 0);
+            int sc = ToIntegerOrInfinityAsInt(interpreter, args[1]);
             actualSkipCount = Math.Max(0, Math.Min(sc, len - actualStart));
         }
 
@@ -863,7 +859,7 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromBoxed(arr[(int)actualIndex]);
     }
 
-    private static RuntimeValue FillV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue FillV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         // ECMA-262 23.1.3.9: Fill WRITES every position in [start, end) — holes
         // are filled, not preserved.
@@ -875,10 +871,14 @@ public static class ArrayBuiltIns
 
         var value = args.Length > 0 ? args[0].ToObject() : null;
 
-        int relStart = args.Length > 1 ? ToIntegerOrInfinity(args[1].ToObject(), 0) : 0;
+        int relStart = args.Length > 1
+            ? ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject())
+            : 0;
         int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
 
-        int relEnd = args.Length > 2 ? ToIntegerOrInfinity(args[2].ToObject(), len) : len;
+        int relEnd = args.Length > 2
+            ? ToIntegerOrInfinityAsInt(interpreter, args[2].ToObject())
+            : len;
         int actualEnd = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
 
         for (int i = actualStart; i < actualEnd; i++)

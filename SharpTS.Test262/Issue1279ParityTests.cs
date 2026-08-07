@@ -1694,6 +1694,11 @@ public sealed class Issue1279ParityTests
     public void Array_stringification_uses_string_hint_coercion(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_splice_coerces_delete_count_with_number_hint()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/splice/S15.4.4.12_A2.2_T5.js");
+
     [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
