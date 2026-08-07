@@ -1552,6 +1552,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/prototype/setPrototypeOf-with-same-value.js");
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A1_T1.js")]
+    public void Array_variadic_mutators_accept_zero_arguments(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

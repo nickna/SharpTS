@@ -11,10 +11,10 @@ public static class ArrayBuiltIns
     private static readonly BuiltInTypeMemberLookup<SharpTSArray> _lookup =
         BuiltInTypeBuilder<SharpTSArray>.ForInstanceType()
             .Property("length", arr => (double)arr.LongLength)
-            .MethodV2("push", 1, int.MaxValue, PushV2)
+            .MethodV2("push", 0, int.MaxValue, 1, PushV2)
             .MethodV2("pop", 0, PopV2)
             .MethodV2("shift", 0, ShiftV2)
-            .MethodV2("unshift", 1, int.MaxValue, UnshiftV2)
+            .MethodV2("unshift", 0, int.MaxValue, 1, UnshiftV2)
             // Spec lengths (ECMA-262 §23.1.3) differ from MinArity for
             // variadic / optional-trailing-arg methods. Pass explicit
             // specLength when (a) the spec mandates a value other than
