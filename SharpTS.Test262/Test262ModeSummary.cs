@@ -9,6 +9,10 @@ public sealed record Test262ModeSummary(
 
     public int Executed => Total - Skipped;
 
+    public double PassPercentage => Executed == 0
+        ? 0
+        : Count(Test262Outcome.Pass) * 100.0 / Executed;
+
     public int Count(Test262Outcome outcome) =>
         Outcomes.TryGetValue(outcome, out var count) ? count : 0;
 

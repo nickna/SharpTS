@@ -22,6 +22,15 @@ public sealed class DifferentialReportTests
         Assert.Equal(0, summary.Count(Test262Outcome.Timeout));
         Assert.Equal(1, summary.Skipped);
         Assert.Equal(3, summary.Executed);
+        Assert.Equal(100.0 / 3, summary.PassPercentage, precision: 10);
+    }
+
+    [Fact]
+    public void Mode_summary_reports_zero_percent_when_every_test_is_skipped()
+    {
+        var summary = Test262ModeSummary.Create(Baseline(("a.js", "Skipped:reason")));
+
+        Assert.Equal(0, summary.PassPercentage);
     }
 
     private static IReadOnlyDictionary<string, string> Baseline(
