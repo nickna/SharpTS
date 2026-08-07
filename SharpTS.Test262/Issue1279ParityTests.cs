@@ -1740,6 +1740,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/S15.5.3.1_A1.js")]
+    [InlineData("built-ins/String/prototype/S15.5.3.1_A3.js")]
+    [InlineData("built-ins/String/prototype/S15.5.3.1_A4.js")]
+    public void String_constructor_owns_an_immutable_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
