@@ -1652,6 +1652,11 @@ public sealed class Issue1279ParityTests
     public void Array_forEach_uses_correct_length_and_default_this(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_some_defaults_non_strict_callback_this_to_global()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/some/15.4.4.17-5-25.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
