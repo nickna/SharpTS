@@ -1155,10 +1155,9 @@ public static partial class ObjectBuiltIns
     {
         var target = args[0];
 
-        if (target == null)
-        {
-            throw new Exception("TypeError: Object.getOwnPropertyNames called on null or undefined");
-        }
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.getOwnPropertyNames called on null or undefined"));
 
         List<object?> names = target switch
         {

@@ -1414,6 +1414,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertyDescriptors/exception-not-object-coercible.js");
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-1-2.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/non-object-argument-invalid.js")]
+    public void Object_getOwnPropertyNames_rejects_nullish_targets(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
