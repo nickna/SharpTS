@@ -355,11 +355,29 @@ public static class StringBuiltIns
 
     private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
+        object? separatorValue = ArgumentOrUndefined(args, 0);
+        if (separatorValue is not (null or SharpTSUndefined))
+        {
+            object? splitter = interpreter.GetSymbolPropertyValue(
+                separatorValue, SharpTSSymbol.Split);
+            if (splitter is not (null or SharpTSUndefined))
+            {
+                if (splitter is not ISharpTSCallable callable)
+                {
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Symbol.split property is not callable"));
+                }
+
+                object? limitValue = ArgumentOrUndefined(args, 1);
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, callable, separatorValue, [str, limitValue]));
+            }
+        }
+
         uint limit = args.Length < 2 || args[1].IsUndefined
             ? uint.MaxValue
             : ToUint32(interpreter.ToNumberWithPrimitive(args[1].ToObject()));
 
-        object? separatorValue = ArgumentOrUndefined(args, 0);
         if (separatorValue is SharpTSUndefined)
         {
             return RuntimeValue.FromObject(limit == 0
