@@ -1841,6 +1841,18 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Symbol/prototype/valueOf/length.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/name.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/not-a-constructor.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/prop-desc.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/this-val-non-obj.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/this-val-obj-non-symbol.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/this-val-obj-symbol.js")]
+    [InlineData("built-ins/Symbol/prototype/valueOf/this-val-symbol.js")]
+    public void Symbol_prototype_valueOf_checks_receiver_brand(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
