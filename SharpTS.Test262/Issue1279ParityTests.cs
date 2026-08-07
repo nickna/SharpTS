@@ -1379,6 +1379,13 @@ public sealed class Issue1279ParityTests
     public void Object_is_treats_omitted_arguments_as_undefined(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/hasOwn/toobject_before_topropertykey.js")]
+    [InlineData("built-ins/Object/hasOwn/toobject_null.js")]
+    [InlineData("built-ins/Object/hasOwn/toobject_undefined.js")]
+    public void Object_hasOwn_rejects_nullish_targets_before_coercing_keys(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

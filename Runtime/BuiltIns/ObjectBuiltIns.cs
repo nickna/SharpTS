@@ -173,6 +173,11 @@ public static partial class ObjectBuiltIns
         Interpreter interp, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var obj = args[0].ToObject();
+        // Object.hasOwn performs ToObject before ToPropertyKey. In particular,
+        // nullish targets throw without observing a coercible property key.
+        if (obj is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.hasOwn called on null or undefined"));
         // A Symbol key stays a Symbol (ToPropertyKey); anything else stringifies.
         var key = args[1].ToObject() is SharpTSSymbol sym
             ? (object)sym
