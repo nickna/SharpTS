@@ -3362,7 +3362,7 @@ test/built-ins/Math/LN2/prop-desc.js Pass
 test/built-ins/Math/LN2/value.js Pass
 test/built-ins/Math/LOG10E/prop-desc.js Pass
 test/built-ins/Math/LOG10E/value.js Pass
-test/built-ins/Math/LOG2E/prop-desc.js Fail
+test/built-ins/Math/LOG2E/prop-desc.js Pass
 test/built-ins/Math/LOG2E/value.js Pass
 test/built-ins/Math/PI/prop-desc.js Pass
 test/built-ins/Math/PI/value.js Pass
