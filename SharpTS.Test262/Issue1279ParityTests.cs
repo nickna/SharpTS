@@ -1909,6 +1909,18 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/raw/nextkey-is-symbol-throws.js")]
+    [InlineData("built-ins/String/raw/raw.js")]
+    [InlineData("built-ins/String/raw/returns-abrupt-from-next-key-toString.js")]
+    [InlineData("built-ins/String/raw/returns-abrupt-from-next-key.js")]
+    [InlineData("built-ins/String/raw/returns-abrupt-from-substitution.js")]
+    [InlineData("built-ins/String/raw/template-length-is-symbol-throws.js")]
+    [InlineData("built-ins/String/raw/template-length-throws.js")]
+    [InlineData("built-ins/String/raw/template-raw-throws.js")]
+    public void String_raw_propagates_observable_coercions(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
