@@ -8,6 +8,23 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringMatchAllTests
 {
+    [Fact]
+    public void RegExp_SymbolMatchAll_ReturnsIterator_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const regexp: any = /a/g;
+            const iterator: any = regexp[Symbol.matchAll]("aba");
+            const first: any = iterator.next();
+            const second: any = iterator.next();
+            const done: any = iterator.next();
+            console.log(first.value[0] + ":" + first.value.index);
+            console.log(second.value[0] + ":" + second.value.index);
+            console.log(done.done);
+            """);
+
+        Assert.Equal("a:0\na:2\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void MatchAll_BasicGlobalRegex_ReturnsAllMatches(ExecutionMode mode)
     {

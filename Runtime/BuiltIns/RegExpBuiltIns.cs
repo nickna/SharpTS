@@ -1257,7 +1257,7 @@ public static class RegExpBuiltIns
                 interp.SetProperty(recv, "lastIndex", (double)matchEnd);
             }
         }
-        return RuntimeValue.FromObject(new SharpTSArray(results));
+        return RuntimeValue.FromObject(new SharpTSIterator(results));
     }
 
     /// <summary>
