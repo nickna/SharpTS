@@ -1434,6 +1434,19 @@ public sealed class Issue1279ParityTests
     public void Object_legacy_accessor_lookup_walks_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/S15.2.1.1_A2_T11.js")]
+    [InlineData("built-ins/Object/S15.2.1.1_A3_T2.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T1.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T2.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T3.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T4.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T5.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A2_T7.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A6_T2.js")]
+    public void Object_call_and_construction_apply_legacy_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");

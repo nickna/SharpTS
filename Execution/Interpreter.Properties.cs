@@ -951,6 +951,8 @@ public partial class Interpreter
         {
             return RuntimeValue.FromBoxed(GetFunctionPrototype().TryGetExtra(memberName));
         }
+        if (obj is ISharpTSCallable && memberName == "constructor")
+            return RuntimeValue.FromBoxed(GetFunctionPrototype().GetMember(memberName));
 
         // Date instances are ordinary extensible objects. Their built-in
         // methods remain registry-backed, while guest-defined own fields live
@@ -1528,10 +1530,11 @@ public partial class Interpreter
             if (GetObjectPrototype().GetExtraGetter(memberName) is { } inheritedGetter)
                 return BindAccessorToObject(inheritedGetter, simpleObj)
                     .CallV2(this, ReadOnlySpan<RuntimeValue>.Empty);
-            if (GetObjectPrototype().GetMember(memberName) is SharpTSObjectUnboundMethod protoMethod)
+            var prototypeMember = GetObjectPrototype().GetMember(memberName);
+            if (prototypeMember is SharpTSObjectUnboundMethod protoMethod)
                 return RuntimeValue.FromObject(protoMethod.BindTo(simpleObj));
-            if (GetObjectPrototype().HasExtra(memberName))
-                return RuntimeValue.FromBoxed(GetObjectPrototype().TryGetExtra(memberName));
+            if (prototypeMember is not null)
+                return RuntimeValue.FromBoxed(prototypeMember);
         }
 
         return RuntimeValue.Undefined;
@@ -1585,6 +1588,8 @@ public partial class Interpreter
                 }
                 return proto;
             }
+            if (memberName == "constructor")
+                return GetFunctionPrototype().GetMember(memberName);
             if (GetFunctionPrototype().HasExtra(memberName))
                 return GetFunctionPrototype().TryGetExtra(memberName);
             if (GetObjectPrototype().HasExtra(memberName))
@@ -1597,6 +1602,8 @@ public partial class Interpreter
                 return arrowGetter.CallBoxed(this, []);
             if (arrowFn2.TryGetProperty(memberName, out var arrowProp2)) return arrowProp2;
             if (memberName == "length") return (double)arrowFn2.Arity();
+            if (memberName == "constructor")
+                return GetFunctionPrototype().GetMember(memberName);
             if (GetFunctionPrototype().HasExtra(memberName))
                 return GetFunctionPrototype().TryGetExtra(memberName);
             if (GetObjectPrototype().HasExtra(memberName))
@@ -1826,6 +1833,8 @@ public partial class Interpreter
         // Object.prototype methods, before throwing.
         if (obj is ISharpTSCallable callable)
         {
+            if (memberName == "constructor")
+                return GetFunctionPrototype().GetMember(memberName);
             if (GetFunctionPrototype().HasExtra(memberName))
                 return GetFunctionPrototype().TryGetExtra(memberName);
             var fnMember = FunctionBuiltIns.GetMember(callable, memberName);

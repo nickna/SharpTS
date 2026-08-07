@@ -512,6 +512,23 @@ public class ObjectFeatureTests
     }
 
     [Theory, ModeData]
+    public void Object_Call_UsesObjectAndFunctionPrototypeConstructors(ExecutionMode mode)
+    {
+        var source = """
+            const empty: any = Object(null);
+            const callable = function (): number { return 7; };
+            const wrapped: any = Object(callable);
+            console.log(empty.constructor === Object);
+            console.log(wrapped === callable);
+            console.log(wrapped.constructor === Function);
+            console.log(wrapped());
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n7\n", output);
+    }
+
+    [Theory, ModeData]
     public void Function_ConstructorPattern_CapturesEnclosingVariable(ExecutionMode mode)
     {
         var source = """
