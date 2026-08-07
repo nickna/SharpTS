@@ -68,6 +68,22 @@ public static partial class ObjectBuiltIns
     {
         switch (arg)
         {
+            case null:
+            case SharpTSUndefined:
+                throw new ThrowException(new SharpTSTypeError(
+                    $"{apiName} called on null or undefined"));
+            case string text:
+                for (int i = 0; i < text.Length; i++)
+                    yield return new(i.ToString(), text[i].ToString());
+                yield break;
+            case bool:
+            case double:
+            case int:
+            case long:
+            case System.Numerics.BigInteger:
+            case SharpTSBigInt:
+            case SharpTSSymbol:
+                yield break;
             case SharpTSObject obj:
                 foreach (var k in obj.OwnEnumerableKeys())
                     yield return new(k, interpreter.GetProperty(obj, k));

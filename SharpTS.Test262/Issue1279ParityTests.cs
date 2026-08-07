@@ -1386,6 +1386,25 @@ public sealed class Issue1279ParityTests
     public void Object_hasOwn_rejects_nullish_targets_before_coercing_keys(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/keys/15.2.3.14-1-1.js")]
+    [InlineData("built-ins/Object/keys/15.2.3.14-1-2.js")]
+    [InlineData("built-ins/Object/keys/15.2.3.14-1-3.js")]
+    [InlineData("built-ins/Object/keys/15.2.3.14-1-4.js")]
+    [InlineData("built-ins/Object/keys/15.2.3.14-1-5.js")]
+    [InlineData("built-ins/Object/entries/exception-not-object-coercible.js")]
+    [InlineData("built-ins/Object/entries/primitive-booleans.js")]
+    [InlineData("built-ins/Object/entries/primitive-numbers.js")]
+    [InlineData("built-ins/Object/entries/primitive-strings.js")]
+    [InlineData("built-ins/Object/entries/primitive-symbols.js")]
+    [InlineData("built-ins/Object/values/exception-not-object-coercible.js")]
+    [InlineData("built-ins/Object/values/primitive-booleans.js")]
+    [InlineData("built-ins/Object/values/primitive-numbers.js")]
+    [InlineData("built-ins/Object/values/primitive-strings.js")]
+    [InlineData("built-ins/Object/values/primitive-symbols.js")]
+    public void Object_enumeration_methods_apply_ToObject(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
