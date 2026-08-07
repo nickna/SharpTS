@@ -179,6 +179,29 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Report_loads_both_baseline_files_and_their_revision()
+    {
+        var directory = Directory.CreateTempSubdirectory("sharpts-differential-");
+        try
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            var interpretedPath = Path.Combine(directory.FullName, "interpreted.txt");
+            var compiledPath = Path.Combine(directory.FullName, "compiled.txt");
+            Test262Baseline.Write(interpretedPath, [("a.js", "Fail")], revision);
+            Test262Baseline.Write(compiledPath, [("a.js", "Pass")], revision);
+
+            var report = Test262DifferentialReport.CreateFromFiles(interpretedPath, compiledPath);
+
+            Assert.Equal(revision, report.InterpretedCorpusRevision);
+            Assert.Single(report.InterpreterDeficits);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(

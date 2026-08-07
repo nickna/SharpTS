@@ -124,6 +124,15 @@ public sealed class Test262DifferentialReport
             compiledCorpusRevision);
     }
 
+    public static Test262DifferentialReport CreateFromFiles(
+        string interpretedPath,
+        string compiledPath) =>
+        Create(
+            Test262Baseline.Read(interpretedPath),
+            Test262Baseline.Read(compiledPath),
+            Test262Baseline.ReadCorpusRevision(interpretedPath),
+            Test262Baseline.ReadCorpusRevision(compiledPath));
+
     public string ToMarkdown()
     {
         var markdown = new StringBuilder();
