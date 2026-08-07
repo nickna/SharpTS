@@ -667,7 +667,11 @@ public class Lexer(string source)
         {
             string hexStr = _source[(_start + 2).._current].Replace("_", "");
             Advance(); // consume 'n'
-            AddToken(TokenType.BIGINT_LITERAL, BigInteger.Parse(hexStr, System.Globalization.NumberStyles.HexNumber));
+            // NumberStyles.HexNumber interprets a leading high bit as a signed
+            // two's-complement value. JavaScript hexadecimal BigInt literals
+            // are unsigned magnitudes, so prefix a zero nibble.
+            AddToken(TokenType.BIGINT_LITERAL, BigInteger.Parse(
+                "0" + hexStr, System.Globalization.NumberStyles.HexNumber));
             return;
         }
 
