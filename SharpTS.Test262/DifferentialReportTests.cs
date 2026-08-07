@@ -5,6 +5,16 @@ namespace SharpTS.Test262;
 public sealed class DifferentialReportTests
 {
     [Fact]
+    public void Differential_entry_exposes_outcomes_and_transition()
+    {
+        var entry = new Test262DifferentialEntry("a.js", "Fail", "Pass");
+
+        Assert.Equal(Test262Outcome.Fail, entry.InterpretedOutcome);
+        Assert.Equal(Test262Outcome.Pass, entry.CompiledOutcome);
+        Assert.Equal("Fail -> Pass", entry.Transition);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
