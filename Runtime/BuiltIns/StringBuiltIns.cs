@@ -91,6 +91,7 @@ public static class StringBuiltIns
         Interpreter interpreter,
         object receiver,
         List<object?> arguments,
+        bool requireGlobalRegExp,
         out object? result)
     {
         object? searchValue = arguments.Count > 0
@@ -100,6 +101,14 @@ public static class StringBuiltIns
         {
             result = null;
             return false;
+        }
+
+        if (requireGlobalRegExp
+            && searchValue is SharpTSRegExp regex
+            && !regex.Global)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "String.prototype.replaceAll called with a non-global RegExp argument"));
         }
 
         object? replaceMethod = interpreter.GetSymbolPropertyValue(
@@ -773,32 +782,37 @@ public static class StringBuiltIns
 
     private static RuntimeValue ReplaceAllV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
+        object? searchValue = args[0].ToObject();
         object? replaceValue = args[1].ToObject();
-        bool functionalReplace = replaceValue is ISharpTSCallable;
-        string? replacementText = functionalReplace
-            ? null
-            : interpreter.ToStringForBuiltInArgument(replaceValue);
 
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        if (searchValue is SharpTSRegExp regex)
         {
             // String.prototype.replaceAll requires a global RegExp (spec §22.1.3.18).
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.replaceAll called with a non-global RegExp argument");
+        }
+
+        if (searchValue is not (null or SharpTSUndefined))
+        {
             object? replaceMethod = interpreter.GetSymbolPropertyValue(
-                regex, SharpTSSymbol.Replace);
+                searchValue, SharpTSSymbol.Replace);
             if (replaceMethod is ISharpTSCallable callable)
             {
                 return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
-                    interpreter, callable, regex, [str, replaceValue]));
+                    interpreter, callable, searchValue, [str, replaceValue]));
             }
             if (replaceMethod is not (null or SharpTSUndefined))
             {
                 throw new ThrowException(new SharpTSTypeError(
-                    "RegExp Symbol.replace is not callable"));
+                    "Symbol.replace is not callable"));
             }
         }
 
-        string search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());
+        bool functionalReplace = replaceValue is ISharpTSCallable;
+        string? replacementText = functionalReplace
+            ? null
+            : interpreter.ToStringForBuiltInArgument(replaceValue);
+        string search = interpreter.ToStringForBuiltInArgument(searchValue);
         var result = new StringBuilder(str.Length);
         int sourcePosition = 0;
         while (sourcePosition <= str.Length)

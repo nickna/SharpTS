@@ -280,9 +280,11 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 $"String.prototype.{_name} called on null or undefined"));
         }
 
-        if (_name == "replace"
+        if (_name is "replace" or "replaceAll"
             && StringBuiltIns.TryInvokeCustomReplace(
-                interpreter, _receiver, arguments, out object? customResult))
+                interpreter, _receiver, arguments,
+                requireGlobalRegExp: _name == "replaceAll",
+                out object? customResult))
         {
             return customResult;
         }

@@ -8,6 +8,20 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class StringMethodTests
 {
+    [Fact]
+    public void String_ReplaceAll_InvokesCustomSymbolReplace_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const search: any = {};
+            search[Symbol.replace] = function(value: any, replacement: any): any {
+                return value + ":" + replacement;
+            };
+            console.log("abc".replaceAll(search, "x"));
+            """);
+
+        Assert.Equal("abc:x\n", output);
+    }
+
     #region String Properties
 
     [Theory, ModeData]
