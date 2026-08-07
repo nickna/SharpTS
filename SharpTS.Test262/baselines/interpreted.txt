@@ -3479,7 +3479,7 @@ test/built-ins/Math/exp/S15.8.2.8_A5.js Pass
 test/built-ins/Math/exp/length.js Pass
 test/built-ins/Math/exp/name.js Pass
 test/built-ins/Math/exp/not-a-constructor.js Pass
-test/built-ins/Math/exp/prop-desc.js Fail
+test/built-ins/Math/exp/prop-desc.js Pass
 test/built-ins/Math/expm1/expm1-specialVals.js Pass
 test/built-ins/Math/expm1/length.js Pass
 test/built-ins/Math/expm1/name.js Pass
