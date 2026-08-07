@@ -3435,7 +3435,7 @@ test/built-ins/Math/cbrt/cbrt-specialValues.js Pass
 test/built-ins/Math/cbrt/length.js Pass
 test/built-ins/Math/cbrt/name.js Pass
 test/built-ins/Math/cbrt/not-a-constructor.js Pass
-test/built-ins/Math/cbrt/prop-desc.js Fail
+test/built-ins/Math/cbrt/prop-desc.js Pass
 test/built-ins/Math/ceil/S15.8.2.6_A1.js Pass
 test/built-ins/Math/ceil/S15.8.2.6_A2.js Pass
 test/built-ins/Math/ceil/S15.8.2.6_A3.js Pass
