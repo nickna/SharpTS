@@ -5,6 +5,10 @@ public sealed record Test262ModeSummary(
     int Total,
     IReadOnlyDictionary<Test262Outcome, int> Outcomes)
 {
+    public int Skipped => Count(Test262Outcome.Skipped);
+
+    public int Executed => Total - Skipped;
+
     public int Count(Test262Outcome outcome) =>
         Outcomes.TryGetValue(outcome, out var count) ? count : 0;
 
