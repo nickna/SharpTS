@@ -111,6 +111,7 @@ public class SharpTSErrorClass : SharpTSClass
     /// Initialises error fields (name, message, stack) on an instance.
     /// </summary>
     internal static void InitializeErrorFields(
+        Interpreter interpreter,
         SharpTSInstance instance,
         string errorTypeName,
         List<object?> arguments)
@@ -119,7 +120,8 @@ public class SharpTSErrorClass : SharpTSClass
         if (errorTypeName == "AggregateError")
         {
             var message = arguments.Count > 1
-                ? arguments[1]?.ToString() ?? "All promises were rejected"
+                && arguments[1] is not SharpTSUndefined
+                ? interpreter.ToStringForBuiltInArgument(arguments[1])
                 : "All promises were rejected";
             instance.SetRawField("name", errorTypeName);
             instance.SetRawField("message", message);
@@ -128,22 +130,27 @@ public class SharpTSErrorClass : SharpTSClass
                 instance.SetRawField("errors", arguments[0]);
             // Cause is in the third argument's options
             if (arguments.Count > 2 && arguments[2] is SharpTSObject opts
-                && opts.HasProperty("cause"))
+                && interpreter.HasProperty(opts, "cause"))
             {
-                instance.SetRawField("cause", opts.GetProperty("cause"));
+                instance.SetRawField(
+                    "cause", interpreter.GetPropertyValue(opts, "cause"));
             }
         }
         else
         {
-            var message = arguments.Count > 0 ? arguments[0]?.ToString() ?? "" : "";
+            var message = arguments.Count > 0
+                && arguments[0] is not SharpTSUndefined
+                ? interpreter.ToStringForBuiltInArgument(arguments[0])
+                : "";
             instance.SetRawField("name", errorTypeName);
             instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             // Cause is in the second argument's options
             if (arguments.Count > 1 && arguments[1] is SharpTSObject opts
-                && opts.HasProperty("cause"))
+                && interpreter.HasProperty(opts, "cause"))
             {
-                instance.SetRawField("cause", opts.GetProperty("cause"));
+                instance.SetRawField(
+                    "cause", interpreter.GetPropertyValue(opts, "cause"));
             }
         }
 
@@ -186,7 +193,7 @@ public class SharpTSErrorClass : SharpTSClass
         else
         {
             // No user constructor (or built-in Error class) — initialise error fields directly
-            InitializeErrorFields(instance, _errorTypeName, arguments);
+            InitializeErrorFields(interpreter, instance, _errorTypeName, arguments);
         }
 
         return instance;
@@ -213,7 +220,7 @@ public class SharpTSErrorClass : SharpTSClass
             var instance = _boundInstance
                 ?? interpreter.GetCurrentThis() as SharpTSInstance;
             if (instance != null)
-                InitializeErrorFields(instance, errorTypeName, arguments);
+                InitializeErrorFields(interpreter, instance, errorTypeName, arguments);
             return null;
         }
     }

@@ -2253,6 +2253,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Array/prototype/with/no-get-replaced-index.js");
 
+    [Theory]
+    [InlineData("built-ins/Error/constructor.js")]
+    [InlineData("built-ins/Error/error-message-tostring-symbol.js")]
+    public void Error_constructor_arguments_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

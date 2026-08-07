@@ -396,6 +396,37 @@ public class ErrorTests
     }
 
     [Theory, ModeData]
+    public void Error_CoercesMessageBeforeReadingCause(ExecutionMode mode)
+    {
+        var source = """
+            const sequence: string[] = [];
+            const error = new Error(
+                ({ toString() { sequence.push("message"); return "converted"; } } as any),
+                { get cause() { sequence.push("cause"); return 42; } }
+            );
+            console.log(sequence.join(","));
+            console.log(error.message, error.cause);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("message,cause\nconverted 42\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_SymbolMessageThrowsTypeError(ExecutionMode mode)
+    {
+        var source = """
+            try {
+                Error(Symbol() as any);
+                console.log("no error");
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory, ModeData]
     public void Error_WithStringCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"
