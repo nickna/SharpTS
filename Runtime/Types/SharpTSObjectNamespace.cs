@@ -90,7 +90,7 @@ public class SharpTSObjectNamespace : ISharpTSCallable
         // constructors. This preserves Object(value)'s primitive identity for
         // later ToPrimitive operations.
         if (value is string or double or bool)
-            return BuiltInConstructorFactory.ToObject(value);
+            return BuiltInConstructorFactory.ToObject(value, interpreter);
         return value;
     }
 

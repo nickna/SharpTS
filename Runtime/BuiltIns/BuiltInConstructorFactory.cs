@@ -194,11 +194,11 @@ public static class BuiltInConstructorFactory
     /// <c>null</c>/<c>undefined</c> guard before calling. Mirrors compiled mode's
     /// <c>$Runtime.ToObject</c> (see <c>RuntimeEmitter.BoxedPrimitives.EmitToObject</c>).
     /// </summary>
-    public static object? ToObject(object? value) => value switch
+    public static object? ToObject(object? value, Interpreter? interpreter = null) => value switch
     {
-        string => CreateBoxedString(new[] { value }),
-        double => CreateBoxedNumber(new[] { value }),
-        bool => CreateBoxedBoolean(new[] { value }),
+        string => CreateBoxedString(new[] { value }, interpreter),
+        double => CreateBoxedNumber(new[] { value }, interpreter),
+        bool => CreateBoxedBoolean(new[] { value }, interpreter),
         _ => value,
     };
 

@@ -1489,6 +1489,14 @@ public sealed class Issue1279ParityTests
     public void Object_assign_rejects_nullish_targets(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/assign/OnlyOneArgument.js")]
+    [InlineData("built-ins/Object/assign/Target-Boolean.js")]
+    [InlineData("built-ins/Object/assign/Target-Number.js")]
+    [InlineData("built-ins/Object/assign/Target-String.js")]
+    public void Object_assign_boxes_primitive_targets(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

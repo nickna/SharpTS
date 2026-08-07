@@ -253,12 +253,14 @@ public static partial class ObjectBuiltIns
         return RuntimeValue.FromBoolean(ReferenceEquals(obj1, obj2));
     }
 
-    private static object? Assign(Interpreter _, List<object?> args)
+    private static object? Assign(Interpreter interpreter, List<object?> args)
     {
         // Object.assign(target, ...sources)
         if (args.Count == 0 || args[0] is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Object.assign called on null or undefined"));
+
+        args[0] = BuiltInConstructorFactory.ToObject(args[0], interpreter);
 
         // Handle SharpTSObject target
         if (args[0] is SharpTSObject targetObj)
