@@ -2020,6 +2020,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/asIntN/bigint-tobigint-wrapped-values.js")]
+    [InlineData("built-ins/BigInt/asIntN/bits-toindex-wrapped-values.js")]
+    [InlineData("built-ins/BigInt/asUintN/bigint-tobigint-wrapped-values.js")]
+    [InlineData("built-ins/BigInt/asUintN/bits-toindex-wrapped-values.js")]
+    public void BigInt_fixed_width_statics_unbox_wrapped_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
