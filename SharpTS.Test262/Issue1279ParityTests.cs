@@ -1700,6 +1700,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Array/prototype/splice/S15.4.4.12_A2.2_T5.js");
 
     [Theory]
+    [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
+    public void Array_from_binds_the_mapping_this_argument(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

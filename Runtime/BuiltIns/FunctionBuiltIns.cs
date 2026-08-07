@@ -191,9 +191,10 @@ public static class FunctionBuiltIns
         // For regular functions, we need to bind 'this'
         if (callable is SharpTSFunction fn)
         {
-            // Create a temporary bound function
-            var bound = new BoundFunction(fn, thisArg, new List<object?>());
-            return bound.Call(interp, args);
+            object? effectiveThis = !fn.IsStrict && thisArg is null or SharpTSUndefined
+                ? interp.GlobalThis
+                : thisArg;
+            return fn.BindThis(effectiveThis).Call(interp, args);
         }
 
         if (callable is SharpTSArrowFunction arrowWithThis)

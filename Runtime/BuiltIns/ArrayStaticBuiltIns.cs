@@ -18,7 +18,7 @@ public static class ArrayStaticBuiltIns
                     args[0].ToObject() is SharpTSArray and not SharpTSArguments
                         or SharpTSArrayPrototype);
             }).AsNonConstructor(),
-            "from" => BuiltInMethod.CreateV2("from", 1, 2, static (interpreter, _, args) =>
+            "from" => BuiltInMethod.CreateV2("from", 1, 3, static (interpreter, _, args) =>
             {
                 // ECMA-262 23.1.2.1: Array.from(null) and Array.from(undefined) throw TypeError
                 // (via the GetMethod(@@iterator) → Get → ToObject(items) chain).
@@ -46,6 +46,9 @@ public static class ArrayStaticBuiltIns
 
                 if (mapFn != null)
                 {
+                    object? thisArg = args.Length > 2
+                        ? args[2].ToObject()
+                        : SharpTSUndefined.Instance;
                     // Apply mapfn DURING iteration, not after materializing the
                     // whole source (ECMA-262 23.1.2.1 step 6.g: map each element as
                     // it is produced). For an iterator this is observable two ways:
@@ -67,7 +70,8 @@ public static class ArrayStaticBuiltIns
                     {
                         callbackArgs[0] = element;
                         callbackArgs[1] = (double)i++;
-                        result.Add(mapFn.Call(interpreter, callbackArgs));
+                        result.Add(FunctionBuiltIns.CallWithThis(
+                            interpreter, mapFn, thisArg, callbackArgs));
                     }
                     return RuntimeValue.FromObject(new SharpTSArray(result));
                 }
