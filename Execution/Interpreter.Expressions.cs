@@ -1120,6 +1120,13 @@ public partial class Interpreter
             // A user-set own symbol property (`re[Symbol.match] = false`) shadows
             // the inherited RegExp.prototype well-known-symbol method — IsRegExp
             // depends on this override winning.
+            if (regexObj.TryGetSymbolAccessor(regexSym, out var ownGetter, out _))
+            {
+                return ownGetter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(ownGetter, regexObj).Call(this, []));
+            }
             if (regexObj.TryGetSymbolProperty(regexSym, out var ownSym))
                 return RuntimeValue.FromBoxed(ownSym ?? SharpTSUndefined.Instance);
             var prototype = GetRegExpPrototype();

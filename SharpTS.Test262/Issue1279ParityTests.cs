@@ -2179,6 +2179,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/String/prototype/matchAll/regexp-matchAll-is-undefined-or-null.js")]
     [InlineData("built-ins/String/prototype/matchAll/regexp-prototype-matchAll-throws.js")]
     [InlineData("built-ins/String/prototype/matchAll/regexp-matchAll-throws.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-get-matchAll-throws.js")]
     public void String_matchAll_invokes_symbol_protocol(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 

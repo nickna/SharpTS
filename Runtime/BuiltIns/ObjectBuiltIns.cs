@@ -506,7 +506,9 @@ public static partial class ObjectBuiltIns
                         symArrow.SetBySymbol(symKey, descriptor.Value);
                     return target;
                 case SharpTSRegExp symRegex:
-                    if (descriptorHasValue)
+                    if (isAccessor)
+                        symRegex.DefineSymbolAccessor(symKey, descriptor.Get, descriptor.Set);
+                    else if (descriptorHasValue)
                         symRegex.SetBySymbol(symKey, descriptor.Value);
                     return target;
                 // `Object.defineProperty(Error.prototype, Symbol.toStringTag, …)` and friends.

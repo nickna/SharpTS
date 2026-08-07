@@ -74,6 +74,35 @@ public class SharpTSRegExp : ITypeCategorized
     // runtime↔emitted public-method parity test (RuntimeTypeSyncTests) isn't
     // affected (the emitted $RegExp has its own symbol storage).
     private Dictionary<SharpTSSymbol, object?>? _symbolProps;
+    private Dictionary<SharpTSSymbol, (ISharpTSCallable? Getter, ISharpTSCallable? Setter)>?
+        _symbolAccessors;
+
+    internal bool TryGetSymbolAccessor(
+        SharpTSSymbol symbol,
+        out ISharpTSCallable? getter,
+        out ISharpTSCallable? setter)
+    {
+        if (_symbolAccessors != null
+            && _symbolAccessors.TryGetValue(symbol, out var accessor))
+        {
+            getter = accessor.Getter;
+            setter = accessor.Setter;
+            return true;
+        }
+        getter = null;
+        setter = null;
+        return false;
+    }
+
+    internal void DefineSymbolAccessor(
+        SharpTSSymbol symbol,
+        ISharpTSCallable? getter,
+        ISharpTSCallable? setter)
+    {
+        _symbolProps?.Remove(symbol);
+        _symbolAccessors ??= [];
+        _symbolAccessors[symbol] = (getter, setter);
+    }
 
     internal bool TryGetSymbolProperty(SharpTSSymbol symbol, out object? value)
     {
@@ -85,12 +114,14 @@ public class SharpTSRegExp : ITypeCategorized
 
     internal void SetBySymbol(SharpTSSymbol symbol, object? value)
     {
+        _symbolAccessors?.Remove(symbol);
         _symbolProps ??= [];
         _symbolProps[symbol] = value;
     }
 
     internal bool HasSymbolProperty(SharpTSSymbol symbol) =>
-        _symbolProps != null && _symbolProps.ContainsKey(symbol);
+        _symbolProps != null && _symbolProps.ContainsKey(symbol)
+        || _symbolAccessors != null && _symbolAccessors.ContainsKey(symbol);
 
     internal bool TryGetProperty(string name, out object? value)
     {
