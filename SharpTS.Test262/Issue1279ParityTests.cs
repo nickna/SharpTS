@@ -1926,6 +1926,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A1_T11.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A1_T12.js")]
+    [InlineData("built-ins/String/prototype/replace/replaceValue-evaluation-order.js")]
+    public void String_replace_supports_functional_plain_search(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

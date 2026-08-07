@@ -136,17 +136,63 @@ public static class StringBuiltIns
 
     private static RuntimeValue ReplaceV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var replacement = interpreter.ToStringForBuiltInArgument(args[1].ToObject());
+        object? searchValue = args[0].ToObject();
+        object? replaceValue = args[1].ToObject();
 
-        if (args[0].ToObject() is SharpTSRegExp regex)
+        if (searchValue is SharpTSRegExp regex)
         {
-            return RuntimeValue.FromString(regex.Replace(str, replacement));
+            var regexReplacement = interpreter.ToStringForBuiltInArgument(replaceValue);
+            return RuntimeValue.FromString(regex.Replace(str, regexReplacement));
         }
 
-        var search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());
+        var search = interpreter.ToStringForBuiltInArgument(searchValue);
+        bool functionalReplace = replaceValue is ISharpTSCallable;
+        string? replacementText = functionalReplace
+            ? null
+            : interpreter.ToStringForBuiltInArgument(replaceValue);
         var index = str.IndexOf(search);
         if (index < 0) return RuntimeValue.FromString(str);
-        return RuntimeValue.FromString(str.Substring(0, index) + replacement + str.Substring(index + search.Length));
+
+        string replacement;
+        if (replaceValue is ISharpTSCallable replacer)
+        {
+            object? result = FunctionBuiltIns.CallWithThis(
+                interpreter, replacer, SharpTSUndefined.Instance,
+                [search, (double)index, str]);
+            replacement = interpreter.ToStringForBuiltInArgument(result);
+        }
+        else
+        {
+            replacement = ExpandStringReplacement(
+                replacementText!, str, search, index);
+        }
+
+        return RuntimeValue.FromString(
+            str[..index] + replacement + str[(index + search.Length)..]);
+    }
+
+    private static string ExpandStringReplacement(
+        string replacement, string input, string matched, int index)
+    {
+        var result = new StringBuilder(replacement.Length);
+        for (int i = 0; i < replacement.Length; i++)
+        {
+            if (replacement[i] != '$' || i + 1 >= replacement.Length)
+            {
+                result.Append(replacement[i]);
+                continue;
+            }
+
+            switch (replacement[i + 1])
+            {
+                case '$': result.Append('$'); i++; break;
+                case '&': result.Append(matched); i++; break;
+                case '`': result.Append(input.AsSpan(0, index)); i++; break;
+                case '\'': result.Append(input.AsSpan(index + matched.Length)); i++; break;
+                default: result.Append('$'); break;
+            }
+        }
+        return result.ToString();
     }
 
     private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)

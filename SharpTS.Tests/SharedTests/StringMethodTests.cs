@@ -27,6 +27,17 @@ public class StringMethodTests
 
     #region Basic String Methods
 
+    [Fact]
+    public void String_Replace_ExpandsPlainSearchSubstitutions_InInterpreter()
+    {
+        var source = """
+            console.log("abc".replace("b", "[$$][$&][$`][$']"));
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("a[$][b][a][c]c\n", output);
+    }
+
     [Theory, ModeData]
     public void String_CharAt_ReturnsCharacter(ExecutionMode mode)
     {
