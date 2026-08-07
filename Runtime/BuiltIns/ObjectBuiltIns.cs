@@ -567,6 +567,9 @@ public static partial class ObjectBuiltIns
             case SharpTSBigIntPrototype bigIntPrototype:
                 success = bigIntPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSSymbolPrototype symbolPrototype:
+                success = symbolPrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSFunctionPrototype functionPrototype:
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -706,6 +709,8 @@ public static partial class ObjectBuiltIns
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSSymbolPrototype symbolPrototype => symbolPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
@@ -1532,6 +1537,7 @@ public static partial class ObjectBuiltIns
         SharpTSNumberPrototype => interp?.GetObjectPrototype(),
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
         SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
+        SharpTSSymbolPrototype => interp?.GetObjectPrototype(),
         // §10.2.5: a derived constructor's [[Prototype]] is its base constructor, so
         // `Object.getPrototypeOf(RangeError) === Error`. A base class falls back to
         // Function.prototype like any other function object.

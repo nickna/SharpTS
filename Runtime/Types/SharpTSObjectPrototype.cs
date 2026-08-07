@@ -256,6 +256,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetMember(key) != null,
             SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.HasOwnProperty(key),
+            SharpTSSymbolPrototype symbolPrototype => symbolPrototype.HasOwnProperty(key),
             SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),
             SharpTSClassPrototype classPrototype => classPrototype.HasOwnProperty(key),
             SharpTSClass when key is "name" or "length" or "prototype" => true,

@@ -374,25 +374,58 @@ public sealed class SharpTSSymbolPrototype : ISharpTSMutableBuiltIn
 {
     internal object? RealmConstructor { get; set; }
     private readonly SharpTSObject _extras = new([]);
+    private bool _constructorDeleted;
 
     internal SharpTSSymbolPrototype() { }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (name == "constructor") _constructorDeleted = false;
+        if (name == "constructor" && !HasExtra(name))
+        {
+            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+            return;
+        }
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        if (name == "constructor") _constructorDeleted = false;
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool HasOwnProperty(string name) => name == "constructor" || HasExtra(name);
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || name == "constructor" && !_constructorDeleted;
     public bool DeleteProperty(string name)
-        => HasExtra(name) ? _extras.DeleteProperty(name) : name != "constructor";
+    {
+        if (HasExtra(name))
+        {
+            bool deleted = _extras.DeleteProperty(name);
+            if (deleted && name == "constructor") _constructorDeleted = true;
+            return deleted;
+        }
+        if (name == "constructor") _constructorDeleted = true;
+        return true;
+    }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
-            : name == "constructor" ? RealmConstructor
+            : name == "constructor" && !_constructorDeleted ? RealmConstructor
             : null;
     public override string ToString() => "[object Symbol]";
 }
