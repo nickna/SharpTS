@@ -1682,6 +1682,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-2-4.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-2-4.js")]
+    public void Array_reducers_prioritize_the_receiver_length(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
