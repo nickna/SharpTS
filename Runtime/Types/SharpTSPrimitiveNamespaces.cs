@@ -280,6 +280,18 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 $"String.prototype.{_name} called on null or undefined"));
         }
 
+        if (_name is "toString" or "valueOf")
+        {
+            bool isStringReceiver = _receiver is string or SharpTSStringPrototype
+                || _receiver is SharpTSObject boxed
+                    && boxed.GetProperty("__primitiveType") is "String";
+            if (!isStringReceiver)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"String.prototype.{_name} called on incompatible receiver"));
+            }
+        }
+
         // ECMA-262 §22.1.3: String.prototype is itself a String object whose
         // [[StringData]] is "", so `String.prototype.toString()` is "" rather than
         // the object's "[object String]" stringification.

@@ -1752,6 +1752,17 @@ public sealed class Issue1279ParityTests
     public void String_prototype_has_its_intrinsic_object_shape(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void String_toString_rejects_non_string_receivers()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/toString/non-generic.js");
+
+    [Fact]
+    public void Interpreted_String_valueOf_rejects_non_string_receivers()
+        => AssertPass(
+            "built-ins/String/prototype/valueOf/non-generic.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
