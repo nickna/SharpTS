@@ -3621,7 +3621,7 @@ test/built-ins/Math/sign/length.js Pass
 test/built-ins/Math/sign/name.js Pass
 test/built-ins/Math/sign/not-a-constructor.js Pass
 test/built-ins/Math/sign/prop-desc.js Pass
-test/built-ins/Math/sign/sign-specialVals.js RuntimeError
+test/built-ins/Math/sign/sign-specialVals.js Pass
 test/built-ins/Math/sin/S15.8.2.16_A1.js Pass
 test/built-ins/Math/sin/S15.8.2.16_A4.js Pass
 test/built-ins/Math/sin/S15.8.2.16_A5.js Pass

@@ -1336,6 +1336,10 @@ public sealed class Issue1279ParityTests
     public void Math_inherits_from_Object_prototype()
         => AssertPassInBothModes("built-ins/Math/proto.js");
 
+    [Fact]
+    public void Math_sign_preserves_special_values()
+        => AssertPassInBothModes("built-ins/Math/sign/sign-specialVals.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

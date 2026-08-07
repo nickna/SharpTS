@@ -57,7 +57,10 @@ public static class MathBuiltIns
             .MethodV2("log10", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Log10(Interpreter.ToNumber(args[0]))))
             .MethodV2("sign", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Sign(Interpreter.ToNumber(args[0]))))
+            {
+                double x = Interpreter.ToNumber(args[0]);
+                return RuntimeValue.FromNumber(double.IsNaN(x) || x == 0 ? x : x < 0 ? -1 : 1);
+            })
             .MethodV2("trunc", 1, (_, _, args) =>
                 RuntimeValue.FromNumber(Math.Truncate(Interpreter.ToNumber(args[0]))))
             // Hyperbolic + area-hyperbolic (ECMA-262 21.3.2). The compiled backend
