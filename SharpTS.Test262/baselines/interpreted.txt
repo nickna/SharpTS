@@ -3430,7 +3430,7 @@ test/built-ins/Math/atanh/atanh-specialVals.js Pass
 test/built-ins/Math/atanh/length.js Pass
 test/built-ins/Math/atanh/name.js Pass
 test/built-ins/Math/atanh/not-a-constructor.js Pass
-test/built-ins/Math/atanh/prop-desc.js Fail
+test/built-ins/Math/atanh/prop-desc.js Pass
 test/built-ins/Math/cbrt/cbrt-specialValues.js Pass
 test/built-ins/Math/cbrt/length.js Pass
 test/built-ins/Math/cbrt/name.js Pass
