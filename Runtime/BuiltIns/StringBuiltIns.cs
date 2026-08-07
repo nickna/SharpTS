@@ -771,33 +771,53 @@ public static class StringBuiltIns
         return RuntimeValue.FromNumber(str[index]);
     }
 
-    private static RuntimeValue ReplaceAllV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ReplaceAllV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
-        var replacement = args[1].ToObject()?.ToString() ?? "";
+        object? replaceValue = args[1].ToObject();
+        bool functionalReplace = replaceValue is ISharpTSCallable;
+        string? replacementText = functionalReplace
+            ? null
+            : interpreter.ToStringForBuiltInArgument(replaceValue);
 
         if (args[0].ToObject() is SharpTSRegExp regex)
         {
             // String.prototype.replaceAll requires a global RegExp (spec §22.1.3.18).
             if (!regex.Global)
                 throw new Exception("TypeError: String.prototype.replaceAll called with a non-global RegExp argument");
-            return RuntimeValue.FromString(regex.Replace(str, replacement));
+            return RuntimeValue.FromString(regex.Replace(str, replacementText ?? ""));
         }
 
-        var search = args[0].ToObject()?.ToString() ?? "";
-        if (search.Length == 0)
+        string search = interpreter.ToStringForBuiltInArgument(args[0].ToObject());
+        var result = new StringBuilder(str.Length);
+        int sourcePosition = 0;
+        while (sourcePosition <= str.Length)
         {
-            // ECMA-262 22.1.3.20: empty search inserts replacement at every
-            // position 0..length (between each char + start + end).
-            // E.g. "a".replaceAll("","_") → "_a_".
-            var sb = new StringBuilder();
-            for (int i = 0; i <= str.Length; i++)
+            int matchPosition = search.Length == 0
+                ? sourcePosition
+                : str.IndexOf(search, sourcePosition, StringComparison.Ordinal);
+            if (matchPosition < 0) break;
+
+            result.Append(str, sourcePosition, matchPosition - sourcePosition);
+            if (replaceValue is ISharpTSCallable replacer)
             {
-                sb.Append(replacement);
-                if (i < str.Length) sb.Append(str[i]);
+                object? replacement = FunctionBuiltIns.CallWithThis(
+                    interpreter, replacer, SharpTSUndefined.Instance,
+                    [search, (double)matchPosition, str]);
+                result.Append(interpreter.ToStringForBuiltInArgument(replacement));
             }
-            return RuntimeValue.FromString(sb.ToString());
+            else
+            {
+                result.Append(ExpandStringReplacement(
+                    replacementText!, str, search, matchPosition));
+            }
+
+            sourcePosition = matchPosition + Math.Max(1, search.Length);
+            if (search.Length == 0 && matchPosition < str.Length)
+                result.Append(str[matchPosition]);
         }
-        return RuntimeValue.FromString(str.Replace(search, replacement));
+        if (sourcePosition < str.Length)
+            result.Append(str, sourcePosition, str.Length - sourcePosition);
+        return RuntimeValue.FromString(result.ToString());
     }
 
     private static RuntimeValue NormalizeV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)

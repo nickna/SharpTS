@@ -2080,6 +2080,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-each-match-position.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-matching-empty.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-tostring-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-fn-skip-toString.js")]
+    public void String_replaceAll_calls_functional_replacers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
