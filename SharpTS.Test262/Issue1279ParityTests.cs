@@ -1270,6 +1270,10 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes("built-ins/Boolean/S15.6.1.1_A1_T4.js");
 
     [Fact]
+    public void Deleted_Boolean_toString_falls_back_to_Object_prototype()
+        => AssertPassInBothModes("built-ins/Boolean/S15.6.2.1_A4.js");
+
+    [Fact]
     public void Error_prototype_exposes_its_standard_name()
         => AssertPassInBothModes("built-ins/Error/name.js");
 
