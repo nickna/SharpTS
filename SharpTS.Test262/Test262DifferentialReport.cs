@@ -48,6 +48,10 @@ public sealed class Test262DifferentialReport
         .ThenBy(item => item.Transition, StringComparer.Ordinal)
         .ToList();
 
+    public IReadOnlyList<Test262DifferentialEntry> InterpreterDeficits => Divergences
+        .Where(entry => entry.CompiledOutcome == Test262Outcome.Pass)
+        .ToList();
+
     public static Test262DifferentialReport Create(
         IReadOnlyDictionary<string, string> interpreted,
         IReadOnlyDictionary<string, string> compiled)
