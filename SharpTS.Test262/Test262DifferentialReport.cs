@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace SharpTS.Test262;
 
 public sealed record Test262TransitionCount(string Transition, int Count);
@@ -108,4 +111,21 @@ public sealed class Test262DifferentialReport
             Test262ModeSummary.Create(interpreted),
             Test262ModeSummary.Create(compiled));
     }
+
+    public string ToMarkdown()
+    {
+        var markdown = new StringBuilder();
+        markdown.AppendLine("# Test262 Differential Report");
+        markdown.AppendLine();
+        markdown.AppendLine("| Mode | Pass | Executed | Skipped | Pass rate |");
+        markdown.AppendLine("|---|---:|---:|---:|---:|");
+        AppendMode(markdown, "Interpreted", InterpretedSummary);
+        AppendMode(markdown, "Compiled", CompiledSummary);
+        markdown.AppendLine();
+        markdown.AppendLine($"Outcome agreement: **{AgreementCount:N0}/{Entries.Count:N0} ({AgreementPercentage.ToString("F1", CultureInfo.InvariantCulture)}%)**.");
+        return markdown.ToString();
+    }
+
+    private static void AppendMode(StringBuilder markdown, string mode, Test262ModeSummary summary) =>
+        markdown.AppendLine($"| {mode} | {summary.Count(Test262Outcome.Pass)} | {summary.Executed} | {summary.Skipped} | {summary.PassPercentage.ToString("F1", CultureInfo.InvariantCulture)}% |");
 }

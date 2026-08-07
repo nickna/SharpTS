@@ -99,6 +99,21 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Markdown_starts_with_mode_coverage_and_agreement()
+    {
+        var report = Test262DifferentialReport.Create(
+            Baseline(("a.js", "Pass"), ("b.js", "Skipped:reason")),
+            Baseline(("a.js", "Pass"), ("b.js", "Fail")));
+
+        var markdown = report.ToMarkdown();
+
+        Assert.StartsWith("# Test262 Differential Report", markdown);
+        Assert.Contains("| Interpreted | 1 | 1 | 1 | 100.0% |", markdown);
+        Assert.Contains("| Compiled | 1 | 2 | 0 | 50.0% |", markdown);
+        Assert.Contains("Outcome agreement: **1/2 (50.0%)**.", markdown);
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(
