@@ -1807,6 +1807,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/length.js")]
+    [InlineData("built-ins/BigInt/name.js")]
+    [InlineData("built-ins/BigInt/constructor-integer.js")]
+    [InlineData("built-ins/BigInt/constructor-from-decimal-string.js")]
+    public void BigInt_is_available_as_a_global_function(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

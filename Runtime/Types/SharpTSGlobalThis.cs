@@ -212,6 +212,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
             foreach (var errorTypeName in BuiltInNames.ErrorTypeNames)
                 yield return errorTypeName;
             yield return "Symbol";
+            yield return "BigInt";
             yield return "Promise";
             yield return "process";
             yield return "Buffer";

@@ -139,6 +139,7 @@ public partial class Interpreter
         // `typeof parseFloat === 'function'`.
         string[] globalFunctionNames =
         [
+            BuiltInNames.BigInt,
             BuiltInNames.ParseInt, BuiltInNames.ParseFloat,
             BuiltInNames.IsNaN, BuiltInNames.IsFinite,
             BuiltInNames.StructuredClone,
@@ -150,7 +151,8 @@ public partial class Interpreter
         foreach (var name in globalFunctionNames)
         {
             if (!globals.ContainsKey(name))
-                globals[name] = new SharpTSGlobalFunction(name);
+                globals[name] = new SharpTSGlobalFunction(
+                    name, name == BuiltInNames.BigInt ? 1 : 0);
         }
 
         // Bind value-position globals for built-ins that were previously only

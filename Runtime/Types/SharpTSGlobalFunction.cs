@@ -12,18 +12,25 @@ namespace SharpTS.Runtime.Types;
 /// e.g. <c>var pf = parseFloat; typeof parseFloat === 'function';
 /// freeParseFloat("1.5")</c> — not just called by name.
 /// </summary>
-public sealed class SharpTSGlobalFunction : ISharpTSCallable, ITypeCategorized
+public sealed class SharpTSGlobalFunction : ISharpTSCallable, ITypeCategorized,
+    IBuiltInFunctionMetadata
 {
     public TypeCategory RuntimeCategory => TypeCategory.Function;
 
     public string Name { get; }
+    private readonly int _arity;
+    private readonly BuiltInFunctionMetadata _metadata = new();
 
-    public SharpTSGlobalFunction(string name)
+    public SharpTSGlobalFunction(string name, int arity = 0)
     {
         Name = name;
+        _arity = arity;
     }
 
-    public int Arity() => 0;
+    public int Arity() => _arity;
+    public string FunctionName => Name;
+    public bool HasMetadataProperty(string name) => _metadata.Has(name);
+    public bool DeleteMetadataProperty(string name) => _metadata.Delete(name);
 
     public object? Call(Interp interpreter, List<object?> arguments)
     {
