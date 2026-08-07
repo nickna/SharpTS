@@ -1055,6 +1055,9 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateGetOnArrayRV(object obj, string memberName)
     {
+        if (obj is SharpTSArray lengthArray && memberName == "length")
+            return RuntimeValue.FromNumber(lengthArray.LongLength);
+
         // ISharpTSPropertyAccessor check (handles SharpTSTemplateStringsArray.raw)
         if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(memberName))
             return RuntimeValue.FromBoxed(accessor.GetProperty(memberName));

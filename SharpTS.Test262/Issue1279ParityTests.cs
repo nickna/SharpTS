@@ -1635,6 +1635,11 @@ public sealed class Issue1279ParityTests
     public void Array_map_rejects_unrepresentable_result_lengths(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_own_length_precedes_Array_prototype_length()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/map/15.4.4.19-2-4.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
