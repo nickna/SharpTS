@@ -1720,6 +1720,10 @@ public sealed class Issue1279ParityTests
     public void Array_length_descriptors_validate_after_numeric_coercion(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_length_truncation_deletes_only_out_of_range_indices()
+        => AssertPassInBothModes("built-ins/Array/S15.4.5.2_A3_T2.js");
+
     [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
