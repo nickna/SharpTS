@@ -1935,6 +1935,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A4_T1.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A4_T2.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A4_T3.js")]
+    [InlineData("built-ins/String/prototype/replace/S15.5.4.11_A4_T4.js")]
+    public void String_replace_passes_regexp_captures_to_replacer(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

@@ -141,6 +141,31 @@ public static class StringBuiltIns
 
         if (searchValue is SharpTSRegExp regex)
         {
+            if (replaceValue is ISharpTSCallable regexReplacer)
+            {
+                return RuntimeValue.FromString(regex.Replace(str, match =>
+                {
+                    var callbackArgs = new List<object?>(match.Groups.Count + 2)
+                    {
+                        match.Value
+                    };
+                    for (int i = 1; i < match.Groups.Count; i++)
+                    {
+                        var group = match.Groups[i];
+                        callbackArgs.Add(group.Success
+                            ? group.Value
+                            : SharpTSUndefined.Instance);
+                    }
+                    callbackArgs.Add((double)match.Index);
+                    callbackArgs.Add(str);
+
+                    object? result = FunctionBuiltIns.CallWithThis(
+                        interpreter, regexReplacer, SharpTSUndefined.Instance,
+                        callbackArgs);
+                    return interpreter.ToStringForBuiltInArgument(result);
+                }));
+            }
+
             var regexReplacement = interpreter.ToStringForBuiltInArgument(replaceValue);
             return RuntimeValue.FromString(regex.Replace(str, regexReplacement));
         }

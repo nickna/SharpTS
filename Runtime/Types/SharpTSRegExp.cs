@@ -885,6 +885,19 @@ public class SharpTSRegExp : ITypeCategorized
     }
 
     /// <summary>
+    /// Replace occurrences using a callback that receives each regex match.
+    /// </summary>
+    internal string Replace(string input, MatchEvaluator evaluator)
+    {
+        if (_global)
+        {
+            return _regex.Replace(input, evaluator);
+        }
+
+        return _regex.Replace(input, evaluator, 1);
+    }
+
+    /// <summary>
     /// Search for the first match in the string.
     /// </summary>
     /// <param name="input">The input string.</param>
