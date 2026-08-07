@@ -1670,6 +1670,11 @@ public sealed class Issue1279ParityTests
     public void Array_findIndex_observes_live_generic_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_findLast_propagates_indexed_property_errors()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/findLast/return-abrupt-from-property.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
