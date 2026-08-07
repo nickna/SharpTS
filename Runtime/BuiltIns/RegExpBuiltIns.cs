@@ -866,8 +866,13 @@ public static class RegExpBuiltIns
         foreach (var match in matches)
         {
             var matchStr = ToStr(interp, interp.GetProperty(match, "0"));
-            int position = ToLengthAsInt(interp.GetProperty(match, "index"));
-            position = Math.Clamp(position, 0, s.Length);
+            double rawPosition = interp.ToNumberWithPrimitive(
+                interp.GetProperty(match, "index"));
+            int position = double.IsNaN(rawPosition) || rawPosition <= 0
+                ? 0
+                : double.IsPositiveInfinity(rawPosition) || rawPosition >= s.Length
+                    ? s.Length
+                    : (int)Math.Truncate(rawPosition);
 
             string replacement;
             if (isCallable)
