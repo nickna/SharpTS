@@ -598,7 +598,16 @@ public static class StringBuiltIns
         var source = pattern is SharpTSUndefined
             ? ""
             : interpreter.ToStringForBuiltInArgument(pattern);
-        return RuntimeValue.FromNumber(new SharpTSRegExp(source).Search(str));
+        var created = new SharpTSRegExp(source);
+        object? createdSearcher = interpreter.GetSymbolPropertyValue(
+            created, SharpTSSymbol.Search);
+        if (createdSearcher is not ISharpTSCallable createdCallable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Constructed RegExp Symbol.search property is not callable"));
+        }
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter, createdCallable, created, [str]));
     }
 
     private static RuntimeValue StringRawV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
