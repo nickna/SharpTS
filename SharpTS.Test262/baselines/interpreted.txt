@@ -3470,7 +3470,7 @@ test/built-ins/Math/cosh/cosh-specialVals.js Pass
 test/built-ins/Math/cosh/length.js Pass
 test/built-ins/Math/cosh/name.js Pass
 test/built-ins/Math/cosh/not-a-constructor.js Pass
-test/built-ins/Math/cosh/prop-desc.js Fail
+test/built-ins/Math/cosh/prop-desc.js Pass
 test/built-ins/Math/exp/S15.8.2.8_A1.js Pass
 test/built-ins/Math/exp/S15.8.2.8_A2.js Pass
 test/built-ins/Math/exp/S15.8.2.8_A3.js Pass
