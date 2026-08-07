@@ -2259,6 +2259,11 @@ public sealed class Issue1279ParityTests
     public void Error_constructor_arguments_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Error_prototype_property_is_nonconfigurable()
+        => AssertPassInBothModes(
+            "built-ins/Error/prototype/S15.11.3.1_A1_T1.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

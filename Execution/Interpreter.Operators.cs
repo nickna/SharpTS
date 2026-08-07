@@ -1006,6 +1006,8 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(name),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(name),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(name),
+            SharpTSClass when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.DeleteProperty(name),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
@@ -1065,12 +1067,23 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(keyStr),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(keyStr),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(keyStr),
+            SharpTSClass when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
             SharpTSFunction function => function.DeleteProperty(keyStr),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };
+    }
+
+    private static bool DeleteNonConfigurableClassPrototype(
+        string propertyName, bool strictMode)
+    {
+        if (strictMode)
+            throw StrictModeErrors.TypeError(
+                $"Cannot delete property '{propertyName}' of class constructor");
+        return false;
     }
 
     /// <summary>

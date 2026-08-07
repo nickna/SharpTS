@@ -427,6 +427,19 @@ public class ErrorTests
     }
 
     [Theory, ModeData]
+    public void Error_PrototypePropertyIsNonConfigurable(ExecutionMode mode)
+    {
+        var source = """
+            const descriptor = Object.getOwnPropertyDescriptor(Error, "prototype")!;
+            console.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            console.log(delete (Error as any).prototype);
+            console.log(Error.prototype === descriptor.value);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false false false\nfalse\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Error_WithStringCause_SetsCauseProperty(ExecutionMode mode)
     {
         var source = @"

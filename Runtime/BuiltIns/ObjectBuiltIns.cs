@@ -729,6 +729,11 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSClass klass when propertyKey == "prototype" => DataDescriptor(
+                klass.Prototype,
+                writable: false,
+                enumerable: false,
+                configurable: false),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`
