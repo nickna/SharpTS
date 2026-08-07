@@ -199,6 +199,42 @@ public static class StringBuiltIns
         return true;
     }
 
+    internal static bool TryInvokeCustomSplit(
+        Interpreter interpreter,
+        object receiver,
+        List<object?> arguments,
+        out object? result)
+    {
+        object? separator = arguments.Count > 0
+            ? arguments[0]
+            : SharpTSUndefined.Instance;
+        if (separator is null or SharpTSUndefined or SharpTSRegExp)
+        {
+            result = null;
+            return false;
+        }
+
+        object? splitter = interpreter.GetSymbolPropertyValue(
+            separator, SharpTSSymbol.Split);
+        if (splitter is null or SharpTSUndefined)
+        {
+            result = null;
+            return false;
+        }
+        if (splitter is not ISharpTSCallable callable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Symbol.split property is not callable"));
+        }
+
+        object? limit = arguments.Count > 1
+            ? arguments[1]
+            : SharpTSUndefined.Instance;
+        result = FunctionBuiltIns.CallWithThis(
+            interpreter, callable, separator, [receiver, limit]);
+        return true;
+    }
+
     private static RuntimeValue IsWellFormedV2(
         Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
     {
@@ -356,7 +392,7 @@ public static class StringBuiltIns
     private static RuntimeValue SplitV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         object? separatorValue = ArgumentOrUndefined(args, 0);
-        if (separatorValue is not (null or SharpTSUndefined))
+        if (separatorValue is not (null or SharpTSUndefined or SharpTSRegExp))
         {
             object? splitter = interpreter.GetSymbolPropertyValue(
                 separatorValue, SharpTSSymbol.Split);

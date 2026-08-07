@@ -303,6 +303,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
             return searchResult;
         }
 
+        if (_name == "split"
+            && StringBuiltIns.TryInvokeCustomSplit(
+                interpreter, _receiver, arguments, out object? splitResult))
+        {
+            return splitResult;
+        }
+
         if (_name is "toString" or "valueOf")
         {
             bool isStringReceiver = _receiver is string or SharpTSStringPrototype

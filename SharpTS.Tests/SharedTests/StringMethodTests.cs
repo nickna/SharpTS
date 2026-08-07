@@ -9,6 +9,27 @@ namespace SharpTS.Tests.SharedTests;
 public class StringMethodTests
 {
     [Fact]
+    public void String_Split_PreservesBorrowedReceiverAndLimitForSymbolHook_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const receiver: any = { marker: "original" };
+            receiver.toString = function(): string { throw new Error("unexpected"); };
+            const limit: any = { marker: "raw" };
+            limit.valueOf = function(): number { throw new Error("unexpected"); };
+            const separator: any = {};
+            separator[Symbol.split] = function(value: any, receivedLimit: any): any {
+                console.log(value === receiver);
+                console.log(receivedLimit === limit);
+                console.log(this === separator);
+                return "split";
+            };
+            console.log(String.prototype.split.call(receiver, separator, limit));
+            """);
+
+        Assert.Equal("true\ntrue\ntrue\nsplit\n", output);
+    }
+
+    [Fact]
     public void String_Search_PreservesBorrowedReceiverForSymbolHook_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""
