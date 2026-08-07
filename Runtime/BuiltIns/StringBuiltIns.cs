@@ -58,8 +58,8 @@ public static class StringBuiltIns
     private static readonly BuiltInStaticMemberLookup _staticLookup =
         BuiltInStaticBuilder.Create()
             .MethodV2("raw", 1, int.MaxValue, StringRawV2)
-            .MethodV2("fromCharCode", 0, int.MaxValue, FromCharCodeV2)
-            .MethodV2("fromCodePoint", 0, int.MaxValue, FromCodePointV2)
+            .MethodV2("fromCharCode", 0, int.MaxValue, specLength: 1, FromCharCodeV2)
+            .MethodV2("fromCodePoint", 0, int.MaxValue, specLength: 1, FromCodePointV2)
             .Build();
 
     public static object? GetMember(string receiver, string name)

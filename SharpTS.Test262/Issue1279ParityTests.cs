@@ -1725,6 +1725,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes("built-ins/Array/S15.4.5.2_A3_T2.js");
 
     [Theory]
+    [InlineData("built-ins/String/fromCodePoint/fromCodePoint.js")]
+    [InlineData("built-ins/String/fromCodePoint/length.js")]
+    public void String_fromCodePoint_exposes_standard_metadata(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]

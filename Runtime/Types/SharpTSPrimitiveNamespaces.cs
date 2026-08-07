@@ -25,33 +25,67 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     // ECMA-262 makes a constructor object ordinary and extensible, so `String.foo = 1`
     // must take. Descriptor-aware storage keeps defineProperty attributes intact.
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
 
     /// <summary>
-    /// Assigns an expando. A write targeting one of the built-in statics is dropped: those
-    /// are <c>{ writable: false }</c> data properties per ECMA-262 §21.1.2 / §22.1.2, and
-    /// sloppy-mode assignment to a non-writable property is a silent no-op — not a shadowing
-    /// own property. (<c>Number.MAX_VALUE = 1</c> must leave MAX_VALUE alone.)
+    /// Assigns an expando. String static methods are writable/configurable
+    /// non-enumerable data properties, so an assignment replaces the intrinsic
+    /// with a realm-local own value while preserving those attributes.
     /// </summary>
     public void SetExtra(string name, object? value)
     {
         if (IsReadOnlyBuiltIn(name)) return;
+        _deletedBuiltIns.Remove(name);
+        if (IsBuiltInMethod(name) && !HasExtra(name))
+        {
+            _extras.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = value,
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+            return;
+        }
         _extras.SetProperty(name, value);
     }
 
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool DeleteProperty(string name) => !IsReadOnlyBuiltIn(name) && _extras.DeleteProperty(name);
+    public bool DeleteProperty(string name)
+    {
+        if (IsReadOnlyBuiltIn(name)) return false;
+        bool hadExtra = HasExtra(name);
+        if (hadExtra && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltInMethod(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
-    private static bool IsReadOnlyBuiltIn(string name)
-        => name == "prototype" || StringBuiltIns.GetStaticMember(name) != null;
+    private static bool IsReadOnlyBuiltIn(string name) => name == "prototype";
+
+    private static bool IsBuiltInMethod(string name)
+        => StringBuiltIns.GetStaticMember(name) is not null;
+
+    public bool HasOwnProperty(string name)
+        => name is "name" or "length"
+            || HasExtra(name)
+            || (!_deletedBuiltIns.Contains(name)
+                && (name == "prototype" || StringBuiltIns.GetStaticMember(name) != null));
 
     public int Arity() => 0;
 
@@ -91,7 +125,10 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (name == "name") return "String";
+        if (name == "length") return 1.0;
         if (name == "prototype") return SharpTSStringPrototype.Instance;
+        if (_deletedBuiltIns.Contains(name)) return null;
         // Materialize constant-wrapping members (MAX_VALUE, EPSILON, …) here rather than
         // leaving the wrapper for each read path to unwrap — a per-realm intrinsic bypasses
         // the namespace static fast-path in EvaluateGet that used to do it.
