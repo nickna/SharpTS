@@ -1620,6 +1620,11 @@ public sealed class Issue1279ParityTests
     public void Array_copying_methods_reject_oversized_results(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Array_with_propagates_index_coercion_errors()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/with/index-throw-completion.js");
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

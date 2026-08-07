@@ -836,15 +836,15 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromObject(new SharpTSArray(result));
     }
 
-    private static RuntimeValue WithV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue WithV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
         // ECMA-262 23.1.3.39: produces a dense array with the modified element.
         // Holes in the source become undefined in the output.
         int len = arr.Length;
-        int index = (int)Interpreter.ToNumber(args[0]);
-        int actualIndex = index < 0 ? len + index : index;
+        double index = ToIntegerOrInfinity(interpreter, args[0].ToObject());
+        double actualIndex = index < 0 ? len + index : index;
         if (actualIndex < 0 || actualIndex >= len)
-            throw new Exception("RangeError: Invalid index for with()");
+            throw new ThrowException(new SharpTSRangeError("Invalid index for with()."));
         var result = new List<object?>(len);
         for (int i = 0; i < len; i++)
             result.Add(i == actualIndex ? args[1].ToObject() : arr[i]);
