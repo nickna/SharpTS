@@ -85,7 +85,7 @@ public abstract class Test262TestsBase
                 if (!byAbs.TryGetValue(absPath, out var bucket))
                     bucket = "RuntimeError:worker-crashed";
                 current[relPath] = bucket;
-                var outcome = ParseOutcomeFromBucket(bucket);
+                var outcome = Test262Bucket.ParseOutcome(bucket);
                 counts.TryGetValue(outcome, out var c);
                 counts[outcome] = c + 1;
             }
@@ -172,19 +172,6 @@ public abstract class Test262TestsBase
         return Path.IsPathRooted(config.SkipFeaturesFile)
             ? config.SkipFeaturesFile
             : Path.Combine(configDir, config.SkipFeaturesFile);
-    }
-
-    /// <summary>
-    /// Recovers the <see cref="Test262Outcome"/> from an encoded bucket string
-    /// like <c>"Pass"</c>, <c>"Skipped:async-done-deferred"</c>, or
-    /// <c>"RuntimeError:worker-crashed"</c>. Used to populate the per-mode
-    /// outcome histogram when results come from the worker subprocess.
-    /// </summary>
-    private static Test262Outcome ParseOutcomeFromBucket(string bucket)
-    {
-        var colon = bucket.IndexOf(':');
-        var name = colon < 0 ? bucket : bucket[..colon];
-        return Enum.TryParse<Test262Outcome>(name, out var outcome) ? outcome : Test262Outcome.RuntimeError;
     }
 
     /// <summary>

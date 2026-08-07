@@ -18,4 +18,13 @@ public class BaselineContractTests
     {
         Assert.Throws<ArgumentException>(() => Test262Baseline.Header("not-a-revision"));
     }
+
+    [Theory]
+    [InlineData("Pass", Test262Outcome.Pass)]
+    [InlineData("Skipped:skip-feature:Proxy", Test262Outcome.Skipped)]
+    [InlineData("unknown", Test262Outcome.RuntimeError)]
+    public void Bucket_ParsesOutcome(string bucket, Test262Outcome expected)
+    {
+        Assert.Equal(expected, Test262Bucket.ParseOutcome(bucket));
+    }
 }
