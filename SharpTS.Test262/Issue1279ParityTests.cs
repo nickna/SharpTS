@@ -2068,6 +2068,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/BigInt/call-value-of-when-to-string-present.js")]
+    [InlineData("built-ins/BigInt/tostring-throws.js")]
+    [InlineData("built-ins/BigInt/valueof-throws.js")]
+    public void BigInt_constructor_observes_object_conversion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/flat/array-like-objects.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-nested.js")]
     [InlineData("built-ins/Array/prototype/flatMap/array-like-objects-poisoned-length.js")]
