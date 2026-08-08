@@ -867,6 +867,19 @@ public partial class Interpreter
     /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
     private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
     {
+        // Arrays can replace their inherited @@iterator with an own method.
+        // Consult that override before falling back to indexed enumeration.
+        if (iterable is SharpTSArray array && array.HasSymbolProperty(SharpTSSymbol.Iterator))
+        {
+            var iteratorFn = array.GetBySymbol(SharpTSSymbol.Iterator);
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError(
+                    "[Symbol.iterator] must be a function"));
+            if (TryBindReceiverForMethodAccess(iteratorFn, array) is { } boundIteratorFn)
+                iteratorFn = boundIteratorFn;
+            return EnumerateWithIteratorProtocol(iteratorFn);
+        }
+
         // Check for Symbol.iterator on SharpTSObject
         if (iterable is SharpTSObject obj)
         {

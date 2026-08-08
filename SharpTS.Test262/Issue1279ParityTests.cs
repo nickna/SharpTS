@@ -2556,6 +2556,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Math_sumPrecise_honors_array_iterator_overrides()
+        => AssertPass(
+            "built-ins/Math/sumPrecise/takes-iterable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");

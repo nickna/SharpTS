@@ -113,7 +113,9 @@ public static class MathBuiltIns
                 RuntimeValue.FromNumber(
                     unchecked(ToInt32(Interpreter.ToNumber(args[0])) * ToInt32(Interpreter.ToNumber(args[1])))))
             // §21.3.2.31: exact sum over an iterable of Numbers.
-            .MethodV2("sumPrecise", 1, SumPrecise)
+            // Missing input is a guest TypeError produced by SumPrecise itself;
+            // do not let the host arity guard surface a generic Error first.
+            .MethodV2("sumPrecise", 0, int.MaxValue, 1, SumPrecise)
             // Two argument methods
             .MethodV2("pow", 2, (_, _, args) =>
             {
@@ -238,7 +240,16 @@ public static class MathBuiltIns
         var target = args.Length > 0 ? args[0].ToObject() : null;
         if (target is null or SharpTSUndefined or double or string or bool)
             throw new ThrowException(new SharpTSTypeError("Math.sumPrecise requires an iterable"));
-        var items = interpreter.GetIterableElements(target);
+        IEnumerable<object?> items;
+        try
+        {
+            items = interpreter.GetIterableElements(target);
+        }
+        catch (InterpreterException)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Math.sumPrecise requires an iterable"));
+        }
 
         bool sawPosInf = false, sawNegInf = false, sawNaN = false;
         bool allNegZero = true, any = false;
