@@ -1034,7 +1034,9 @@ public static class RegExpBuiltIns
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.split]");
         var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
-        var limitArg = args.Length > 1 ? args[1].ToObject() : null;
+        var limitArg = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
 
         // §22.2.5.13 step 4: C = SpeciesConstructor(rx, %RegExp%).
         var speciesCtor = SpeciesConstructor(interp, recv);
@@ -1069,12 +1071,9 @@ public static class RegExpBuiltIns
         }
 
         // Step 12: lim = ToUint32(limit).
-        long limit = limitArg switch
-        {
-            null or SharpTSUndefined => uint.MaxValue,
-            double d => double.IsNaN(d) ? 0 : (long)((uint)d),
-            _ => 0,
-        };
+        long limit = limitArg is SharpTSUndefined
+            ? uint.MaxValue
+            : interp.ToUint32(limitArg);
         if (limit == 0) return RuntimeValue.FromObject(new SharpTSArray(new List<object?>()));
 
         var arr = new List<object?>();

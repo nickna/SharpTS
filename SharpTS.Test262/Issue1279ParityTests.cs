@@ -2510,6 +2510,13 @@ public sealed class Issue1279ParityTests
     public void RegExp_protocols_propagate_flags_ToString_errors(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-limit-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-limit.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-string-err.js")]
+    public void RegExp_split_coerces_string_and_limit(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
