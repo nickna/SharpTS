@@ -2709,6 +2709,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void String_prototype_constructor_constructs_boxed_strings()
+        => AssertPass(
+            "built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");

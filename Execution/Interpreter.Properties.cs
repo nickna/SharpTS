@@ -174,6 +174,10 @@ public partial class Interpreter
             throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
         }
 
+        if (klass is SharpTSStringNamespace)
+            return BuiltInConstructorFactory.TryCreate(
+                BuiltInNames.String, evaluatedArguments, this);
+
         // Handle callable constructors (like SharpTSEventEmitterConstructor)
         // These implement ISharpTSCallable and are used for module-imported types.
         if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
@@ -372,6 +376,12 @@ public partial class Interpreter
         {
             throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
         }
+
+        // A constructor obtained through an alias still performs [[Construct]];
+        // calling the namespace would incorrectly return a primitive String.
+        if (klass is SharpTSStringNamespace)
+            return BuiltInConstructorFactory.TryCreateRV(
+                BuiltInNames.String, evaluatedArguments, this);
 
         // Handle callable constructors. Many built-in constructors are
         // registered as BuiltInMethod, so we accept any ISharpTSCallable here.
