@@ -17,6 +17,13 @@ public class PrimitiveWrapperTests
         Assert.Equal("object\n", TestHarness.RunInterpreted(source));
     }
 
+    [Fact]
+    public void Boolean_AliasedConstructor_StillBoxesInInterpreter()
+    {
+        var source = "const C: any = Boolean; console.log(typeof new C(true));";
+        Assert.Equal("object\n", TestHarness.RunInterpreted(source));
+    }
+
     // ── typeof ───────────────────────────────────────────────────────────────
 
     [Theory, ModeData]
