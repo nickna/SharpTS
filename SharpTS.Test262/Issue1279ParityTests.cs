@@ -3166,6 +3166,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A4_T2.js")]
     [InlineData("built-ins/Array/prototype/unshift/length-near-integer-limit.js")]
     [InlineData("built-ins/Array/prototype/unshift/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-array-length-is-non-writable.js")]
     public void Array_unshift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
