@@ -106,8 +106,8 @@ public static class PromiseBuiltIns
             "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
                 ResolveImplAsync(args), factory).WithSpecLength(1),
 
-            "reject" => new BuiltInAsyncMethod("reject", 1, 1, (_, _, args) =>
-                Task.FromResult(RejectImpl(args)), factory),
+            "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
+                Task.FromResult(RejectImpl(args)), factory).WithSpecLength(1),
 
             "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, _, args) =>
                 AllSettledImpl(args, interp), factory),
@@ -893,7 +893,7 @@ public static class PromiseBuiltIns
     /// </summary>
     private static async Task<object?> ResolveImplAsync(List<object?> args)
     {
-        var value = args.Count > 0 ? args[0] : null;
+        var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
 
         // If already a Promise, await it to unwrap and avoid double-wrapping
         // (BuiltInAsyncMethod.Call will wrap the result in a new Promise)
@@ -913,7 +913,7 @@ public static class PromiseBuiltIns
     /// </summary>
     private static object? RejectImpl(List<object?> args)
     {
-        var reason = args.Count > 0 ? args[0] : null;
+        var reason = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         // Throw to let BuiltInAsyncMethod.Call create the rejected Promise
         throw new SharpTSPromiseRejectedException(reason);
     }

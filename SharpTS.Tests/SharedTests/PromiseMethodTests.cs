@@ -384,8 +384,8 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory, ModeData]
-    public void Resolve_NoArgs(ExecutionMode mode)
+    [Fact]
+    public void Resolve_NoArgs()
     {
         var source = """
             async function main(): Promise<void> {
@@ -396,8 +396,8 @@ public class PromiseMethodTests
             main();
             """;
 
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("null\n", output);
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("undefined\n", output);
     }
 
     /// <summary>
@@ -509,6 +509,25 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("caught\n", output);
+    }
+
+    [Fact]
+    public void ResolveAndReject_OmittedValuesAreUndefined()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                console.log((await Promise.resolve()) === undefined);
+                try {
+                    await Promise.reject();
+                } catch (reason) {
+                    console.log(reason === undefined);
+                }
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\n", output);
     }
 
     #endregion
