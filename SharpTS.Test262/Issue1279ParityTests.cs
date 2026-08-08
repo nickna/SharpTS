@@ -3126,6 +3126,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T2.js")]
     public void Array_push_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
