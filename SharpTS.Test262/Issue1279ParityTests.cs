@@ -3161,6 +3161,7 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T1.js")]
     [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A3_T2.js")]
     public void Array_unshift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
