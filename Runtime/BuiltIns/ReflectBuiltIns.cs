@@ -347,6 +347,9 @@ public static class ReflectBuiltIns
                         keys.AddRange(inst.GetFieldNames().Select(k => (object?)k));
                         keys.AddRange(inst.GetSymbolPropertyNames().Select(s => (object?)s));
                         break;
+                    case SharpTSMath math:
+                        keys.AddRange(math.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
                     case Dictionary<string, object?> dict:
                         keys.AddRange(dict.Keys.Select(k => (object?)k));
                         keys.AddRange(PropertyDescriptorStore.GetSymbolKeys(dict).Select(s => (object?)s));

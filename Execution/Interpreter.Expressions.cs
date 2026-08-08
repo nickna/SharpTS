@@ -1074,6 +1074,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(dotNetInstance.GetIndex(index, this));
         }
 
+        if (obj is SharpTSMath symbolMath && index is SharpTSSymbol mathSymbol)
+        {
+            return RuntimeValue.FromBoxed(
+                symbolMath.GetBySymbol(mathSymbol) ?? SharpTSUndefined.Instance);
+        }
+
         // Built-in namespace singletons and prototype objects resolve dot-notation access via
         // BuiltInRegistry.GetInstanceMember or hand-written fallbacks in EvaluateGetOnFallback
         // (SharpTSArrayGlobal, SharpTSArrayPrototype, SharpTSBuiltInConstructor, etc.).
@@ -1361,7 +1367,10 @@ public partial class Interpreter
         // Math is an extensible object — allow Math[n] = v alongside Math.foo = v.
         if (obj is SharpTSMath math)
         {
-            math.SetExtra(index?.ToString() ?? "", value);
+            if (index is SharpTSSymbol mathSymbol)
+                math.SetBySymbolStrict(mathSymbol, value, strictMode);
+            else
+                math.SetExtra(index?.ToString() ?? "", value);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSJSON json)

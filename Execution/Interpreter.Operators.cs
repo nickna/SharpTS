@@ -1056,6 +1056,7 @@ public partial class Interpreter
                 SharpTSObject tsObj => tsObj.DeleteBySymbolStrict(symbol, strictMode),
                 SharpTSInstance tsInst => tsInst.DeleteBySymbolStrict(symbol, strictMode),
                 SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
                 _ => true
             };
         }
