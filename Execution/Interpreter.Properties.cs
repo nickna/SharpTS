@@ -1584,6 +1584,18 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
+        if (obj is BoundFunction boundFunction)
+        {
+            if (boundFunction.TryGetAccessor(memberName, out var getter, out _)
+                && getter != null)
+                return FunctionBuiltIns.CallWithThis(this, getter, boundFunction, []);
+            if (boundFunction.TryGetProperty(memberName, out var ownValue))
+                return ownValue;
+            return FunctionBuiltIns.GetMember(boundFunction, memberName)
+                ?? InheritedObjectPrototypeMember(boundFunction, memberName)
+                ?? SharpTSUndefined.Instance;
+        }
+
         // JS functions are objects — support arbitrary property access on
         // user-defined functions. Built-in keys (`name`, `length`) come
         // from the function itself; user keys come from the property bag.

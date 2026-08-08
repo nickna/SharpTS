@@ -610,6 +610,9 @@ public static partial class ObjectBuiltIns
             case SharpTSArrowFunction arrow:
                 success = arrow.DefineProperty(propertyKey, descriptor);
                 break;
+            case BoundFunction bound:
+                success = bound.DefineProperty(propertyKey, descriptor);
+                break;
             case SharpTSRegExp rx:
                 // RegExp expandos are ordinary descriptor-bearing properties.
                 // Reuse SharpTSObject validation so non-configurable properties
@@ -784,6 +787,8 @@ public static partial class ObjectBuiltIns
                 => GetCallableMetaDescriptor(callable, propertyKey),
             SharpTSFunction fn => GetFunctionOwnPropertyDescriptor(fn, propertyKey),
             SharpTSArrowFunction arrow => GetFunctionOwnPropertyDescriptor(arrow, propertyKey),
+            BoundFunction bound => bound.GetOwnPropertyDescriptor(propertyKey)
+                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             _ => GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)
         };
     }

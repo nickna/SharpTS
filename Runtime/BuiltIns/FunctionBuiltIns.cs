@@ -334,6 +334,40 @@ public class BoundFunction : ISharpTSCallable
     private readonly object? _thisArg;
     private readonly List<object?> _boundArgs;
     private readonly bool _ignoreThisArg;
+    private SharpTSObject? _ownProperties;
+
+    internal ISharpTSCallable Target => _target;
+
+    public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => (_ownProperties ??= new SharpTSObject([])).DefineProperty(name, descriptor);
+
+    public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+        => _ownProperties?.GetOwnPropertyDescriptor(name);
+
+    public bool TryGetProperty(string name, out object? value)
+    {
+        if (_ownProperties != null && _ownProperties.HasProperty(name))
+        {
+            value = _ownProperties.GetProperty(name);
+            return true;
+        }
+        value = null;
+        return false;
+    }
+
+    public bool TryGetAccessor(
+        string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_ownProperties != null)
+        {
+            getter = _ownProperties.GetGetter(name);
+            setter = _ownProperties.GetSetter(name);
+            return getter != null || setter != null;
+        }
+        getter = null;
+        setter = null;
+        return false;
+    }
 
     /// <summary>
     /// The name of the bound function (for Function.prototype.name).

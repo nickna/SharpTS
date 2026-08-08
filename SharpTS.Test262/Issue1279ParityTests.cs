@@ -2441,6 +2441,11 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Promise_constructor_validates_executor_before_new_target_prototype()
+        => AssertPassInBothModes(
+            "built-ins/Promise/get-prototype-abrupt-executor-not-callable.js");
+
+    [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
             "built-ins/Promise/prototype/finally/is-a-method.js",

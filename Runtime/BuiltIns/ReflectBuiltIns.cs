@@ -435,6 +435,17 @@ public static class ReflectBuiltIns
                     throw new ThrowException(new SharpTSTypeError(
                         "Reflect.construct target is not a constructor"));
 
+                // Promise validates the executor before
+                // GetPrototypeFromConstructor(newTarget). In particular, an
+                // accessor on newTarget.prototype must not run when the
+                // executor argument is absent or non-callable.
+                if (target is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+                    && (callArgs.Count == 0 || callArgs[0] is not ISharpTSCallable))
+                {
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Promise executor must be callable"));
+                }
+
                 if (target is SharpTSClass cls)
                 {
                     return RuntimeValue.FromBoxed(cls.Call(interpreter, callArgs));
@@ -473,9 +484,10 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod
             or SharpTS.Runtime.Types.ErrorToStringCallable
             or BuiltInAsyncMethod
-            or BoundFunction
             or BuiltInMethod { IsConstructor: false })
             return true;
+        if (value is BoundFunction bound)
+            return IsNotConstructor(bound.Target);
         // Anything else that's not callable can't be a constructor.
         return value is not ISharpTSCallable;
     }
