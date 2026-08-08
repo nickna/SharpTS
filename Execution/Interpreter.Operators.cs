@@ -1022,6 +1022,8 @@ public partial class Interpreter
                 { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSBuiltInConstructor constructor =>
+                DeleteBuiltInConstructorProperty(constructor, name),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.DeleteProperty(name),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
@@ -1089,6 +1091,8 @@ public partial class Interpreter
                 { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
                 when keyStr == "prototype" =>
                     DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSBuiltInConstructor constructor =>
+                DeleteBuiltInConstructorProperty(constructor, keyStr),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
             SharpTSFunction function => function.DeleteProperty(keyStr),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),

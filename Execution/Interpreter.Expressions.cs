@@ -1448,6 +1448,12 @@ public partial class Interpreter
                     "Cannot assign to read only property 'prototype' of function"));
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSBuiltInConstructor builtInConstructor)
+        {
+            SetBuiltInConstructorProperty(
+                builtInConstructor, PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         var target = ResolveIndexTarget(obj, index);
 

@@ -277,10 +277,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // is observable here.
             IBuiltInFunctionMetadata meta when key is "name" or "length"
                 => meta.HasMetadataProperty(key),
-            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
-                when key == "prototype" => true,
-            SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
-                when key == "prototype" => true,
+            SharpTSBuiltInConstructor constructor
+                => interpreter?.HasBuiltInConstructorOwnProperty(constructor, key)
+                    ?? constructor.GetMember(key) is not null,
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };

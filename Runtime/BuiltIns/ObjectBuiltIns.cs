@@ -871,6 +871,16 @@ public static partial class ObjectBuiltIns
         object target,
         string propertyKey)
     {
+        if (target is SharpTSBuiltInConstructor constructor)
+        {
+            var overlay = interpreter.GetBuiltInConstructorOverlayDescriptor(
+                constructor, propertyKey);
+            if (overlay is not null)
+                return overlay;
+            if (!interpreter.HasBuiltInConstructorOwnProperty(constructor, propertyKey))
+                return null;
+        }
+
         // Date instances inherit registry-backed methods from Date.prototype;
         // only the intrinsic prototype owns them. Date.prototype uses the same
         // SharpTSDate representation so the marker is required to distinguish

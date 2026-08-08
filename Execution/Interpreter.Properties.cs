@@ -1705,6 +1705,8 @@ public partial class Interpreter
         {
             if (TryGetBuiltInConstructorProperty(ctor, memberName, out var ownValue))
                 return ownValue;
+            if (IsBuiltInConstructorPropertyDeleted(ctor, memberName))
+                return SharpTSUndefined.Instance;
             // RegExp.prototype is realm-local: route through the Interpreter's
             // own prototype object so `delete RegExp.prototype[Symbol.split]`
             // and `Object.defineProperty(RegExp.prototype, …)` don't leak

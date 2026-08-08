@@ -224,6 +224,8 @@ public partial class Interpreter
     // another interpreter running in the same process.
     private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, object?>>?
         _builtInConstructorProperties;
+    private Dictionary<SharpTSBuiltInConstructor, HashSet<string>>?
+        _deletedBuiltInConstructorProperties;
 
     private bool TryGetBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor,
@@ -241,6 +243,11 @@ public partial class Interpreter
         string name,
         object? value)
     {
+        if (_deletedBuiltInConstructorProperties != null
+            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        {
+            deleted.Remove(name);
+        }
         _builtInConstructorProperties ??= [];
         if (!_builtInConstructorProperties.TryGetValue(constructor, out var properties))
         {
@@ -249,6 +256,64 @@ public partial class Interpreter
         }
         properties[name] = value;
     }
+
+    internal bool HasBuiltInConstructorOwnProperty(
+        SharpTSBuiltInConstructor constructor, string name)
+    {
+        if (name == "prototype"
+            && constructor.Name is BuiltInNames.Promise or BuiltInNames.RegExp)
+        {
+            return true;
+        }
+        if (TryGetBuiltInConstructorProperty(constructor, name, out _))
+            return true;
+        return !IsBuiltInConstructorPropertyDeleted(constructor, name)
+            && constructor.GetMember(name) is not null;
+    }
+
+    internal SharpTSPropertyDescriptor? GetBuiltInConstructorOverlayDescriptor(
+        SharpTSBuiltInConstructor constructor, string name)
+    {
+        if (!TryGetBuiltInConstructorProperty(constructor, name, out var value))
+            return null;
+        return new SharpTSPropertyDescriptor
+        {
+            Value = value,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = constructor.GetMember(name) is null,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        };
+    }
+
+    internal bool DeleteBuiltInConstructorProperty(
+        SharpTSBuiltInConstructor constructor, string name)
+    {
+        if (_builtInConstructorProperties != null
+            && _builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        {
+            properties.Remove(name);
+        }
+        if (constructor.GetMember(name) is null)
+            return true;
+        _deletedBuiltInConstructorProperties ??= [];
+        if (!_deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        {
+            deleted = [];
+            _deletedBuiltInConstructorProperties[constructor] = deleted;
+        }
+        deleted.Add(name);
+        return true;
+    }
+
+    private bool IsBuiltInConstructorPropertyDeleted(
+        SharpTSBuiltInConstructor constructor, string name)
+        => _deletedBuiltInConstructorProperties != null
+            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted)
+            && deleted.Contains(name);
 
     // Per-realm RegExp.prototype. Held on the Interpreter (not on the
     // process-wide SharpTSBuiltInConstructor singleton) so user mutations

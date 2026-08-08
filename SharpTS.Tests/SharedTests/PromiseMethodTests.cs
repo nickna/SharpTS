@@ -27,6 +27,25 @@ public class PromiseMethodTests
         Assert.Equal("42\nreplacement\ntrue\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Constructor_ComputedWritesAndDeletesAreRealmLocal(ExecutionMode mode)
+    {
+        var source = """
+            const original = Promise.resolve;
+            const key = "resolve";
+            (Promise as any)[key] = "replacement";
+            console.log((Promise as any)[key]);
+            console.log(Object.getOwnPropertyDescriptor(Promise, key)!.enumerable);
+            console.log(delete (Promise as any)[key]);
+            console.log(Object.prototype.hasOwnProperty.call(Promise, key));
+            (Promise as any)[key] = original;
+            console.log(Promise.resolve(1) instanceof Promise);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("replacement\nfalse\ntrue\nfalse\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Resolve_ReturnsPromisesWithTheSameConstructorUnchanged(ExecutionMode mode)
     {
