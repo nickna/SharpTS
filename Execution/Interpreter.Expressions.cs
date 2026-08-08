@@ -890,7 +890,7 @@ public partial class Interpreter
     /// <param name="obj">The object being indexed.</param>
     /// <param name="index">The index value.</param>
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
-    private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
+    private IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
     {
         (SharpTSArray array, SharpTSSymbol symbol) => new IndexTarget.ArraySymbol(array, symbol),
         (SharpTSArray array, double idx)
@@ -905,7 +905,7 @@ public partial class Interpreter
                 && parsed <= SharpTSArray.MaxWriteIndex
             => new IndexTarget.Array(array, parsed),
         (SharpTSArray array, _) => new IndexTarget.ArrayString(
-            array, PropertyKeyConverter.ToPropertyKeyString(index)),
+            array, ToPropertyKeyString(index)),
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
@@ -917,17 +917,17 @@ public partial class Interpreter
         // and `obj["0"]` resolve identically (and undefined/null/bool keys
         // stringify to "undefined"/"null"/"true"/"false" rather than landing in
         // the Unsupported bucket).
-        (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, PropertyKeyConverter.ToPropertyKeyString(index)),
-        (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, PropertyKeyConverter.ToPropertyKeyString(index)),
+        (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, ToPropertyKeyString(index)),
+        (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, ToPropertyKeyString(index)),
         (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
         (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(
-                builtInPrototype, PropertyKeyConverter.ToPropertyKeyString(index)),
+                builtInPrototype, ToPropertyKeyString(index)),
         (SharpTSHeaders headers, string headerKey) => new IndexTarget.HeadersString(headers, headerKey),
         // Class constructors accept expando statics (Node: `C["foo"] = 1`,
         // `C[Symbol.species] = P`). #262.
         (SharpTSClass cls, SharpTSSymbol clsSym) => new IndexTarget.ClassSymbol(cls, clsSym),
-        (SharpTSClass cls, _) => new IndexTarget.ClassString(cls, PropertyKeyConverter.ToPropertyKeyString(index)),
+        (SharpTSClass cls, _) => new IndexTarget.ClassString(cls, ToPropertyKeyString(index)),
         (string str, double strIdx)
             when double.IsFinite(strIdx)
                 && strIdx >= 0
