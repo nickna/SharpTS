@@ -786,7 +786,7 @@ public static class StringBuiltIns
     }
 
     private static RuntimeValue ToUpperCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.ToUpper());
+        => RuntimeValue.FromString(str.ToUpperInvariant());
 
     private static RuntimeValue ToLowerCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(str.ToLower());
