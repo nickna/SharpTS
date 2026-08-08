@@ -264,7 +264,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),
             SharpTSClassPrototype classPrototype => classPrototype.HasOwnProperty(key),
             SharpTSPromisePrototype promisePrototype => promisePrototype.HasOwnProperty(key),
-            SharpTSClass when key is "name" or "length" or "prototype" => true,
+            SharpTSClass klass => key is "name" or "length" or "prototype"
+                || klass.HasOwnStaticMember(key),
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
             SharpTSGlobalThis globalThis => globalThis.HasProperty(key),

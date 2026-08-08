@@ -606,6 +606,9 @@ public static partial class ObjectBuiltIns
             case SharpTSGlobalThis globalThis:
                 success = globalThis.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSClass klass:
+                success = klass.DefineStaticProperty(propertyKey, descriptor);
+                break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
                 var compiledDesc = CompiledPropertyDescriptor.FromAny(descriptorArg);

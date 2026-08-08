@@ -2614,6 +2614,13 @@ public sealed class Issue1279ParityTests
     public void Error_isError_uses_the_intrinsic_brand(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Error/isError/is-a-constructor.js")]
+    [InlineData("built-ins/Error/isError/name.js")]
+    [InlineData("built-ins/Error/isError/prop-desc.js")]
+    public void Error_isError_has_standard_function_metadata(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
