@@ -3081,6 +3081,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-get-err.js")]
     [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-falsey.js")]
     [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-truthy.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A2_T1.js")]
     [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A3_T3.js")]
     [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A3_T1.js")]
     [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-string-wrapper.js")]
