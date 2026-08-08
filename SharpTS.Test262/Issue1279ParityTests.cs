@@ -2787,6 +2787,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Array_length_growth_does_not_materialize_prototype_indices()
+        => AssertPass(
+            "built-ins/Array/length/S15.4.5.1_A1.2_T3.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
