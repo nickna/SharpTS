@@ -568,8 +568,14 @@ public static class StringBuiltIns
 
         if (pattern is SharpTSRegExp regex)
         {
-            if (!regex.Global)
-                throw new Exception("TypeError: String.prototype.matchAll called with a non-global RegExp argument");
+            object? flagsValue = interpreter.GetPropertyValue(regex, "flags");
+            if (flagsValue is null or SharpTSUndefined)
+                throw new ThrowException(new SharpTSTypeError(
+                    "String.prototype.matchAll requires RegExp flags"));
+            string flags = interpreter.ToStringForBuiltInArgument(flagsValue);
+            if (!flags.Contains('g'))
+                throw new ThrowException(new SharpTSTypeError(
+                    "String.prototype.matchAll called with a non-global RegExp argument"));
             object? matcher = interpreter.GetSymbolPropertyValue(
                 regex, SharpTSSymbol.MatchAll);
             if (matcher is not (null or SharpTSUndefined))

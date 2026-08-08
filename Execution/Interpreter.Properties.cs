@@ -1003,6 +1003,12 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(rxGetter.CallBoxed(this, []));
             if (regex.TryGetProperty(memberName, out var ownValue))
                 return RuntimeValue.FromBoxed(ownValue);
+            var regexpPrototype = GetRegExpPrototype();
+            if (regexpPrototype.GetGetter(memberName) is { } prototypeGetter)
+                return RuntimeValue.FromBoxed(
+                    BindAccessorToObject(prototypeGetter, regex).CallBoxed(this, []));
+            if (regexpPrototype.Fields.ContainsKey(memberName))
+                return RuntimeValue.FromBoxed(regexpPrototype.GetProperty(memberName));
             if (memberName == "flags")
                 return RuntimeValue.FromBoxed(Runtime.BuiltIns.RegExpBuiltIns.GetMember(regex, memberName, this));
             // ECMA-262 §22.2.6.1: `constructor` is inherited from

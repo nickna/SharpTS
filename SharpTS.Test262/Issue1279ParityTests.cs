@@ -2733,6 +2733,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void String_matchAll_rejects_undefined_RegExp_flags()
+        => AssertPass(
+            "built-ins/String/prototype/matchAll/flags-undefined-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
