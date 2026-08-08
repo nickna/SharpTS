@@ -363,12 +363,8 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromNumber(arr.Length);
     }
 
-    private static RuntimeValue PopV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Undefined;
-        return RuntimeValue.FromBoxed(arr.RemoveLast());
-    }
+    private static RuntimeValue PopV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoxed(PopArrayLike(interpreter, arr));
 
     private static RuntimeValue ShiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -858,6 +854,30 @@ public static class ArrayBuiltIns
         for (int i = 0; i < args.Count; i++)
             AppendConcatItem(interpreter, result, ref nextIndex, args[i]);
         return result;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.23 generic pop algorithm. It operates directly on the
+    /// receiver so inherited indexed values, accessors, proxies, large lengths,
+    /// and strict delete/set failures remain observable in specification order.
+    /// </summary>
+    internal static object? PopArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length == 0)
+        {
+            interpreter.SetProperty(receiver, "length", 0d);
+            return SharpTSUndefined.Instance;
+        }
+
+        long newLength = length - 1;
+        string key = newLength.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+        object? element = interpreter.GetPropertyValue(receiver, key);
+        interpreter.DeleteProperty(receiver, key);
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return element;
     }
 
     private static void AppendConcatItem(

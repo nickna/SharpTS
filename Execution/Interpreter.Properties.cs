@@ -1476,10 +1476,10 @@ public partial class Interpreter
         {
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
-            // join, slice, and concat have complete generic array-like dispatch in the wrapper. Other
+            // join, slice, concat, and pop have complete generic array-like dispatch in the wrapper. Other
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
-            ArrayPrototypeMethodWrapper m when m.FunctionName is "join" or "slice" or "concat"
+            ArrayPrototypeMethodWrapper m when m.FunctionName is "join" or "slice" or "concat" or "pop"
                 => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
@@ -2274,6 +2274,11 @@ public partial class Interpreter
             case TypeCategory.Array when obj is SharpTSArray array:
                 if (memberName == "length")
                 {
+                    if (strictMode && (array.IsFrozen || !array.IsLengthWritable))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot assign to read only property 'length' of array"));
+                    }
                     // ECMA-262: `a.length = N` truncates (if N < length) or extends
                     // with holes (if N > length). SharpTSArray.SetLength handles both
                     // paths and transitions to sparse storage for large extensions.

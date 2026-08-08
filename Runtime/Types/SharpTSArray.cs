@@ -490,6 +490,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public bool IsExtensible { get; private set; } = true;
 
+    /// <summary>Whether the array exotic length property accepts assignment.</summary>
+    internal bool IsLengthWritable => _lengthWritable;
+
     /// <summary>
     /// Freezes this array, preventing any element changes.
     /// </summary>

@@ -1020,6 +1020,16 @@ public partial class Interpreter
         object? obj = (await ctx.EvaluateExprAsync(get.Object)).ToObject();
         string name = get.Name.Lexeme;
 
+        return DeleteProperty(obj, name, strictMode);
+    }
+
+    /// <summary>
+    /// ECMA-262 DeletePropertyOrThrow dispatch for already-evaluated operands.
+    /// Shared by delete expressions and built-in algorithms that must delete a
+    /// receiver property without synthesizing an AST node.
+    /// </summary>
+    internal bool DeleteProperty(object? obj, string name, bool strictMode = true)
+    {
         if (obj is SharpTSProxy proxy)
             return proxy.TrapDeleteProperty(name, this);
 
@@ -1103,53 +1113,7 @@ public partial class Interpreter
         }
 
         string keyStr = Stringify(key);
-
-        return obj switch
-        {
-            SharpTSArray array => array.DeletePropertyStrict(keyStr, strictMode),
-            SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
-            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
-            SharpTSMath math => math.DeleteExtra(keyStr),
-            SharpTSJSON json => json.DeleteExtra(keyStr),
-            SharpTSDate date => date.DeleteExtra(keyStr),
-            SharpTSRegExp regex => regex.DeleteProperty(keyStr),
-            SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(keyStr),
-            SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(keyStr),
-            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(keyStr),
-            SharpTSStringNamespace when keyStr == "prototype" =>
-                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(keyStr),
-            SharpTSNumberNamespace when keyStr == "prototype" =>
-                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSNumberNamespace numberNamespace => numberNamespace.DeleteProperty(keyStr),
-            SharpTSBooleanNamespace when keyStr == "prototype" =>
-                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSBooleanNamespace booleanNamespace => booleanNamespace.DeleteProperty(keyStr),
-            SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(keyStr),
-            SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(keyStr),
-            SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(keyStr),
-            SharpTSNumberPrototype numberPrototype => numberPrototype.DeleteProperty(keyStr),
-            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.DeleteProperty(keyStr),
-            SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.DeleteProperty(keyStr),
-            SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(keyStr),
-            SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(keyStr),
-            SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(keyStr),
-            SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(keyStr),
-            SharpTSClass when keyStr == "prototype" =>
-                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSClass klass => klass.DeleteStaticProperty(keyStr),
-            SharpTSBuiltInConstructor
-                { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
-                when keyStr == "prototype" =>
-                    DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSBuiltInConstructor constructor =>
-                DeleteBuiltInConstructorProperty(constructor, keyStr),
-            IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
-            SharpTSFunction function => function.DeleteProperty(keyStr),
-            SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
-            Dictionary<string, object?> dict => dict.Remove(keyStr),
-            _ => true
-        };
+        return DeleteProperty(obj, keyStr, strictMode);
     }
 
     private static bool DeleteNonConfigurableClassPrototype(

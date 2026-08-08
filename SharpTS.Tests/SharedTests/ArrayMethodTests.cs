@@ -448,6 +448,39 @@ public class ArrayMethodTests
         Assert.Equal("4\n1\n4\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Pop_IsGenericAndObservesInheritedIndexes(ExecutionMode mode)
+    {
+        var source = """
+            Array.prototype[1] = "array-prototype";
+            const array: any[] = [0];
+            array.length = 2;
+            console.log(array.pop());
+            console.log(array[1]);
+            delete Array.prototype[1];
+
+            const prototype: any = { 1: "object-prototype", length: 2 };
+            const object: any = Object.create(prototype);
+            console.log(Array.prototype.pop.call(object));
+            console.log(object.length);
+            console.log(object[1]);
+
+            const large: any = {
+                9007199254740990: "large-index",
+                length: 9007199254740991
+            };
+            console.log(Array.prototype.pop.call(large));
+            console.log(large.length);
+            console.log(9007199254740990 in large);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "array-prototype\narray-prototype\nobject-prototype\n1\nobject-prototype\n" +
+            "large-index\n9007199254740990\nfalse\n",
+            output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {
