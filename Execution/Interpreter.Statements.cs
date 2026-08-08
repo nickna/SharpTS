@@ -884,7 +884,17 @@ public partial class Interpreter
         // Check for Symbol.iterator on SharpTSObject
         if (iterable is SharpTSObject obj)
         {
-            var iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
+            object? iteratorFn;
+            if (obj.TryGetSymbolAccessor(SharpTSSymbol.Iterator, out var iteratorGetter, out _))
+            {
+                iteratorFn = iteratorGetter is null
+                    ? SharpTSUndefined.Instance
+                    : FunctionBuiltIns.CallWithThis(this, iteratorGetter, obj, []);
+            }
+            else
+            {
+                iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
+            }
             if (iteratorFn != null || obj.HasSymbolProperty(SharpTSSymbol.Iterator))
             {
                 if (iteratorFn is not ISharpTSCallable)
