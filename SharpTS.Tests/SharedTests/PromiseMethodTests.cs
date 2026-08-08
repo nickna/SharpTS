@@ -73,6 +73,27 @@ public class PromiseMethodTests
         Assert.Equal(string.Concat(Enumerable.Repeat("true\n", 36)), output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void StaticCombinators_RejectCallableNonConstructors(ExecutionMode mode)
+    {
+        var source = """
+            const methods: any[] = [
+                Promise.all, Promise.race, Promise.allSettled, Promise.any
+            ];
+            for (const method of methods) {
+                try {
+                    method.call(eval);
+                    console.log(false);
+                } catch (error) {
+                    console.log(error instanceof TypeError && error.constructor === TypeError);
+                }
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
     #region Promise.then() Tests
 
     [Theory, ModeData]

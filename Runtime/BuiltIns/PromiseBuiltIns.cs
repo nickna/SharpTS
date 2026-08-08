@@ -223,11 +223,13 @@ public static class PromiseBuiltIns
             };
         return name switch
         {
-            "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, receiver, args) =>
-                AllImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
+            "all" => new BuiltInAsyncMethod("all", 0, 1, (interp, receiver, args) =>
+                AllImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
-            "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, receiver, args) =>
-                RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
+            "race" => new BuiltInAsyncMethod("race", 0, 1, (interp, receiver, args) =>
+                RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
             "resolve" => new BuiltInMethod("resolve", 0, 1, (interp, receiver, args) =>
                 ResolveStatic(interp, receiver, args, factory))
@@ -237,11 +239,13 @@ public static class PromiseBuiltIns
             "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
                 Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
 
-            "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, receiver, args) =>
-                AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
+            "allSettled" => new BuiltInAsyncMethod("allSettled", 0, 1, (interp, receiver, args) =>
+                AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
-            "any" => new BuiltInAsyncMethod("any", 1, 1, (interp, receiver, args) =>
-                AnyImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
+            "any" => new BuiltInAsyncMethod("any", 0, 1, (interp, receiver, args) =>
+                AnyImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
             "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, _, _) =>
                 RuntimeValue.FromBoxed(WithResolversImpl(interp, factory))),
@@ -258,12 +262,10 @@ public static class PromiseBuiltIns
     /// </summary>
     private static void RequireConstructorReceiver(object? receiver)
     {
-        if (receiver is null or SharpTSUndefined or bool or double or int or long
-            or float or decimal or char or string or SharpTSSymbol
-            or SharpTSBigInt or System.Numerics.BigInteger)
+        if (!IsConstructorSpecies(receiver))
         {
             throw new Exceptions.ThrowException(new SharpTSTypeError(
-                "Promise static method called on a non-object receiver"));
+                "Promise static method called on a non-constructor receiver"));
         }
     }
 
