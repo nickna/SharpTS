@@ -2360,6 +2360,13 @@ public sealed class Issue1279ParityTests
             "built-ins/Promise/race/invoke-resolve-error-reject.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/catch/prop-desc.js")]
+    [InlineData("built-ins/Promise/prototype/then/prop-desc.js")]
+    [InlineData("built-ins/Promise/prototype/prop-desc.js")]
+    public void Promise_prototype_descriptors_match_the_spec(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

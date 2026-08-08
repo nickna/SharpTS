@@ -1064,6 +1064,24 @@ public class PromiseMethodTests
         Assert.Equal("true\nfunction\ntrue\n", output);
     }
 
+    [Fact]
+    public void PromisePrototype_IsAnOrdinaryMutableObject()
+    {
+        var source = """
+            const proto: any = Promise.prototype;
+            const original = proto.then;
+            console.log(Object.hasOwn(proto, "then"));
+            console.log(delete proto.then);
+            console.log(Object.hasOwn(proto, "then"));
+            proto["then"] = original;
+            console.log(Object.hasOwn(proto, "then"));
+            console.log(Object.getPrototypeOf(proto) === Object.prototype);
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\nfalse\ntrue\ntrue\n", output);
+    }
+
     #endregion
 
     #region Executor rejection reason

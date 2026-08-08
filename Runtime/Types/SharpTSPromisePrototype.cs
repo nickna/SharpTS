@@ -13,7 +13,7 @@ namespace SharpTS.Runtime.Types;
 /// is the prototype *as a value*; instance property reads still go through that dispatch.
 /// </para>
 /// </summary>
-public sealed class SharpTSPromisePrototype
+public sealed class SharpTSPromisePrototype : ISharpTSMutableBuiltIn
 {
     /// <summary>
     /// Process-wide instance. Promise.prototype carries no per-realm mutable state here

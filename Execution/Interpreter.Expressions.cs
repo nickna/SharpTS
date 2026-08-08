@@ -1424,6 +1424,14 @@ public partial class Interpreter
                     $"Cannot assign to read only property '{index}' of function"));
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+            && index?.ToString() == "prototype")
+        {
+            if (strictMode)
+                throw new ThrowException(new Runtime.Types.SharpTSTypeError(
+                    "Cannot assign to read only property 'prototype' of function"));
+            return RuntimeValue.FromBoxed(value);
+        }
 
         var target = ResolveIndexTarget(obj, index);
 

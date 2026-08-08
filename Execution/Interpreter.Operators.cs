@@ -1008,8 +1008,12 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(name),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(name),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(name),
+            SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(name),
             SharpTSClass when name == "prototype" =>
                 DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+                when name == "prototype" =>
+                    DeleteNonConfigurableClassPrototype(name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.DeleteProperty(name),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
@@ -1070,8 +1074,12 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(keyStr),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(keyStr),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(keyStr),
+            SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(keyStr),
             SharpTSClass when keyStr == "prototype" =>
                 DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+                when keyStr == "prototype" =>
+                    DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
             SharpTSFunction function => function.DeleteProperty(keyStr),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),

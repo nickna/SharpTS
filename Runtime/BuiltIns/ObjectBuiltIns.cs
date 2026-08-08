@@ -593,6 +593,9 @@ public static partial class ObjectBuiltIns
             case SharpTSClassPrototype classPrototype:
                 success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
+            case SharpTSPromisePrototype promisePrototype:
+                success = promisePrototype.DefineExtraProperty(propertyKey, descriptor);
+                break;
             case SharpTSGlobalThis globalThis:
                 success = globalThis.DefineProperty(propertyKey, descriptor);
                 break;
@@ -744,6 +747,11 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSClassPrototype classPrototype => classPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSPromisePrototype promisePrototype when !promisePrototype.HasOwnProperty(propertyKey)
+                => null,
+            SharpTSPromisePrototype promisePrototype
+                => promisePrototype.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSRegExp regex => regex.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
@@ -1596,6 +1604,7 @@ public static partial class ObjectBuiltIns
         // bottoms out at Object.prototype.
         SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
         SharpTSArrayPrototype => interp?.GetObjectPrototype(),
+        SharpTSPromisePrototype => interp?.GetObjectPrototype(),
         SharpTSStringPrototype => interp?.GetObjectPrototype(),
         SharpTSClassPrototype classPrototype
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),

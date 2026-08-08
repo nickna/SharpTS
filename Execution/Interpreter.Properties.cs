@@ -1965,6 +1965,14 @@ public partial class Interpreter
             json.SetExtra(set.Name.Lexeme, value);
             return value;
         }
+        if (obj is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+            && set.Name.Lexeme == "prototype")
+        {
+            if (_environment.IsStrictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Cannot assign to read only property 'prototype' of function"));
+            return value;
+        }
 
         // Every built-in prototype singleton is an ordinary mutable object per ECMA-262
         // (Object/Array/String/Number/Boolean/Function.prototype). Test262 assigns

@@ -262,6 +262,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.HasOwnProperty(key),
             SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),
             SharpTSClassPrototype classPrototype => classPrototype.HasOwnProperty(key),
+            SharpTSPromisePrototype promisePrototype => promisePrototype.HasOwnProperty(key),
             SharpTSClass when key is "name" or "length" or "prototype" => true,
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
@@ -275,6 +276,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // is observable here.
             IBuiltInFunctionMetadata meta when key is "name" or "length"
                 => meta.HasMetadataProperty(key),
+            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+                when key == "prototype" => true,
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };
