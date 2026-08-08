@@ -18,7 +18,7 @@ public static class JSONBuiltIns
     // a fresh BuiltInMethod per access.
     private static readonly BuiltInStaticMemberLookup _lookup =
         BuiltInStaticBuilder.Create()
-            .MethodV2("parse", 1, 2, 2, ParseJson)
+            .MethodV2("parse", 0, 2, 2, ParseJson)
             .MethodV2("stringify", 1, 3, 3, StringifyJson)
             .MethodV2("rawJSON", 0, int.MaxValue, 1, RawJson)
             .MethodV2("isRawJSON", 0, int.MaxValue, 1, IsRawJson)
@@ -66,7 +66,10 @@ public static class JSONBuiltIns
 
     private static RuntimeValue ParseJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
-        var text = args[0].ToObject()?.ToString() ?? "null";
+        object? input = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        var text = interp.ToStringForBuiltInArgument(input);
         var reviver = args.Length > 1 ? args[1].ToObject() as ISharpTSCallable : null;
 
         object? parsed;

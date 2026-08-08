@@ -2415,6 +2415,14 @@ public sealed class Issue1279ParityTests
     public void JSON_raw_values_match_the_spec(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/JSON/parse/text-negative-zero.js")]
+    [InlineData("built-ins/JSON/parse/text-non-string-primitive.js")]
+    [InlineData("built-ins/JSON/parse/text-object-abrupt.js")]
+    [InlineData("built-ins/JSON/parse/text-object.js")]
+    public void JSON_parse_coerces_input_with_ToString(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
