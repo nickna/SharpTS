@@ -114,6 +114,7 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // instance's own toString.
         if (arg is SharpTSInstance) return interpreter.ToStringForStringCall(arg);
         if (arg is SharpTSGlobalThis) return interpreter.ToStringForStringCall(arg);
+        if (arg is ISharpTSCallable) return interpreter.ToStringForStringCall(arg);
         return arg.ToString() ?? "";
     }
 

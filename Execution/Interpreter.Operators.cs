@@ -682,6 +682,8 @@ public partial class Interpreter
         }
         if (value is SharpTSGlobalThis)
             return OrdinaryToPrimitiveObject(value, hint);
+        if (value is ISharpTSCallable)
+            return OrdinaryToPrimitiveObject(value, hint);
         if (value is not SharpTSObject obj) return value;
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;
@@ -822,6 +824,8 @@ public partial class Interpreter
             return "[object Arguments]";
         if (value is SharpTSArray array)
             return ArrayBuiltIns.ToJsString(this, array);
+        if (value is ISharpTSCallable or SharpTSGlobalThis)
+            return Stringify(OrdinaryToPrimitiveObject(value, PrimitiveHint.String));
         if (value is not SharpTSObject obj)
             return Stringify(value);
 
