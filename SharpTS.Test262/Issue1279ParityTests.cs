@@ -3064,6 +3064,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/isArray/15.4.3.2-0-1.js")]
     [InlineData("built-ins/Array/isArray/15.4.3.2-0-2.js")]
     [InlineData("built-ins/Array/isArray/15.4.3.2-0-3.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-4.js")]
     public void Array_isArray_preserves_cross_type_classification(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
