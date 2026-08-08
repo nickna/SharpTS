@@ -2604,6 +2604,16 @@ public sealed class Issue1279ParityTests
             "built-ins/Error/isError/errors.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Error/isError/bigints.js")]
+    [InlineData("built-ins/Error/isError/error-subclass.js")]
+    [InlineData("built-ins/Error/isError/fake-errors.js")]
+    [InlineData("built-ins/Error/isError/non-error-objects.js")]
+    [InlineData("built-ins/Error/isError/primitives.js")]
+    [InlineData("built-ins/Error/isError/symbols.js")]
+    public void Error_isError_uses_the_intrinsic_brand(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
