@@ -3191,6 +3191,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/fill/fill-values.js")]
     [InlineData("built-ins/Array/prototype/fill/length-near-integer-limit.js")]
     [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end.js")]
     public void Array_fill_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
