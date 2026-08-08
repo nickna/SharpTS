@@ -1301,7 +1301,11 @@ public partial class Interpreter : IDisposable
 
         // Preserve the outer type map: InterpretRepl assigns _typeMap, and passing null
         // would clobber type-aware dispatch for the remainder of the outer program.
-        return InterpretRepl(parseResult.Statements, _typeMap);
+        var completion = InterpretRepl(parseResult.Statements, _typeMap);
+        return parseResult.Statements.Count > 0
+            && parseResult.Statements[^1] is Stmt.Expression
+                ? completion
+                : SharpTSUndefined.Instance;
     }
 
     /// <summary>
