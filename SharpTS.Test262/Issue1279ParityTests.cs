@@ -2504,6 +2504,12 @@ public sealed class Issue1279ParityTests
             "built-ins/RegExp/prototype/Symbol.replace/arg-2-coerce-err.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/flags-tostring-error.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/flags-tostring-error.js")]
+    public void RegExp_protocols_propagate_flags_ToString_errors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
