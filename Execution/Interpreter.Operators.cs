@@ -680,6 +680,8 @@ public partial class Interpreter
                 return OrdinaryToPrimitiveObject(arr, hint);
             return ArrayBuiltIns.ToJsString(this, arr);
         }
+        if (value is SharpTSGlobalThis)
+            return OrdinaryToPrimitiveObject(value, hint);
         if (value is not SharpTSObject obj) return value;
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;

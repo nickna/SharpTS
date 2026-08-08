@@ -1865,6 +1865,8 @@ public partial class Interpreter
             value = Evaluate(varStmt.Initializer);
         }
         _environment.Define(varStmt.Name.Lexeme, value);
+        if (varStmt.IsVar && _environment.Enclosing is null)
+            GlobalThis.SetProperty(varStmt.Name.Lexeme, value);
         return ExecutionResult.Success();
     }
 
