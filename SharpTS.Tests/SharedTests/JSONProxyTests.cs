@@ -5,11 +5,11 @@ namespace SharpTS.Tests.SharedTests;
 
 /// <summary>
 /// Tests for JSON.stringify of Proxy objects (#92).
-/// Compile-mode only — interpreter Proxy + JSON integration is a separate gap.
+/// Covers Proxy integration with JSON and reflective object operations.
 /// </summary>
 public class JSONProxyTests
 {
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_Stringify_ProxyWithGetTrap(ExecutionMode mode)
     {
         var source = """
@@ -24,7 +24,7 @@ public class JSONProxyTests
         Assert.Equal("{\"a\":10,\"b\":20}\n", output);
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_Stringify_ProxyWithOwnKeysTrap(ExecutionMode mode)
     {
         var source = """
@@ -39,7 +39,7 @@ public class JSONProxyTests
         Assert.Equal("{\"a\":1,\"c\":3}\n", output);
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_Stringify_RevokedProxy_Throws(ExecutionMode mode)
     {
         var source = """
