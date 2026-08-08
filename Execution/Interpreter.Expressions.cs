@@ -1007,6 +1007,8 @@ public partial class Interpreter
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
+            if (index is SharpTSSymbol symbol)
+                return RuntimeValue.FromBoxed(proxy.TrapGet(symbol, this));
             string key = index?.ToString() ?? "";
             return proxy.TrapGetRV(key, this);
         }

@@ -872,6 +872,7 @@ public static class ArrayBuiltIns
                 item!, SharpTSSymbol.IsConcatSpreadable);
             spreadable = spreadability is SharpTSUndefined
                 ? item is SharpTSArray
+                    || item is SharpTSProxy proxy && proxy.HasArrayTarget()
                 : RuntimeValue.FromBoxed(spreadability).IsTruthy();
         }
 

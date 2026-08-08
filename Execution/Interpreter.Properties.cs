@@ -605,6 +605,9 @@ public partial class Interpreter
         if (obj is string or bool or double or SharpTSBigInt or SharpTSSymbol)
             return SharpTSUndefined.Instance;
 
+        if (obj is SharpTSProxy proxy)
+            return proxy.TrapGet(symbol, this);
+
         object receiver = obj;
         object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
