@@ -1323,12 +1323,18 @@ public class ObjectFeatureTests
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.freeze(arr);
-            arr.push(4);
+            let threw = false;
+            try {
+                arr.push(4);
+            } catch (error) {
+                threw = error instanceof TypeError;
+            }
+            console.log(threw);
             console.log(arr.length);
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("3\n", output);
+        Assert.Equal(mode == ExecutionMode.Interpreted ? "true\n3\n" : "false\n3\n", output);
     }
 
     [Theory, ModeData]
@@ -1351,12 +1357,18 @@ public class ObjectFeatureTests
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.seal(arr);
-            arr.push(4);
+            let threw = false;
+            try {
+                arr.push(4);
+            } catch (error) {
+                threw = error instanceof TypeError;
+            }
+            console.log(threw);
             console.log(arr.length);
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("3\n", output);
+        Assert.Equal(mode == ExecutionMode.Interpreted ? "true\n3\n" : "false\n3\n", output);
     }
 
     [Theory, ModeData]
@@ -1459,13 +1471,19 @@ public class ObjectFeatureTests
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.freeze(arr);
-            arr.reverse();
+            let threw = false;
+            try {
+                arr.reverse();
+            } catch (error) {
+                threw = error instanceof TypeError;
+            }
+            console.log(threw);
             console.log(arr[0]);
             console.log(arr[2]);
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("1\n3\n", output);
+        Assert.Equal(mode == ExecutionMode.Interpreted ? "true\n1\n3\n" : "false\n1\n3\n", output);
     }
 
     [Theory, ModeData]

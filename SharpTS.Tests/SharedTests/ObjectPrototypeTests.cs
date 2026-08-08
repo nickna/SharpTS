@@ -67,10 +67,16 @@ public class ObjectPrototypeTests
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.preventExtensions(arr);
-            arr.push(4);  // Should be silently ignored
+            let threw = false;
+            try {
+                arr.push(4);
+            } catch (error) {
+                threw = error instanceof TypeError;
+            }
+            console.log(threw);
             console.log(arr.length);
             """;
-        Assert.Equal("3\n", TestHarness.Run(source, mode));
+        Assert.Equal(mode == ExecutionMode.Interpreted ? "true\n3\n" : "false\n3\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

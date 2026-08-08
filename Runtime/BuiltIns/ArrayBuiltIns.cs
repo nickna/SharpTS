@@ -954,6 +954,12 @@ public static class ArrayBuiltIns
         if (items.Count > MaxSafeInteger - length)
             throw TypeError("Array.prototype.unshift result exceeds the maximum safe integer.");
 
+        if (items.Count == 0)
+        {
+            interpreter.SetProperty(receiver, "length", (double)length);
+            return length;
+        }
+
         for (long from = length; from > 0; from--)
         {
             long sourceIndex = from - 1;

@@ -2096,6 +2096,23 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, set.Name.Lexeme);
         }
 
+        bool strictMode = forceStrict || _environment.IsStrictMode;
+
+        bool hasWritableOwnLength = obj switch
+        {
+            SharpTSFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
+            SharpTSArrowFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
+            _ => false
+        };
+
+        if (strictMode && set.Name.Lexeme == "length" && !hasWritableOwnLength
+            && obj is SharpTSFunction or SharpTSArrowFunction
+                or SharpTSAsyncFunction or SharpTSAsyncArrowFunction)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot assign to read only property 'length' of function"));
+        }
+
         // Proxy interception - must be before any other dispatch
         if (obj is SharpTSProxy proxy)
         {
@@ -2183,8 +2200,6 @@ public partial class Interpreter
 
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = set.Name.Lexeme;
-        bool strictMode = forceStrict || _environment.IsStrictMode;
-
         switch (category)
         {
             case TypeCategory.External when obj is DotNetInstance dotNetInstance:
