@@ -28,3 +28,18 @@ public interface ISharpTSMutableBuiltIn
     /// <summary>Own enumerable string keys — the <c>for...in</c> / <c>Object.keys</c> surface.</summary>
     IEnumerable<string> OwnEnumerableKeys();
 }
+
+/// <summary>
+/// Symbol-keyed own-property surface for ordinary built-in objects whose
+/// expando storage is backed by <see cref="SharpTSObject"/>. Keeping this
+/// separate from <see cref="ISharpTSMutableBuiltIn"/> lets built-ins opt in as
+/// their symbol semantics are implemented without weakening string-key support.
+/// </summary>
+internal interface ISharpTSSymbolPropertyBag
+{
+    bool HasSymbolProperty(SharpTSSymbol symbol);
+    object? GetBySymbol(SharpTSSymbol symbol);
+    bool TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter);
+    void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode);
+}

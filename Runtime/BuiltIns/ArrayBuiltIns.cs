@@ -54,7 +54,7 @@ public static class ArrayBuiltIns
             .MethodV2("toReversed", 0, ToReversedV2)
             .MethodV2("with", 2, WithV2)
             .MethodV2("at", 1, AtV2)
-            .MethodV2("fill", 1, 3, FillV2)
+            .MethodV2("fill", 0, 3, specLength: 1, FillV2)
             .MethodV2("copyWithin", 1, 3, specLength: 2, CopyWithinV2)
             .MethodV2("entries", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(arr))))
             .MethodV2("keys", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(arr))))
@@ -354,38 +354,26 @@ public static class ArrayBuiltIns
 
     #region V2 Implementations (RuntimeValue — no boxing)
 
-    private static RuntimeValue PushV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PushV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen || arr.IsSealed || !arr.IsExtensible)
-            return RuntimeValue.FromNumber(arr.Length);
-        foreach (var arg in args)
-            arr.Add(arg.ToObject());
-        return RuntimeValue.FromNumber(arr.Length);
+        var items = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            items[i] = args[i].ToObject();
+        return RuntimeValue.FromNumber(PushArrayLike(interpreter, arr, items));
     }
 
-    private static RuntimeValue PopV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Undefined;
-        return RuntimeValue.FromBoxed(arr.RemoveLast());
-    }
+    private static RuntimeValue PopV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoxed(PopArrayLike(interpreter, arr));
 
-    private static RuntimeValue ShiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Undefined;
-        return RuntimeValue.FromBoxed(arr.RemoveFirst());
-    }
+    private static RuntimeValue ShiftV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoxed(ShiftArrayLike(interpreter, arr));
 
-    private static RuntimeValue UnshiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue UnshiftV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen || arr.IsSealed || !arr.IsExtensible)
-            return RuntimeValue.FromNumber(arr.Length);
-        // JS variadic: unshift(a, b, c) on [x, y] yields [a, b, c, x, y].
-        // AddFirst preserves insertion position, so walk args in reverse.
-        for (int i = args.Length - 1; i >= 0; i--)
-            arr.AddFirst(args[i].ToObject());
-        return RuntimeValue.FromNumber(arr.Length);
+        var items = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            items[i] = args[i].ToObject();
+        return RuntimeValue.FromNumber(UnshiftArrayLike(interpreter, arr, items));
     }
 
     private static RuntimeValue SliceV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -831,63 +819,314 @@ public static class ArrayBuiltIns
     internal static string ToJsString(Interpreter interp, SharpTSArray arr)
         => JoinV2(interp, arr, ReadOnlySpan<RuntimeValue>.Empty).AsString();
 
-    /// <summary>
-    /// Copies [0, length) of <paramref name="src"/> into <paramref name="dst"/>,
-    /// preserving holes as <see cref="ArrayHole"/>.<c>Instance</c> entries. Used
-    /// by concat / with / toReversed to honor ECMA-262's hole-preserving semantics.
-    /// </summary>
-    private static void AppendPreservingHoles(SharpTSArray src, List<object?> dst)
+    private static RuntimeValue ConcatV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        int len = src.Length;
-        for (int i = 0; i < len; i++)
-        {
-            if (src.HasIndex(i))
-                dst.Add(src[i]);
-            else
-                dst.Add(ArrayHole.Instance);
-        }
-    }
-
-    private static RuntimeValue ConcatV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        // ECMA-262 23.1.3.2: preserves holes from array arguments; non-array args
-        // are appended as single elements.
-        var result = new List<object?>(arr.Length);
-        AppendPreservingHoles(arr, result);
+        var result = new SharpTSArray();
+        long nextIndex = 0;
+        AppendConcatItem(interpreter, result, ref nextIndex, arr);
         for (int a = 0; a < args.Length; a++)
-        {
-            var arg = args[a].ToObject();
-            if (arg is SharpTSArray otherArr)
-                AppendPreservingHoles(otherArr, result);
-            else
-                result.Add(arg);
-        }
-        return RuntimeValue.FromObject(new SharpTSArray(result));
+            AppendConcatItem(interpreter, result, ref nextIndex, args[a].ToObject());
+        return RuntimeValue.FromObject(result);
     }
 
-    private static RuntimeValue ReverseV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    /// <summary>
+    /// ECMA-262 23.1.3.2 generic concat path used by
+    /// <c>Array.prototype.concat.call(arrayLike, ...items)</c>. The receiver and
+    /// every argument independently consult <c>Symbol.isConcatSpreadable</c>;
+    /// absent indexed properties advance the output length without creating
+    /// data properties, preserving holes.
+    /// </summary>
+    internal static object ConcatArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
     {
-        // ECMA-262 23.1.3.26: preserves holes. Implemented via hole-aware swap
-        // so reverse([1,,3]) === [3,,1] (middle stays a hole).
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-        int len = arr.Length;
-        int lower = 0, upper = len - 1;
-        while (lower < upper)
-        {
-            bool lowerPresent = arr.HasIndex(lower);
-            bool upperPresent = arr.HasIndex(upper);
-            var lowerValue = lowerPresent ? arr[lower] : null;
-            var upperValue = upperPresent ? arr[upper] : null;
-            if (upperPresent) arr[lower] = upperValue;
-            else arr.DeleteAt(lower);
-            if (lowerPresent) arr[upper] = lowerValue;
-            else arr.DeleteAt(upper);
-            lower++;
-            upper--;
-        }
-        return RuntimeValue.FromObject(arr);
+        var result = new SharpTSArray();
+        long nextIndex = 0;
+        AppendConcatItem(interpreter, result, ref nextIndex, receiver);
+        for (int i = 0; i < args.Count; i++)
+            AppendConcatItem(interpreter, result, ref nextIndex, args[i]);
+        return result;
     }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.23 generic pop algorithm. It operates directly on the
+    /// receiver so inherited indexed values, accessors, proxies, large lengths,
+    /// and strict delete/set failures remain observable in specification order.
+    /// </summary>
+    internal static object? PopArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length == 0)
+        {
+            interpreter.SetProperty(receiver, "length", 0d);
+            return SharpTSUndefined.Instance;
+        }
+
+        long newLength = length - 1;
+        string key = newLength.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+        object? element = interpreter.GetPropertyValue(receiver, key);
+        interpreter.DeleteProperty(receiver, key);
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return element;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.23 generic push algorithm. Writes directly to the
+    /// receiver and performs the 53-bit result-length check before any item is
+    /// stored, while preserving partial writes when a later strict Set fails.
+    /// </summary>
+    internal static double PushArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> items)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (items.Count > MaxSafeInteger - length)
+            throw TypeError("Array.prototype.push result exceeds the maximum safe integer.");
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            string key = (length + i).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            interpreter.SetProperty(receiver, key, items[i]);
+        }
+
+        long newLength = length + items.Count;
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return newLength;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.27 generic shift algorithm. Indexed properties are
+    /// observed and moved one at a time on the original receiver so holes,
+    /// inherited values, accessors, and abrupt completions remain visible.
+    /// </summary>
+    internal static object? ShiftArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length == 0)
+        {
+            interpreter.SetProperty(receiver, "length", 0d);
+            return SharpTSUndefined.Instance;
+        }
+
+        object? first = interpreter.GetPropertyValue(receiver, "0");
+        for (long from = 1; from < length; from++)
+        {
+            string fromKey = from.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = (from - 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+        }
+
+        long newLength = length - 1;
+        interpreter.DeleteProperty(
+            receiver,
+            newLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return first;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.29 generic unshift algorithm. Existing properties move
+    /// from high to low indexes before new items are written, preserving holes
+    /// and the observable ordering of getters, setters, and proxy traps.
+    /// </summary>
+    internal static double UnshiftArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> items)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (items.Count > MaxSafeInteger - length)
+            throw TypeError("Array.prototype.unshift result exceeds the maximum safe integer.");
+
+        if (items.Count == 0)
+        {
+            interpreter.SetProperty(receiver, "length", (double)length);
+            return length;
+        }
+
+        for (long from = length; from > 0; from--)
+        {
+            long sourceIndex = from - 1;
+            long targetIndex = sourceIndex + items.Count;
+            string fromKey = sourceIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = targetIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+        }
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                items[i]);
+        }
+
+        long newLength = length + items.Count;
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return newLength;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.26 generic reverse algorithm. Each pair is queried and
+    /// updated through the receiver's property operations, retaining holes and
+    /// honoring inherited properties, accessors, proxies, and strict failures.
+    /// </summary>
+    internal static object ReverseArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        long middle = length / 2;
+        for (long lower = 0; lower < middle; lower++)
+        {
+            long upper = length - lower - 1;
+            string lowerKey = lower.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string upperKey = upper.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            bool lowerExists = interpreter.HasProperty(receiver, lowerKey);
+            object? lowerValue = lowerExists
+                ? interpreter.GetPropertyValue(receiver, lowerKey)
+                : null;
+            bool upperExists = interpreter.HasProperty(receiver, upperKey);
+            object? upperValue = upperExists
+                ? interpreter.GetPropertyValue(receiver, upperKey)
+                : null;
+
+            if (lowerExists && upperExists)
+            {
+                interpreter.SetProperty(receiver, lowerKey, upperValue);
+                interpreter.SetProperty(receiver, upperKey, lowerValue);
+            }
+            else if (!lowerExists && upperExists)
+            {
+                interpreter.SetProperty(receiver, lowerKey, upperValue);
+                interpreter.DeleteProperty(receiver, upperKey);
+            }
+            else if (lowerExists)
+            {
+                interpreter.DeleteProperty(receiver, lowerKey);
+                interpreter.SetProperty(receiver, upperKey, lowerValue);
+            }
+        }
+        return receiver;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.6 generic fill algorithm. Length, start, and end are
+    /// coerced in specification order even for an empty receiver, then each
+    /// selected property is written strictly on the original object.
+    /// </summary>
+    internal static object FillArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        object? value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+
+        double relativeStart = args.Count > 1
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 2 && args[2] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[2])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+
+        for (long index = start; index < end; index++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                value);
+        }
+        return receiver;
+    }
+
+    private static long NormalizeRelativeIndex(double relativeIndex, long length)
+    {
+        if (double.IsNegativeInfinity(relativeIndex)) return 0;
+        if (relativeIndex < 0)
+            return (long)Math.Max(length + relativeIndex, 0);
+        return (long)Math.Min(relativeIndex, length);
+    }
+
+    private static void AppendConcatItem(
+        Interpreter interpreter, SharpTSArray result, ref long nextIndex, object? item)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        var itemValue = RuntimeValue.FromBoxed(item);
+        bool spreadable = false;
+        if (itemValue.IsObject)
+        {
+            object? spreadability = interpreter.GetSymbolPropertyValue(
+                item!, SharpTSSymbol.IsConcatSpreadable);
+            spreadable = spreadability is SharpTSUndefined
+                ? item is SharpTSArray
+                    || item is SharpTSProxy proxy && proxy.HasArrayTarget()
+                : RuntimeValue.FromBoxed(spreadability).IsTruthy();
+        }
+
+        if (!spreadable)
+        {
+            if (nextIndex >= MaxSafeInteger)
+                throw TypeError("Array.prototype.concat result exceeds the maximum safe integer.");
+            result.Set(nextIndex++, item);
+            return;
+        }
+
+        long length = ToLength(
+            interpreter.GetPropertyValue(item, "length"), interpreter);
+        if (length > MaxSafeInteger - nextIndex)
+            throw TypeError("Array.prototype.concat result exceeds the maximum safe integer.");
+        if (length > SharpTSArray.MaxLength - nextIndex)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        for (long sourceIndex = 0; sourceIndex < length; sourceIndex++)
+        {
+            string key = sourceIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(item, key))
+            {
+                result.Set(
+                    nextIndex + sourceIndex,
+                    interpreter.GetPropertyValue(item, key));
+            }
+        }
+        nextIndex += length;
+        result.SetLength(nextIndex);
+    }
+
+    private static RuntimeValue ReverseV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(ReverseArrayLike(interpreter, arr));
 
     private static RuntimeValue ToReversedV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -929,30 +1168,10 @@ public static class ArrayBuiltIns
 
     private static RuntimeValue FillV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        // ECMA-262 23.1.3.9: Fill WRITES every position in [start, end) — holes
-        // are filled, not preserved.
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-
-        int len = arr.Length;
-        if (len == 0) return RuntimeValue.FromObject(arr);
-
-        var value = args.Length > 0 ? args[0].ToObject() : null;
-
-        int relStart = args.Length > 1
-            ? ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject())
-            : 0;
-        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        int relEnd = args.Length > 2
-            ? ToIntegerOrInfinityAsInt(interpreter, args[2].ToObject())
-            : len;
-        int actualEnd = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
-
-        for (int i = actualStart; i < actualEnd; i++)
-            arr[i] = value;
-
-        return RuntimeValue.FromObject(arr);
+        var boxedArgs = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            boxedArgs[i] = args[i].ToObject();
+        return RuntimeValue.FromObject(FillArrayLike(interpreter, arr, boxedArgs));
     }
 
     private static RuntimeValue CopyWithinV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)

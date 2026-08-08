@@ -490,6 +490,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public bool IsExtensible { get; private set; } = true;
 
+    /// <summary>Whether the array exotic length property accepts assignment.</summary>
+    internal bool IsLengthWritable => _lengthWritable;
+
     /// <summary>
     /// Freezes this array, preventing any element changes.
     /// </summary>
@@ -588,17 +591,36 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (IsFrozen)
         {
             if (strictMode)
-                throw new Exception($"TypeError: Cannot assign to read only property '{index}' of array");
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to read only property '{index}' of array"));
             return;
         }
         if (index < 0) throw new Exception("RangeError: Index out of bounds.");
         if (index > MaxWriteIndex)
             throw new Exception($"RangeError: Array index {index} exceeds ECMA-262 uint32 maximum.");
 
+        string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (GetOwnPropertyDescriptor(key) is { Writable: false })
+        {
+            if (strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to read only property '{key}' of array"));
+            return;
+        }
+
+        if (index >= _length && !_lengthWritable)
+        {
+            if (strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Cannot extend an array with a non-writable length"));
+            return;
+        }
+
         if (index >= _length && !IsExtensible)
         {
             if (strictMode)
-                throw new Exception($"TypeError: Cannot add property {index}, object is not extensible");
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot add property {index}, object is not extensible"));
             return;
         }
 

@@ -1007,8 +1007,24 @@ public partial class Interpreter
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
+            if (index is SharpTSSymbol symbol)
+                return RuntimeValue.FromBoxed(proxy.TrapGet(symbol, this));
             string key = index?.ToString() ?? "";
             return proxy.TrapGetRV(key, this);
+        }
+
+        if (obj is ISharpTSSymbolPropertyBag symbolBag
+            && index is SharpTSSymbol bagSymbol)
+        {
+            if (symbolBag.TryGetSymbolAccessor(bagSymbol, out var getter, out _))
+            {
+                return getter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(getter, obj).Call(this, []));
+            }
+            if (symbolBag.HasSymbolProperty(bagSymbol))
+                return RuntimeValue.FromBoxed(symbolBag.GetBySymbol(bagSymbol));
         }
 
         // JS functions are objects — bracket access reads user properties.
@@ -1027,6 +1043,7 @@ public partial class Interpreter
                     return RuntimeValue.FromBoxed(symGetter.Call(this, []));
                 if (fn.TryGetSymbolProperty(fnSym, out var symVal))
                     return RuntimeValue.FromBoxed(symVal ?? SharpTSUndefined.Instance);
+                return RuntimeValue.FromBoxed(GetSymbolPropertyValue(fn, fnSym));
             }
             string fnKey = index?.ToString() ?? "";
             if (fn.TryGetProperty(fnKey, out var propVal))
@@ -1042,6 +1059,7 @@ public partial class Interpreter
                     return RuntimeValue.FromBoxed(arrGetter.Call(this, []));
                 if (afn.TryGetSymbolProperty(arrSym, out var arrSymVal))
                     return RuntimeValue.FromBoxed(arrSymVal ?? SharpTSUndefined.Instance);
+                return RuntimeValue.FromBoxed(GetSymbolPropertyValue(afn, arrSym));
             }
             string arrKey = index?.ToString() ?? "";
             if (afn.TryGetProperty(arrKey, out var arrPropVal))
@@ -1049,16 +1067,33 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
-        // Arrays inherit @@iterator from Array.prototype. Bracket access on an
-        // instance must therefore return the realm's values method bound to that
-        // instance, just as a dotted Array.prototype method call is receiver-bound.
-        if (obj is SharpTSArray array && ReferenceEquals(index, SharpTSSymbol.Iterator))
+        // Symbol-valued array properties are ordinary own properties and must
+        // preserve null (rather than confusing it with a missing property).
+        // An own value/accessor also shadows Array.prototype's @@iterator.
+        if (obj is SharpTSArray array && index is SharpTSSymbol arraySymbol)
         {
-            var iteratorMethod = GetArrayPrototype().GetMember("values");
+            if (array.TryGetSymbolAccessor(arraySymbol, out var getter, out _))
+            {
+                return getter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(getter, array).Call(this, []));
+            }
+            if (array.HasSymbolProperty(arraySymbol))
+                return RuntimeValue.FromBoxed(array.GetBySymbol(arraySymbol));
+
+            // Arrays inherit @@iterator from Array.prototype. Return the
+            // realm's values method bound to this instance.
+            if (ReferenceEquals(arraySymbol, SharpTSSymbol.Iterator))
+            {
+                var iteratorMethod = GetArrayPrototype().GetMember("values");
+                return RuntimeValue.FromBoxed(
+                    iteratorMethod is ArrayPrototypeMethodWrapper wrapper
+                        ? wrapper.Bind(array)
+                        : iteratorMethod ?? SharpTSUndefined.Instance);
+            }
             return RuntimeValue.FromBoxed(
-                iteratorMethod is ArrayPrototypeMethodWrapper wrapper
-                    ? wrapper.Bind(array)
-                    : iteratorMethod ?? SharpTSUndefined.Instance);
+                GetSymbolPropertyValue(array, arraySymbol));
         }
 
         if (obj is SharpTSObject symbolObject && index is SharpTSSymbol objectSymbol)
@@ -1070,10 +1105,8 @@ public partial class Interpreter
                     : RuntimeValue.FromBoxed(
                         BindAccessorToObject(getter, symbolObject).Call(this, []));
             }
-            return symbolObject.HasSymbolProperty(objectSymbol)
-                ? RuntimeValue.FromBoxed(
-                    symbolObject.GetBySymbol(objectSymbol) ?? SharpTSUndefined.Instance)
-                : RuntimeValue.Undefined;
+            return RuntimeValue.FromBoxed(
+                GetSymbolPropertyValue(symbolObject, objectSymbol));
         }
 
         // CLR indexers are real properties with parameters. Route them before the string-key
@@ -1148,6 +1181,9 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(
                 arrayProto.GetMember(key) ?? SharpTSUndefined.Instance);
         }
+
+        if (obj is ISharpTSSymbolPropertyBag && index is SharpTSSymbol)
+            return RuntimeValue.Undefined;
 
         // ECMA-262 §22.2.5: RegExp.prototype has well-known-symbol-keyed methods
         // (@@match, @@matchAll, @@replace, @@search, @@split). These are bracket-only
@@ -1262,6 +1298,13 @@ public partial class Interpreter
                     this, ReadOnlySpan<RuntimeValue>.Empty);
             if (prototype.HasExtra(key))
                 return RuntimeValue.FromBoxed(prototype.TryGetExtra(key));
+
+            var objectPrototype = GetObjectPrototype();
+            if (objectPrototype.GetExtraGetter(key) is { } objectGetter)
+                return BindAccessorToObject(objectGetter, array).CallV2(
+                    this, ReadOnlySpan<RuntimeValue>.Empty);
+            if (objectPrototype.HasExtra(key))
+                return RuntimeValue.FromBoxed(objectPrototype.TryGetExtra(key));
         }
         return RuntimeValue.FromBoxed(array.Get(index));
     }
@@ -1354,6 +1397,13 @@ public partial class Interpreter
         {
             string key = index?.ToString() ?? "";
             return proxy.TrapSetRV(key, value, this);
+        }
+
+        if (obj is ISharpTSSymbolPropertyBag symbolBag
+            && index is SharpTSSymbol bagSymbol)
+        {
+            symbolBag.SetBySymbolStrict(bagSymbol, value, strictMode);
+            return RuntimeValue.FromBoxed(value);
         }
 
         // JS functions are objects — support bracket property assignment.

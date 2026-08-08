@@ -9,6 +9,25 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArrayMethodTests
 {
+    [Fact]
+    public void Array_Holes_InheritObjectPrototypeIndexes_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const prototype: any = Object.prototype;
+            prototype[2] = "inherited";
+            const values: any = ["own"];
+            values.length = 3;
+            console.log(values[2]);
+            console.log(values.hasOwnProperty("2"));
+            const copy: any = values.concat();
+            console.log(copy[2]);
+            console.log(copy.hasOwnProperty("2"));
+            delete prototype[2];
+            """);
+
+        Assert.Equal("inherited\nfalse\ninherited\ntrue\n", output);
+    }
+
     #region Find Tests
 
     [Theory, ModeData]
@@ -427,6 +446,188 @@ public class ArrayMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("4\n1\n4\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Pop_IsGenericAndObservesInheritedIndexes(ExecutionMode mode)
+    {
+        var source = """
+            Array.prototype[1] = "array-prototype";
+            const array: any[] = [0];
+            array.length = 2;
+            console.log(array.pop());
+            console.log(array[1]);
+            delete Array.prototype[1];
+
+            const prototype: any = { 1: "object-prototype", length: 2 };
+            const object: any = Object.create(prototype);
+            console.log(Array.prototype.pop.call(object));
+            console.log(object.length);
+            console.log(object[1]);
+
+            const large: any = {
+                9007199254740990: "large-index",
+                length: 9007199254740991
+            };
+            console.log(Array.prototype.pop.call(large));
+            console.log(large.length);
+            console.log(9007199254740990 in large);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "array-prototype\narray-prototype\nobject-prototype\n1\nobject-prototype\n" +
+            "large-index\n9007199254740990\nfalse\n",
+            output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Push_IsGenericAndSupportsSafeIntegerLengths(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { length: 4294967296 };
+            object.push = Array.prototype.push;
+            console.log(object.push("x", "y"));
+            console.log(object.length);
+            console.log(object[4294967296]);
+            console.log(object[4294967297]);
+
+            const large: any = { length: 9007199254740990 };
+            console.log(Array.prototype.push.call(large, "last"));
+            console.log(large[9007199254740990]);
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.push();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "4294967298\n4294967298\nx\ny\n9007199254740991\nlast\ntrue\n",
+            output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Shift_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 3 };
+            object.shift = Array.prototype.shift;
+            console.log(object.shift());
+            console.log(object.length);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(2 in object);
+
+            Object.prototype[1] = "inherited";
+            const inherited: any = { 0: "own", length: 2 };
+            console.log(Array.prototype.shift.call(inherited));
+            console.log(inherited[0]);
+            console.log(inherited.length);
+            delete Object.prototype[1];
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.shift();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "first\n2\nfalse\nthird\nfalse\nown\ninherited\n1\ntrue\n",
+            output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Unshift_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 3 };
+            object.unshift = Array.prototype.unshift;
+            console.log(object.unshift("a", "b"));
+            console.log(object[0]);
+            console.log(object[1]);
+            console.log(object[2]);
+            console.log(3 in object);
+            console.log(object[4]);
+
+            const generic: any = { 0: "tail", length: 1 };
+            console.log(Array.prototype.unshift.call(generic, "x"));
+            console.log(generic[0]);
+            console.log(generic[1]);
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.unshift();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "5\na\nb\nfirst\nfalse\nthird\n2\nx\ntail\ntrue\n",
+            output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Reverse_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 4 };
+            object.reverse = Array.prototype.reverse;
+            console.log(object.reverse() === object);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(2 in object);
+            console.log(object[3]);
+
+            Array.prototype[1] = "inherited";
+            const array: any[] = ["a"];
+            array.length = 2;
+            array.reverse();
+            console.log(array[0]);
+            console.log(array[1]);
+            delete Array.prototype[1];
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfalse\nthird\nfalse\nfirst\ninherited\na\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Fill_IsGenericAndCoercesEmptyBounds(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { length: 4 };
+            object.fill = Array.prototype.fill;
+            console.log(object.fill("x", 1, -1) === object);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(object[2]);
+            console.log(3 in object);
+
+            let coerced = false;
+            const empty: any = { length: 0 };
+            Array.prototype.fill.call(empty, 1, {
+                valueOf() {
+                    coerced = true;
+                    return 0;
+                }
+            });
+            console.log(coerced);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfalse\nx\nx\nfalse\ntrue\n", output);
     }
 
     [Theory, ModeData]

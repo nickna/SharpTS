@@ -154,17 +154,12 @@ public static class ReflectBuiltIns
                 }
             }),
 
-            "get" => BuiltInMethod.CreateV2("get", 2, 3, static (_, _, args) =>
+            "get" => BuiltInMethod.CreateV2("get", 2, 3, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.get requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
-                return RuntimeValue.FromBoxed(target switch
-                {
-                    SharpTSObject obj => obj.GetProperty(propertyKey),
-                    SharpTSInstance inst => inst.GetRawField(propertyKey),
-                    Dictionary<string, object?> dict => dict.TryGetValue(propertyKey, out var v) ? v : null,
-                    _ => null
-                });
+                return RuntimeValue.FromBoxed(
+                    interpreter.GetPropertyValue(target, propertyKey));
             }),
 
             "set" => BuiltInMethod.CreateV2("set", 3, 4, static (_, _, args) =>

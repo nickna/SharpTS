@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -33,7 +34,8 @@ public class SharpTSProxy : ISharpTSCallable
     private void EnsureNotRevoked()
     {
         if (_isRevoked)
-            throw new Exception("Runtime Error: Cannot perform operation on a revoked proxy.");
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot perform operation on a revoked proxy."));
     }
 
     private static void ValidateObject(object? value, string argName)
@@ -111,6 +113,32 @@ public class SharpTSProxy : ISharpTSCallable
         // Pass target, prop, receiver (null for compiled mode compatibility)
         object? receiver = interp != null ? (object)this : null;
         return InvokeTrap(trap, interp, [_target, prop, receiver]);
+    }
+
+    /// <summary>
+    /// Symbol-keyed variant of <see cref="TrapGet(string, Interpreter?)"/>.
+    /// Proxy traps observe the symbol itself as the property key; it must not be
+    /// stringified before dispatch. When no trap exists, ordinary symbol lookup
+    /// is forwarded to the target, including through nested proxies.
+    /// </summary>
+    internal object? TrapGet(SharpTSSymbol prop, Interpreter interp)
+    {
+        var trap = GetTrapCallable("get");
+        if (trap == null)
+            return interp.GetSymbolPropertyValue(_target, prop);
+
+        return InvokeTrap(trap, interp, [_target, prop, this]);
+    }
+
+    /// <summary>
+    /// Implements the proxy branch of ECMA-262 IsArray. Revoked proxies throw;
+    /// otherwise classification recursively follows the final proxy target.
+    /// </summary>
+    internal bool HasArrayTarget()
+    {
+        EnsureNotRevoked();
+        return _target is SharpTSArray
+            || _target is SharpTSProxy proxy && proxy.HasArrayTarget();
     }
 
     public object? TrapSet(string prop, object? value, Interpreter? interp)
@@ -268,6 +296,8 @@ public class SharpTSProxy : ISharpTSCallable
 
     private object? ForwardGet(string prop, Interpreter? interp)
     {
+        if (_target is SharpTSProxy proxy)
+            return proxy.TrapGet(prop, interp);
         if (_target is SharpTSObject obj)
             return obj.GetProperty(prop);
         if (_target is SharpTSInstance inst)
@@ -280,6 +310,14 @@ public class SharpTSProxy : ISharpTSCallable
         {
             // Handle array properties
             if (prop == "length") return (double)arr.Length;
+            if (long.TryParse(prop, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out long index)
+                && index >= 0)
+            {
+                return arr.HasIndex(index)
+                    ? arr.Get(index)
+                    : SharpTSUndefined.Instance;
+            }
             var member = BuiltInRegistry.Instance.GetInstanceMember(arr, prop);
             if (member is BuiltInMethod m) return m.Bind(arr);
             if (member is BuiltInAsyncMethod am) return am.Bind(arr);
@@ -325,6 +363,8 @@ public class SharpTSProxy : ISharpTSCallable
 
     private bool ForwardHas(string prop, Interpreter? interp)
     {
+        if (_target is SharpTSProxy proxy)
+            return proxy.TrapHas(prop, interp);
         if (_target is SharpTSObject obj)
             return obj.HasProperty(prop);
         if (_target is SharpTSInstance inst)

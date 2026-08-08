@@ -3072,6 +3072,130 @@ public sealed class Issue1279ParityTests
     public void Array_isArray_preserves_cross_type_classification(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_array-like-negative-length.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-sparse-object.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_length-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/concat/create-non-array.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-get-err.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-falsey.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-truthy.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-string-wrapper.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-number-wrapper.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-function.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-boolean-wrapper.js")]
+    [InlineData("built-ins/Array/prototype/concat/S15.4.4.4_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-reg-exp.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-getter-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_sloppy-arguments-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_array-like-primitive-non-number-length.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_array-like-length-value-of-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_array-like-length-to-string-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/15.4.4.4-5-c-i-1.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-proxy.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-is-array-proxy-revoked.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-proxy-revoked.js")]
+    [InlineData("built-ins/Array/prototype/concat/arg-length-exceeding-integer-limit.js")]
+    public void Array_concat_honors_generic_and_spreadable_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/pop/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/pop/clamps-to-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/pop/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/pop/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/pop/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/pop/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/pop/set-length-zero-array-length-is-non-writable.js")]
+    public void Array_pop_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A3.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T3.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A5_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js")]
+    [InlineData("built-ins/Array/prototype/push/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-zero-array-length-is-non-writable.js")]
+    public void Array_push_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T5.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/shift/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-length-is-non-writable.js")]
+    public void Array_shift_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/unshift/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-length-is-non-writable.js")]
+    public void Array_unshift_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/reverse/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/reverse/get_if_present_with_delete.js")]
+    [InlineData("built-ins/Array/prototype/reverse/length-exceeding-integer-limit-with-object.js")]
+    public void Array_reverse_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/fill/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/fill/coerced-indexes.js")]
+    [InlineData("built-ins/Array/prototype/fill/fill-values.js")]
+    [InlineData("built-ins/Array/prototype/fill/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-setting-property-value.js")]
+    public void Array_fill_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

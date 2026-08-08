@@ -9,6 +9,42 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ProxyTests
 {
+    [Theory, InterpretedOnlyData]
+    public void Proxy_ArrayConcat_PreservesSymbolKeysAndArrayClassification(ExecutionMode mode)
+    {
+        var source = """
+            const arrayProxy: any = new Proxy([1, 2], {});
+            const nestedProxy: any = new Proxy(arrayProxy, {});
+            console.log([0].concat(arrayProxy).join(","));
+            console.log([0].concat(nestedProxy).join(","));
+
+            let sawSymbol = false;
+            const arrayLike: any = { 0: "x", length: 1 };
+            const spreadableProxy: any = new Proxy(arrayLike, {
+                get(target: any, key: any) {
+                    if (key === Symbol.isConcatSpreadable) {
+                        sawSymbol = true;
+                        return true;
+                    }
+                    return target[key];
+                }
+            });
+            console.log([].concat(spreadableProxy).join(","));
+            console.log(sawSymbol);
+
+            const handle: any = Proxy.revocable([], {});
+            handle.revoke();
+            try {
+                [].concat(handle.proxy);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0,1,2\n0,1,2\nx\ntrue\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Proxy_GetTrap(ExecutionMode mode)
     {

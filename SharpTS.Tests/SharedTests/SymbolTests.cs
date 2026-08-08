@@ -132,6 +132,45 @@ public class SymbolTests
     }
 
     [Fact]
+    public void Symbol_ArrayProperty_PreservesNull_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const key = Symbol("key");
+            const values: any = [];
+            values[key] = null;
+            console.log(values[key] === null);
+            """);
+
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Symbol_BuiltInPrototypeProperties_AreInherited_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const key = Symbol("inherited");
+            const booleanPrototype: any = Boolean.prototype;
+            const numberPrototype: any = Number.prototype;
+            const functionPrototype: any = Function.prototype;
+            const arrayPrototype: any = Array.prototype;
+            booleanPrototype[key] = "boolean";
+            numberPrototype[key] = "number";
+            functionPrototype[key] = "function";
+            arrayPrototype[key] = "array";
+            const boxedBoolean: any = new Boolean(true);
+            const boxedNumber: any = new Number(1);
+            const fn: any = function() {};
+            const values: any = [];
+            console.log(boxedBoolean[key]);
+            console.log(boxedNumber[key]);
+            console.log(fn[key]);
+            console.log(values[key]);
+            """);
+
+        Assert.Equal("boolean\nnumber\nfunction\narray\n", output);
+    }
+
+    [Fact]
     public void Symbol_DefinePropertyPreservesDescriptorFlags_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""

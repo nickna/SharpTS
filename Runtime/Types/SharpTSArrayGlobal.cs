@@ -102,7 +102,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
 /// rebinds the receiver before invoking, so both access paths share one
 /// implementation.
 /// </summary>
-public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     internal SharpTSArrayGlobal? RealmConstructor { get; set; }
     // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
@@ -129,21 +129,22 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     private object? GetBuiltInMember(string name)
     {
         if (name == "constructor") return RealmConstructor ?? SharpTSArrayGlobal.Instance;
         if (name == "length") return 0d;
-
-        var legacy = name switch
-        {
-            "push" => (object?)SharpTSArrayUnboundMethod.Push,
-            "pop" => SharpTSArrayUnboundMethod.Pop,
-            "shift" => SharpTSArrayUnboundMethod.Shift,
-            "unshift" => SharpTSArrayUnboundMethod.Unshift,
-            _ => null,
-        };
-        if (legacy is not null) return legacy;
 
         var method = BuiltIns.ArrayBuiltIns.GetPrototypeMethod(name);
         return method is null
@@ -166,14 +167,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
 
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
-    // Mutating methods (push/pop/shift/unshift) keep the bespoke
-    // SharpTSArrayUnboundMethod path because spec-compliant array-like
-    // mutation would require writing indexed properties back onto the
-    // original receiver — a larger refactor. Non-mutating methods
-    // (slice/concat — pure reads returning new arrays, plus indexOf) are
-    // routed through ArrayBuiltIns, so they share one implementation with
-    // instance-method dispatch and inherit the array-like receiver
-    // coercion in ArrayPrototypeMethodWrapper.
+    // All Array.prototype methods now route through ArrayBuiltIns so instance
+    // dispatch and generic call/apply share the same receiver semantics.
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
@@ -269,6 +264,45 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         if (_name == "with")
         {
             return BuiltIns.ArrayBuiltIns.CopyWithArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
+        if (_name == "concat")
+        {
+            return BuiltIns.ArrayBuiltIns.ConcatArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
+        if (_name == "pop")
+        {
+            return BuiltIns.ArrayBuiltIns.PopArrayLike(interpreter, receiver!);
+        }
+
+        if (_name == "push")
+        {
+            return BuiltIns.ArrayBuiltIns.PushArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
+        if (_name == "shift")
+        {
+            return BuiltIns.ArrayBuiltIns.ShiftArrayLike(interpreter, receiver!);
+        }
+
+        if (_name == "unshift")
+        {
+            return BuiltIns.ArrayBuiltIns.UnshiftArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
+        if (_name == "reverse")
+        {
+            return BuiltIns.ArrayBuiltIns.ReverseArrayLike(interpreter, receiver!);
+        }
+
+        if (_name == "fill")
+        {
+            return BuiltIns.ArrayBuiltIns.FillArrayLike(
                 interpreter, receiver!, arguments);
         }
 

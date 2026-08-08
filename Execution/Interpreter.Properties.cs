@@ -604,7 +604,78 @@ public partial class Interpreter
     {
         if (obj is string or bool or double or SharpTSBigInt or SharpTSSymbol)
             return SharpTSUndefined.Instance;
-        return PerformIndexGet(null!, obj, symbol).ToObject();
+
+        if (obj is SharpTSProxy proxy)
+            return proxy.TrapGet(symbol, this);
+
+        object receiver = obj;
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            if (current is SharpTSObject record)
+            {
+                if (record.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (record.HasSymbolProperty(symbol))
+                    return record.GetBySymbol(symbol);
+                current = GetRecordPrototype(record);
+                continue;
+            }
+
+            if (current is SharpTSFunction function)
+            {
+                if (function.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (function.TryGetSymbolProperty(symbol, out var value))
+                    return value;
+                current = GetFunctionPrototype();
+                continue;
+            }
+
+            if (current is SharpTSArrowFunction arrow)
+            {
+                if (arrow.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (arrow.TryGetSymbolProperty(symbol, out var value))
+                    return value;
+                current = GetFunctionPrototype();
+                continue;
+            }
+
+            if (current is SharpTSArray array)
+            {
+                if (array.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (array.HasSymbolProperty(symbol))
+                    return array.GetBySymbol(symbol);
+                if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
+                    return PerformIndexGet(null!, array, symbol).ToObject();
+                current = GetArrayPrototype();
+                continue;
+            }
+
+            if (current is ISharpTSSymbolPropertyBag symbolBag)
+            {
+                if (symbolBag.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                return symbolBag.HasSymbolProperty(symbol)
+                    ? symbolBag.GetBySymbol(symbol)
+                    : SharpTSUndefined.Instance;
+            }
+
+            return PerformIndexGet(null!, current, symbol).ToObject();
+        }
+        return SharpTSUndefined.Instance;
     }
 
     /// <summary>
@@ -1405,10 +1476,12 @@ public partial class Interpreter
         {
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
-            // join and slice have complete generic array-like dispatch in the wrapper. Other
+            // These methods have complete generic array-like dispatch in the wrapper. Other
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
-            ArrayPrototypeMethodWrapper m when m.FunctionName is "join" or "slice" => m.Bind(receiver),
+            ArrayPrototypeMethodWrapper m when m.FunctionName is
+                "join" or "slice" or "concat" or "pop" or "push" or "shift" or "unshift" or "reverse" or "fill"
+                => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
@@ -2023,6 +2096,23 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, set.Name.Lexeme);
         }
 
+        bool strictMode = forceStrict || _environment.IsStrictMode;
+
+        bool hasWritableOwnLength = obj switch
+        {
+            SharpTSFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
+            SharpTSArrowFunction function => function.GetOwnPropertyDescriptor("length") is { Writable: true },
+            _ => false
+        };
+
+        if (strictMode && set.Name.Lexeme == "length" && !hasWritableOwnLength
+            && obj is SharpTSFunction or SharpTSArrowFunction
+                or SharpTSAsyncFunction or SharpTSAsyncArrowFunction)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot assign to read only property 'length' of function"));
+        }
+
         // Proxy interception - must be before any other dispatch
         if (obj is SharpTSProxy proxy)
         {
@@ -2110,8 +2200,6 @@ public partial class Interpreter
 
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = set.Name.Lexeme;
-        bool strictMode = forceStrict || _environment.IsStrictMode;
-
         switch (category)
         {
             case TypeCategory.External when obj is DotNetInstance dotNetInstance:
@@ -2202,11 +2290,47 @@ public partial class Interpreter
             case TypeCategory.Array when obj is SharpTSArray array:
                 if (memberName == "length")
                 {
+                    if (strictMode && (array.IsFrozen || !array.IsLengthWritable))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot assign to read only property 'length' of array"));
+                    }
                     // ECMA-262: `a.length = N` truncates (if N < length) or extends
                     // with holes (if N > length). SharpTSArray.SetLength handles both
                     // paths and transitions to sparse storage for large extensions.
                     double newLength = ArrayBuiltIns.CoerceArrayLength(this, value);
                     array.SetLength((long)newLength);
+                    return value;
+                }
+                if (uint.TryParse(memberName,
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out uint arrayIndex)
+                    && arrayIndex < uint.MaxValue)
+                {
+                    if (!array.HasIndex(arrayIndex)
+                        && GetArrayPrototype().GetOwnPropertyDescriptor(memberName)
+                            is { } inherited)
+                    {
+                        if (GetArrayPrototype().GetExtraSetter(memberName)
+                            is { } inheritedSetter)
+                        {
+                            BindAccessorToObject(inheritedSetter, array)
+                                .CallBoxed(this, [value]);
+                            return value;
+                        }
+                        if (inherited.Get != null || inherited.Set != null
+                            || !inherited.Writable)
+                        {
+                            if (strictMode)
+                            {
+                                throw new ThrowException(new SharpTSTypeError(
+                                    $"Cannot assign to inherited read only property '{memberName}' of array"));
+                            }
+                            return value;
+                        }
+                    }
+                    array.SetStrict(arrayIndex, value, strictMode);
                     return value;
                 }
                 array.SetNamedProperty(memberName, value);
