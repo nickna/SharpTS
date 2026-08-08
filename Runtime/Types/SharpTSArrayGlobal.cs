@@ -146,13 +146,6 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
         if (name == "constructor") return RealmConstructor ?? SharpTSArrayGlobal.Instance;
         if (name == "length") return 0d;
 
-        var legacy = name switch
-        {
-            "unshift" => SharpTSArrayUnboundMethod.Unshift,
-            _ => null,
-        };
-        if (legacy is not null) return legacy;
-
         var method = BuiltIns.ArrayBuiltIns.GetPrototypeMethod(name);
         return method is null
             ? null
@@ -174,14 +167,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
 
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
-    // The mutating method that still materializes (unshift) keeps the bespoke
-    // SharpTSArrayUnboundMethod path because spec-compliant array-like
-    // mutation would require writing indexed properties back onto the
-    // original receiver — a larger refactor. Non-mutating methods
-    // (slice/concat — pure reads returning new arrays, plus indexOf) are
-    // routed through ArrayBuiltIns, so they share one implementation with
-    // instance-method dispatch and inherit the array-like receiver
-    // coercion in ArrayPrototypeMethodWrapper.
+    // All Array.prototype methods now route through ArrayBuiltIns so instance
+    // dispatch and generic call/apply share the same receiver semantics.
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
@@ -300,6 +287,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         if (_name == "shift")
         {
             return BuiltIns.ArrayBuiltIns.ShiftArrayLike(interpreter, receiver!);
+        }
+
+        if (_name == "unshift")
+        {
+            return BuiltIns.ArrayBuiltIns.UnshiftArrayLike(
+                interpreter, receiver!, arguments);
         }
 
         // Fast path: receiver is a real array (ToObject is identity for objects).

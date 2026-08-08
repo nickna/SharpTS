@@ -368,15 +368,12 @@ public static class ArrayBuiltIns
     private static RuntimeValue ShiftV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(ShiftArrayLike(interpreter, arr));
 
-    private static RuntimeValue UnshiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue UnshiftV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen || arr.IsSealed || !arr.IsExtensible)
-            return RuntimeValue.FromNumber(arr.Length);
-        // JS variadic: unshift(a, b, c) on [x, y] yields [a, b, c, x, y].
-        // AddFirst preserves insertion position, so walk args in reverse.
-        for (int i = args.Length - 1; i >= 0; i--)
-            arr.AddFirst(args[i].ToObject());
-        return RuntimeValue.FromNumber(arr.Length);
+        var items = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            items[i] = args[i].ToObject();
+        return RuntimeValue.FromNumber(UnshiftArrayLike(interpreter, arr, items));
     }
 
     private static RuntimeValue SliceV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -941,6 +938,53 @@ public static class ArrayBuiltIns
             newLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
         interpreter.SetProperty(receiver, "length", (double)newLength);
         return first;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.29 generic unshift algorithm. Existing properties move
+    /// from high to low indexes before new items are written, preserving holes
+    /// and the observable ordering of getters, setters, and proxy traps.
+    /// </summary>
+    internal static double UnshiftArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> items)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (items.Count > MaxSafeInteger - length)
+            throw TypeError("Array.prototype.unshift result exceeds the maximum safe integer.");
+
+        for (long from = length; from > 0; from--)
+        {
+            long sourceIndex = from - 1;
+            long targetIndex = sourceIndex + items.Count;
+            string fromKey = sourceIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = targetIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+        }
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                items[i]);
+        }
+
+        long newLength = length + items.Count;
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return newLength;
     }
 
     private static void AppendConcatItem(

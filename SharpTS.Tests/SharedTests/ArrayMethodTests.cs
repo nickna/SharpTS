@@ -545,6 +545,39 @@ public class ArrayMethodTests
             output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Unshift_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 3 };
+            object.unshift = Array.prototype.unshift;
+            console.log(object.unshift("a", "b"));
+            console.log(object[0]);
+            console.log(object[1]);
+            console.log(object[2]);
+            console.log(3 in object);
+            console.log(object[4]);
+
+            const generic: any = { 0: "tail", length: 1 };
+            console.log(Array.prototype.unshift.call(generic, "x"));
+            console.log(generic[0]);
+            console.log(generic[1]);
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.unshift();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "5\na\nb\nfirst\nfalse\nthird\n2\nx\ntail\ntrue\n",
+            output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {
