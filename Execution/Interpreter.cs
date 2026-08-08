@@ -307,7 +307,14 @@ public partial class Interpreter : IDisposable
     /// outermost scope. Used by Test262 to inject the <c>$DONE</c>
     /// async-completion callback into <c>flags: [async]</c> tests.
     /// </summary>
-    public void RegisterGlobal(string name, object? value) => _environment.Define(name, value);
+    public void RegisterGlobal(string name, object? value)
+    {
+        _environment.Define(name, value);
+        // Host-injected globals are properties of the realm's global object,
+        // not lexical-only bindings. Test262's asyncHelpers intentionally checks
+        // hasOwnProperty(globalThis, "$DONE") before using the callback.
+        GlobalThis.SetProperty(name, value);
+    }
 
     /// <summary>
     /// When set, yield expressions call this delegate instead of throwing YieldException.

@@ -15,6 +15,18 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class RealmIsolationTests
 {
+    [Fact]
+    public void HostRegisteredGlobals_AreOwnGlobalObjectProperties()
+    {
+        using var interpreter = new Interpreter(TextWriter.Null, TextWriter.Null);
+        var callback = new object();
+
+        interpreter.RegisterGlobal("hostCallback", callback);
+
+        Assert.True(interpreter.GlobalThis.HasUserProperty("hostCallback"));
+        Assert.Same(callback, interpreter.GlobalThis.GetProperty("hostCallback"));
+    }
+
     /// <summary>
     /// The happy path still holds within a single realm in both modes:
     /// <c>Symbol.for</c> is idempotent for a given key and <c>Symbol.keyFor</c>
