@@ -141,6 +141,7 @@ public record GlobalOptions(
 /// <param name="EmitDebugSymbols">Emit a portable PDB beside the assembly (<c>--debug</c>/<c>-g</c>)</param>
 /// <param name="Timings">Print a human-readable compilation timing table.</param>
 /// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
+/// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -154,7 +155,8 @@ public record CompileOptions(
     bool Standalone = false,
     bool EmitDebugSymbols = false,
     bool Timings = false,
-    bool TimingsJson = false
+    bool TimingsJson = false,
+    bool Hosted = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -668,6 +670,7 @@ public class CommandLineParser
         bool standalone = false;
         bool timings = false;
         bool timingsJson = false;
+        bool hosted = false;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
 
@@ -780,6 +783,10 @@ public class CommandLineParser
             {
                 standalone = true;
             }
+            else if (args[i] == "--hosted")
+            {
+                hosted = true;
+            }
             else if (args[i] == "--pack")
             {
                 pack = true;
@@ -829,6 +836,14 @@ public class CommandLineParser
                 ShowCompileUsage: true);
         }
 
+        if (hosted && target != OutputTarget.Dll)
+        {
+            return new ParsedCommand.Error(
+                "Error: --hosted is valid only with --target dll.",
+                64,
+                ShowCompileUsage: true);
+        }
+
         if (timings && timingsJson)
         {
             return new ParsedCommand.Error(
@@ -861,7 +876,8 @@ public class CommandLineParser
             Standalone: standalone,
             EmitDebugSymbols: emitDebugSymbols,
             Timings: timings,
-            TimingsJson: timingsJson
+            TimingsJson: timingsJson,
+            Hosted: hosted
         );
 
         var packOptions = new PackOptions(

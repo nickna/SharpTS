@@ -96,6 +96,10 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         IL.MarkLabel(haveTaskLabel);
         IL.Emit(OpCodes.Ldloc, taskLocal);
+        if (Ctx.Runtime.EventLoopPrepareHostedAwait is not null)
+            IL.Emit(OpCodes.Call, Ctx.Runtime.EventLoopPrepareHostedAwait);
+        IL.Emit(OpCodes.Stloc, taskLocal);
+        IL.Emit(OpCodes.Ldloc, taskLocal);
 
         // 3. Get awaiter: task.GetAwaiter()
         IL.Emit(OpCodes.Call, AsyncBuilder.GetTaskGetAwaiterMethod());

@@ -98,6 +98,7 @@ coverage*.xml
 # BenchmarkDotNet (incl. EtwProfiler native payload extracted to /out)
 BenchmarkDotNet.Artifacts/
 /out/
+/artifacts/
 **/CompiledTS/
 *.benchmarklog
 # VS Code Extension / Node.js

@@ -1228,9 +1228,17 @@ public class StandaloneDllTests
                     socket.end();
                     server.close();
                 });
+                server.on('tlsClientError', (err: any) => {
+                    console.log('tls-server-error:' + err.message);
+                    server.close();
+                });
                 server.listen(0, '127.0.0.1', () => {
                     const addr = server.address();
                     const client = tls.connect(addr.port, '127.0.0.1', { rejectUnauthorized: false });
+                    client.on('error', (err: any) => {
+                        console.log('tls-client-error:' + err.message);
+                        server.close();
+                    });
                     client.setEncoding('utf8');
                     let data = '';
                     client.on('data', (c: string) => { data += c; });
@@ -1253,6 +1261,28 @@ public class StandaloneDllTests
 
             var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 20000);
             Assert.Equal("recv:hi-from-server\nencrypted:true\nprotoOk:true\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void Isolated_ProbeTimeout_ShouldTerminateChildAndReportCapturedOutput()
+    {
+        var source = """
+            console.log('probe-started');
+            setInterval(() => {}, 1000);
+            """;
+
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            var ex = Assert.Throws<TimeoutException>(
+                () => ExecuteCompiledDllIsolated(dllPath, timeoutMs: 500));
+            Assert.Contains("timed out after 500 ms", ex.Message);
+            Assert.Contains("probe-started", ex.Message);
         }
         finally
         {
@@ -1370,14 +1400,44 @@ public class StandaloneDllTests
         };
 
         using var process = Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
 
         if (!process.WaitForExit(timeoutMs))
         {
-            process.Kill();
-            throw new TimeoutException("Compiled standalone probe timed out.");
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process exited between the timeout and Kill().
+            }
+
+            if (!process.WaitForExit(5000))
+            {
+                throw new TimeoutException(
+                    $"Compiled standalone probe timed out after {timeoutMs} ms and its process tree did not terminate.");
+            }
+
+            if (!Task.WaitAll([outputTask, errorTask], 5000))
+            {
+                throw new TimeoutException(
+                    $"Compiled standalone probe timed out after {timeoutMs} ms and its output pipes did not close.");
+            }
+
+            var timedOutOutput = outputTask.GetAwaiter().GetResult();
+            var timedOutError = errorTask.GetAwaiter().GetResult();
+            throw new TimeoutException(
+                $"Compiled standalone probe timed out after {timeoutMs} ms. " +
+                $"Stdout: {timedOutOutput} Stderr: {timedOutError}");
         }
+
+        if (!Task.WaitAll([outputTask, errorTask], 5000))
+            throw new TimeoutException("Compiled standalone probe exited, but its output pipes did not close.");
+
+        var output = outputTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
 
         if (process.ExitCode != 0)
         {

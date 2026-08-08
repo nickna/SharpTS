@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>SharpTS.Hosting.Abstractions</AssemblyName>
+    <RootNamespace>SharpTS.Hosting</RootNamespace>
+  </PropertyGroup>
+</Project>

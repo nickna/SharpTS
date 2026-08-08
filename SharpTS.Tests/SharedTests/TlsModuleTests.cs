@@ -561,6 +561,37 @@ public class TlsModuleTests
         Assert.Equal("received: hello from server\n", output);
     }
 
+    [Theory, ModeData]
+    public void TlsServer_EmitsTlsClientError_ForInvalidHandshake(ExecutionMode mode)
+    {
+        var (certPem, keyPem) = GenerateSelfSignedCert();
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = $$"""
+                import * as net from 'net';
+                import * as tls from 'tls';
+                const cert = `{{certPem}}`;
+                const key = `{{keyPem}}`;
+                const server = tls.createServer({ cert, key });
+                server.on('tlsClientError', (err: any) => {
+                    console.log('tls-client-error:' + (err.message.length > 0));
+                    server.close();
+                });
+                server.listen(0, '127.0.0.1', () => {
+                    const addr = server.address();
+                    const client = net.connect(addr.port, '127.0.0.1', () => {
+                        client.write('not a tls handshake');
+                        client.end();
+                    });
+                    client.on('error', () => {});
+                });
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("tls-client-error:true\n", output);
+    }
+
     #endregion
 
     #region Introspection parity (#1034)

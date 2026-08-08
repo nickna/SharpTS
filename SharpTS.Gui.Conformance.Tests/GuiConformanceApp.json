@@ -1,0 +1,6 @@
+{
+  "entryPath": "Guest/main.tsx",
+  "compiledAssembly": "SharpTS.Gui.Guest.dll",
+  "hostedAbiVersion": 1,
+  "guiApiVersion": 1
+}

@@ -182,16 +182,30 @@
     <None Remove="SharpTS.LanguageServer/**" />
     <Compile Remove="Examples/**" />
     <None Remove="Examples/**" />
+    <Compile Remove="SharpTS.Gui/**" />
+    <None Remove="SharpTS.Gui/**" />
+    <Compile Remove="SharpTS.Gui.Host/**" />
+    <None Remove="SharpTS.Gui.Host/**" />
+    <Compile Remove="SharpTS.Gui.Conformance.Tests/**" />
+    <None Remove="SharpTS.Gui.Conformance.Tests/**" />
+    <Compile Remove="SharpTS.Gui.Sdk.Consumer/**" />
+    <None Remove="SharpTS.Gui.Sdk.Consumer/**" />
+    <Compile Remove="SharpTS.Hosting.Abstractions/**" />
+    <None Remove="SharpTS.Hosting.Abstractions/**" />
     <Compile Remove="SharpTS.Sdk/**" />
     <None Remove="SharpTS.Sdk/**" />
     <Compile Remove="SharpTS.Sdk.Tasks/**" />
     <None Remove="SharpTS.Sdk.Tasks/**" />
+    <Compile Remove="SharpTS.Gui.Sdk/**" />
+    <None Remove="SharpTS.Gui.Sdk/**" />
     <Compile Remove="SharpTS.Hosting/**" />
     <None Remove="SharpTS.Hosting/**" />
     <Compile Remove="scripts/**" />
     <None Remove="scripts/**" />
     <Compile Remove="external/**" />
     <None Remove="external/**" />
+    <Compile Remove="artifacts/**" />
+    <None Remove="artifacts/**" />
   </ItemGroup>
 
   <!--
@@ -228,6 +242,7 @@
   </Target>
 
   <ItemGroup>
+    <ProjectReference Include="SharpTS.Hosting.Abstractions\SharpTS.Hosting.Abstractions.csproj" />
     <!-- MinVer is inherited from Directory.Build.props (repo-wide versioning). -->
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     <PackageReference Include="NickNa.PEPacker" />

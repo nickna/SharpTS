@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>SharpTS.Gui.Host</AssemblyName>
+    <RootNamespace>SharpTS.Gui.Host</RootNamespace>
+    <Description>Avalonia host for the SharpTS GUI SDK public preview.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpTS.csproj" />
+    <ProjectReference Include="..\SharpTS.Gui\SharpTS.Gui.csproj" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+</Project>

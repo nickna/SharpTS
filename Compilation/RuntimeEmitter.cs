@@ -9,6 +9,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly TypeProvider _types;
+    private readonly bool _emitHosted;
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -18,9 +19,10 @@ public partial class RuntimeEmitter
     /// </summary>
     private RuntimeFeatureSet _features = RuntimeFeatureSet.EmitEverything();
 
-    public RuntimeEmitter(TypeProvider types)
+    public RuntimeEmitter(TypeProvider types, bool emitHosted = false)
     {
         _types = types;
+        _emitHosted = emitHosted;
     }
 
     /// <summary>
@@ -509,6 +511,7 @@ public partial class RuntimeEmitter
         if (features.UsesTls)
         {
             EmitTlsAcceptClosureClass(moduleBuilder, runtime);
+            EmitTlsAcceptErrorClosureClass(moduleBuilder, runtime);
             EmitTlsConnectClosureClass(moduleBuilder, runtime);
             EmitTlsConnectBody(runtime);
             // $TlsSocket Phase 2: emit method bodies + CreateType. Must come after the

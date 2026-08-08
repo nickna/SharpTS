@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@sharpts/gui",
+    "baseUrl": ".",
+    "paths": {
+      "@sharpts/gui": ["node_modules/@sharpts/gui/index.ts"],
+      "@sharpts/gui/*": ["node_modules/@sharpts/gui/*"]
+    }
+  }
+}

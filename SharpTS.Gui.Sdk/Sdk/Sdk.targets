@@ -1,0 +1,169 @@
+<Project>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <SharpTSGuiIntermediateRoot Condition="'$(SharpTSGuiIntermediateRoot)' == ''">$(IntermediateOutputPath).sharpts-gui\</SharpTSGuiIntermediateRoot>
+    <SharpTSGuiMaterializedPackage Condition="'$(SharpTSGuiMaterializedPackage)' == ''">$(SharpTSGuiIntermediateRoot)node_modules\@sharpts\gui\</SharpTSGuiMaterializedPackage>
+    <SharpTSGuiGeneratedTsConfig Condition="'$(SharpTSGuiGeneratedTsConfig)' == ''">$(SharpTSGuiIntermediateRoot)tsconfig.json</SharpTSGuiGeneratedTsConfig>
+    <SharpTSGuiGuestAssembly Condition="'$(SharpTSGuiGuestAssembly)' == ''">$(SharpTSGuiIntermediateRoot)SharpTS.Gui.Guest.dll</SharpTSGuiGuestAssembly>
+    <SharpTSGuiManifest Condition="'$(SharpTSGuiManifest)' == ''">$(SharpTSGuiIntermediateRoot)app.json</SharpTSGuiManifest>
+    <SharpTSGuiEntryFullPath Condition="$([System.IO.Path]::IsPathRooted('$(SharpTSEntryPoint)'))">$(SharpTSEntryPoint)</SharpTSGuiEntryFullPath>
+    <SharpTSGuiEntryFullPath Condition="'$(SharpTSGuiEntryFullPath)' == ''">$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)</SharpTSGuiEntryFullPath>
+    <RunCommand>dotnet</RunCommand>
+    <RunArguments>&quot;$(TargetPath)&quot;</RunArguments>
+  </PropertyGroup>
+
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.WriteGuiTsConfigTask"
+             AssemblyFile="$(SharpTSGuiTasksAssembly)" />
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.WriteGuiManifestTask"
+             AssemblyFile="$(SharpTSGuiTasksAssembly)" />
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.PrepareGuiAssetsTask"
+             AssemblyFile="$(SharpTSGuiTasksAssembly)" />
+
+  <Target Name="_SharpTSGuiValidate" BeforeTargets="SharpTSGuiPrepare">
+    <Error Condition="'$(OS)' != 'Windows_NT'"
+           Text="SharpTS.Gui.Sdk public preview currently supports Windows only." />
+    <Error Condition="'$(RuntimeIdentifier)' != '' and !$([System.String]::Copy(';$(SharpTSGuiSupportedRuntimeIdentifiers);').Contains(';$(RuntimeIdentifier);'))"
+           Text="SharpTS.Gui.Sdk supports only $(SharpTSGuiSupportedRuntimeIdentifiers) runtime identifiers." />
+    <Error Condition="!Exists('$(SharpTSGuiTasksAssembly)')"
+           Text="SharpTS.Gui.Sdk payload is incomplete: missing MSBuild tasks assembly." />
+    <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.Gui.Host.dll')"
+           Text="SharpTS.Gui.Sdk payload is incomplete: missing GUI host." />
+    <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.dll')"
+           Text="SharpTS.Gui.Sdk payload is incomplete: missing compiler/runtime." />
+    <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.Gui.dll')"
+           Text="SharpTS.Gui.Sdk payload is incomplete: missing Avalonia bridge." />
+    <Error Condition="!Exists('$(SharpTSGuiEntryFullPath)')"
+           Text="SharpTSEntryPoint '$(SharpTSEntryPoint)' does not exist." />
+  </Target>
+
+  <Target Name="SharpTSGuiPrepareAssets" DependsOnTargets="_SharpTSGuiValidate">
+    <PrepareGuiAssetsTask LocalAssets="@(SharpTSGuiAsset)"
+                          RemoteAssets="@(SharpTSGuiRemoteAsset)"
+                          ProjectDirectory="$(MSBuildProjectDirectory)"
+                          OutputDirectory="$(SharpTSGuiIntermediateRoot)assets">
+      <Output TaskParameter="PreparedAssets" ItemName="_SharpTSGuiPreparedAsset" />
+    </PrepareGuiAssetsTask>
+    <ItemGroup>
+      <EmbeddedResource Include="@(_SharpTSGuiPreparedAsset)" LogicalName="SharpTS.Gui.Asset/%(LogicalName)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SharpTSGuiPrepare" DependsOnTargets="SharpTSGuiPrepareAssets">
+    <ItemGroup>
+      <_SharpTSGuiPackageFiles Include="$(SharpTSGuiPackageSource)**\*" />
+      <_SharpTSGuiGuestSources Include="$(MSBuildProjectDirectory)\**\*.ts;$(MSBuildProjectDirectory)\**\*.tsx"
+                               Exclude="$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\node_modules\**" />
+    </ItemGroup>
+    <MakeDir Directories="$(SharpTSGuiMaterializedPackage);$(TargetDir)Guest;$(TargetDir).sharpts\node_modules\@sharpts\gui" />
+    <Copy SourceFiles="@(_SharpTSGuiPackageFiles)"
+          DestinationFiles="@(_SharpTSGuiPackageFiles->'$(SharpTSGuiMaterializedPackage)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <WriteGuiTsConfigTask OutputPath="$(SharpTSGuiGeneratedTsConfig)"
+                          ProjectDirectory="$(MSBuildProjectDirectory)"
+                          GuiPackageDirectory="$(SharpTSGuiMaterializedPackage)"
+                          BaseTsConfigPath="$(SharpTSTsConfigPath)" />
+    <PropertyGroup>
+      <_SharpTSGuiEntryRelative>$([MSBuild]::MakeRelative('$(MSBuildProjectDirectory)', '$(SharpTSGuiEntryFullPath)'))</_SharpTSGuiEntryRelative>
+    </PropertyGroup>
+    <Error Condition="$([System.String]::Copy('$(_SharpTSGuiEntryRelative)').StartsWith('..'))"
+           Text="SharpTSEntryPoint must be inside the GUI project directory." />
+    <WriteGuiManifestTask OutputPath="$(SharpTSGuiManifest)"
+                          EntryPath="Guest\$(_SharpTSGuiEntryRelative)"
+                          CompiledAssembly="SharpTS.Gui.Guest.dll"
+                          HostedAbiVersion="$(SharpTSGuiHostedAbiVersion)"
+                          GuiApiVersion="$(SharpTSGuiApiVersion)" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(SharpTSGuiGuestAssembly)" LogicalName="SharpTS.Gui.Guest.dll" />
+      <EmbeddedResource Include="$(SharpTSGuiManifest)" LogicalName="SharpTS.Gui.App.json" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SharpTSGuiCompile"
+          DependsOnTargets="SharpTSGuiPrepare"
+          BeforeTargets="PrepareResourceNames"
+          Inputs="$(SharpTSGuiEntryFullPath);@(_SharpTSGuiGuestSources);@(_SharpTSGuiPackageFiles);$(SharpTSGuiHostRoot)SharpTS.dll;$(SharpTSGuiHostRoot)SharpTS.Gui.dll"
+          Outputs="$(SharpTSGuiGuestAssembly)">
+    <PropertyGroup>
+      <_SharpTSGuiCompileArgs>-p &quot;$(SharpTSGuiGeneratedTsConfig)&quot; -r &quot;$(SharpTSGuiHostRoot)SharpTS.Gui.dll&quot; -c &quot;$(SharpTSGuiEntryFullPath)&quot; --target dll --hosted --quiet -o &quot;$(SharpTSGuiGuestAssembly)&quot;</_SharpTSGuiCompileArgs>
+      <_SharpTSGuiCompileArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSGuiCompileArgs) --verify</_SharpTSGuiCompileArgs>
+    </PropertyGroup>
+    <Exec Command="dotnet &quot;$(SharpTSGuiHostRoot)SharpTS.dll&quot; $(_SharpTSGuiCompileArgs)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="SharpTSGuiAssemble"
+          DependsOnTargets="SharpTSGuiCompile"
+          AfterTargets="Build"
+          BeforeTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <_SharpTSGuiEffectiveRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_SharpTSGuiEffectiveRid>
+      <_SharpTSGuiEffectiveRid Condition="'$(_SharpTSGuiEffectiveRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</_SharpTSGuiEffectiveRid>
+    </PropertyGroup>
+    <ItemGroup>
+      <_SharpTSGuiHostFiles Include="$(SharpTSGuiHostRoot)**\*"
+                            Exclude="$(SharpTSGuiHostRoot)runtimes\**;$(SharpTSGuiHostRoot)**\*.pdb" />
+      <_SharpTSGuiNativeBuildFiles Include="$(SharpTSGuiHostRoot)runtimes\$(_SharpTSGuiEffectiveRid)\native\*"
+                                   Exclude="$(SharpTSGuiHostRoot)runtimes\$(_SharpTSGuiEffectiveRid)\native\*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SharpTSGuiHostFiles)"
+          DestinationFiles="@(_SharpTSGuiHostFiles->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_SharpTSGuiNativeBuildFiles)"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(SharpTSGuiGuestAssembly)" DestinationFolder="$(TargetDir)" />
+    <Copy SourceFiles="@(_SharpTSGuiGuestSources)"
+          DestinationFiles="@(_SharpTSGuiGuestSources->'$(TargetDir)Guest\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(SharpTSGuiGeneratedTsConfig)" DestinationFolder="$(TargetDir).sharpts" />
+    <Copy SourceFiles="$(SharpTSGuiManifest)" DestinationFolder="$(TargetDir).sharpts" />
+    <Copy SourceFiles="@(_SharpTSGuiPackageFiles)"
+          DestinationFiles="@(_SharpTSGuiPackageFiles->'$(TargetDir).sharpts\node_modules\@sharpts\gui\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="SharpTSGuiAddPublishFiles"
+          BeforeTargets="ComputeResolvedFilesToPublishList"
+          DependsOnTargets="SharpTSGuiAssemble">
+    <ItemGroup>
+      <_SharpTSGuiPublishNativeFiles Include="$(SharpTSGuiHostRoot)runtimes\$(RuntimeIdentifier)\native\*"
+                                     Exclude="$(SharpTSGuiHostRoot)runtimes\$(RuntimeIdentifier)\native\*.pdb"
+                                     Condition="'$(RuntimeIdentifier)' != ''" />
+      <_SharpTSGuiPublishGuestSources Include="$(TargetDir)Guest\**\*"
+                                      Condition="'$(PublishSingleFile)' != 'true'" />
+      <_SharpTSGuiPublishMetadata Include="$(TargetDir).sharpts\**\*"
+                                  Condition="'$(PublishSingleFile)' != 'true'" />
+      <_SharpTSGuiPublishGuestAssembly Include="$(TargetDir)SharpTS.Gui.Guest.dll"
+                                       Condition="'$(PublishSingleFile)' != 'true'" />
+      <ResolvedFileToPublish Include="@(_SharpTSGuiPublishNativeFiles)">
+        <RelativePath>%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <AssetType>native</AssetType>
+        <ExcludeFromSingleFile>false</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_SharpTSGuiPublishGuestSources)">
+        <RelativePath>Guest\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_SharpTSGuiPublishMetadata)">
+        <RelativePath>.sharpts\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_SharpTSGuiPublishGuestAssembly)">
+        <RelativePath>SharpTS.Gui.Guest.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SharpTSGuiValidatePublish" AfterTargets="Publish">
+    <Exec Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiValidatePublishedOutput)' == 'true'"
+          Command="dotnet &quot;$(PublishDir)$(AssemblyName).dll&quot; --validate-deps &quot;$(PublishDir)&quot;" />
+  </Target>
+
+  <Target Name="SharpTSGuiClean" BeforeTargets="Clean">
+    <RemoveDir Directories="$(SharpTSGuiIntermediateRoot)" Condition="Exists('$(SharpTSGuiIntermediateRoot)')" />
+    <RemoveDir Directories="$(TargetDir)" Condition="Exists('$(TargetDir)')" />
+  </Target>
+</Project>

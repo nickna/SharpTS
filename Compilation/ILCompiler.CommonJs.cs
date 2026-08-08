@@ -223,7 +223,10 @@ public partial class ILCompiler
 
             if (stmt is Stmt.Expression exprStmt)
             {
-                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+                if (_hosted)
+                    EmitHostedExpression(il, emitter, exprStmt);
+                else
+                    EmitExpressionWithAsyncWait(il, emitter, exprStmt);
             }
             else
             {

@@ -1,0 +1,503 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using SharpTS.Gui;
+using Xunit;
+
+namespace SharpTS.Gui.Conformance.Tests;
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class DesktopRendererCollection
+{
+    public const string Name = "DesktopRenderer";
+}
+
+[Collection(DesktopRendererCollection.Name)]
+public sealed class DesktopRendererTests : IDisposable
+{
+    static DesktopRendererTests()
+    {
+        if (Application.Current is null)
+        {
+            AppBuilder.Configure<TestApplication>()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .SetupWithoutStarting();
+        }
+    }
+
+    private readonly TraceRecorder _trace = new(Environment.CurrentManagedThreadId);
+    private readonly DesktopRuntimeRegistration _runtimeRegistration;
+
+    public DesktopRendererTests()
+    {
+        _runtimeRegistration = DesktopBridge.Configure(
+            _trace,
+            _ => { },
+            headless: true,
+            dispatchGuestCallback: callback => callback(),
+            scheduleGuestMicrotask: callback => callback());
+    }
+
+    public void Dispose() => _runtimeRegistration.Dispose();
+
+    [Fact]
+    public void Render_UpdatesPropertiesAndMovesKeyedControlsWithoutRecreation()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(
+            Panel(4,
+                Text("A", "a"),
+                Text("B", "b")),
+            title: "Before",
+            width: 400,
+            height: 200));
+
+        Control a = Assert.IsType<TextBlock>(root.FindControl("a"));
+        Control b = Assert.IsType<TextBlock>(root.FindControl("b"));
+        var panel = Assert.IsType<StackPanel>(root.FindControl("panel"));
+
+        root.Render(Window(
+            Panel(11,
+                Text("B updated", "b"),
+                Text("A updated", "a")),
+            title: "After",
+            width: 640,
+            height: 360));
+
+        Assert.Same(a, root.FindControl("a"));
+        Assert.Same(b, root.FindControl("b"));
+        Assert.Same(b, panel.Children[0]);
+        Assert.Same(a, panel.Children[1]);
+        Assert.Equal("A updated", ((TextBlock)a).Text);
+        Assert.Equal("B updated", ((TextBlock)b).Text);
+        Assert.Equal(11, panel.Spacing);
+        Assert.Equal("After", root.Window!.Title);
+        Assert.Equal(640, root.Window.Width);
+        Assert.Equal(360, root.Window.Height);
+        Assert.Contains(_trace.Snapshot(), item => item.Stage == "reconcile-move");
+    }
+
+    [Fact]
+    public void Render_MatchesUnkeyedChildrenPositionallyAndReplacesChangedKinds()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(0, Text("first"), Text("second"))));
+        var panel = Assert.IsType<StackPanel>(root.FindControl("panel"));
+        Control first = panel.Children[0];
+        Control second = panel.Children[1];
+
+        root.Render(Window(Panel(0, Text("first updated"), ButtonNode("replacement"))));
+
+        Assert.Same(first, panel.Children[0]);
+        Assert.NotSame(second, panel.Children[1]);
+        Assert.IsType<Button>(panel.Children[1]);
+        Assert.Equal("first updated", ((TextBlock)first).Text);
+    }
+
+    [Fact]
+    public void Fragment_IsARetainedContainerAndMovesItsKeyedChildren()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode(
+            "Fragment",
+            Key: "fragment",
+            Children: new[] { Text("A", "a"), Text("B", "b") })));
+        var fragment = Assert.IsType<StackPanel>(root.FindControl("fragment"));
+        Control a = root.FindControl("a")!;
+        Control b = root.FindControl("b")!;
+
+        root.Render(Window(new GuiVNode(
+            "Fragment",
+            Key: "fragment",
+            Children: new[] { Text("B", "b"), Text("A", "a") })));
+
+        Assert.Same(fragment, root.FindControl("fragment"));
+        Assert.Same(b, fragment.Children[0]);
+        Assert.Same(a, fragment.Children[1]);
+    }
+
+    [Fact]
+    public void Render_PrevalidatesDuplicateKeysLeafChildrenAndWindowCardinality()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(0, Text("A", "a")), title: "Stable"));
+        Window window = root.Window!;
+        Control a = root.FindControl("a")!;
+
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(Panel(0, Text("one", "x"), Text("two", "x")), title: "Must not commit")));
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            new GuiVNode("Window", Children: new[]
+            {
+                new GuiVNode("TextBlock", Text: "one"),
+                new GuiVNode("TextBlock", Text: "two"),
+            })));
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("TextBlock", Text: "leaf", Children: new[] { Text("invalid") }))));
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("Unknown"))));
+        Assert.Equal("42", DesktopBridge.CreateTextBlock("key", double.NaN, "normal", "noWrap", null, 42d, null).Key);
+
+        Assert.Same(window, root.Window);
+        Assert.Same(a, root.FindControl("a"));
+        Assert.Equal("Stable", root.Window!.Title);
+    }
+
+    [Fact]
+    public void Button_KeepsOneSubscriptionAndDispatchesLatestCallback()
+    {
+        int oldCalls = 0;
+        int newCalls = 0;
+        object refIdentity = new();
+        var refEvents = new List<string>();
+        Action<object?> firstRef = value => refEvents.Add(value is null ? "detach" : "attach");
+        Action<object?> secondRef = value => refEvents.Add(value is null ? "detach-new" : "attach-new");
+        DesktopRoot root = CreateRoot();
+
+        root.Render(Window(Panel(0,
+            new GuiVNode(
+                "Button",
+                Key: "action",
+                Text: "Old",
+                Click: () => oldCalls++,
+                AttachRef: firstRef,
+                RefIdentity: refIdentity))));
+        var button = Assert.IsType<Button>(root.FindControl("action"));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        root.Render(Window(Panel(0,
+            new GuiVNode(
+                "Button",
+                Key: "action",
+                Text: "New",
+                Click: () => newCalls++,
+                AttachRef: secondRef,
+                RefIdentity: refIdentity))));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        Assert.Equal(1, oldCalls);
+        Assert.Equal(1, newCalls);
+        Assert.Equal(new[] { "attach" }, refEvents);
+        Assert.Equal(1, root.ActiveSubscriptions);
+        Assert.Single(_trace.Snapshot(), item => item.Stage == "subscribe");
+
+        root.Dispose();
+        Assert.Equal(new[] { "attach", "detach-new" }, refEvents);
+        Assert.Single(_trace.Snapshot(), item => item.Stage == "unsubscribe");
+    }
+
+    [Fact]
+    public void ReplacementAndDisposal_ReleaseEventsAndRefsChildFirstExactlyOnce()
+    {
+        var order = new List<string>();
+        object oldIdentity = new();
+        object newIdentity = new();
+        object windowIdentity = new();
+        object panelIdentity = new();
+        object siblingIdentity = new();
+        Action<object?> windowRef = value => order.Add(value is null ? "window-null" : "window-set");
+        Action<object?> panelRef = value => order.Add(value is null ? "panel-null" : "panel-set");
+        Action<object?> siblingRef = value => order.Add(value is null ? "sibling-null" : "sibling-set");
+        DesktopRoot root = CreateRoot(() => order.Add("reactive-cleanup"));
+        root.Render(new GuiVNode(
+            "Window",
+            AttachRef: windowRef,
+            RefIdentity: windowIdentity,
+            Children: new[]
+            {
+                new GuiVNode(
+                    "StackPanel",
+                    Key: "panel",
+                    AttachRef: panelRef,
+                    RefIdentity: panelIdentity,
+                    Children: new[]
+                    {
+                        new GuiVNode(
+                            "Button",
+                            Key: "replace",
+                            Text: "button",
+                            AttachRef: value => order.Add(value is null ? "old-null" : "old-set"),
+                            RefIdentity: oldIdentity),
+                        new GuiVNode(
+                            "TextBlock",
+                            Key: "sibling",
+                            Text: "sibling",
+                            AttachRef: siblingRef,
+                            RefIdentity: siblingIdentity),
+                    })
+            }));
+
+        order.Clear();
+        root.Render(new GuiVNode(
+            "Window",
+            AttachRef: windowRef,
+            RefIdentity: windowIdentity,
+            Children: new[]
+            {
+                new GuiVNode(
+                    "StackPanel",
+                    Key: "panel",
+                    AttachRef: panelRef,
+                    RefIdentity: panelIdentity,
+                    Children: new[]
+                    {
+                        new GuiVNode(
+                            "TextBlock",
+                            Key: "replace",
+                            Text: "text",
+                            AttachRef: value => order.Add(value is null ? "new-null" : "new-set"),
+                            RefIdentity: newIdentity),
+                        new GuiVNode(
+                            "TextBlock",
+                            Key: "sibling",
+                            Text: "sibling",
+                            AttachRef: siblingRef,
+                            RefIdentity: siblingIdentity),
+                    })
+            }));
+
+        Assert.Equal(new[] { "old-null", "new-set" }, order);
+        Assert.Equal(0, root.ActiveSubscriptions);
+
+        order.Clear();
+        root.Dispose();
+        root.Dispose();
+        Assert.Equal(
+            new[] { "reactive-cleanup", "new-null", "sibling-null", "panel-null", "window-null" },
+            order);
+        Assert.Equal(1, order.Count(item => item == "new-null"));
+    }
+
+    [Fact]
+    public void Root_RejectsAdditionalRootsAndAllOffThreadAccess()
+    {
+        int cleanups = 0;
+        DesktopRoot root = CreateRoot(() => cleanups++);
+        root.Render(Window(Panel(0, Text("owner"))));
+
+        Assert.Throws<InvalidOperationException>(() => DesktopBridge.CreateDesktopRoot(() => { }));
+        Exception? offThreadError = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                root.Render(Window(Panel(0, Text("wrong thread"))));
+            }
+            catch (Exception exception)
+            {
+                offThreadError = exception;
+            }
+        });
+        thread.Start();
+        thread.Join();
+        InvalidOperationException error = Assert.IsType<InvalidOperationException>(offThreadError);
+        Assert.Contains("owner", error.Message, StringComparison.OrdinalIgnoreCase);
+
+        root.Dispose();
+        root.Dispose();
+        Assert.Equal(1, cleanups);
+        using DesktopRoot next = CreateRoot();
+    }
+
+    [Fact]
+    public void FormsLayout_UpdatesInPlaceAcrossAllPreviewDescriptors()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode(
+            "Border",
+            Key: "border",
+            Padding: 8,
+            Background: "#112233",
+            BorderBrush: "orange",
+            BorderThickness: 2,
+            CornerRadius: 4,
+            Children: new[]
+            {
+                new GuiVNode(
+                    "ScrollViewer",
+                    Key: "scroll",
+                    VerticalScrollBarVisibility: "visible",
+                    Children: new[]
+                    {
+                        new GuiVNode(
+                            "Grid",
+                            Key: "grid",
+                            Rows: "auto,*",
+                            Columns: "120,*",
+                            Children: new[]
+                            {
+                                new GuiVNode(
+                                    "TextBlock",
+                                    Key: "label",
+                                    Text: "Before",
+                                    FontSize: 18,
+                                    FontWeight: "bold",
+                                    TextWrapping: "wrap",
+                                    Foreground: "white",
+                                    Margin: 3,
+                                    HorizontalAlignment: "right",
+                                    GridRow: 1,
+                                    GridColumn: 1),
+                                new GuiVNode("ProgressBar", Key: "progress", Minimum: 0, Maximum: 10, Value: 2),
+                            })
+                    })
+            })));
+
+        var border = Assert.IsType<Border>(root.FindControl("border"));
+        var scroll = Assert.IsType<ScrollViewer>(root.FindControl("scroll"));
+        var grid = Assert.IsType<Grid>(root.FindControl("grid"));
+        var label = Assert.IsType<TextBlock>(root.FindControl("label"));
+        var progress = Assert.IsType<ProgressBar>(root.FindControl("progress"));
+
+        root.Render(Window(new GuiVNode(
+            "Border",
+            Key: "border",
+            Padding: 12,
+            Background: "#223344",
+            BorderBrush: "yellow",
+            BorderThickness: 3,
+            CornerRadius: 6,
+            Children: new[]
+            {
+                new GuiVNode(
+                    "ScrollViewer",
+                    Key: "scroll",
+                    HorizontalScrollBarVisibility: "hidden",
+                    VerticalScrollBarVisibility: "auto",
+                    Children: new[]
+                    {
+                        new GuiVNode(
+                            "Grid",
+                            Key: "grid",
+                            Rows: "*,auto",
+                            Columns: "*,2*",
+                            Children: new[]
+                            {
+                                new GuiVNode("ProgressBar", Key: "progress", Minimum: 0, Maximum: 20, Value: 7),
+                                new GuiVNode(
+                                    "TextBlock",
+                                    Key: "label",
+                                    Text: "After",
+                                    FontSize: 20,
+                                    FontWeight: "normal",
+                                    TextWrapping: "noWrap",
+                                    Foreground: "black",
+                                    HorizontalAlignment: "left",
+                                    GridRow: 0,
+                                    GridColumn: 0),
+                            })
+                    })
+            })));
+
+        Assert.Same(border, root.FindControl("border"));
+        Assert.Same(scroll, root.FindControl("scroll"));
+        Assert.Same(grid, root.FindControl("grid"));
+        Assert.Same(label, root.FindControl("label"));
+        Assert.Same(progress, root.FindControl("progress"));
+        Assert.Equal(new Thickness(12), border.Padding);
+        Assert.Equal(new CornerRadius(6), border.CornerRadius);
+        Assert.Equal(ScrollBarVisibility.Hidden, scroll.HorizontalScrollBarVisibility);
+        Assert.Equal("After", label.Text);
+        Assert.Equal(FontWeight.Normal, label.FontWeight);
+        Assert.Equal(HorizontalAlignment.Left, label.HorizontalAlignment);
+        Assert.Equal(0, Grid.GetRow(label));
+        Assert.Equal(0, Grid.GetColumn(label));
+        Assert.Equal(7, progress.Value);
+        Assert.Same(progress, grid.Children[0]);
+        Assert.Same(label, grid.Children[1]);
+    }
+
+    [Fact]
+    public void ControlledInputs_SuppressRenderFeedbackAndDispatchLatestCallbacks()
+    {
+        var oldEvents = new List<string>();
+        var newEvents = new List<string>();
+        DesktopRoot root = CreateRoot();
+
+        root.Render(Window(Panel(0,
+            new GuiVNode("Button", Key: "button", Text: "Before", Click: () => oldEvents.Add("click")),
+            new GuiVNode("TextBox", Key: "text", Text: "before", TextChanged: value => oldEvents.Add("text:" + value)),
+            new GuiVNode("CheckBox", Key: "check", Text: "Before", IsChecked: false, CheckedChanged: value => oldEvents.Add("check:" + value)),
+            new GuiVNode("ComboBox", Key: "combo", Items: ["a", "b"], SelectedIndex: 0, SelectionChanged: value => oldEvents.Add("combo:" + value)),
+            new GuiVNode("Slider", Key: "slider", Minimum: 0, Maximum: 10, Value: 1, ValueChanged: value => oldEvents.Add("slider:" + value)))));
+
+        root.Render(Window(Panel(4,
+            new GuiVNode("Button", Key: "button", Text: "After", Click: () => newEvents.Add("click")),
+            new GuiVNode("TextBox", Key: "text", Text: "rendered", TextChanged: value => newEvents.Add("text:" + value)),
+            new GuiVNode("CheckBox", Key: "check", Text: "After", IsChecked: true, CheckedChanged: value => newEvents.Add("check:" + value)),
+            new GuiVNode("ComboBox", Key: "combo", Items: ["a", "b", "c"], SelectedIndex: 1, SelectionChanged: value => newEvents.Add("combo:" + value)),
+            new GuiVNode("Slider", Key: "slider", Minimum: 0, Maximum: 20, Value: 2, ValueChanged: value => newEvents.Add("slider:" + value)))));
+
+        Assert.Empty(oldEvents);
+        Assert.Empty(newEvents);
+        Assert.Equal(5, root.ActiveSubscriptions);
+        Assert.Equal(5, _trace.Snapshot().Count(item => item.Stage == "subscribe"));
+
+        Assert.IsType<Button>(root.FindControl("button")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var textBox = Assert.IsType<TextBox>(root.FindControl("text"));
+        textBox.Text = "user";
+        textBox.RaiseEvent(new TextChangedEventArgs(TextBox.TextChangedEvent));
+        Assert.IsType<CheckBox>(root.FindControl("check")).IsChecked = false;
+        Assert.IsType<ComboBox>(root.FindControl("combo")).SelectedIndex = 2;
+        Assert.IsType<Slider>(root.FindControl("slider")).Value = 9;
+
+        Assert.Empty(oldEvents);
+        Assert.Equal(new[] { "click", "text:user", "check:False", "combo:2", "slider:9" }, newEvents);
+        root.Dispose();
+        Assert.Equal(5, _trace.Snapshot().Count(item => item.Stage == "unsubscribe"));
+    }
+
+    [Fact]
+    public void PreviewProperties_ArePrevalidatedWithoutMutatingMountedControls()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(2, Text("Stable", "stable")), title: "Stable"));
+        Window window = root.Window!;
+        Control stable = root.FindControl("stable")!;
+
+        InvalidOperationException colorError = Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("Border", Background: "not a color", SourceFile: "app.tsx", SourceLine: 7, SourceColumn: 9))));
+        Assert.Contains("app.tsx:7:9", colorError.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("Grid", Rows: "not-a-grid-length"))));
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("Slider", Minimum: 5, Maximum: 1, Value: 3))));
+        Assert.Throws<InvalidOperationException>(() => root.Render(
+            Window(new GuiVNode("ComboBox", Items: ["only"], SelectedIndex: 2))));
+
+        Assert.Same(window, root.Window);
+        Assert.Same(stable, root.FindControl("stable"));
+        Assert.Equal("Stable", root.Window!.Title);
+    }
+
+    private static GuiVNode Window(
+        GuiVNode? content = null,
+        string title = "Test",
+        double width = 480,
+        double height = 260) =>
+        new(
+            "Window",
+            Key: "window",
+            Title: title,
+            Width: width,
+            Height: height,
+            Children: content is null ? Array.Empty<GuiVNode>() : new[] { content });
+
+    private static GuiVNode Panel(double spacing, params GuiVNode[] children) =>
+        new("StackPanel", Key: "panel", Spacing: spacing, Children: children);
+
+    private static GuiVNode Text(string text, string? key = null) =>
+        new("TextBlock", Key: key, Text: text);
+
+    private static GuiVNode ButtonNode(string text, string? key = null) =>
+        new("Button", Key: key, Text: text);
+
+    private static DesktopRoot CreateRoot(Action? cleanup = null) =>
+        DesktopBridge.CreateDesktopRoot(cleanup ?? (() => { }));
+
+    private sealed class TestApplication : Application;
+}

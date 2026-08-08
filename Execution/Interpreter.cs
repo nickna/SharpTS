@@ -155,6 +155,11 @@ public partial class Interpreter : IDisposable
     // Flag to indicate interpreter has been disposed - timer callbacks should not execute
     private volatile bool _isDisposed;
 
+    // Console execution waits for promise-valued top-level expression statements.
+    // Hosted scripts/CommonJS disable that legacy convention; hosted ESM uses the
+    // resumable async statement path in Interpreter.Hosting.cs instead.
+    private bool _waitForTopLevelPromises = true;
+
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
 
@@ -368,6 +373,11 @@ public partial class Interpreter : IDisposable
             _virtualTimerQueue.Enqueue(timer, (fireTime, _timerSequence++));
             _hasScheduledTimers = true;
         }
+        if (_hostedTimerChanged != null)
+        {
+            _hostedTimerChanged();
+            return timer;
+        }
         // Always wake the event loop: it may be blocked in a wait whose timeout was
         // computed before this timer existed (up to 60s when the queue was empty), so a
         // cross-thread schedule with any delay must force a timeout recomputation.
@@ -381,6 +391,12 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private void WakeEventLoop()
     {
+        if (_hostedWorkAvailable != null)
+        {
+            _hostedWorkAvailable();
+            return;
+        }
+
         if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
         {
             try { _callbackQueue.Add(() => { }); }
@@ -413,8 +429,10 @@ public partial class Interpreter : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        // Log uncaught exceptions from microtasks but don't crash
-                        Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
+                        if (_hostedUnhandledError != null)
+                            _hostedUnhandledError(ex);
+                        else
+                            Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
                     }
                 }
             });
@@ -450,9 +468,16 @@ public partial class Interpreter : IDisposable
     /// <param name="action">The callback action to execute on the main thread.</param>
     internal void EnqueueCallback(Action action)
     {
+        if (_hostedWorkAvailable != null && !_hostedAcceptingWork)
+            return;
+
         if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
         {
-            try { _callbackQueue.Add(action); }
+            try
+            {
+                _callbackQueue.Add(action);
+                _hostedWorkAvailable?.Invoke();
+            }
             catch (InvalidOperationException)
             {
                 // Queue was completed between our check and the Add call - this is expected
@@ -1422,7 +1447,7 @@ public partial class Interpreter : IDisposable
                 if (stmt is Stmt.Expression exprStmt)
                 {
                     object? result = Evaluate(exprStmt.Expr);
-                    if (result is SharpTSPromise promise)
+                    if (_waitForTopLevelPromises && result is SharpTSPromise promise)
                     {
                         WaitForPromise(promise);
                     }
@@ -1628,7 +1653,7 @@ public partial class Interpreter : IDisposable
                 {
                     object? result = Evaluate(exprStmt.Expr);
                     // Wait for top-level Promises to complete before continuing
-                    if (result is SharpTSPromise promise)
+                    if (_waitForTopLevelPromises && result is SharpTSPromise promise)
                     {
                         WaitForPromise(promise);
                     }

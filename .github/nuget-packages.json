@@ -11,6 +11,11 @@
     { "id": "SharpTS.LanguageServer" },
     { "id": "SharpTS.Hosting" },
     { "id": "SharpTS.Sdk" },
-    { "id": "SharpTS" }
+    { "id": "SharpTS" },
+    {
+      "id": "SharpTS.Gui.Sdk",
+      "version": "0.1.0-preview.1",
+      "publish": false
+    }
   ]
 }

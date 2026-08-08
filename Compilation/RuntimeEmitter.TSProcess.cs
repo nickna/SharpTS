@@ -1,6 +1,9 @@
+#pragma warning disable SHARPTS_HOSTING001
+
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using SharpTS.Hosting;
 
 namespace SharpTS.Compilation;
 
@@ -82,6 +85,15 @@ public partial class RuntimeEmitter
         runtime.ProcessRunLifecycle = runtimeTb.DefineMethod(
             "ProcessRunLifecycle", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), Type.EmptyTypes);
+        if (_emitHosted)
+        {
+            runtime.ProcessEmitHostedBeforeExit = runtimeTb.DefineMethod(
+                "ProcessEmitHostedBeforeExit", MethodAttributes.Public | MethodAttributes.Static,
+                typeof(void), [_types.Int32]);
+            runtime.ProcessEmitHostedExit = runtimeTb.DefineMethod(
+                "ProcessEmitHostedExit", MethodAttributes.Public | MethodAttributes.Static,
+                typeof(void), [_types.Int32]);
+        }
         runtime.ProcessRegisterSignal = runtimeTb.DefineMethod(
             "ProcessRegisterSignal", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [_types.String]);
@@ -127,6 +139,8 @@ public partial class RuntimeEmitter
         EmitProcessKillBody(runtime);
         EmitProcessEmitWarningBody(runtime);
         EmitProcessRunLifecycleBody(runtime);
+        if (_emitHosted)
+            EmitHostedProcessLifecycleBodies(runtime);
         EmitProcessSignalMachinery(runtimeTb, runtime);
     }
 
@@ -1688,6 +1702,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveCode);
         il.Emit(OpCodes.Stloc, codeLocal);
 
+        // Hosted output emits exit synchronously but transfers termination to
+        // the host lifetime. It never mutates Environment.ExitCode or calls
+        // Environment.Exit on this path.
+        if (_emitHosted)
+        {
+            var ordinaryExit = il.DefineLabel();
+            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Brfalse, ordinaryExit);
+            EmitHostedProcessEvent(il, runtime, "exit", codeLocal);
+            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Ldloc, codeLocal);
+            il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+                nameof(SharpTSHostedRuntimeBase.RequestProcessExit))!);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryExit);
+        }
+
         // Environment.ExitCode = code (so 'exit' listeners read the final value)
         il.Emit(OpCodes.Ldloc, codeLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Environment, "ExitCode").SetMethod!);
@@ -2135,6 +2167,47 @@ public partial class RuntimeEmitter
         EmitProcessEvent("exit");
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitHostedProcessLifecycleBodies(EmittedRuntime runtime)
+    {
+        var before = ((MethodBuilder)runtime.ProcessEmitHostedBeforeExit).GetILGenerator();
+        var beforeCode = before.DeclareLocal(_types.Int32);
+        before.Emit(OpCodes.Ldarg_0);
+        before.Emit(OpCodes.Stloc, beforeCode);
+        EmitHostedProcessEvent(before, runtime, "beforeExit", beforeCode);
+        before.Emit(OpCodes.Ret);
+
+        var exit = ((MethodBuilder)runtime.ProcessEmitHostedExit).GetILGenerator();
+        var exitCode = exit.DeclareLocal(_types.Int32);
+        exit.Emit(OpCodes.Ldarg_0);
+        exit.Emit(OpCodes.Stloc, exitCode);
+        EmitHostedProcessEvent(exit, runtime, "exit", exitCode);
+        exit.Emit(OpCodes.Ret);
+    }
+
+    private void EmitHostedProcessEvent(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        string eventName,
+        LocalBuilder exitCode)
+    {
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Call, _processGetInstance);
+        il.Emit(OpCodes.Ldstr, eventName);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, exitCode);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.EndExceptionBlock();
     }
 
     /// <summary>

@@ -1,0 +1,332 @@
+# Avalonia desktop status and Windows roadmap
+
+Date: 2026-08-08
+
+This document is the canonical engineering record for the Avalonia desktop effort. It replaces
+the Phase 0, Phase 1A, Phase 1B, Phase 2, Phase 3A, and Windows-preview findings reports. Git
+history remains the source for the full phase-by-phase narratives.
+
+## Current decision
+
+- The Windows x64 public-preview implementation is complete and verified. It passed the isolated
+  SDK package lifecycle, interpreted and compiled Headless and real-window execution, and a
+  self-contained compiled single-file run without a usable `DOTNET_ROOT`.
+- Windows ARM64 directory and single-file cross-publish pass. Native ARM64 Headless and
+  real-window execution remain outstanding; cross-publish evidence is not native execution
+  evidence.
+- `SharpTS.Gui.Sdk` is prepared as `0.1.0-preview.1` but is unpublished. NuGet package-ID
+  onboarding and separate API-key scope validation are prerequisites to publication.
+- Preview productization cleanup is complete. Projects, paths, tests, traces, workflows, renderer
+  units, bridge ownership, host services, conformance hooks, and RID declarations now use durable
+  boundaries without changing the preview contract.
+- The TSX application API is now implemented at GUI API version 1: typed function components,
+  natural children, keyed fragments, standard hooks, typed refs, keyboard/focus input, a broad
+  built-in control set, desktop dialogs/clipboard, and reproducible packaged assets. The
+  `Examples/Calculator` application exercises this surface in interpreted and compiled modes.
+- macOS is officially deferred. It has not passed any current product gate and does not gate the
+  Windows preview. No macOS compatibility or schedule is implied by the Avalonia architecture.
+
+The result is a go for the implemented `win-x64` preview and for `win-arm64` cross-publish, not a
+claim that every Windows architecture has executed natively and not a cross-platform product go.
+
+## Completed capabilities
+
+### Hosting and scheduling
+
+- Avalonia owns the process main thread, dispatcher, synchronization context, and classic desktop
+  lifetime. SharpTS neither replaces that synchronization context nor starts a competing blocking
+  event loop.
+- Interpreted and compiled guests are dispatcher-driven. One coalesced host turn runs at most one
+  external callback, timer, or module job and then drains the complete guest microtask checkpoint.
+  The earliest guest timer is represented by one cancellable host deadline; there is no polling
+  pump.
+- Off-thread notifications are queued for the owner thread, synchronous return-valued off-thread
+  calls are rejected, and owner-thread reentrancy runs inline while deferring its checkpoint to the
+  outermost guest boundary.
+- Framework-neutral dispatcher, lifetime, and error-sink contracts serve both execution modes.
+  Hosted ABI 1 validates assembly metadata before constructing a compiled guest.
+- Initialization faults and uncaught errors route through the host error sink and ordered shutdown.
+  Graceful shutdown observes `beforeExit`, reverse cleanup, and `exit`; `process.exit(code)` requests
+  host shutdown without calling `Environment.Exit`.
+- Hosted interpreted ESM supports prepared static top-level-await graphs. Compiled hosting supports
+  standalone awaits and direct awaited variable/export initializers. Compound-expression,
+  conditional, loop, and dynamic-import top-level-await expansion remain outside the contract.
+
+### Renderer and TypeScript surface
+
+- The retained renderer validates a complete incoming tree before structural mutation and
+  reconciles keyed or positional children in place. Key/kind matches retain native controls;
+  kind changes replace them.
+- Signals use `Object.is` equality, coalesce invalidations through a hosted microtask, and commit
+  dynamic dependencies only after a successful render. Work queued after root disposal is ignored.
+- Refs preserve native identity and detach before removal. Event wrappers read the latest guest
+  callback while retaining one native subscription for the mounted lifetime. Cleanup is
+  deterministic, child-first, and idempotent.
+- The descriptor registry is internal. The public node set now covers core layout, text/images,
+  actions, text and selection input, numeric/date/time input, tabs, menus, tool/status bars, and
+  fragments. List and combo data remain string-backed in GUI API 1.
+- Typed props cover layout, per-edge spacing, colors, typography, content alignment, visibility,
+  enabled/opacity state, tooltips, accessibility names, Grid/Dock placement, focus refs, and
+  normalized keyboard events. Controlled input commits suppress native callback echoes; real user
+  changes dispatch the latest guest callback.
+- TSX produces a JavaScript element tree. Typed function components and natural primitive children
+  are materialized by a lifecycle-aware root with `useState`, `useReducer`, `useEffect`, `useMemo`,
+  `useCallback`, `useRef`, and `useControlRef`. `createSignal` remains the supported external-state
+  primitive. Conformance helpers stay isolated under `@sharpts/gui/internal-testing`.
+
+### SDK, deployment, and release controls
+
+- An isolated consumer with no project references restores `SharpTS.Gui.Sdk` from a package feed,
+  including from a path containing spaces. SDK targets generate the consumer launcher, hosted ABI
+  manifest, tsconfig overlay, and compiled guest, while retaining source payloads for interpreted
+  development execution.
+- Development builds and framework-dependent directory publishes support interpreted and compiled
+  modes. A Windows RID publish defaults to a Windows-subsystem, self-contained, compiled
+  single-file executable containing the guest and native payload; interpreted mode is rejected
+  with a durable fatal diagnostic.
+- Package contents are filtered to `win-x64` and `win-arm64`, contain no PDBs, and expose no
+  absolute repository paths in MSBuild assets. Both single-file publish directories contain only
+  the consumer executable.
+- Interactive Windows-subsystem failures are written under `%LOCALAPPDATA%\SharpTS.Gui` and may
+  show a minimal native dialog when no console is attached.
+- Release preflight requires the fixed preview artifact and a registered package ID before any
+  stable package push. The release manifest excludes the GUI SDK from publication and inventory
+  with `publish: false` until maintainers intentionally complete onboarding and remove the guard.
+
+### Productization boundaries
+
+- The renderer is split into root reconciliation, mounted-node ownership, validation,
+  common-property, registry, and control-descriptor units while retaining its original commit
+  ordering and cleanup semantics.
+- A host-owned application runtime context holds the dispatcher callbacks, trace recorder, and
+  single active root. Production VNode/microtask interop and conformance-only controls use distinct
+  facades; normal `@sharpts/gui` imports cannot reach the conformance hooks.
+- Host option parsing, manifest and embedded-payload loading, Avalonia lifetime coordination, and
+  fatal diagnostics are separate services. Windows logging paths and the native error dialog are
+  confined to the Windows diagnostics adapter.
+- `Sdk/SupportedPlatforms.props` is the source of truth for `win-x64` and `win-arm64`. SDK
+  validation, package assets, the consumer harness, and workflow-coverage tests consume or verify
+  that declaration.
+- GUI API version 1 is written into file and embedded manifests and rejected on host mismatch.
+  Project-local assets and SHA-256-pinned HTTP(S) assets are prepared at build time and embedded
+  under stable `asset:///` logical names.
+
+## Milestones
+
+| Milestone | What it proved | Earlier limitation retired |
+| --- | --- | --- |
+| Phase 0 | Avalonia could own a responsive Windows UI thread while interpreted and compiled guests mounted a real window, handled an event, timer, promise, and off-thread completion, and published a complete framework-dependent asset closure. | Established feasibility, but used a 5 ms dispatcher pump, one-time mounting, a four-control surface, and separate host/guest assemblies. |
+| Phase 1A | A framework-neutral interpreted dispatcher/lifetime/error contract delivered deterministic turns, timers, lifecycle, cleanup, and static-graph ESM top-level await. | Removed polling from interpreted hosting and replaced ad hoc task delivery with a deterministic scheduler; compiled hosting still used the Phase 0 pump. |
+| Phase 1B | Hosted ABI 1 and the compiled scheduler matched interpreted scheduling, lifecycle, top-level-await subset, synchronization-context, and no-pump behavior. | Removed compiled polling and the prototype initializer/pump pair; replaced it with validated hosted assembly metadata and a shared runtime contract. |
+| Phase 2 | A retained keyed renderer, signals, refs, latest-callback events, validation, and deterministic cleanup produced identical interpreted and compiled traces. | Replaced one-time recursive mounting and imperative sample updates; retained the original small descriptor set and local source package. |
+| Phase 3A | A separately restored MSBuild SDK drove an isolated consumer through build, clean/rebuild, publish, IL verification, Headless, and real-window execution. | Replaced repository-local host compilation and copying with an SDK-owned manifest, overlay, launcher pipeline, and packaged consumer boundary. |
+| Windows preview | Durable assembly names, typed layout/display/form controls, controlled inputs, Windows-only RID filtering, generated consumer launcher, and compiled self-contained single-file deployment passed on x64; ARM64 cross-publish passed. | Expanded beyond the four-control and framework-dependent-only experiment, reduced the all-platform package, and added release-preflight and Windows fatal-diagnostic safeguards. |
+| Preview productization | Durable root-level project identities, decomposed renderer/bridge/host services, isolated conformance APIs, and one validated Windows RID declaration passed the packaged x64 and ARM64 gates. | Removed prototype paths and process-global test state, retired the renderer and host monoliths, isolated Windows diagnostics, and prevented package/SDK/harness/workflow RID drift. |
+
+## Decision ledger
+
+### Retained
+
+| Decision | Current rule |
+| --- | --- |
+| UI ownership | Avalonia owns the UI thread, dispatcher loop, synchronization context, and desktop lifetime. |
+| Hosted contract | Hosted ABI remains version 1 for interpreted/compiled parity and persisted-assembly loading. |
+| Root model | A runtime configuration supports one active `Window` root. Multi-window semantics are not inferred from Avalonia capabilities. |
+| Control metadata | The descriptor registry remains an internal, explicit mapping rather than public reflection or custom registration. |
+
+### Changed
+
+| Earlier position | Current position |
+| --- | --- |
+| Dispatcher polling was acceptable for feasibility. | Both guest modes use wake/coalescing and exact host deadlines; polling is removed. |
+| Rendering was a one-time recursive mount. | Rendering uses retained keyed/positional reconciliation with signals, refs, validation, fresh callbacks, and cleanup. |
+| Deployment was framework-dependent and directory-based. | Framework-dependent directories remain for dual-mode development; RID publish adds a compiled self-contained single-file Windows executable. |
+| A real-window macOS run was the immediate next feasibility gate. | macOS is an explicit backlog item and does not gate the Windows preview. Its earlier pending gates were not converted into passes. |
+
+### Deferred
+
+- Native Windows ARM64 Headless and real-window execution.
+- NuGet ID reservation/onboarding, API-key scope validation, and package publication.
+- Theme/resource dictionaries, custom descriptors/controls, rich item templates, drawing/canvas,
+  data grids/trees, and multi-window support.
+- Compound-expression and dynamic-import top-level await.
+- Trimming, Native AOT, signing, installers, update/distribution mechanisms, and macOS.
+
+## Architecture boundaries
+
+Portability depends on keeping the following seams intact during future evolution:
+
+- Keep dispatcher, lifetime, error-sink, and hosted ABI contracts independent of Avalonia and
+  Windows. Framework-neutral scheduling semantics must not acquire control or platform types.
+- Keep reconciliation, validation, descriptors, mounted-node ownership, refs, and event freshness
+  independent of Windows packaging. Renderer behavior must be testable without a WinExe or native
+  dialog.
+- Confine RID filtering, WinExe selection, native fatal dialogs, and platform assets to
+  platform-specific packaging or host adapters. A consumer manifest and generated launcher should
+  not encode Windows behavior into the hosted ABI.
+- Keep one source of truth for supported platforms and RIDs so package contents, SDK validation,
+  consumer harnesses, and workflows cannot drift.
+- Do not add speculative macOS assets or adapters and do not claim compatibility while macOS is
+  deferred.
+
+## Completed preview productization cleanup
+
+The pre-publication cleanup is complete and behavior-preserving:
+
+1. Prototype project, namespace, test, trace, workflow, and path identities were replaced with
+   durable `SharpTS.Gui`, `SharpTS.Gui.Host`, SDK-consumer, and conformance-oriented names.
+2. The 1,383-line renderer was decomposed while retaining validation-before-mutation, keyed
+   identity, event/ref ordering, and deterministic cleanup.
+3. Bridge state now belongs to an explicit application runtime context with a scoped host
+   registration and the existing single-root policy.
+4. Host startup is separated into option, payload, lifetime, and platform-diagnostics services.
+5. Conformance state and controls are isolated behind `@sharpts/gui/internal-testing`; contract
+   tests verify that the normal package entry point does not expose them.
+6. Supported Windows RIDs have one declaration that drives SDK validation and package assets and
+   is consumed or checked by the package harness and workflow tests.
+
+## Windows preview publication gate
+
+Publication is complete only when all of the following are recorded against the candidate commit
+and exact `0.1.0-preview.1` artifact:
+
+1. Run native ARM64 Headless and real-window scenarios on a Windows ARM64 machine and retain both
+   traces. Cross-publish success is necessary but does not satisfy this gate.
+2. Reserve/onboard the `SharpTS.Gui.Sdk` NuGet ID with an approved preview and separately verify
+   that the release API key is scoped to it. The stable release workflow must not perform the
+   first publication of a new ID.
+3. Run the complete release dry run and public-feed preflight, inspect the package, run packaged
+   x64 and native ARM64 gates, run the full solution tests and Release build, and run repository
+   diff/whitespace checks. Confirm the artifact is unchanged after validation.
+4. Review the release inventory and documentation version pins, then intentionally remove the
+   manifest's `publish: false` guard in a dedicated, reviewable change.
+5. Publish only after every prior step passes. Retain the package hash, package inventory,
+   workflow URLs, x64 and ARM64 traces, and NuGet verification result as the preview release
+   record.
+
+## Post-preview stabilization
+
+- Establish compatibility and versioning policies for `@sharpts/gui`, hosted ABI metadata,
+  application manifests, descriptor schemas, and generated launchers. Define which combinations
+  fail fast and which may roll forward.
+- Resolve render failures that occur after an Avalonia property setter or ref callback has already
+  mutated native state. Choose and test a recovery policy rather than implying full rollback from
+  current structural prevalidation.
+- Add leak/soak tests and release gates for accessibility, focus and keyboard behavior, startup
+  latency, application/package size, reconciliation throughput, allocation, and input-to-render
+  latency.
+- Stabilize the implemented TSX component/lifecycle contract and decide the minimum supported
+  theme/resource model before expanding into custom controls.
+- Add code signing, artifact provenance, installer/update and distribution guidance, and support
+  diagnostics suitable for field reports.
+
+## macOS reactivation checklist
+
+macOS work is separate from the current Windows roadmap and is not scheduled. If it is
+reactivated, require all of the following rather than extrapolating from Windows or Headless runs:
+
+1. Add intentional macOS x64 and ARM64 platform payloads without weakening Windows RID filtering.
+2. Add a macOS fatal-diagnostics adapter with platform-appropriate logging and user notification.
+3. Build and inspect the x64/ARM64 matrix and prove Headless parity in interpreted and compiled
+   development modes.
+4. Record native real-window evidence on both macOS architectures, including dispatcher,
+   synchronization-context, lifecycle, reconciliation, forms, and cleanup traces.
+5. Define and validate the `.app` bundle layout and metadata.
+6. Add signing and notarization as explicit distribution gates.
+
+None of these items is evidence of present compatibility, and none gates the Windows preview.
+
+## Evidence appendix
+
+### TSX application API verification
+
+The GUI API 1 worktree passed the following focused gates on 2026-08-08:
+
+| Gate | Result |
+| --- | --- |
+| Desktop/conformance tests | 18 passed in interpreted/compiled Headless integration; zero failed |
+| JSX type-checker and GUI SDK task tests | 25 passed; zero failed |
+| Calculator reducer contract | Eight arithmetic, chaining, percent, edit, digit-limit, and error-recovery scenarios passed |
+| Packaged Calculator build | Release build and persisted-IL verification passed against a freshly packed `SharpTS.Gui.Sdk.0.1.0-preview.1` |
+| Packaged Calculator execution | Interpreted and compiled Headless smoke runs passed |
+| Package/manifest audit | `gui/runtime.ts`, tasks, GUI bridge, hosted ABI 1, and GUI API 1 were present; generated SDK intermediates remained under `obj` |
+
+A full `SharpTS.Tests` run did not complete in this sandbox. Hang attribution recorded 15,917
+completed tests and one active case before the run was stopped:
+`StandaloneDllTests.Isolated_Tls_ShouldExecuteWithoutSharpTsDll`. Running that TLS case alone also
+timed out after three minutes without an assertion or compiler error. This is not recorded as a
+full-suite pass; CI or a network-capable environment must close that regression gate.
+
+### Final Windows verification
+
+| Gate | Final recorded result |
+| --- | --- |
+| Release solution tests | 16,453 core tests and 18 desktop/conformance tests passed; two pre-existing HTTP lifecycle skips; zero failures |
+| Release solution build | Passed with zero warnings and zero errors |
+| Isolated x64 package lifecycle | Restore, build, no-op build, clean/rebuild, path-with-spaces, IL verification, and missing-entry diagnostic passed |
+| Development modes | Interpreted and compiled traces matched |
+| x64 framework-dependent directory | Headless and real-window passed in interpreted and compiled modes; dependency closure passed |
+| x64 compiled single file | Headless and real-window passed with invalid `DOTNET_ROOT`; interpreted mode rejection produced the expected fatal diagnostic |
+| ARM64 artifacts | Directory and single-file cross-publish passed with correct RID payload and no sidecars |
+| ARM64 native execution | Pending; neither Headless nor real-window execution has been recorded |
+| macOS | Deferred; not run and not passed |
+
+Earlier gates established the progression: Phase 1B recorded 18 hosted runtime/ABI tests and two
+dual-mode Headless tests; Phase 2 recorded ten renderer/integration tests and 19 hosted runtime
+tests; Phase 3A recorded ten renderer/source Headless tests and 23 hosted runtime/SDK task checks.
+The final counts above supersede those snapshots as the current release evidence.
+
+### Artifact sizes
+
+| Artifact | Size/count |
+| --- | ---: |
+| `SharpTS.Gui.Sdk.0.1.0-preview.1.nupkg` | 26,150,323 bytes |
+| x64 framework-dependent directory | 69 files; 48,767,053 bytes |
+| x64 single executable | 121,877,925 bytes |
+| ARM64 single executable, cross-published | 129,519,545 bytes |
+
+For historical comparison, the Phase 3A all-platform local package had 112 entries and was
+201,368,297 bytes. The initial Phase 0 framework-dependent closure validated 49 managed, 40
+native, and 38 resource assets across 38 selected libraries. The preview's Windows-only package
+and single-file evidence retire those experiments' all-platform payload and directory-only
+limitations.
+
+### Representative retained-renderer and lifecycle evidence
+
+The compiled x64 single-file real-window trace included:
+
+```text
+4   view-render-1
+31  mount
+33  identities-initial
+36  view-render-2
+59  coalesced-update-complete
+60  identities-reordered
+76  forms-events-complete
+85  guest-click
+93  unmount
+94  late-reactive-work-ignored
+95  dispatcher-sentinel
+96  guest-timer
+```
+
+Window, layout, form, action, and keyed `a`/`b` controls retained native identity. A keyed
+TextBlock-to-Button kind change received a new identity, reordered keys moved without recreation,
+the latest callbacks fired, and disposal released refs and subscriptions before ignoring queued
+reactive work. The sentinel and timer completed without polling.
+
+Deterministic hosted-runtime conformance separately fixed the lifecycle orders:
+
+| Scenario | Asserted order |
+| --- | --- |
+| Turn fairness | `macro-1`, `micro-1`, `promise-1`, host `sentinel`, `macro-2` |
+| Graceful shutdown | `beforeExit`, `beforeExit-microtask`, cleanup 2, cleanup 1, `exit` |
+| Forced exit | synchronous `exit-7-7`; no `beforeExit`; lifetime request 7 |
+
+### Evidence boundary
+
+The x64 results above are native execution evidence because the published applications ran on
+Windows x64. The ARM64 results prove restore, asset selection, architecture-safe validation, and
+artifact construction from an x64 host; they do not prove that the ARM64 CLR/native payload
+starts, opens a real window, or preserves dispatcher behavior on ARM64 hardware. Only the
+hardware-backed workflow gate can close that distinction.

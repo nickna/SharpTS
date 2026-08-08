@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <SharpTSGuiSupportedRuntimeIdentifiers>win-x64;win-arm64</SharpTSGuiSupportedRuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SharpTSGuiSupportedRuntimeIdentifier Include="win-x64">
+      <Architecture>X64</Architecture>
+    </SharpTSGuiSupportedRuntimeIdentifier>
+    <SharpTSGuiSupportedRuntimeIdentifier Include="win-arm64">
+      <Architecture>Arm64</Architecture>
+    </SharpTSGuiSupportedRuntimeIdentifier>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(GuiHostPublishRoot)' != ''">
+    <SharpTSGuiRuntimeAsset Include="$(GuiHostPublishRoot)runtimes\win-x64\**"
+                            Exclude="$(GuiHostPublishRoot)runtimes\win-x64\**\*.pdb">
+      <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    </SharpTSGuiRuntimeAsset>
+    <SharpTSGuiRuntimeAsset Include="$(GuiHostPublishRoot)runtimes\win-arm64\**"
+                            Exclude="$(GuiHostPublishRoot)runtimes\win-arm64\**\*.pdb">
+      <RuntimeIdentifier>win-arm64</RuntimeIdentifier>
+    </SharpTSGuiRuntimeAsset>
+  </ItemGroup>
+</Project>

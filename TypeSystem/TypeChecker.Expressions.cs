@@ -222,9 +222,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckAwait(Expr.Await awaitExpr)
     {
-        if (!_inAsyncFunction)
+        bool isModuleTopLevel = _allowHostedTopLevelAwait && _currentFunctionReturnType is null &&
+            _currentModule is { IsScript: false, IsCommonJs: false };
+        if (!_inAsyncFunction && !isModuleTopLevel)
         {
-            throw new TypeCheckException("'await' is only valid inside an async function.", tsCode: "TS1308");
+            throw new TypeCheckException(
+                "'await' is only valid inside an async function.",
+                tsCode: "TS1308");
         }
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);

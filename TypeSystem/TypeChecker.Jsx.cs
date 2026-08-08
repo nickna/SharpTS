@@ -189,13 +189,29 @@ public partial class TypeChecker
         // Async/lazy component escape hatches: leave promise-shaped returns alone.
         if (returnType is TypeInfo.Promise)
             return;
-        if (!IsCompatible(elementType, returnType))
+        if (!IsJsxComponentResult(elementType, returnType))
         {
             ReportJsx(new TypeCheckException(
                 $"'{jsx.TagName}' cannot be used as a JSX component. " +
                 $"Its return type '{returnType}' is not a valid JSX element.",
                 jsx.Line, tsCode: "TS2786"));
         }
+    }
+
+    private bool IsJsxComponentResult(TypeInfo elementType, TypeInfo returnType)
+    {
+        if (IsCompatible(elementType, returnType))
+            return true;
+        return returnType switch
+        {
+            TypeInfo.Null or TypeInfo.Undefined or TypeInfo.String or TypeInfo.StringLiteral or
+                TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral => true,
+            TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN } => true,
+            TypeInfo.Array array => IsJsxComponentResult(elementType, array.ElementType),
+            TypeInfo.Tuple tuple => tuple.Elements.All(item => IsJsxComponentResult(elementType, item.Type)),
+            TypeInfo.Union union => union.FlattenedTypes.All(item => IsJsxComponentResult(elementType, item)),
+            _ => false,
+        };
     }
 
     /// <summary>

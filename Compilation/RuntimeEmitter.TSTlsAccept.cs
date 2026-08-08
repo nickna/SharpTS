@@ -22,6 +22,8 @@ public partial class RuntimeEmitter
 {
     private ConstructorBuilder _tlsAcceptClosureCtor = null!;
     private MethodBuilder _tlsAcceptClosureRun = null!;
+    private ConstructorBuilder _tlsAcceptErrorClosureCtor = null!;
+    private MethodBuilder _tlsAcceptErrorClosureRun = null!;
 
     // TLS client connect closures
     private TypeBuilder _tlsConnectClosureType = null!;
@@ -122,6 +124,66 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, socketField);
         il.Emit(OpCodes.Callvirt, runtime.NetSocketStartReading);
 
+        il.Emit(OpCodes.Ret);
+
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Emits $TlsAcceptErrorClosure: reports a failed server-side handshake as 'tlsClientError'
+    /// on the event-loop thread. The accept worker itself runs on the ThreadPool and must not
+    /// invoke TypeScript listeners directly.
+    /// </summary>
+    private void EmitTlsAcceptErrorClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
+            "$TlsAcceptErrorClosure",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object
+        );
+
+        var serverField = typeBuilder.DefineField("_server", _tlsServerTypeBuilder, FieldAttributes.Private);
+        var msgField = typeBuilder.DefineField("_msg", _types.String, FieldAttributes.Private);
+
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_tlsServerTypeBuilder, _types.String]
+        );
+        _tlsAcceptErrorClosureCtor = ctor;
+
+        var ctorIL = ctor.GetILGenerator();
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Stfld, serverField);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_2);
+        ctorIL.Emit(OpCodes.Stfld, msgField);
+        ctorIL.Emit(OpCodes.Ret);
+
+        var run = typeBuilder.DefineMethod("Run", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
+        _tlsAcceptErrorClosureRun = run;
+        var il = run.GetILGenerator();
+
+        var errLocal = il.DeclareLocal(runtime.TSErrorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, msgField);
+        il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
+        il.Emit(OpCodes.Stloc, errLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, serverField);
+        il.Emit(OpCodes.Ldstr, "tlsClientError");
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, errLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
@@ -471,6 +533,7 @@ public partial class RuntimeEmitter
         var sslStreamLocal = il.DeclareLocal(typeof(SslStream));
         var authOptsLocal = il.DeclareLocal(typeof(SslServerAuthenticationOptions));
         var socketLocal = il.DeclareLocal(_tlsSocketTypeBuilder);
+        var handshakeExceptionLocal = il.DeclareLocal(_types.Exception);
 
         var loopTop = il.DefineLabel();
         var loopExit = il.DefineLabel();
@@ -570,9 +633,9 @@ public partial class RuntimeEmitter
 
         var handshakeOk = il.DefineLabel();
         il.Emit(OpCodes.Leave, handshakeOk);
-        // catch { try { tcpClient.Close(); } catch {} }  → continue loop
+        // catch (Exception ex) { close client; schedule 'tlsClientError'; } → continue loop
         il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Stloc, handshakeExceptionLocal);
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, tcpClientLocal);
         var noClient = il.DefineLabel();
@@ -583,6 +646,16 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
         il.EndExceptionBlock();
+
+        // EventLoop.Schedule(new Action(new $TlsAcceptErrorClosure(this, ex.Message).Run))
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, handshakeExceptionLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, _tlsAcceptErrorClosureCtor);
+        il.Emit(OpCodes.Ldftn, _tlsAcceptErrorClosureRun);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.EventLoopSchedule);
         il.Emit(OpCodes.Leave, handshakeOk);
         il.EndExceptionBlock();
         il.MarkLabel(handshakeOk);

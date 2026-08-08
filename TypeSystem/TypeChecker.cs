@@ -353,6 +353,9 @@ public partial class TypeChecker
 
     // We need to track the current function's expected return type to validate 'return' statements
     private TypeInfo? _currentFunctionReturnType = null;
+    // Phase 1A enables this only for hosted program preparation. Keeping the
+    // default false preserves the ordinary CLI/interpreter/compiler contract.
+    private bool _allowHostedTopLevelAwait;
     // When non-null, VisitReturn collects return expression types here instead of validating (for inference)
     private List<TypeInfo>? _inferredReturnTypes = null;
     // When non-null (set only while inferring a generator's return type), CheckYield collects the operand
@@ -1052,6 +1055,8 @@ public partial class TypeChecker
     /// Sets the decorator mode for type checking decorators.
     /// </summary>
     public void SetDecoratorMode(DecoratorMode mode) => _decoratorMode = mode;
+
+    internal void EnableHostedTopLevelAwait() => _allowHostedTopLevelAwait = true;
 
     // Module support - track the current module being type-checked
     private ParsedModule? _currentModule = null;

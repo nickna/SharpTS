@@ -867,6 +867,9 @@ public partial class Interpreter
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = get.Name.Lexeme;
 
+        if (obj is SharpTSProcess && memberName == "exitCode" && IsHostedExecution)
+            return RuntimeValue.FromNumber(GetProcessExitCode());
+
         // A primitive's inherited members come from THIS realm's prototype, so `constructor`
         // must be this realm's constructor object — `("x").constructor === String`. Resolving
         // it off the process-wide singleton breaks that identity now that the bare globals are
@@ -2487,7 +2490,10 @@ public partial class Interpreter
         // routed through the process-managed setters (Runtime/BuiltIns/ProcessBuiltIns.cs).
         if (obj is SharpTSProcess process)
         {
-            process.SetProcessMember(memberName, value);
+            if (memberName == "exitCode" && IsHostedExecution)
+                SetProcessExitCode(value is double d ? (int)d : 0);
+            else
+                process.SetProcessMember(memberName, value);
             return value;
         }
 

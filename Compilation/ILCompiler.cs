@@ -217,6 +217,23 @@ public partial class ILCompiler
 
     // Output target type (DLL or EXE)
     private readonly OutputTarget _outputTarget;
+    private bool _hosted;
+    private TypeBuilder? _hostedRuntimeType;
+    private TypeBuilder? _hostedFactoryType;
+    private readonly Dictionary<string, List<MethodBuilder>> _hostedModuleSteps = [];
+
+    /// <summary>
+    /// Enables the experimental versioned hosted ABI for DLL output.
+    /// </summary>
+    internal void EnableHostedOutput()
+    {
+        if (_outputTarget != OutputTarget.Dll)
+        {
+            throw new InvalidOperationException("Hosted output is valid only for DLL output.");
+        }
+
+        _hosted = true;
+    }
 
     // Simple name of the emitted assembly, used to derive a default PDB file name.
     private readonly string _assemblyName;
@@ -557,6 +574,7 @@ public partial class ILCompiler
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
+        RejectHostedTopLevelAwait(statements);
         if (_timingCollector is null)
         {
             statements = PrepareSingleCompilation(statements, typeMap, deadCodeInfo);
@@ -648,7 +666,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types) { EntryModulePath = _entryModulePath }
+        _runtime = new RuntimeEmitter(_types, _hosted) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
         _typeMapper.SetRuntime(_runtime);
     }
@@ -992,6 +1010,8 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _hostedRuntimeType?.CreateType();
+        _hostedFactoryType?.CreateType();
     }
 
     /// <summary>
@@ -1176,6 +1196,11 @@ public partial class ILCompiler
         _timingCollector.Measure(ExecutionPhaseTiming.EmitEntryPoint,
             () => ModulePhase10_EmitEntryPoint(modules));
         _timingCollector.Measure(ExecutionPhaseTiming.FinalizeTypes, ModulePhase11_FinalizeTypes);
+    }
+
+    private void RejectHostedTopLevelAwait(IEnumerable<Stmt> statements)
+    {
+        // Hosted output owns top-level await through its asynchronous initializer.
     }
 
     private List<Stmt> PrepareModuleCompilation(
@@ -1525,6 +1550,8 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _hostedRuntimeType?.CreateType();
+        _hostedFactoryType?.CreateType();
     }
 
     #endregion

@@ -1,0 +1,47 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(MSBuildThisFileDirectory)SupportedPlatforms.props" />
+
+  <PropertyGroup>
+    <UsingSharpTSGuiSdk>true</UsingSharpTSGuiSdk>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>SharpTS.Gui.Generated.Launcher</StartupObject>
+    <UseAppHost>true</UseAppHost>
+
+    <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">main.tsx</SharpTSEntryPoint>
+    <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == '' and Exists('$(MSBuildProjectDirectory)\tsconfig.json')">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
+    <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
+
+    <SharpTSGuiSdkRoot>$(MSBuildThisFileDirectory)..\</SharpTSGuiSdkRoot>
+    <SharpTSGuiHostRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiHostRoot>
+    <SharpTSGuiPackageSource>$(SharpTSGuiSdkRoot)gui\</SharpTSGuiPackageSource>
+    <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
+    <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
+    <SharpTSGuiApiVersion>1</SharpTSGuiApiVersion>
+    <SharpTSGuiPublishMode Condition="'$(SharpTSGuiPublishMode)' == ''">SingleFile</SharpTSGuiPublishMode>
+    <SharpTSGuiValidatePublishedOutput
+      Condition="'$(SharpTSGuiValidatePublishedOutput)' == '' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)')">true</SharpTSGuiValidatePublishedOutput>
+    <SharpTSGuiValidatePublishedOutput
+      Condition="'$(SharpTSGuiValidatePublishedOutput)' == ''">false</SharpTSGuiValidatePublishedOutput>
+    <SelfContained Condition="'$(SharpTSGuiPublishMode)' == 'SingleFile' and '$(RuntimeIdentifier)' != ''">true</SelfContained>
+    <PublishSingleFile Condition="'$(SharpTSGuiPublishMode)' == 'SingleFile' and '$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">false</IncludeAllContentForSelfExtract>
+    <PublishTrimmed Condition="'$(PublishSingleFile)' == 'true'">false</PublishTrimmed>
+    <DebugType Condition="'$(PublishSingleFile)' == 'true'">None</DebugType>
+    <DebugSymbols Condition="'$(PublishSingleFile)' == 'true'">false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Assets')">
+    <SharpTSGuiAsset Include="$(MSBuildProjectDirectory)\Assets\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharpTSGuiSdkRoot)launcher\Launcher.cs" Link="SharpTS.Gui.Launcher.g.cs" />
+    <_SharpTSGuiManagedReference Include="$(SharpTSGuiHostRoot)*.dll" />
+    <Reference Include="@(_SharpTSGuiManagedReference)">
+      <HintPath>%(Identity)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

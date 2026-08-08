@@ -739,6 +739,37 @@ public partial class RuntimeEmitter
 
         // Emit ProcessMicrotasks method
         EmitProcessMicrotasksMethod(runtimeType, runtime, microtaskQueueField, queueType);
+        EmitHasMicrotasksMethod(runtimeType, runtime, microtaskQueueField, queueType);
+    }
+
+    private void EmitHasMicrotasksMethod(
+        TypeBuilder runtimeType,
+        EmittedRuntime runtime,
+        FieldBuilder microtaskQueueField,
+        Type queueType)
+    {
+        var method = runtimeType.DefineMethod(
+            "HasMicrotasks",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            Type.EmptyTypes);
+        runtime.HasMicrotasks = method;
+
+        var il = method.GetILGenerator();
+        var none = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, microtaskQueueField);
+        il.Emit(OpCodes.Brfalse, none);
+        var countGetter = EmitterTypeHelpers.ResolveMethod(
+            queueType,
+            _types.GetProperty(_types.QueueOpen, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldsfld, microtaskQueueField);
+        il.Emit(OpCodes.Callvirt, countGetter);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Cgt);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(none);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

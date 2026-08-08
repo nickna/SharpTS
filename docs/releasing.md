@@ -9,7 +9,10 @@ inventory verification.
 
 `.github/nuget-packages.json` is the source of truth for the expected package
 IDs, their deterministic push order, and the stable `SharpTS.Sdk` version used
-by copyable documentation examples. When adding a package:
+by copyable documentation examples. An entry with `publish: false` is still
+packed and preflighted, but is excluded from the stable release push and
+post-publish inventory. Its fixed `version` keeps an independent preview train
+from inheriting the repository tag. When adding a package:
 
 1. Onboard the package ID on NuGet separately from a release tag.
    Publishing an approved prerelease package is the only reliable end-to-end
@@ -24,13 +27,20 @@ The tagged release is deliberately blocked if any manifest ID is not already
 registered. This prevents an untested new-package permission from publishing an
 established package first.
 
+`SharpTS.Gui.Sdk` is currently recorded as `0.1.0-preview.1` with
+`publish: false`. Before removing that guard, an operator must reserve and
+publish an approved preview of the package ID, confirm the release API key is
+scoped to it, run the packaged Windows x64 and ARM64 gates, and rerun the Publish
+workflow preflight. The stable release workflow must not be used to perform the
+first GUI package publication.
+
 ## Normal release
 
 The Publish workflow builds and tests all artifacts before its release job. The
-release job pushes each package explicitly with `--skip-duplicate`, records a
-result for every package, and then queries NuGet until every manifest ID exposes
-the tag version. The job fails if any push failed or the final inventory remains
-incomplete.
+release job pushes each publishable package explicitly with `--skip-duplicate`,
+records a result for every publishable package, and then queries NuGet until each
+one exposes the tag version. The job fails if any push failed or the final
+inventory remains incomplete.
 
 Rerunning a failed release is safe. Already published packages are skipped and
 missing packages are retried, allowing a partial release to converge without

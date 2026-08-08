@@ -259,7 +259,7 @@ public class JsxTypeCheckerTests
     {
         const string prelude = JsxPrelude + """
 
-            declare function NotAComponent(props: { a?: string }): number;
+            declare function NotAComponent(props: { a?: string }): { value: string };
             """;
         var call = JsxCall(JsxElementKind.Component, "NotAComponent",
             new Expr.Variable(Identifier("NotAComponent")),
@@ -268,6 +268,23 @@ public class JsxTypeCheckerTests
         var result = Check(call, prelude);
 
         Assert.Contains(result.Diagnostics, d => d.TsCode == "TS2786");
+    }
+
+    [Fact]
+    public void FunctionComponent_PrimitiveNullableAndArrayReturns_AreValid()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare function TextComponent(props: {}): string | null;
+            declare function ListComponent(props: {}): JSX.Element[];
+            """;
+        var text = JsxCall(JsxElementKind.Component, "TextComponent",
+            new Expr.Variable(Identifier("TextComponent")), new Expr.ObjectLiteral([]));
+        var list = JsxCall(JsxElementKind.Component, "ListComponent",
+            new Expr.Variable(Identifier("ListComponent")), new Expr.ObjectLiteral([]));
+
+        Assert.Empty(Check(text, prelude).Diagnostics);
+        Assert.Empty(Check(list, prelude).Diagnostics);
     }
 
     [Fact]

@@ -221,6 +221,21 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_Compile_Hosted_RequiresDllAndSetsHiddenOption()
+    {
+        var result = _parser.Parse(["-c", "file.ts", "--hosted"]);
+
+        var compile = Assert.IsType<ParsedCommand.Compile>(result);
+        Assert.True(compile.CompileOptions.Hosted);
+
+        var invalid = _parser.Parse([
+            "-c", "file.ts", "--hosted", "--target", "exe"]);
+        var error = Assert.IsType<ParsedCommand.Error>(invalid);
+        Assert.Contains("valid only with --target dll", error.Message);
+        Assert.Equal(64, error.ExitCode);
+    }
+
+    [Fact]
     public void Parse_Compile_AllPackageFlags_ParsesCorrectly()
     {
         var result = _parser.Parse([
