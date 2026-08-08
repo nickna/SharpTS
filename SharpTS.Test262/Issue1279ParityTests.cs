@@ -3180,6 +3180,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A4_T1.js")]
     [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A4_T2.js")]
     [InlineData("built-ins/Array/prototype/reverse/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/reverse/get_if_present_with_delete.js")]
     public void Array_reverse_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
