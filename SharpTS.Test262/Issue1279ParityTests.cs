@@ -2517,6 +2517,14 @@ public sealed class Issue1279ParityTests
     public void RegExp_split_coerces_string_and_limit(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/exec-return-type-invalid.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-coerce-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-set-lastindex-err.js")]
+    public void RegExp_match_honors_global_exec_and_lastIndex(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

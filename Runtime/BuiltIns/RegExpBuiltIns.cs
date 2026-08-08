@@ -516,7 +516,7 @@ public static class RegExpBuiltIns
         if (exec is ISharpTSCallable callable)
         {
             var result = FunctionBuiltIns.CallWithThis(interp, callable, rx, [s]);
-            if (result is null || result is SharpTSUndefined) return null;
+            if (result is null) return null;
             // Per spec, exec must return Object or Null. Anything else → TypeError.
             if (result is not (SharpTSObject or SharpTSArray or SharpTSInstance))
                 throw new ThrowException(new SharpTSTypeError(
@@ -776,7 +776,10 @@ public static class RegExpBuiltIns
         bool fullUnicode = flags.Contains('u');
 
         // 6.b Set(rx, "lastIndex", 0, true).
-        interp.SetProperty(recv, "lastIndex", 0.0);
+        if (recv is SharpTSRegExp regex)
+            SetLastIndexOrThrow(interp, regex, 0);
+        else
+            interp.SetProperty(recv, "lastIndex", 0.0);
 
         // 6.c-e Loop, accumulate matched strings.
         var results = new List<object?>();
@@ -796,9 +799,13 @@ public static class RegExpBuiltIns
             // If matchStr is empty, advance lastIndex to avoid infinite loop.
             if (matchStr.Length == 0)
             {
-                var thisIndex = ToLengthAsInt(interp.GetProperty(recv, "lastIndex"));
+                var thisIndex = ToLengthAsInt(
+                    interp, interp.GetProperty(recv, "lastIndex"));
                 int nextIndex = AdvanceStringIndex(s, thisIndex, fullUnicode);
-                interp.SetProperty(recv, "lastIndex", (double)nextIndex);
+                if (recv is SharpTSRegExp regexReceiver)
+                    SetLastIndexOrThrow(interp, regexReceiver, nextIndex);
+                else
+                    interp.SetProperty(recv, "lastIndex", (double)nextIndex);
             }
         }
     }
