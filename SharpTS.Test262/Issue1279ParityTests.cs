@@ -2434,6 +2434,12 @@ public sealed class Issue1279ParityTests
     public void Promise_combinator_element_callbacks_are_extensible(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/reject-via-abrupt.js")]
+    [InlineData("built-ins/Promise/reject-via-abrupt-queue.js")]
+    public void Promise_executor_preserves_thrown_rejection_values(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
