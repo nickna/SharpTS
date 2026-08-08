@@ -886,45 +886,39 @@ public static class PromiseBuiltIns
             return new SharpTSArray([]);
         }
 
-        List<object?> results = [];
+        var tasks = new List<Task<object?>>(array.Count);
 
         foreach (var element in array)
         {
-            try
-            {
-                var resolved = InvokePromiseResolve(
-                    interpreter, constructor, promiseResolve, element);
-                object? value;
-                if (resolved is SharpTSPromise promise)
-                {
-                    value = await promise.GetValueAsync();
-                }
-                else
-                {
-                    value = resolved;
-                }
-
-                // Create fulfilled outcome object
-                var outcome = new SharpTSObject(new Dictionary<string, object?>
-                {
-                    ["status"] = "fulfilled",
-                    ["value"] = value
-                });
-                results.Add(outcome);
-            }
-            catch (Exception ex)
-            {
-                // Create rejected outcome object carrying the guest rejection value
-                var outcome = new SharpTSObject(new Dictionary<string, object?>
-                {
-                    ["status"] = "rejected",
-                    ["reason"] = ExtractRejectionReason(ex)
-                });
-                results.Add(outcome);
-            }
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            tasks.Add(SettleForAllSettled(resolved));
         }
 
-        return new SharpTSArray(results);
+        return new SharpTSArray([.. await Task.WhenAll(tasks)]);
+    }
+
+    private static async Task<object?> SettleForAllSettled(object? resolved)
+    {
+        try
+        {
+            object? value = resolved is SharpTSPromise promise
+                ? await promise.GetValueAsync()
+                : resolved;
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["status"] = "fulfilled",
+                ["value"] = value
+            });
+        }
+        catch (Exception ex)
+        {
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["status"] = "rejected",
+                ["reason"] = ExtractRejectionReason(ex)
+            });
+        }
     }
 
     /// <summary>
