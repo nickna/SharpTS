@@ -2401,6 +2401,14 @@ public sealed class Issue1279ParityTests
     public void Promise_capability_executor_is_extensible()
         => AssertPassInBothModes("built-ins/Promise/executor-function-extensible.js");
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/any/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/race/resolve-non-callable.js")]
+    public void Promise_combinators_validate_resolve_before_iteration(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(

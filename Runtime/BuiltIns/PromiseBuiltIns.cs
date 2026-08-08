@@ -215,8 +215,8 @@ public static class PromiseBuiltIns
             };
         return name switch
         {
-            "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, _, args) =>
-                AllImpl(args, interp), factory, speciesResolver: receiverResolver),
+            "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, receiver, args) =>
+                AllImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
 
             "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, receiver, args) =>
                 RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
@@ -229,11 +229,11 @@ public static class PromiseBuiltIns
             "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
                 Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
 
-            "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, _, args) =>
-                AllSettledImpl(args, interp), factory, speciesResolver: receiverResolver),
+            "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, receiver, args) =>
+                AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
 
-            "any" => new BuiltInAsyncMethod("any", 1, 1, (interp, _, args) =>
-                AnyImpl(args, interp), factory, speciesResolver: receiverResolver),
+            "any" => new BuiltInAsyncMethod("any", 1, 1, (interp, receiver, args) =>
+                AnyImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
 
             "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, _, _) =>
                 RuntimeValue.FromBoxed(WithResolversImpl(interp, factory))),
@@ -765,8 +765,10 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.all(iterable)
     /// Resolves when all promises resolve, rejects on first rejection.
     /// </summary>
-    private static async Task<object?> AllImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AllImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "all");
         var array = IterateCombinatorArgument(args, interpreter, "all");
 
         // Empty array resolves immediately to empty array
@@ -779,14 +781,15 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            if (resolved is SharpTSPromise promise)
             {
                 tasks.Add(promise.GetValueAsync());
             }
             else
             {
-                // Non-promise values are treated as immediately resolved
-                tasks.Add(Task.FromResult(element));
+                tasks.Add(Task.FromResult(resolved));
             }
         }
 
@@ -802,6 +805,7 @@ public static class PromiseBuiltIns
     private static async Task<object?> RaceImpl(
         List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "race");
         var array = IterateCombinatorArgument(args, interpreter, "race");
 
         // Empty array never settles — there are no competitors to race.
@@ -818,7 +822,8 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            object? resolved = ResolveRaceElement(constructor, element, interpreter);
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
             if (resolved is SharpTSPromise promise)
             {
                 tasks.Add(promise.GetValueAsync());
@@ -835,28 +840,28 @@ public static class PromiseBuiltIns
         return await completedTask;
     }
 
-    private static object? ResolveRaceElement(
-        object? constructor, object? element, Interpreter interpreter)
+    private static ISharpTSCallable GetPromiseResolve(
+        Interpreter interpreter, object? constructor, string methodName)
     {
-        if (constructor is null
-            || ReferenceEquals(constructor, Interpreter.PromiseGlobalValue)
-            || constructor is SharpTSPromiseClass promiseClass
-                && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase))
-        {
-            return element;
-        }
-
         object? resolve = interpreter.GetProperty(constructor, "resolve");
-        if (resolve is not ISharpTSCallable callable)
+        if (resolve is ISharpTSCallable callable)
         {
-            throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
-                "Promise.race resolve property is not callable"));
+            return callable;
         }
+        throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+            $"Promise.{methodName} resolve property is not callable"));
+    }
 
+    private static object? InvokePromiseResolve(
+        Interpreter interpreter,
+        object? constructor,
+        ISharpTSCallable promiseResolve,
+        object? element)
+    {
         try
         {
             return FunctionBuiltIns.CallWithThis(
-                interpreter, callable, constructor, [element]);
+                interpreter, promiseResolve, constructor, [element]);
         }
         catch (Runtime.Exceptions.ThrowException ex)
         {
@@ -869,8 +874,10 @@ public static class PromiseBuiltIns
     /// Returns array of outcome objects: {status: "fulfilled"|"rejected", value?: T, reason?: E}
     /// Never rejects - always resolves with all outcomes.
     /// </summary>
-    private static async Task<object?> AllSettledImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AllSettledImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "allSettled");
         var array = IterateCombinatorArgument(args, interpreter, "allSettled");
 
         // Empty array resolves immediately to empty array
@@ -885,15 +892,16 @@ public static class PromiseBuiltIns
         {
             try
             {
+                var resolved = InvokePromiseResolve(
+                    interpreter, constructor, promiseResolve, element);
                 object? value;
-                if (element is SharpTSPromise promise)
+                if (resolved is SharpTSPromise promise)
                 {
                     value = await promise.GetValueAsync();
                 }
                 else
                 {
-                    // Non-promise values are treated as immediately resolved
-                    value = element;
+                    value = resolved;
                 }
 
                 // Create fulfilled outcome object
@@ -934,8 +942,10 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.any(iterable)
     /// First fulfilled promise wins. If all reject, throws AggregateError.
     /// </summary>
-    private static async Task<object?> AnyImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AnyImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "any");
         var array = IterateCombinatorArgument(args, interpreter, "any");
 
         // Empty array rejects immediately with AggregateError. Must be a real
@@ -951,14 +961,15 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            if (resolved is SharpTSPromise promise)
             {
                 _ = ProcessPromiseForAny(promise.GetValueAsync(), state);
             }
             else
             {
-                // Non-promise values are treated as immediately resolved - first one wins
-                state.Tcs.TrySetResult(element);
+                state.Tcs.TrySetResult(resolved);
             }
         }
 
