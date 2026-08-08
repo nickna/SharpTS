@@ -10,6 +10,31 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PromiseMethodTests
 {
+    [Theory, ModeData]
+    public void StaticMethods_ThrowSynchronouslyForPrimitiveReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const methods: any[] = [
+                Promise.resolve, Promise.reject, Promise.all,
+                Promise.race, Promise.allSettled, Promise.any
+            ];
+            const receivers: any[] = [undefined, null, 86, "string", true, Symbol()];
+            for (const method of methods) {
+                for (const receiver of receivers) {
+                    try {
+                        method.call(receiver, []);
+                        console.log(false);
+                    } catch (error) {
+                        console.log(error instanceof TypeError);
+                    }
+                }
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(string.Concat(Enumerable.Repeat("true\n", 36)), output);
+    }
+
     #region Promise.then() Tests
 
     [Theory, ModeData]

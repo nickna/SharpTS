@@ -207,31 +207,54 @@ public static class PromiseBuiltIns
     public static ISharpTSCallable? GetStaticMethod(string name, SharpTSPromiseClass? subclass)
     {
         var factory = DerivedPromiseFactory(subclass);
+        Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?> receiverResolver =
+            (_, receiver) =>
+            {
+                RequireConstructorReceiver(receiver);
+                return factory;
+            };
         return name switch
         {
             "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, _, args) =>
-                AllImpl(args, interp), factory),
+                AllImpl(args, interp), factory, speciesResolver: receiverResolver),
 
             "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, receiver, args) =>
-                RaceImpl(args, interp, receiver), factory),
+                RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
 
             "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
-                ResolveImplAsync(args), factory).WithSpecLength(1),
+                ResolveImplAsync(args), factory, speciesResolver: receiverResolver).WithSpecLength(1),
 
             "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
-                Task.FromResult(RejectImpl(args)), factory).WithSpecLength(1),
+                Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
 
             "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, _, args) =>
-                AllSettledImpl(args, interp), factory),
+                AllSettledImpl(args, interp), factory, speciesResolver: receiverResolver),
 
             "any" => new BuiltInAsyncMethod("any", 1, 1, (interp, _, args) =>
-                AnyImpl(args, interp), factory),
+                AnyImpl(args, interp), factory, speciesResolver: receiverResolver),
 
             "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, _, _) =>
                 RuntimeValue.FromBoxed(WithResolversImpl(interp, factory))),
 
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Promise static combinators run NewPromiseCapability on their <c>this</c>
+    /// value before creating a result promise. That operation requires an
+    /// Object; primitives must therefore throw synchronously rather than
+    /// becoming a rejected promise in <see cref="BuiltInAsyncMethod"/>.
+    /// </summary>
+    private static void RequireConstructorReceiver(object? receiver)
+    {
+        if (receiver is null or SharpTSUndefined or bool or double or int or long
+            or float or decimal or char or string or SharpTSSymbol
+            or SharpTSBigInt or System.Numerics.BigInteger)
+        {
+            throw new Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise static method called on a non-object receiver"));
+        }
     }
 
     /// <summary>

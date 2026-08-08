@@ -706,6 +706,16 @@ public sealed class Issue1279ParityTests
     public void Promise_combinators_reject_on_non_iterable(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/allSettled/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/any/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/race/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/reject/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/resolve/ctx-non-object.js")]
+    public void Promise_static_methods_reject_primitive_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     /// <summary>
     /// <c>Promise.prototype</c> is a real object carrying the unbound reaction methods; it
     /// read as <c>undefined</c>, so every access through it threw.

@@ -16,6 +16,12 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
+    private static ISharpTSCallable BindBuiltInStaticCallReceiver(
+        string namespaceName, ISharpTSCallable method)
+        => namespaceName == BuiltInNames.Promise && method is BuiltInAsyncMethod promiseMethod
+            ? promiseMethod.Bind(PromiseGlobalValue)
+            : method;
+
     /// <summary>
     /// Calls a built-in method with pooled argument list to reduce allocations.
     /// Uses V2 (RuntimeValue) fast path when the method supports it, avoiding
@@ -163,6 +169,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
+                method = BindBuiltInStaticCallReceiver(nsVar.Name.Lexeme, method);
                 return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
@@ -455,6 +462,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
+                method = BindBuiltInStaticCallReceiver(nsVar.Name.Lexeme, method);
                 return CallBuiltInSync(method, call.Arguments);
             }
         }
