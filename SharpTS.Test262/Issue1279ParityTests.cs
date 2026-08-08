@@ -3049,6 +3049,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/iter-set-length.js")]
     [InlineData("built-ins/Array/from/mapfn-is-not-callable-typeerror.js")]
     [InlineData("built-ins/Array/from/mapfn-is-symbol-throws.js")]
+    [InlineData("built-ins/Array/from/mapfn-throws-exception.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
