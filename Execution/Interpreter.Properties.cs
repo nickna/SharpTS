@@ -1356,7 +1356,7 @@ public partial class Interpreter
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
             BuiltInMethod m when !m.IsBound
-                && m.FunctionName is "catch" or "finally" => m.Bind(receiver),
+                && m.FunctionName is "catch" or "finally" or "resolve" => m.Bind(receiver),
             _ => null,
         };
     }

@@ -221,8 +221,10 @@ public static class PromiseBuiltIns
             "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, receiver, args) =>
                 RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver),
 
-            "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
-                ResolveImplAsync(args), factory, speciesResolver: receiverResolver).WithSpecLength(1),
+            "resolve" => new BuiltInMethod("resolve", 0, 1, (interp, receiver, args) =>
+                ResolveStatic(interp, receiver, args, factory))
+                .WithSpecLength(1)
+                .AsNonConstructor(),
 
             "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
                 Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
@@ -1023,9 +1025,31 @@ public static class PromiseBuiltIns
     }
 
     /// <summary>
-    /// Implementation of Promise.resolve(value?)
-    /// Returns the value directly - BuiltInAsyncMethod.Call wraps in a Promise.
+    /// Implementation of Promise.resolve(value?). Returns an existing promise
+    /// unchanged when its constructor is the receiver; otherwise creates a
+    /// promise that adopts the supplied value.
     /// </summary>
+    private static object ResolveStatic(
+        Interpreter interpreter,
+        object? receiver,
+        List<object?> args,
+        Func<Interpreter, Task<object?>, SharpTSPromise>? promiseFactory)
+    {
+        RequireConstructorReceiver(receiver);
+        var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+
+        if (value is SharpTSPromise promise
+            && ReferenceEquals(interpreter.GetProperty(promise, "constructor"), receiver))
+        {
+            return promise;
+        }
+
+        var task = ResolveImplAsync(args);
+        return promiseFactory != null
+            ? promiseFactory(interpreter, task)
+            : new SharpTSPromise(task);
+    }
+
     private static async Task<object?> ResolveImplAsync(List<object?> args)
     {
         var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;

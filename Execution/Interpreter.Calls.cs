@@ -18,8 +18,13 @@ public partial class Interpreter
 {
     private static ISharpTSCallable BindBuiltInStaticCallReceiver(
         string namespaceName, ISharpTSCallable method)
-        => namespaceName == BuiltInNames.Promise && method is BuiltInAsyncMethod promiseMethod
-            ? promiseMethod.Bind(PromiseGlobalValue)
+        => namespaceName == BuiltInNames.Promise
+            ? method switch
+            {
+                BuiltInAsyncMethod promiseMethod => promiseMethod.Bind(PromiseGlobalValue),
+                BuiltInMethod promiseMethod => promiseMethod.Bind(PromiseGlobalValue),
+                _ => method,
+            }
             : method;
 
     /// <summary>

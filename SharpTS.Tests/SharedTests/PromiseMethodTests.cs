@@ -11,6 +11,27 @@ namespace SharpTS.Tests.SharedTests;
 public class PromiseMethodTests
 {
     [Theory, ModeData]
+    public void Resolve_ReturnsPromisesWithTheSameConstructorUnchanged(ExecutionMode mode)
+    {
+        var source = """
+            let fulfill!: (value: object) => void;
+            let reject!: (reason: object) => void;
+            const fulfilled = Promise.resolve(1);
+            const pendingFulfilled = new Promise<object>((res) => { fulfill = res; });
+            const pendingRejected = new Promise<object>((_, rej) => { reject = rej; });
+            console.log(Promise.resolve(fulfilled) === fulfilled);
+            console.log(Promise.resolve(pendingFulfilled) === pendingFulfilled);
+            console.log(Promise.resolve(pendingRejected) === pendingRejected);
+            fulfill({});
+            reject({});
+            pendingRejected.catch(() => {});
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void StaticMethods_ThrowSynchronouslyForPrimitiveReceivers(ExecutionMode mode)
     {
         var source = """

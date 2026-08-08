@@ -2383,6 +2383,13 @@ public sealed class Issue1279ParityTests
             "built-ins/Promise/resolve/length.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.1_T1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.2_T1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.3_T1.js")]
+    public void Promise_resolve_preserves_same_constructor_identity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
