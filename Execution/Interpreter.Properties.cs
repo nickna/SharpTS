@@ -177,6 +177,9 @@ public partial class Interpreter
         if (klass is SharpTSStringNamespace)
             return BuiltInConstructorFactory.TryCreate(
                 BuiltInNames.String, evaluatedArguments, this);
+        if (klass is SharpTSNumberNamespace)
+            return BuiltInConstructorFactory.TryCreate(
+                BuiltInNames.Number, evaluatedArguments, this);
 
         // Handle callable constructors (like SharpTSEventEmitterConstructor)
         // These implement ISharpTSCallable and are used for module-imported types.
@@ -382,6 +385,9 @@ public partial class Interpreter
         if (klass is SharpTSStringNamespace)
             return BuiltInConstructorFactory.TryCreateRV(
                 BuiltInNames.String, evaluatedArguments, this);
+        if (klass is SharpTSNumberNamespace)
+            return BuiltInConstructorFactory.TryCreateRV(
+                BuiltInNames.Number, evaluatedArguments, this);
 
         // Handle callable constructors. Many built-in constructors are
         // registered as BuiltInMethod, so we accept any ISharpTSCallable here.

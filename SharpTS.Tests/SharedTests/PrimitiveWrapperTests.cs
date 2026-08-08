@@ -10,6 +10,13 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PrimitiveWrapperTests
 {
+    [Fact]
+    public void Number_AliasedConstructor_StillBoxesInInterpreter()
+    {
+        var source = "const C: any = Number; console.log(typeof new C(5));";
+        Assert.Equal("object\n", TestHarness.RunInterpreted(source));
+    }
+
     // ── typeof ───────────────────────────────────────────────────────────────
 
     [Theory, ModeData]
