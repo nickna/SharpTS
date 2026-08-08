@@ -3187,6 +3187,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/prototype/fill/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/fill/coerced-indexes.js")]
     public void Array_fill_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
