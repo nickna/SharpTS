@@ -2498,6 +2498,28 @@ public sealed class Issue1279ParityTests
     public void Promise_any_does_not_read_constructor_species()
         => AssertPassInBothModes("built-ins/Promise/any/species-get-error.js");
 
+    [Theory]
+    [InlineData("built-ins/Promise/allKeyed/arg-is-function.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject-bigint.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allKeyed/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/allKeyed/extensible.js")]
+    [InlineData("built-ins/Promise/allKeyed/key-order-preserved.js")]
+    [InlineData("built-ins/Promise/allKeyed/length.js")]
+    [InlineData("built-ins/Promise/allKeyed/name.js")]
+    [InlineData("built-ins/Promise/allKeyed/non-enumerable-properties-ignored.js")]
+    [InlineData("built-ins/Promise/allKeyed/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/allKeyed/prop-desc.js")]
+    [InlineData("built-ins/Promise/allKeyed/proto.js")]
+    [InlineData("built-ins/Promise/allKeyed/prototype-keys-ignored.js")]
+    [InlineData("built-ins/Promise/allKeyed/reject-deferred.js")]
+    [InlineData("built-ins/Promise/allKeyed/reject-immed.js")]
+    [InlineData("built-ins/Promise/allKeyed/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/allKeyed/resolves-empty-object.js")]
+    [InlineData("built-ins/Promise/allKeyed/symbol-keys.js")]
+    public void Promise_allKeyed_resolves_own_enumerable_properties(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(

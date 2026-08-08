@@ -227,6 +227,10 @@ public static class PromiseBuiltIns
                 AllImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
                 .WithSpecLength(1),
 
+            "allKeyed" => new BuiltInAsyncMethod("allKeyed", 0, 1, (interp, receiver, args) =>
+                AllKeyedImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
+
             "race" => new BuiltInAsyncMethod("race", 0, 1, (interp, receiver, args) =>
                 RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
                 .WithSpecLength(1),
@@ -825,6 +829,109 @@ public static class PromiseBuiltIns
         // Wait for all promises - will throw on first rejection
         var results = await Task.WhenAll(tasks);
         return new SharpTSArray(new List<object?>(results));
+    }
+
+    private readonly record struct KeyedPromiseInput(object Key, object? Value);
+
+    /// <summary>
+    /// Promise.allKeyed (Await Dictionary proposal): resolves each own enumerable
+    /// property and returns a null-prototype object with the same string/symbol
+    /// keys in OwnPropertyKeys order.
+    /// </summary>
+    private static async Task<object?> AllKeyedImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
+    {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "allKeyed");
+        var entries = GetKeyedPromiseInputs(args, interpreter, "allKeyed");
+        var tasks = new List<Task<object?>>(entries.Count);
+        foreach (var entry in entries)
+        {
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, entry.Value);
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
+        }
+
+        object?[] values = await Task.WhenAll(tasks);
+        return CreateKeyedPromiseResult(entries, values);
+    }
+
+    private static List<KeyedPromiseInput> GetKeyedPromiseInputs(
+        List<object?> args, Interpreter interpreter, string methodName)
+    {
+        object? input = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        if (input is null or SharpTSUndefined or bool or string or char
+            or byte or sbyte or short or ushort or int or uint or long or ulong
+            or float or double or decimal or SharpTSBigInt or System.Numerics.BigInteger
+            or SharpTSSymbol)
+        {
+            throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                $"Promise.{methodName} requires an object argument"));
+        }
+
+        try
+        {
+            var entries = new List<KeyedPromiseInput>();
+            switch (input)
+            {
+                case SharpTSObject obj:
+                    foreach (string key in obj.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(obj, key)));
+                    foreach (var symbol in obj.GetSymbolPropertyNames())
+                    {
+                        if (!obj.GetSymbolPropertyFlags(symbol).Enumerable) continue;
+                        object? value;
+                        if (obj.TryGetSymbolAccessor(symbol, out var getter, out _)
+                            && getter is not null)
+                        {
+                            value = FunctionBuiltIns.CallWithThis(
+                                interpreter, getter, obj, []);
+                        }
+                        else
+                        {
+                            value = obj.GetBySymbol(symbol) ?? SharpTSUndefined.Instance;
+                        }
+                        entries.Add(new(symbol, value));
+                    }
+                    return entries;
+                case SharpTSFunction function:
+                    foreach (string key in function.PropertyKeys)
+                        entries.Add(new(key, interpreter.GetProperty(function, key)));
+                    return entries;
+                case SharpTSArrowFunction arrow:
+                    foreach (string key in arrow.PropertyKeys)
+                        entries.Add(new(key, interpreter.GetProperty(arrow, key)));
+                    return entries;
+                case SharpTSArray array:
+                    foreach (string key in array.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(array, key)));
+                    return entries;
+                case SharpTSInstance instance:
+                    foreach (string key in instance.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(instance, key)));
+                    return entries;
+                default:
+                    throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                        $"Promise.{methodName} requires an object argument"));
+            }
+        }
+        catch (Exceptions.ThrowException ex)
+        {
+            throw new SharpTSPromiseRejectedException(ex.Value);
+        }
+    }
+
+    private static SharpTSObject CreateKeyedPromiseResult(
+        IReadOnlyList<KeyedPromiseInput> entries, IReadOnlyList<object?> values)
+    {
+        var result = new SharpTSObject([]) { IsNullPrototype = true };
+        for (int index = 0; index < entries.Count; index++)
+        {
+            if (entries[index].Key is SharpTSSymbol symbol)
+                result.SetBySymbol(symbol, values[index]);
+            else
+                result.SetProperty((string)entries[index].Key, values[index]);
+        }
+        return result;
     }
 
     /// <summary>
