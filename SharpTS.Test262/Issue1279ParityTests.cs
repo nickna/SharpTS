@@ -3016,6 +3016,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/S15.4.5.2_A1_T1.js")]
     [InlineData("built-ins/Array/S15.4.5.2_A1_T2.js")]
     [InlineData("built-ins/Array/S15.4.5.2_A2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A3_T1.js")]
     public void Array_legacy_exotic_semantics_remain_interpreter_compatible(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
