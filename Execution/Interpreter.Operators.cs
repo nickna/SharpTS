@@ -670,7 +670,16 @@ public partial class Interpreter
         // -> "1,2,3" and `[1,2,3] == "1,2,3"` -> true. The console/debug ToString
         // ("[1, 2, 3]") is intentionally NOT used here.
         if (value is SharpTSArguments) return "[object Arguments]";
-        if (value is SharpTSArray arr) return ArrayBuiltIns.ToJsString(this, arr);
+        if (value is SharpTSArray arr)
+        {
+            // Array.prototype conversion methods are mutable. Keep the direct
+            // join fast path for the ordinary realm, but perform the full
+            // lookup when either method has been overridden.
+            var arrayPrototype = GetArrayPrototype();
+            if (arrayPrototype.HasExtra("toString") || arrayPrototype.HasExtra("valueOf"))
+                return OrdinaryToPrimitiveObject(arr, hint);
+            return ArrayBuiltIns.ToJsString(this, arr);
+        }
         if (value is not SharpTSObject obj) return value;
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;
@@ -700,6 +709,21 @@ public partial class Interpreter
         if (isWrapper) return primitiveValue;
         if (TryCallOwnConversion(obj, second, out var r2)) return r2;
         return primitiveValue;
+    }
+
+    private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
+    {
+        string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
+        string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
+        foreach (string name in new[] { first, second })
+        {
+            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable)
+                continue;
+            var result = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
+            if (!IsObjectLike(result)) return result;
+        }
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
     }
 
     /// <summary>
@@ -781,7 +805,7 @@ public partial class Interpreter
     /// <see cref="Stringify"/>.
     /// </summary>
     internal string ToStringForStringCall(object? value)
-        => Stringify(value is SharpTSObject ? ToPrimitive(value, PrimitiveHint.String) : value);
+        => Stringify(IsObjectLike(value) ? ToPrimitive(value, PrimitiveHint.String) : value);
 
     /// <summary>
     /// ECMA-262 ToString for built-in algorithm arguments. Unlike the

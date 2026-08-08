@@ -100,7 +100,7 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // ECMA-262 7.1.17 ToString(bigint) = BigInt::toString = bare numeric form
         // ("42"), NOT the "42n" debug form used by console.log / util.inspect.
         if (arg is SharpTSBigInt bi) return bi.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (arg is SharpTSArray arr) return ArrayBuiltIns.ToJsString(interpreter, arr);
+        if (arg is SharpTSArray) return interpreter.ToStringForStringCall(arg);
         // A boxed wrapper / plain object goes through ToString = ToPrimitive
         // (string hint) then stringify, honoring an own toString override and
         // unwrapping a bare wrapper to its primitive (#574). A raw Symbol is
