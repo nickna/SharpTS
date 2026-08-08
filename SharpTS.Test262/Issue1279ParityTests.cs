@@ -2452,6 +2452,11 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Bound_String_match_retains_its_receiver()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/match/S15.5.4.10_A1_T3.js");
+
+    [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
             "built-ins/Promise/prototype/finally/is-a-method.js",

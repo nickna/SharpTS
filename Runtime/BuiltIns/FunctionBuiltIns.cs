@@ -449,15 +449,9 @@ public class BoundFunction : ISharpTSCallable
                 return ((IReceiverBindable)_target).BindToReceiver(_thisArg).CallV2(interpreter, combined);
             }
 
-            // Mirror the legacy Call path for BuiltInMethod (issue #101): the
-            // V2 path is hit by JS-level invocation of a BoundFunction wrapping
-            // a BuiltInMethod target (e.g. Function.prototype.call.bind(...)).
-            // Without this rebind the inner method receives no receiver and the
-            // implementation throws "called on non-function".
-            if (_target is BuiltInMethod bim)
-            {
-                return bim.Bind(_thisArg).CallV2(interpreter, combined);
-            }
+            var rebound = BindNativeReceiver(_target, _thisArg);
+            if (!ReferenceEquals(rebound, _target))
+                return rebound.CallV2(interpreter, combined);
         }
 
         return _target.CallV2(interpreter, combined);
@@ -506,16 +500,9 @@ public class BoundFunction : ISharpTSCallable
                 return ((IReceiverBindable)_target).BindToReceiver(_thisArg).Call(interpreter, combinedArgs);
             }
 
-            // Built-in methods read their receiver from the bound `_receiver`
-            // slot, not from a synthetic `this` environment. For
-            // `Function.prototype.call.bind(hasOwn)` to work, the BuiltInMethod
-            // path must rebind via `.Bind(thisArg)` before invoking — without
-            // this, the inner method sees a null receiver and the implementation
-            // throws.
-            if (_target is BuiltInMethod bim)
-            {
-                return bim.Bind(_thisArg).Call(interpreter, combinedArgs);
-            }
+            var rebound = BindNativeReceiver(_target, _thisArg);
+            if (!ReferenceEquals(rebound, _target))
+                return rebound.Call(interpreter, combinedArgs);
         }
 
         // For arrow functions or when no 'this' binding needed
@@ -530,6 +517,24 @@ public class BoundFunction : ISharpTSCallable
         // We wrap the function in a BoundSharpTSFunctionWrapper
         return new BoundSharpTSFunctionWrapper(fn, thisArg);
     }
+
+    private static ISharpTSCallable BindNativeReceiver(
+        ISharpTSCallable target, object receiver) => target switch
+    {
+        BuiltInMethod method => method.Bind(receiver),
+        BuiltInAsyncMethod method => method.Bind(receiver),
+        StringPrototypeMethodWrapper method => method.Bind(receiver),
+        NumberPrototypeMethodWrapper method => method.Bind(receiver),
+        BooleanPrototypeMethodWrapper method => method.Bind(receiver),
+        SymbolPrototypeMethodWrapper method => method.Bind(receiver),
+        BigIntPrototypeMethodWrapper method => method.Bind(receiver),
+        ArrayPrototypeMethodWrapper method => method.Bind(receiver),
+        SharpTSObjectUnboundMethod method => method.BindTo(receiver),
+        SharpTSArrayUnboundMethod method => method.BindTo(receiver),
+        SharpTSFunctionProtoToString method => method.BindTo(receiver),
+        ErrorToStringCallable method => method.Bind(receiver),
+        _ => target,
+    };
 
     public override string ToString() => $"<fn {Name}>";
 }
