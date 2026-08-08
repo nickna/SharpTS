@@ -2525,6 +2525,13 @@ public sealed class Issue1279ParityTests
     public void RegExp_match_honors_global_exec_and_lastIndex(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/cstm-exec-return-invalid.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/set-lastindex-init-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/set-lastindex-restore-err.js")]
+    public void RegExp_search_uses_throwing_lastIndex_writes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

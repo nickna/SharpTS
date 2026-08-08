@@ -1896,7 +1896,7 @@ public partial class Interpreter
     {
         var syntheticName = new Token(TokenType.IDENTIFIER, name, null, 0);
         var syntheticSet = new Expr.Set(null!, syntheticName, null!);
-        EvaluateSetOnObject(syntheticSet, obj, value);
+        EvaluateSetOnObject(syntheticSet, obj, value, forceStrict: true);
     }
 
     /// <summary>
@@ -1912,7 +1912,11 @@ public partial class Interpreter
     /// Core property assignment logic, shared between sync and async evaluation.
     /// Uses TypeCategoryResolver for fast dispatch on common types.
     /// </summary>
-    private object? EvaluateSetOnObject(Expr.Set set, object? obj, object? value)
+    private object? EvaluateSetOnObject(
+        Expr.Set set,
+        object? obj,
+        object? value,
+        bool forceStrict = false)
     {
         // ECMA-262 PutValue: RequireObjectCoercible throws a guest TypeError on a
         // null/undefined base before any setter dispatch (#733). The RHS value is
@@ -1982,7 +1986,7 @@ public partial class Interpreter
             { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
             && set.Name.Lexeme == "prototype")
         {
-            if (_environment.IsStrictMode)
+            if (forceStrict || _environment.IsStrictMode)
                 throw new ThrowException(new SharpTSTypeError(
                     "Cannot assign to read only property 'prototype' of function"));
             return value;
@@ -2005,7 +2009,7 @@ public partial class Interpreter
 
         var category = TypeCategoryResolver.ClassifyRuntime(obj);
         string memberName = set.Name.Lexeme;
-        bool strictMode = _environment.IsStrictMode;
+        bool strictMode = forceStrict || _environment.IsStrictMode;
 
         switch (category)
         {
@@ -2131,7 +2135,8 @@ public partial class Interpreter
             if (simpleObj.HasGetter(memberName))
             {
                 if (strictMode)
-                    throw new InterpreterException($"Cannot set property '{memberName}' which has only a getter.");
+                    throw new ThrowException(new SharpTSTypeError(
+                        $"Cannot set property '{memberName}' which has only a getter."));
                 return value;
             }
 
@@ -2216,7 +2221,8 @@ public partial class Interpreter
         if (inherited.Get != null || inherited.Set != null || !inherited.Writable)
         {
             if (strictMode)
-                throw new InterpreterException($"Cannot assign to read only property '{memberName}'.");
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to read only property '{memberName}'."));
             return true;
         }
         return false;
