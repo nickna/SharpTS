@@ -618,7 +618,7 @@ public static class RegExpBuiltIns
     /// case (treated as `undefined`).
     /// </summary>
     private static string ToStr(Interpreter interp, object? value)
-        => value is null ? "undefined" : interp.Stringify(value);
+        => interp.ToStringForBuiltInArgument(value);
 
     /// <summary>
     /// ECMA-262 §22.2.4.1 RegExp(pattern, flags). Runs with interpreter access
@@ -636,7 +636,7 @@ public static class RegExpBuiltIns
     {
         object? pattern = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         object? flags = args.Count > 1 ? args[1] : SharpTSUndefined.Instance;
-        bool flagsUndefined = flags is null or SharpTSUndefined;
+        bool flagsUndefined = flags is SharpTSUndefined;
 
         bool patternIsRegExp = IsRegExp(interp, pattern);
 
@@ -669,7 +669,7 @@ public static class RegExpBuiltIns
         {
             // Step 7: ordinary coercion — only `undefined` becomes "" (not the
             // literal "undefined"); everything else is ToString'd.
-            p = pattern is null or SharpTSUndefined ? "" : ToStr(interp, pattern);
+            p = pattern is SharpTSUndefined ? "" : ToStr(interp, pattern);
             f = flagsUndefined ? "" : ToStr(interp, flags);
         }
         return new SharpTSRegExp(p, f);

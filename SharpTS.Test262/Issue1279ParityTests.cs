@@ -2477,6 +2477,14 @@ public sealed class Issue1279ParityTests
     public void JSON_stringify_observes_toJSON_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T4.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T7.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T9.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T12.js")]
+    public void RegExp_constructor_coerces_pattern_and_flags(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
