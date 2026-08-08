@@ -9995,7 +9995,7 @@ test/built-ins/String/15.5.5.5.2-3-2.js Pass
 test/built-ins/String/15.5.5.5.2-3-3.js Pass
 test/built-ins/String/15.5.5.5.2-3-4.js Pass
 test/built-ins/String/15.5.5.5.2-3-5.js Pass
-test/built-ins/String/15.5.5.5.2-3-6.js Fail
+test/built-ins/String/15.5.5.5.2-3-6.js Pass
 test/built-ins/String/15.5.5.5.2-3-7.js Pass
 test/built-ins/String/15.5.5.5.2-3-8.js Pass
 test/built-ins/String/15.5.5.5.2-7-1.js Pass
@@ -10019,12 +10019,12 @@ test/built-ins/String/S15.5.1.1_A1_T4.js Pass
 test/built-ins/String/S15.5.1.1_A1_T5.js Pass
 test/built-ins/String/S15.5.1.1_A1_T6.js Pass
 test/built-ins/String/S15.5.1.1_A1_T7.js Pass
-test/built-ins/String/S15.5.1.1_A1_T8.js Fail
-test/built-ins/String/S15.5.1.1_A1_T9.js Fail
+test/built-ins/String/S15.5.1.1_A1_T8.js Pass
+test/built-ins/String/S15.5.1.1_A1_T9.js Pass
 test/built-ins/String/S15.5.1.1_A2_T1.js Pass
 test/built-ins/String/S15.5.2.1_A1_T1.js Pass
 test/built-ins/String/S15.5.2.1_A1_T10.js Pass
-test/built-ins/String/S15.5.2.1_A1_T11.js Fail
+test/built-ins/String/S15.5.2.1_A1_T11.js Pass
 test/built-ins/String/S15.5.2.1_A1_T12.js Pass
 test/built-ins/String/S15.5.2.1_A1_T13.js Pass
 test/built-ins/String/S15.5.2.1_A1_T16.js Pass
@@ -10037,7 +10037,7 @@ test/built-ins/String/S15.5.2.1_A1_T4.js Pass
 test/built-ins/String/S15.5.2.1_A1_T5.js Pass
 test/built-ins/String/S15.5.2.1_A1_T6.js Pass
 test/built-ins/String/S15.5.2.1_A1_T7.js Pass
-test/built-ins/String/S15.5.2.1_A1_T8.js Fail
+test/built-ins/String/S15.5.2.1_A1_T8.js Pass
 test/built-ins/String/S15.5.2.1_A1_T9.js Pass
 test/built-ins/String/S15.5.2.1_A2_T1.js Pass
 test/built-ins/String/S15.5.2.1_A2_T2.js Pass
@@ -10068,7 +10068,7 @@ test/built-ins/String/S9.8.1_A7.js Pass
 test/built-ins/String/S9.8.1_A8.js Pass
 test/built-ins/String/S9.8.1_A9_T1.js Pass
 test/built-ins/String/S9.8.1_A9_T2.js Pass
-test/built-ins/String/S9.8_A1_T1.js Fail
+test/built-ins/String/S9.8_A1_T1.js Pass
 test/built-ins/String/S9.8_A2_T1.js Pass
 test/built-ins/String/S9.8_A3_T1.js Pass
 test/built-ins/String/S9.8_A4_T1.js Pass
@@ -10224,7 +10224,7 @@ test/built-ins/String/prototype/concat/name.js Pass
 test/built-ins/String/prototype/concat/not-a-constructor.js Pass
 test/built-ins/String/prototype/concat/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/constructor/S15.5.4.1_A1_T1.js Pass
-test/built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js Fail
+test/built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js Pass
 test/built-ins/String/prototype/endsWith/String.prototype.endsWith_Fail.js Pass
 test/built-ins/String/prototype/endsWith/String.prototype.endsWith_Fail_2.js Pass
 test/built-ins/String/prototype/endsWith/String.prototype.endsWith_Success.js Pass
@@ -10658,7 +10658,7 @@ test/built-ins/String/prototype/slice/S15.5.4.13_A1_T14.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T4.js Pass
-test/built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js Fail
+test/built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T6.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T7.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T8.js Pass
@@ -11072,7 +11072,7 @@ test/built-ins/String/prototype/trim/15.5.4.20-3-6.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-3-7.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-3-8.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-3-9.js Pass
-test/built-ins/String/prototype/trim/15.5.4.20-4-1.js Fail
+test/built-ins/String/prototype/trim/15.5.4.20-4-1.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-4-10.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-4-11.js Pass
 test/built-ins/String/prototype/trim/15.5.4.20-4-12.js Pass
