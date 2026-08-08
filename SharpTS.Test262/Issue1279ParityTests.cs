@@ -2429,6 +2429,12 @@ public sealed class Issue1279ParityTests
             "built-ins/JSON/parse/duplicate-proto.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_reviver_preserves_nonconfigurable_array_properties_on_delete()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-array-non-configurable-prop-delete.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -119,7 +119,7 @@ public static class JSONBuiltIns
                 var prop = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
                 if (IsUndefinedRevive(newElement))
-                    arr.DeleteAt(i);
+                    arr.DeletePropertyStrict(prop, strictMode: false);
                 else
                     arr[i] = newElement;
             }
