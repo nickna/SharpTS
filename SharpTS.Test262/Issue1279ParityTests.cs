@@ -2992,6 +2992,11 @@ public sealed class Issue1279ParityTests
     public void RegExp_search_uses_throwing_lastIndex_writes(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/15.4.5-1.js")]
+    public void Array_legacy_exotic_semantics_remain_interpreter_compatible(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
