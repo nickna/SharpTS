@@ -1717,8 +1717,14 @@ public partial class Interpreter
         // Array global constructor: resolves `Array.prototype`, `Array.from`, etc.
         if (obj is SharpTSArrayGlobal arrGlobal)
         {
-            return arrGlobal.GetMember(memberName)
-                ?? InheritedObjectPrototypeMember(arrGlobal, memberName)
+            if (arrGlobal.GetMember(memberName) is { } ownMember)
+                return ownMember;
+            var functionPrototype = GetFunctionPrototype();
+            if (functionPrototype.GetExtraGetter(memberName) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, arrGlobal).CallBoxed(this, []);
+            if (functionPrototype.HasExtra(memberName))
+                return functionPrototype.TryGetExtra(memberName);
+            return InheritedObjectPrototypeMember(arrGlobal, memberName)
                 ?? SharpTSUndefined.Instance;
         }
         if (obj is SharpTSArrayPrototype arrProto)
