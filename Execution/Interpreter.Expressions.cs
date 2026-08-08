@@ -1253,6 +1253,16 @@ public partial class Interpreter
             return BindAccessorToObject(getter, array).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);
         }
+        if (!array.HasIndex(index))
+        {
+            string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var prototype = GetArrayPrototype();
+            if (prototype.GetExtraGetter(key) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, array).CallV2(
+                    this, ReadOnlySpan<RuntimeValue>.Empty);
+            if (prototype.HasExtra(key))
+                return RuntimeValue.FromBoxed(prototype.TryGetExtra(key));
+        }
         return RuntimeValue.FromBoxed(array.Get(index));
     }
 
