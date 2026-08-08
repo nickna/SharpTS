@@ -715,11 +715,12 @@ public static class PromiseBuiltIns
         {
             throw;
         }
-        catch (Runtime.Exceptions.ThrowException)
+        catch (Runtime.Exceptions.ThrowException ex)
         {
-            // A guest throw from a user-supplied Symbol.iterator / next() is itself the
-            // rejection reason; let the surrounding async machinery adopt it.
-            throw;
+            // A guest throw from Symbol.iterator / next() becomes the returned
+            // promise's rejection reason. Convert it here so the task wrapper
+            // preserves the guest value instead of exposing a host message.
+            throw new SharpTSPromiseRejectedException(ex.Value);
         }
         catch
         {

@@ -2476,6 +2476,16 @@ public sealed class Issue1279ParityTests
     public void New_spread_rejects_invalid_iterators(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-assigned-null-reject.js")]
+    [InlineData("built-ins/Promise/all/iter-returns-null-reject.js")]
+    [InlineData("built-ins/Promise/all/S25.4.4.1_A3.1_T3.js")]
+    [InlineData("built-ins/Promise/race/iter-assigned-null-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-returns-null-reject.js")]
+    [InlineData("built-ins/Promise/race/S25.4.4.3_A2.2_T3.js")]
+    public void Promise_combinators_preserve_iterator_error_values(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
