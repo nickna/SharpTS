@@ -928,7 +928,13 @@ public partial class Interpreter
         // `C[Symbol.species] = P`). #262.
         (SharpTSClass cls, SharpTSSymbol clsSym) => new IndexTarget.ClassSymbol(cls, clsSym),
         (SharpTSClass cls, _) => new IndexTarget.ClassString(cls, PropertyKeyConverter.ToPropertyKeyString(index)),
-        (string str, double strIdx) => new IndexTarget.StringChar(str, (int)strIdx),
+        (string str, double strIdx)
+            when double.IsFinite(strIdx)
+                && strIdx >= 0
+                && strIdx <= int.MaxValue
+                && Math.Truncate(strIdx) == strIdx
+            => new IndexTarget.StringChar(str, (int)strIdx),
+        (string str, double) => new IndexTarget.StringChar(str, -1),
         _ => new IndexTarget.Unsupported(obj, index)
     };
 
