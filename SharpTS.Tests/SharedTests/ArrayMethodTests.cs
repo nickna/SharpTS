@@ -603,6 +603,33 @@ public class ArrayMethodTests
         Assert.Equal("true\nfalse\nthird\nfalse\nfirst\ninherited\na\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Fill_IsGenericAndCoercesEmptyBounds(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { length: 4 };
+            object.fill = Array.prototype.fill;
+            console.log(object.fill("x", 1, -1) === object);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(object[2]);
+            console.log(3 in object);
+
+            let coerced = false;
+            const empty: any = { length: 0 };
+            Array.prototype.fill.call(empty, 1, {
+                valueOf() {
+                    coerced = true;
+                    return 0;
+                }
+            });
+            console.log(coerced);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfalse\nx\nx\nfalse\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

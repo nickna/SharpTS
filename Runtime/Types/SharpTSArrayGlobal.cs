@@ -300,6 +300,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
             return BuiltIns.ArrayBuiltIns.ReverseArrayLike(interpreter, receiver!);
         }
 
+        if (_name == "fill")
+        {
+            return BuiltIns.ArrayBuiltIns.FillArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         bool requiresObservableIndexedGet = _name is
             "toReversed" or "toSorted" or "toSpliced";

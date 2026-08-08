@@ -54,7 +54,7 @@ public static class ArrayBuiltIns
             .MethodV2("toReversed", 0, ToReversedV2)
             .MethodV2("with", 2, WithV2)
             .MethodV2("at", 1, AtV2)
-            .MethodV2("fill", 1, 3, FillV2)
+            .MethodV2("fill", 0, 3, specLength: 1, FillV2)
             .MethodV2("copyWithin", 1, 3, specLength: 2, CopyWithinV2)
             .MethodV2("entries", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(arr))))
             .MethodV2("keys", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(arr))))
@@ -1033,6 +1033,46 @@ public static class ArrayBuiltIns
         return receiver;
     }
 
+    /// <summary>
+    /// ECMA-262 23.1.3.6 generic fill algorithm. Length, start, and end are
+    /// coerced in specification order even for an empty receiver, then each
+    /// selected property is written strictly on the original object.
+    /// </summary>
+    internal static object FillArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        object? value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+
+        double relativeStart = args.Count > 1
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 2 && args[2] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[2])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+
+        for (long index = start; index < end; index++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                value);
+        }
+        return receiver;
+    }
+
+    private static long NormalizeRelativeIndex(double relativeIndex, long length)
+    {
+        if (double.IsNegativeInfinity(relativeIndex)) return 0;
+        if (relativeIndex < 0)
+            return (long)Math.Max(length + relativeIndex, 0);
+        return (long)Math.Min(relativeIndex, length);
+    }
+
     private static void AppendConcatItem(
         Interpreter interpreter, SharpTSArray result, ref long nextIndex, object? item)
     {
@@ -1122,30 +1162,10 @@ public static class ArrayBuiltIns
 
     private static RuntimeValue FillV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        // ECMA-262 23.1.3.9: Fill WRITES every position in [start, end) — holes
-        // are filled, not preserved.
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-
-        int len = arr.Length;
-        if (len == 0) return RuntimeValue.FromObject(arr);
-
-        var value = args.Length > 0 ? args[0].ToObject() : null;
-
-        int relStart = args.Length > 1
-            ? ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject())
-            : 0;
-        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        int relEnd = args.Length > 2
-            ? ToIntegerOrInfinityAsInt(interpreter, args[2].ToObject())
-            : len;
-        int actualEnd = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
-
-        for (int i = actualStart; i < actualEnd; i++)
-            arr[i] = value;
-
-        return RuntimeValue.FromObject(arr);
+        var boxedArgs = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            boxedArgs[i] = args[i].ToObject();
+        return RuntimeValue.FromObject(FillArrayLike(interpreter, arr, boxedArgs));
     }
 
     private static RuntimeValue CopyWithinV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
