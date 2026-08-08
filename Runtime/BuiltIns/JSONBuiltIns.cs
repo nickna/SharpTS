@@ -349,6 +349,9 @@ public static class JSONBuiltIns
             case SharpTSArray arr:
                 StringifyArray(interp, arr, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
+            case SharpTSProxy proxy when !proxy.IsCallable:
+                StringifyProxy(interp, proxy, replacer, allowedKeys, indentStr, depth, sb, seen);
+                return true;
             case SharpTSObject obj:
                 StringifyObject(interp, obj, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
@@ -375,7 +378,13 @@ public static class JSONBuiltIns
     /// </summary>
     private static object? CallToJsonIfExists(Interpreter interp, object? value)
     {
-        if (value is SharpTSInstance inst)
+        if (value is SharpTSProxy proxy && !proxy.IsCallable)
+        {
+            var toJson = proxy.TrapGet("toJSON", interp);
+            if (toJson is ISharpTSCallable callable)
+                return FunctionBuiltIns.CallWithThis(interp, callable, proxy, []);
+        }
+        else if (value is SharpTSInstance inst)
         {
             var toJson = inst.GetClass().FindMethod("toJSON");
             if (toJson != null)
@@ -463,6 +472,12 @@ public static class JSONBuiltIns
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
         StringifyJsonObject(interp, dict, dict.Keys,
             k => dict.TryGetValue(k, out var value) ? value : SharpTSUndefined.Instance,
+            replacer, allowedKeys, indentStr, depth, sb, seen);
+
+    private static void StringifyProxy(Interpreter interp, SharpTSProxy proxy,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, proxy, proxy.TrapOwnKeys(interp),
+            key => proxy.TrapGet(key, interp),
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,

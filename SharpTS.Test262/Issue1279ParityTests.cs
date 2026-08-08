@@ -2447,6 +2447,12 @@ public sealed class Issue1279ParityTests
     public void JSON_stringify_preserves_replacer_property_order(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_stringify_ignores_wrong_type_replacer_entries()
+        => AssertPass(
+            "built-ins/JSON/stringify/replacer-array-wrong-type.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
