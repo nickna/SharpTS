@@ -1591,8 +1591,13 @@ public partial class Interpreter
                 return FunctionBuiltIns.CallWithThis(this, getter, boundFunction, []);
             if (boundFunction.TryGetProperty(memberName, out var ownValue))
                 return ownValue;
-            return FunctionBuiltIns.GetMember(boundFunction, memberName)
-                ?? InheritedObjectPrototypeMember(boundFunction, memberName)
+            if (FunctionBuiltIns.GetMember(boundFunction, memberName) is { } functionMember)
+                return functionMember;
+            if (GetFunctionPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
+                return BindAccessorToObject(prototypeGetter, boundFunction).CallBoxed(this, []);
+            if (GetFunctionPrototype().HasExtra(memberName))
+                return GetFunctionPrototype().TryGetExtra(memberName);
+            return InheritedObjectPrototypeMember(boundFunction, memberName)
                 ?? SharpTSUndefined.Instance;
         }
 
