@@ -3158,6 +3158,11 @@ public sealed class Issue1279ParityTests
     public void Array_shift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T1.js")]
+    public void Array_unshift_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
