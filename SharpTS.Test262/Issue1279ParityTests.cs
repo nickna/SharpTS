@@ -3150,6 +3150,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A3_T3.js")]
     [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A4_T1.js")]
     [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/shift/call-with-boolean.js")]
     public void Array_shift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
