@@ -2470,6 +2470,12 @@ public sealed class Issue1279ParityTests
     public void New_evaluates_arguments_before_constructor_validation(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("language/expressions/new/spread-err-mult-err-iter-get-value.js")]
+    [InlineData("language/expressions/new/spread-err-sngl-err-itr-get-value.js")]
+    public void New_spread_rejects_invalid_iterators(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(

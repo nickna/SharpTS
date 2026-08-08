@@ -39,6 +39,38 @@ public partial class Interpreter
     /// </summary>
     private static bool IsSimpleIdentifier(Expr callee) => callee is Expr.Variable;
 
+    private async ValueTask<List<object?>> EvaluateNewArgumentsCore(
+        IEvaluationContext ctx, IReadOnlyList<Expr> arguments)
+    {
+        List<object?> result = [];
+        foreach (var argument in arguments)
+        {
+            if (argument is Expr.Spread spread)
+            {
+                var value = (await ctx.EvaluateExprAsync(spread.Expression)).ToObject();
+                result.AddRange(GetIterableElements(value));
+            }
+            else
+            {
+                result.Add((await ctx.EvaluateExprAsync(argument)).ToObject());
+            }
+        }
+        return result;
+    }
+
+    private List<object?> EvaluateNewArguments(IReadOnlyList<Expr> arguments)
+    {
+        List<object?> result = [];
+        foreach (var argument in arguments)
+        {
+            if (argument is Expr.Spread spread)
+                result.AddRange(GetIterableElements(Evaluate(spread.Expression)));
+            else
+                result.Add(Evaluate(argument));
+        }
+        return result;
+    }
+
     /// <summary>
     /// Core implementation for evaluating 'new' expressions, shared between sync and async paths.
     /// Handles all built-in types (Date, RegExp, Map, Set, WeakMap, WeakSet, Error) and user classes.
@@ -58,25 +90,25 @@ public partial class Interpreter
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
             {
-                if (newExpr.Arguments.Count != 1)
+                var promiseArgs = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
+                if (promiseArgs.Count != 1)
                 {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
                 }
-                object? executor = (await ctx.EvaluateExprAsync(newExpr.Arguments[0])).ToObject();
-                return CreatePromiseFromExecutor(executor);
+                return CreatePromiseFromExecutor(promiseArgs[0]);
             }
 
             // Try factory for all other built-in constructors
             if (BuiltInConstructorFactory.IsBuiltIn(simpleClassName))
             {
-                List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
+                List<object?> args = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
                 return BuiltInConstructorFactory.TryCreate(simpleClassName, args, this);
             }
         }
 
         // Evaluate the callee expression to get the class/constructor
         object? klass = (await ctx.EvaluateExprAsync(newExpr.Callee)).ToObject();
-        List<object?> evaluatedArguments = await ctx.EvaluateAllAsync(newExpr.Arguments);
+        List<object?> evaluatedArguments = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
 
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
@@ -274,33 +306,25 @@ public partial class Interpreter
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
             {
-                if (newExpr.Arguments.Count != 1)
+                var promiseArgs = EvaluateNewArguments(newExpr.Arguments);
+                if (promiseArgs.Count != 1)
                 {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
                 }
-                object? executor = Evaluate(newExpr.Arguments[0]);
-                return RuntimeValue.FromObject(CreatePromiseFromExecutor(executor));
+                return RuntimeValue.FromObject(CreatePromiseFromExecutor(promiseArgs[0]));
             }
 
             // Try factory for all other built-in constructors
             if (BuiltInConstructorFactory.IsBuiltIn(simpleClassName))
             {
-                List<object?> args = [];
-                foreach (var arg in newExpr.Arguments)
-                {
-                    args.Add(Evaluate(arg));
-                }
+                List<object?> args = EvaluateNewArguments(newExpr.Arguments);
                 return BuiltInConstructorFactory.TryCreateRV(simpleClassName, args, this);
             }
         }
 
         // Evaluate the callee expression to get the class/constructor
         object? klass = Evaluate(newExpr.Callee);
-        List<object?> evaluatedArguments = [];
-        foreach (var arg in newExpr.Arguments)
-        {
-            evaluatedArguments.Add(Evaluate(arg));
-        }
+        List<object?> evaluatedArguments = EvaluateNewArguments(newExpr.Arguments);
 
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)

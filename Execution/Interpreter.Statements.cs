@@ -871,8 +871,11 @@ public partial class Interpreter
         if (iterable is SharpTSObject obj)
         {
             var iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
-            if (iteratorFn != null)
+            if (iteratorFn != null || obj.HasSymbolProperty(SharpTSSymbol.Iterator))
             {
+                if (iteratorFn is not ISharpTSCallable)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "[Symbol.iterator] must be a function"));
                 // Bind 'this' to the object for a function expression / object method shorthand,
                 // including generator forms (`[Symbol.iterator]: function*(){ this... }`, #775).
                 if (TryBindReceiverForMethodAccess(iteratorFn, obj) is { } boundIteratorFn)
@@ -895,6 +898,9 @@ public partial class Interpreter
             }
             if (iteratorFn != null)
             {
+                if (iteratorFn is not ISharpTSCallable)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "[Symbol.iterator] must be a function"));
                 // Bind 'this' to the instance for a function expression / object method shorthand,
                 // including generator forms (#775).
                 if (TryBindReceiverForMethodAccess(iteratorFn, inst) is { } boundIteratorFn)
@@ -925,7 +931,8 @@ public partial class Interpreter
         }
         else
         {
-            throw new InterpreterException("[Symbol.iterator] must be a function.");
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator] must be a function"));
         }
 
         // A generator-valued [Symbol.iterator]() (`*[Symbol.iterator]() { yield ... }`) returns a
@@ -937,6 +944,10 @@ public partial class Interpreter
                 yield return item;
             yield break;
         }
+
+        if (iterator is not (SharpTSObject or SharpTSInstance))
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator]() must return an object"));
 
         // Iterate using the iterator protocol. The surrounding try/finally
         // implements ECMA-262 7.4.6 IteratorClose: when iteration is abandoned
