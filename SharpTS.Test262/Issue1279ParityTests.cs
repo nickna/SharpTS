@@ -2633,6 +2633,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Error/the-initial-value-of-errorprototypemessage-is-the-empty-string.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Error/tostring-1.js")]
+    [InlineData("built-ins/Error/tostring-2.js")]
+    public void Error_instances_honor_prototype_toString_replacement(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
