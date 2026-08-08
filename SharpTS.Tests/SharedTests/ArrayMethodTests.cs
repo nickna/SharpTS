@@ -9,6 +9,25 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ArrayMethodTests
 {
+    [Fact]
+    public void Array_Holes_InheritObjectPrototypeIndexes_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const prototype: any = Object.prototype;
+            prototype[2] = "inherited";
+            const values: any = ["own"];
+            values.length = 3;
+            console.log(values[2]);
+            console.log(values.hasOwnProperty("2"));
+            const copy: any = values.concat();
+            console.log(copy[2]);
+            console.log(copy.hasOwnProperty("2"));
+            delete prototype[2];
+            """);
+
+        Assert.Equal("inherited\nfalse\ninherited\ntrue\n", output);
+    }
+
     #region Find Tests
 
     [Theory, ModeData]
