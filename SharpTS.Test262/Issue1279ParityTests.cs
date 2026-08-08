@@ -3154,6 +3154,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/shift/set-length-array-is-frozen.js")]
     [InlineData("built-ins/Array/prototype/shift/set-length-array-length-is-non-writable.js")]
     [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-length-is-non-writable.js")]
     public void Array_shift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
