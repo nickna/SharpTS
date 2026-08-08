@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Text;
 using SharpTS.Execution;
 using SharpTS.Runtime.Exceptions;
@@ -13,6 +14,33 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </summary>
 public static class NumberBuiltIns
 {
+    internal static double BigIntToNumber(BigInteger value)
+    {
+        if (value.IsZero) return 0;
+        bool negative = value.Sign < 0;
+        BigInteger magnitude = BigInteger.Abs(value);
+        int shift = Math.Max(0, (int)magnitude.GetBitLength() - 53);
+        BigInteger significand = magnitude >> shift;
+        if (shift > 0)
+        {
+            BigInteger remainder = magnitude - (significand << shift);
+            BigInteger halfway = BigInteger.One << (shift - 1);
+            if (remainder > halfway
+                || remainder == halfway && !significand.IsEven)
+            {
+                significand++;
+                if (significand.GetBitLength() > 53)
+                {
+                    significand >>= 1;
+                    shift++;
+                }
+            }
+        }
+
+        double result = Math.ScaleB((double)significand, shift);
+        return negative ? -result : result;
+    }
+
     // JavaScript Number constants
     public const double MAX_VALUE = double.MaxValue;
     public const double MIN_VALUE = double.Epsilon;  // JS MIN_VALUE = smallest positive number

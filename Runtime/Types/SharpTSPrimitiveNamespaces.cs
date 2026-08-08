@@ -686,7 +686,7 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // step 3): it returns the numeric value, even though *implicit* ToNumber
         // on a bigint throws a TypeError. The radix-free decimal magnitude maps
         // to the nearest double.
-        if (arg is SharpTSBigInt bi) return (double)bi.Value;
+        if (arg is SharpTSBigInt bi) return NumberBuiltIns.BigIntToNumber(bi.Value);
         return interpreter.ToNumberWithPrimitive(arg);
     }
 
