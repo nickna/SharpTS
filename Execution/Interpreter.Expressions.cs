@@ -786,6 +786,21 @@ public partial class Interpreter
     /// </summary>
     private static void ApplySpreadToFields(object? spreadValue, Dictionary<string, object?> stringFields)
     {
+        // CopyDataProperties skips null/undefined. Other primitives are
+        // ToObject-coerced: only strings contribute enumerable index keys;
+        // number/boolean/symbol/bigint wrappers have none.
+        if (spreadValue is null or SharpTSUndefined)
+            return;
+        if (spreadValue is string text)
+        {
+            for (int i = 0; i < text.Length; i++)
+                stringFields[i.ToString()] = text[i].ToString();
+            return;
+        }
+        if (spreadValue is bool or double or int or long or float or decimal
+            or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
+            return;
+
         if (spreadValue is SharpTSObject spreadObj)
         {
             foreach (var kv in spreadObj.Fields)

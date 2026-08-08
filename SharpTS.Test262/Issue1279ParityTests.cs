@@ -2456,6 +2456,14 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/String/prototype/match/S15.5.4.10_A1_T3.js");
 
+    [Theory]
+    [InlineData("language/expressions/call/spread-mult-obj-null.js")]
+    [InlineData("language/expressions/call/spread-mult-obj-undefined.js")]
+    [InlineData("language/expressions/call/spread-obj-null.js")]
+    [InlineData("language/expressions/call/spread-obj-undefined.js")]
+    public void Object_spread_ignores_nullish_sources(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
