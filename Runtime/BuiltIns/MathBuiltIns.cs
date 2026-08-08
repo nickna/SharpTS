@@ -33,7 +33,11 @@ public static class MathBuiltIns
             .MethodV2("round", 1, (_, _, args) =>
             {
                 double x = Interpreter.ToNumber(args[0]);
-                double rounded = Math.Floor(x + 0.5);
+                // Adding 0.5 first can round a value just below a half-integer
+                // up to the half-integer before Floor sees it. Compare the
+                // fractional part instead, preserving the spec's ties-to-+∞ rule.
+                double floor = Math.Floor(x);
+                double rounded = x - floor < 0.5 ? floor : floor + 1;
                 return RuntimeValue.FromNumber(rounded == 0 && double.IsNegative(x) ? -0.0 : rounded);
             })
             .MethodV2("sqrt", 1, (_, _, args) =>
