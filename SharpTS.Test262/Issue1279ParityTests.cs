@@ -2461,6 +2461,12 @@ public sealed class Issue1279ParityTests
     public void JSON_stringify_circular_values_throw_TypeError(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_stringify_BigInt_throws_TypeError()
+        => AssertPass(
+            "built-ins/JSON/stringify/value-bigint.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -345,7 +345,8 @@ public static class JSONBuiltIns
                 JsonStringEscaper.AppendQuoted(sb, s);
                 return true;
             case SharpTSBigInt:
-                throw new ThrowException("TypeError: BigInt value can't be serialized in JSON");
+                throw new ThrowException(new SharpTSTypeError(
+                    "BigInt value can't be serialized in JSON"));
             case SharpTSArray arr:
                 StringifyArray(interp, arr, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
