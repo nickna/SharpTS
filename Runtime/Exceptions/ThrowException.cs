@@ -70,11 +70,24 @@ public class ThrowException : Exception
 
     private static string ExtractFromInstance(SharpTSInstance inst)
     {
-        var name = inst.GetRawField("name")?.ToString();
-        var message = inst.GetRawField("message")?.ToString();
+        var name = FindInstanceProperty(inst, "name")?.ToString();
+        var message = FindInstanceProperty(inst, "message")?.ToString();
         if (!string.IsNullOrEmpty(name))
             return string.IsNullOrEmpty(message) ? name : $"{name}: {message}";
         return inst.ToString() ?? "";
+    }
+
+    private static object? FindInstanceProperty(SharpTSInstance inst, string name)
+    {
+        if (inst.GetOwnPropertyDescriptor(name) is not null)
+            return inst.GetRawField(name);
+
+        for (SharpTSClass? klass = inst.RuntimeClass; klass is not null; klass = klass.Superclass)
+        {
+            if (klass.Prototype.HasExtra(name))
+                return klass.Prototype.TryGetExtra(name);
+        }
+        return null;
     }
 
     private static string ExtractFromObject(SharpTSObject obj)

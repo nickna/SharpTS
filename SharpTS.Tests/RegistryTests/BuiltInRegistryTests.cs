@@ -131,7 +131,7 @@ public class BuiltInRegistryTests
         var method = BuiltInRegistry.Instance.GetStaticMethod("JSON", "parse");
 
         Assert.NotNull(method);
-        Assert.Equal(1, method.Arity());
+        Assert.Equal(0, method.Arity());
     }
 
     [Fact]

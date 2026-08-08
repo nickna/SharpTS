@@ -258,6 +258,8 @@ public static class TestHarness
             // ProcessBuiltIns.ResetProcessState() (see ProcessLifecycleTests).
             interpreter.EmitProcessLifecycleEvents = true;
             interpreter.Interpret(statements, typeMap);
+            if (interpreter.LastUncaughtError is { } uncaught)
+                throw uncaught;
         });
     }
 

@@ -246,7 +246,7 @@ public class SharpTSAggregateError : SharpTSError
     public SharpTSArray Errors { get; }
 
     public SharpTSAggregateError(SharpTSArray errors, string? message = null)
-        : base("AggregateError", message ?? "All promises were rejected")
+        : base("AggregateError", message ?? "")
     {
         Errors = errors;
     }

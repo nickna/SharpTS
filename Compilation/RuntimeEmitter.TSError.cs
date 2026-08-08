@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
 
-        // Call base("AggregateError", message ?? "All promises were rejected")
+        // Call base("AggregateError", message ?? "")
         // Note: arg1 = errors, arg2 = message
         var hasMessageLabel = il.DefineLabel();
 
@@ -728,7 +728,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, hasMessageLabel);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "All promises were rejected");
+        il.Emit(OpCodes.Ldstr, "");
         il.MarkLabel(hasMessageLabel);
         il.Emit(OpCodes.Call, runtime.TSErrorCtorNameMessage);
 

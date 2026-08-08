@@ -293,7 +293,7 @@ public class ErrorTests
             console.log(e.message);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("All promises were rejected\n", output);
+        Assert.Equal("\n", output);
     }
 
     #endregion
