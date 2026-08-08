@@ -2640,6 +2640,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Error_prototype_constructor_builds_branded_instances()
+        => AssertPass(
+            "built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
