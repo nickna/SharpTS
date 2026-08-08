@@ -3040,6 +3040,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/iter-get-iter-err.js")]
     [InlineData("built-ins/Array/from/iter-get-iter-val-err.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-args.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-err.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
