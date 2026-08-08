@@ -890,22 +890,24 @@ public partial class Interpreter
     /// <param name="obj">The object being indexed.</param>
     /// <param name="index">The index value.</param>
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
-    private IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
+    private IndexTarget ResolveIndexTarget(object? obj, object? index)
     {
-        (SharpTSArray array, SharpTSSymbol symbol) => new IndexTarget.ArraySymbol(array, symbol),
-        (SharpTSArray array, double idx)
-            when idx >= 0
-                && idx <= SharpTSArray.MaxWriteIndex
-                && Math.Truncate(idx) == idx
-            => new IndexTarget.Array(array, (long)idx),
-        (SharpTSArray array, string idx)
-            when long.TryParse(idx, System.Globalization.NumberStyles.None,
+        if (obj is SharpTSArray array)
+        {
+            if (index is SharpTSSymbol symbol)
+                return new IndexTarget.ArraySymbol(array, symbol);
+            string key = ToPropertyKeyString(index);
+            if (long.TryParse(key, System.Globalization.NumberStyles.None,
                     System.Globalization.CultureInfo.InvariantCulture, out long parsed)
-                && parsed >= 0
-                && parsed <= SharpTSArray.MaxWriteIndex
-            => new IndexTarget.Array(array, parsed),
-        (SharpTSArray array, _) => new IndexTarget.ArrayString(
-            array, ToPropertyKeyString(index)),
+                && parsed >= 0 && parsed <= SharpTSArray.MaxWriteIndex)
+            {
+                return new IndexTarget.Array(array, parsed);
+            }
+            return new IndexTarget.ArrayString(array, key);
+        }
+
+        return (obj, index) switch
+        {
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
@@ -935,8 +937,9 @@ public partial class Interpreter
                 && Math.Truncate(strIdx) == strIdx
             => new IndexTarget.StringChar(str, (int)strIdx),
         (string str, double) => new IndexTarget.StringChar(str, -1),
-        _ => new IndexTarget.Unsupported(obj, index)
-    };
+            _ => new IndexTarget.Unsupported(obj, index)
+        };
+    }
 
     /// <summary>
     /// Evaluates an index access expression (bracket notation).
