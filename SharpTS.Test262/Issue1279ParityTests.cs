@@ -3052,6 +3052,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/mapfn-throws-exception.js")]
     [InlineData("built-ins/Array/from/source-object-iterator-1.js")]
     [InlineData("built-ins/Array/from/source-object-iterator-2.js")]
+    [InlineData("built-ins/Array/from/source-object-length-set-elem-prop-non-writable.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
