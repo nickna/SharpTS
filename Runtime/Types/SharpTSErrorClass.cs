@@ -136,12 +136,13 @@ public class SharpTSErrorClass : SharpTSClass
         // AggregateError: first arg is errors array, second is message
         if (errorTypeName == "AggregateError")
         {
-            var message = arguments.Count > 1
-                && arguments[1] is not SharpTSUndefined
+            bool hasMessage = arguments.Count > 1
+                && arguments[1] is not SharpTSUndefined;
+            var message = hasMessage
                 ? interpreter.ToStringForBuiltInArgument(arguments[1])
-                : "All promises were rejected";
-            instance.SetRawField("name", errorTypeName);
-            instance.SetRawField("message", message);
+                : "";
+            if (hasMessage)
+                instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             if (arguments.Count > 0)
                 instance.SetRawField("errors", arguments[0]);
@@ -155,12 +156,13 @@ public class SharpTSErrorClass : SharpTSClass
         }
         else
         {
-            var message = arguments.Count > 0
-                && arguments[0] is not SharpTSUndefined
+            bool hasMessage = arguments.Count > 0
+                && arguments[0] is not SharpTSUndefined;
+            var message = hasMessage
                 ? interpreter.ToStringForBuiltInArgument(arguments[0])
                 : "";
-            instance.SetRawField("name", errorTypeName);
-            instance.SetRawField("message", message);
+            if (hasMessage)
+                instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             // Cause is in the second argument's options
             if (arguments.Count > 1 && arguments[1] is SharpTSObject opts

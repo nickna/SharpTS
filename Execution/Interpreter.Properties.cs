@@ -1302,7 +1302,29 @@ public partial class Interpreter
     private RuntimeValue EvaluateGetOnInstanceRV(SharpTSInstance instance, Token memberName)
     {
         instance.SetInterpreter(this);
-        return instance.GetRV(memberName);
+        if (instance.GetOwnPropertyDescriptor(memberName.Lexeme) is not null)
+            return instance.GetRV(memberName);
+
+        // The mutable prototype overlay shadows the class's declared method
+        // table. This is observable for built-ins such as
+        // `Error.prototype.toString = Object.prototype.toString`.
+        var prototype = instance.RuntimeClass.Prototype;
+        if (prototype.GetExtraGetter(memberName.Lexeme) is { } getter)
+            return BindAccessorToObject(getter, instance).CallV2(
+                this, ReadOnlySpan<RuntimeValue>.Empty);
+        if (prototype.HasExtra(memberName.Lexeme))
+        {
+            object? value = prototype.TryGetExtra(memberName.Lexeme);
+            return RuntimeValue.FromBoxed(
+                TryBindReceiverForMethodAccess(value, instance) ?? value);
+        }
+
+        RuntimeValue resolved = instance.GetRV(memberName);
+        if (instance.HasProperty(memberName.Lexeme)) return resolved;
+
+        return RuntimeValue.FromBoxed(
+            InheritedObjectPrototypeMember(instance, memberName.Lexeme)
+                ?? SharpTSUndefined.Instance);
     }
 
     /// <summary>
