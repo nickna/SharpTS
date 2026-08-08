@@ -824,7 +824,7 @@ public partial class Interpreter
             return "[object Arguments]";
         if (value is SharpTSArray array)
             return ArrayBuiltIns.ToJsString(this, array);
-        if (value is ISharpTSCallable or SharpTSGlobalThis)
+        if (value is ISharpTSCallable or SharpTSGlobalThis or SharpTSRegExp)
             return Stringify(OrdinaryToPrimitiveObject(value, PrimitiveHint.String));
         if (value is not SharpTSObject obj)
             return Stringify(value);
