@@ -25,6 +25,22 @@ public class StringMethodTests
     }
 
     [Fact]
+    public void String_ToLowerCase_IsLocaleIndependent_InInterpreter()
+    {
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture =
+                System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+            Assert.Equal("i\n", TestHarness.RunInterpreted("console.log('I'.toLowerCase());"));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
     public void String_Split_ObservesRegExpPrototypeSymbolHook_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""

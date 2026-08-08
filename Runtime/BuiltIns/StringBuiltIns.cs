@@ -789,7 +789,7 @@ public static class StringBuiltIns
         => RuntimeValue.FromString(str.ToUpperInvariant());
 
     private static RuntimeValue ToLowerCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.ToLower());
+        => RuntimeValue.FromString(str.ToLowerInvariant());
 
     private static RuntimeValue TrimV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(TrimEcmaWhitespace(str, trimStart: true, trimEnd: true));
