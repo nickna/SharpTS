@@ -1,10 +1,9 @@
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
-/// Minimal global <c>Function</c> constructor placeholder. Real-world CJS
-/// packages (lodash) only use this indirectly for <c>Function.prototype</c>
-/// and <c>funcProto.toString</c> introspection, so we expose a skeleton
-/// sufficient for those lookups.
+/// Global <c>Function</c> constructor. The zero-argument form produces the
+/// spec-equivalent empty anonymous function; parsing parameter/body strings is
+/// deliberately rejected until the dynamic-source path can validate them.
 /// </summary>
 public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 {
@@ -14,10 +13,19 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 
     public int Arity() => 0;
 
-    // Calling `new Function(body)` is not supported — lodash only dereferences
-    // `.prototype`, never calls the constructor.
     public object? Call(Execution.Interpreter interpreter, List<object?> arguments)
-        => throw new Exception("Runtime Error: Dynamic Function() construction is not supported.");
+    {
+        if (arguments.Count != 0)
+        {
+            throw new Exception(
+                "Runtime Error: Dynamic Function() construction with source text is not supported.");
+        }
+
+        return new BuiltIns.BuiltInMethod(
+            "anonymous",
+            0,
+            static (_, _, _) => SharpTSUndefined.Instance);
+    }
 
     public object? GetMember(string name)
     {
