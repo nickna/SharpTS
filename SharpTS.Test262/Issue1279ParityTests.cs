@@ -3026,6 +3026,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/from/Array.from-name.js")]
+    [InlineData("built-ins/Array/from/Array.from_arity.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
