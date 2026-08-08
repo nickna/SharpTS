@@ -3072,6 +3072,18 @@ public sealed class Issue1279ParityTests
     public void Array_isArray_preserves_cross_type_classification(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_array-like-negative-length.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-sparse-object.js")]
+    [InlineData("built-ins/Array/prototype/concat/Array.prototype.concat_length-throws.js")]
+    [InlineData("built-ins/Array/prototype/concat/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/concat/create-non-array.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-get-err.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-falsey.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-val-truthy.js")]
+    public void Array_concat_honors_generic_and_spreadable_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

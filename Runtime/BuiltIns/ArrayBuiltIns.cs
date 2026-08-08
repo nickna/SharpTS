@@ -831,38 +831,78 @@ public static class ArrayBuiltIns
     internal static string ToJsString(Interpreter interp, SharpTSArray arr)
         => JoinV2(interp, arr, ReadOnlySpan<RuntimeValue>.Empty).AsString();
 
-    /// <summary>
-    /// Copies [0, length) of <paramref name="src"/> into <paramref name="dst"/>,
-    /// preserving holes as <see cref="ArrayHole"/>.<c>Instance</c> entries. Used
-    /// by concat / with / toReversed to honor ECMA-262's hole-preserving semantics.
-    /// </summary>
-    private static void AppendPreservingHoles(SharpTSArray src, List<object?> dst)
+    private static RuntimeValue ConcatV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        int len = src.Length;
-        for (int i = 0; i < len; i++)
-        {
-            if (src.HasIndex(i))
-                dst.Add(src[i]);
-            else
-                dst.Add(ArrayHole.Instance);
-        }
+        var result = new SharpTSArray();
+        long nextIndex = 0;
+        AppendConcatItem(interpreter, result, ref nextIndex, arr);
+        for (int a = 0; a < args.Length; a++)
+            AppendConcatItem(interpreter, result, ref nextIndex, args[a].ToObject());
+        return RuntimeValue.FromObject(result);
     }
 
-    private static RuntimeValue ConcatV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    /// <summary>
+    /// ECMA-262 23.1.3.2 generic concat path used by
+    /// <c>Array.prototype.concat.call(arrayLike, ...items)</c>. The receiver and
+    /// every argument independently consult <c>Symbol.isConcatSpreadable</c>;
+    /// absent indexed properties advance the output length without creating
+    /// data properties, preserving holes.
+    /// </summary>
+    internal static object ConcatArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
     {
-        // ECMA-262 23.1.3.2: preserves holes from array arguments; non-array args
-        // are appended as single elements.
-        var result = new List<object?>(arr.Length);
-        AppendPreservingHoles(arr, result);
-        for (int a = 0; a < args.Length; a++)
+        var result = new SharpTSArray();
+        long nextIndex = 0;
+        AppendConcatItem(interpreter, result, ref nextIndex, receiver);
+        for (int i = 0; i < args.Count; i++)
+            AppendConcatItem(interpreter, result, ref nextIndex, args[i]);
+        return result;
+    }
+
+    private static void AppendConcatItem(
+        Interpreter interpreter, SharpTSArray result, ref long nextIndex, object? item)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        var itemValue = RuntimeValue.FromBoxed(item);
+        bool spreadable = false;
+        if (itemValue.IsObject)
         {
-            var arg = args[a].ToObject();
-            if (arg is SharpTSArray otherArr)
-                AppendPreservingHoles(otherArr, result);
-            else
-                result.Add(arg);
+            object? spreadability = interpreter.GetSymbolPropertyValue(
+                item!, SharpTSSymbol.IsConcatSpreadable);
+            spreadable = spreadability is SharpTSUndefined
+                ? item is SharpTSArray
+                : RuntimeValue.FromBoxed(spreadability).IsTruthy();
         }
-        return RuntimeValue.FromObject(new SharpTSArray(result));
+
+        if (!spreadable)
+        {
+            if (nextIndex >= MaxSafeInteger)
+                throw TypeError("Array.prototype.concat result exceeds the maximum safe integer.");
+            result.Set(nextIndex++, item);
+            return;
+        }
+
+        long length = ToLength(
+            interpreter.GetPropertyValue(item, "length"), interpreter);
+        if (length > MaxSafeInteger - nextIndex)
+            throw TypeError("Array.prototype.concat result exceeds the maximum safe integer.");
+        if (length > SharpTSArray.MaxLength - nextIndex)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        for (long sourceIndex = 0; sourceIndex < length; sourceIndex++)
+        {
+            string key = sourceIndex.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(item, key))
+            {
+                result.Set(
+                    nextIndex + sourceIndex,
+                    interpreter.GetPropertyValue(item, key));
+            }
+        }
+        nextIndex += length;
+        result.SetLength(nextIndex);
     }
 
     private static RuntimeValue ReverseV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
