@@ -1015,6 +1015,12 @@ public partial class Interpreter
                 if (promiseMethod != null)
                     return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub));
             }
+            if (memberName is "then" or "catch" or "finally")
+            {
+                return RuntimeValue.FromBoxed(
+                    GetPromisePrototype().GetMember(memberName)
+                    ?? SharpTSUndefined.Instance);
+            }
         }
 
         // Number primitives inherit from this realm's mutable Number.prototype.
@@ -1346,6 +1352,7 @@ public partial class Interpreter
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             ErrorToStringCallable m => m.Bind(receiver),
+            BuiltInAsyncMethod m => m.Bind(receiver),
             _ => null,
         };
     }
@@ -1807,7 +1814,8 @@ public partial class Interpreter
                 // adapters directly. Prototype adapters receive `this` at the
                 // member-call site so ordinary reads preserve function identity.
                 if (member is BuiltInMethod m) return m.Bind(obj);
-                if (member is BuiltInAsyncMethod am) return am.Bind(obj);
+                if (member is BuiltInAsyncMethod am)
+                    return obj is SharpTSPromisePrototype ? am : am.Bind(obj);
                 return member;
             }
 

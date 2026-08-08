@@ -1101,6 +1101,24 @@ public class PromiseMethodTests
         Assert.Equal("true\ntrue\nfalse\ntrue\ntrue\n", output);
     }
 
+    [Fact]
+    public void PromiseMethods_AreInheritedByIdentityAndBindAtCallTime()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                const p: any = Promise.resolve(3);
+                console.log(p.then === Promise.prototype.then);
+                console.log(p.catch === Promise.prototype.catch);
+                console.log(p.finally === Promise.prototype.finally);
+                console.log(await p.then((value: number) => value + 1));
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\ntrue\n4\n", output);
+    }
+
     #endregion
 
     #region Executor rejection reason

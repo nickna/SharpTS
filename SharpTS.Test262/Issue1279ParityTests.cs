@@ -2373,6 +2373,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Promise/resolve/length.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Promise_instances_inherit_the_finally_method()
+        => AssertPass(
+            "built-ins/Promise/prototype/finally/is-a-method.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
