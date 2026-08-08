@@ -3174,6 +3174,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T2.js")]
     public void Array_reverse_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
