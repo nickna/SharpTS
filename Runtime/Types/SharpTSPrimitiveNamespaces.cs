@@ -167,7 +167,23 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
     public static readonly SharpTSStringPrototype Instance = new();
     // internal (not private) so each Interpreter can construct its own realm
     // instance; only the _extras overlay differs between instances.
-    internal SharpTSStringPrototype() { }
+    internal SharpTSStringPrototype()
+    {
+        var iterator = new StringPrototypeMethodWrapper(
+            "[Symbol.iterator]",
+            StringBuiltIns.GetPrototypeMethod("[Symbol.iterator]")!);
+        _extras.DefineProperty(SharpTSSymbol.Iterator, new SharpTSPropertyDescriptor
+        {
+            Value = iterator,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
+    }
 
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
@@ -189,6 +205,17 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _extras.GetSymbolPropertyNames();
+    internal object? GetBySymbol(SharpTSSymbol symbol) => _extras.GetBySymbol(symbol);
+    internal void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
 
     private bool IsBuiltIn(string name)
         => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;

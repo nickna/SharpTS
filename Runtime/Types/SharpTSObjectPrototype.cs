@@ -230,6 +230,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                 SharpTSObject obj => obj.HasSymbolProperty(sym),
                 SharpTSInstance inst => inst.HasSymbolProperty(sym),
                 SharpTSMath math => math.GetOwnPropertyDescriptor(sym) is not null,
+                SharpTSStringPrototype stringPrototype
+                    => stringPrototype.GetOwnPropertyDescriptor(sym) is not null,
                 _ => false,
             };
         }
@@ -420,6 +422,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
                 SharpTSMath math
                     => math.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
+                SharpTSStringPrototype stringPrototype
+                    => stringPrototype.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 _ => false,
             };
         }

@@ -11,6 +11,9 @@ public static class StringBuiltIns
     private static readonly BuiltInTypeMemberLookup<string> _lookup =
         BuiltInTypeBuilder<string>.ForInstanceType()
             .Property("length", s => (double)s.Length)
+            .MethodV2("[Symbol.iterator]", 0, static (_, value, _) =>
+                RuntimeValue.FromObject(new SharpTSIterator(
+                    value.EnumerateRunes().Select(r => (object?)r.ToString()))))
             .MethodV2("charAt", 0, int.MaxValue, specLength: 1, CharAtV2)
             // Spec lengths (ECMA-262 §22.1.3) are metadata, independent of
             // runtime argument acceptance: JavaScript methods coerce omitted

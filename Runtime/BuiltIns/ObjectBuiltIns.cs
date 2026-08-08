@@ -504,6 +504,13 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSStringPrototype stringPrototype:
+                    if (!stringPrototype.DefineProperty(symKey, descriptor))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot redefine symbol property"));
+                    }
+                    return target;
                 case SharpTSInstance symInst:
                     if (descriptorHasValue)
                         symInst.SetBySymbol(symKey, descriptor.Value);
@@ -1000,6 +1007,9 @@ public static partial class ObjectBuiltIns
             case SharpTSArray array when array.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSMath math when math.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
+            case SharpTSStringPrototype stringPrototype
+                when stringPrototype.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             default:
                 return SharpTSUndefined.Instance;
@@ -1584,6 +1594,8 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSArray array => array.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSStringPrototype stringPrototype
+                => stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             Dictionary<string, object?> dict => PropertyDescriptorStore.GetSymbolKeys(dict)
                                                   .Select(s => (object?)s).ToList(),
             _ => []

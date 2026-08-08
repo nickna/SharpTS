@@ -1079,6 +1079,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(
                 symbolMath.GetBySymbol(mathSymbol) ?? SharpTSUndefined.Instance);
         }
+        if (obj is SharpTSStringPrototype stringPrototype
+            && index is SharpTSSymbol stringSymbol)
+        {
+            return RuntimeValue.FromBoxed(
+                stringPrototype.GetBySymbol(stringSymbol) ?? SharpTSUndefined.Instance);
+        }
 
         // Built-in namespace singletons and prototype objects resolve dot-notation access via
         // BuiltInRegistry.GetInstanceMember or hand-written fallbacks in EvaluateGetOnFallback
@@ -1403,7 +1409,10 @@ public partial class Interpreter
         }
         if (obj is SharpTSStringPrototype strProto)
         {
-            strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            if (index is SharpTSSymbol stringSymbol)
+                strProto.SetBySymbolStrict(stringSymbol, value, strictMode);
+            else
+                strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSArrayPrototype arrayProto)

@@ -2651,6 +2651,15 @@ public sealed class Issue1279ParityTests
             "built-ins/Error/cause_abrupt.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/length.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/name.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/not-a-constructor.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/prop-desc.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/this-val-to-str-err.js")]
+    public void String_iterator_has_standard_protocol_metadata(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
