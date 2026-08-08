@@ -2391,6 +2391,12 @@ public sealed class Issue1279ParityTests
     public void Promise_resolve_preserves_same_constructor_identity(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/reject-function-nonconstructor.js")]
+    [InlineData("built-ins/Promise/resolve-function-nonconstructor.js")]
+    public void Promise_capability_callbacks_are_not_constructors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(

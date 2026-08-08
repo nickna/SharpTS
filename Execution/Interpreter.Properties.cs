@@ -1203,6 +1203,8 @@ public partial class Interpreter
         or SymbolPrototypeMethodWrapper
         or BigIntPrototypeMethodWrapper
         or SharpTSGlobalFunction
+        or PromiseResolveCallback
+        or PromiseRejectCallback
         or SharpTSObjectUnboundMethod
         or SharpTSArrayUnboundMethod
         or ErrorToStringCallable
