@@ -1,6 +1,7 @@
 using SharpTS.Execution;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
+using System.Numerics;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -253,10 +254,11 @@ public static class MathBuiltIns
 
         bool sawPosInf = false, sawNegInf = false, sawNaN = false;
         bool allNegZero = true, any = false;
-        // Exact accumulation: Kahan-style compensation is not enough for the
-        // "precise" contract, so sum the doubles in decreasing-magnitude order
-        // via decimal-free pairwise addition of the sorted magnitudes.
-        var finite = new List<double>();
+        // Every finite binary64 value is an integer multiple of 2^-1074. Sum
+        // those integer units exactly, then round once when converting back to
+        // binary64. This avoids both intermediate overflow and cancellation
+        // loss (the core guarantee of Math.sumPrecise).
+        BigInteger exactUnits = BigInteger.Zero;
 
         foreach (var item in items)
         {
@@ -268,7 +270,7 @@ public static class MathBuiltIns
             if (double.IsPositiveInfinity(d)) { sawPosInf = true; continue; }
             if (double.IsNegativeInfinity(d)) { sawNegInf = true; continue; }
             if (d != 0 || !double.IsNegative(d)) allNegZero = false;
-            finite.Add(d);
+            exactUnits += ToBinary64Units(d);
         }
 
         if (sawPosInf && sawNegInf) return RuntimeValue.FromNumber(double.NaN);
@@ -277,9 +279,50 @@ public static class MathBuiltIns
         if (sawNegInf) return RuntimeValue.FromNumber(double.NegativeInfinity);
         if (!any || allNegZero) return RuntimeValue.FromNumber(-0.0);
 
-        finite.Sort(static (a, b) => Math.Abs(b).CompareTo(Math.Abs(a)));
-        double sum = 0;
-        foreach (var d in finite) sum += d;
-        return RuntimeValue.FromNumber(sum);
+        return RuntimeValue.FromNumber(FromBinary64Units(exactUnits));
+    }
+
+    private static BigInteger ToBinary64Units(double value)
+    {
+        long bits = BitConverter.DoubleToInt64Bits(value);
+        bool negative = bits < 0;
+        int exponentBits = (int)((bits >> 52) & 0x7ff);
+        long fraction = bits & 0x000f_ffff_ffff_ffffL;
+        BigInteger significand = exponentBits == 0
+            ? fraction
+            : (1L << 52) | fraction;
+        if (exponentBits > 0)
+            significand <<= exponentBits - 1;
+        return negative ? -significand : significand;
+    }
+
+    private static double FromBinary64Units(BigInteger units)
+    {
+        if (units.IsZero) return 0;
+
+        bool negative = units.Sign < 0;
+        BigInteger magnitude = BigInteger.Abs(units);
+        int bitLength = (int)magnitude.GetBitLength();
+        int shift = Math.Max(0, bitLength - 53);
+        BigInteger significand = magnitude >> shift;
+
+        if (shift > 0)
+        {
+            BigInteger remainder = magnitude - (significand << shift);
+            BigInteger halfway = BigInteger.One << (shift - 1);
+            if (remainder > halfway
+                || remainder == halfway && !significand.IsEven)
+            {
+                significand++;
+                if (significand.GetBitLength() > 53)
+                {
+                    significand >>= 1;
+                    shift++;
+                }
+            }
+        }
+
+        double result = Math.ScaleB((double)significand, shift - 1074);
+        return negative ? -result : result;
     }
 }
