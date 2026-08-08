@@ -2423,6 +2423,12 @@ public sealed class Issue1279ParityTests
     public void JSON_parse_coerces_input_with_ToString(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_parse_keeps_the_last_duplicate_property()
+        => AssertPass(
+            "built-ins/JSON/parse/duplicate-proto.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

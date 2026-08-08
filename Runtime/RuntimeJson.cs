@@ -33,11 +33,22 @@ internal static class RuntimeJson
             JsonValueKind.String => element.GetString(),
             JsonValueKind.Array => new SharpTSArray(
                 element.EnumerateArray().Select(FromElement).ToList()),
-            JsonValueKind.Object => new SharpTSObject(
-                element.EnumerateObject().ToDictionary(
-                    p => p.Name,
-                    p => FromElement(p.Value))),
+            JsonValueKind.Object => FromObject(element),
             _ => null
         };
+    }
+
+    private static SharpTSObject FromObject(JsonElement element)
+    {
+        var fields = new Dictionary<string, object?>();
+        foreach (var property in element.EnumerateObject())
+        {
+            // JSON permits duplicate names. JSON.parse keeps the last value,
+            // including for "__proto__", which is an ordinary data property
+            // here rather than object-literal prototype syntax.
+            fields[property.Name] = FromElement(property.Value);
+        }
+
+        return new SharpTSObject(fields);
     }
 }
