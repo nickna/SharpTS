@@ -2435,6 +2435,12 @@ public sealed class Issue1279ParityTests
             "built-ins/JSON/parse/reviver-array-non-configurable-prop-delete.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_reviver_validates_array_data_property_creation()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-array-non-configurable-prop-create.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

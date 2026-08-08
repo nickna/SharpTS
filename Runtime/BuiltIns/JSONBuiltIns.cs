@@ -121,7 +121,17 @@ public static class JSONBuiltIns
                 if (IsUndefinedRevive(newElement))
                     arr.DeletePropertyStrict(prop, strictMode: false);
                 else
-                    arr[i] = newElement;
+                    arr.DefineProperty(prop, new SharpTSPropertyDescriptor
+                    {
+                        Value = newElement,
+                        HasValue = true,
+                        Writable = true,
+                        HasWritable = true,
+                        Enumerable = true,
+                        HasEnumerable = true,
+                        Configurable = true,
+                        HasConfigurable = true,
+                    });
             }
         }
         else if (val is SharpTSProxy proxy)
