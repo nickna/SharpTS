@@ -1083,7 +1083,12 @@ public static class StringBuiltIns
     private static RuntimeValue LocaleCompareV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         string that = StringArgument(interpreter, args, 0);
-        var result = string.Compare(str, that, StringComparison.CurrentCulture);
+        // ECMA-402 requires canonically equivalent strings to compare equal,
+        // independent of the host culture's normalization behavior.
+        var result = string.Compare(
+            str.Normalize(NormalizationForm.FormC),
+            that.Normalize(NormalizationForm.FormC),
+            StringComparison.CurrentCulture);
         return RuntimeValue.FromNumber(result < 0 ? -1 : result > 0 ? 1 : 0);
     }
 
