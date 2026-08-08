@@ -3060,6 +3060,11 @@ public sealed class Issue1279ParityTests
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-1.js")]
+    public void Array_isArray_preserves_cross_type_classification(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
