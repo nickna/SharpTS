@@ -3033,6 +3033,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/elements-added-after.js")]
     [InlineData("built-ins/Array/from/elements-updated-after.js")]
     [InlineData("built-ins/Array/from/from-array.js")]
+    [InlineData("built-ins/Array/from/from-string.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
